@@ -305,6 +305,21 @@ T['\\s']['from another tab page sends the issues through the tab that Send acts 
   eq(send.writes(child), { paste(DEFAULT_PROMPT .. '\n- src/code.lua:2: Never used.') })
 end
 
+T['\\s']['from a tab page of its own, whose aineo tab shows another file, sends the issues and leaves Input'] = function()
+  open_layout('explain-send-own-tab', 'ready')
+  claude_session.wait_for_status(child, 'ready')
+  entry.set_input(child, { 'a draft' })
+  send.watch_writes(child)
+  child.cmd('tabedit ' .. vim.fn.fnameescape(project .. '/src/code.lua'))
+  find_issues({ { line = 2, text = 'Never used.' } })
+  mark_issue_on(2)
+
+  press('\\s')
+
+  eq(send.writes(child), { paste(DEFAULT_PROMPT .. '\n- src/code.lua:2: Never used.') })
+  eq(send.input(child).lines, { 'a draft' })
+end
+
 T['\\s']['keeps the marks, and tells the user as Send does, when Claude is not ready'] = function()
   local fake = open_layout('explain-send-trust', 'trust')
   claude_session.wait_for_screen(child, terminal_buffer(), 'Yes, I trust this folder')

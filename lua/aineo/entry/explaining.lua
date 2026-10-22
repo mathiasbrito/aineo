@@ -89,13 +89,13 @@ end
 --- buffer had marked issues, in which case Send has nothing else to do.
 ---
 ---@param submit fun(message: string): boolean sends the message, telling the user why when it cannot
+---@param buffer integer the buffer Send was pressed in, before any switch to aineo's tab page
 ---@return boolean
-function M.send_marked_issues(submit)
+function M.send_marked_issues(submit, buffer)
   local explain = package.loaded['aineo.explain']
   if not explain then
     return false
   end
-  local buffer = vim.api.nvim_get_current_buf()
   local issues = explain.marked_issues(buffer)
   if #issues == 0 then
     return false
