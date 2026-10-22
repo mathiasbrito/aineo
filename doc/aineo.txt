@@ -1914,10 +1914,12 @@ its own. A marked issue shows `✓` where `▎` is, on all its rows, keeping its
 label, and its band is blended 25% toward the accent, in
 |hl-AineoExplainIssueMarked| and |hl-AineoExplainIssueMarkedGutter|. A line
 with no issue tells you once, `aineo: no issue on this line` (`on the selected
-lines` in Visual mode); explanations are never marked. The badge of the window
-the issues were asked in says, last, how many are marked and what sends them:
-` 2 issues marked · \s sends ` (`1 issue marked`), with a request running or
-not, and it closes at none.
+lines` in Visual mode); explanations are never marked. The badge of every
+window that shows the buffer says, last, how many of its issues are marked
+and what sends them: ` 2 issues marked · \s sends ` (`1 issue marked`), with
+a request running or not. It names the key that sends as configured (the
+`prefix` and `s`, `:Aineo send` when `prefix` is false), follows the buffer a
+window shows, and closes at none.
 
 `\s` (|aineo-send|), pressed in a window whose buffer has marked issues, sends
 them to the Claude Code of the tab that Send acts on, at once, and leaves

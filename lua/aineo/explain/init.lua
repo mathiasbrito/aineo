@@ -21,6 +21,9 @@ marks.on_change(function(buffer, window)
   if window then
     runs.refresh_badge(window)
   end
+  for _, shown_in in ipairs(vim.api.nvim_buf_is_valid(buffer) and vim.fn.win_findbuf(buffer) or {}) do
+    runs.refresh_badge(shown_in)
+  end
 end)
 
 --- One request to explain code.
@@ -34,6 +37,7 @@ end)
 ---@field command string[] the words that run Claude Code, `claude.cmd`
 ---@field model string the model that explains
 ---@field timeout_ms integer how long the request may run
+---@field send_key? string what the user presses to send marked issues, said in the badge; `\s` when absent
 
 --- The nearest folder that exists among the folders holding `path`: its
 --- own, else the first of its parents, which a file not written yet may lack.
@@ -103,6 +107,7 @@ end
 ---@field window integer
 ---@field path string
 ---@field file string the file's absolute path
+---@field send_key? string
 ---@field first integer
 ---@field last integer
 ---@field key string what the answer is kept under (`aineo.explain.kept`'s `key()`)
@@ -134,7 +139,11 @@ local function show_answer(asked, ended)
     return
   end
   marks.clear(asked.buffer, asked.kind, asked.first, asked.last)
-  marks.place(asked.buffer, asked.window, asked.kind, explanations, asked.file)
+  marks.place(asked.buffer, asked.kind, explanations, {
+    window = asked.window,
+    file = asked.file,
+    send_key = asked.send_key,
+  })
   kept.keep(
     asked.buffer,
     asked.key,
@@ -167,6 +176,7 @@ local function start(explaining)
     window = explaining.window,
     path = vim.fs.relpath(folder, path),
     file = path,
+    send_key = explaining.send_key,
     first = range[1],
     last = range[2],
     key = kept.key(kind, explaining.tools, explaining.range),
@@ -226,6 +236,16 @@ vim.api.nvim_create_autocmd('VimLeavePre', {
   callback = runs.stop_all,
 })
 
+vim.api.nvim_create_autocmd({ 'BufWinEnter', 'WinNew' }, {
+  group = 'aineo_explain',
+  desc = 'aineo: say the marked issues of the buffer a window shows in its badge',
+  callback = function()
+    for _, window in ipairs(vim.fn.win_findbuf(vim.api.nvim_get_current_buf())) do
+      runs.refresh_badge(window)
+    end
+  end,
+})
+
 vim.api.nvim_create_autocmd('BufWipeout', {
   group = 'aineo_explain',
   desc = 'aineo: stop the Claude Code of the requests for a buffer wiped out',
@@ -267,7 +287,11 @@ local function place_kept(explaining, kind)
     return false
   end
   marks.clear(buffer, kind, range[1], range[2])
-  marks.place(buffer, explaining.window, kind, explanations, vim.api.nvim_buf_get_name(buffer))
+  marks.place(buffer, kind, explanations, {
+    window = explaining.window,
+    file = vim.api.nvim_buf_get_name(buffer),
+    send_key = explaining.send_key,
+  })
   vim.notify(
     ('aineo: the earlier answer, the code unchanged (:Aineo explain %sasks again)'):format(
       words_that_ask_again(explaining, kind)

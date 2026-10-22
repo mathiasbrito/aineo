@@ -14,6 +14,10 @@ local MARK = '┊ '
 local GUTTER_MARK = '▎'
 local MARKED_GUTTER_MARK = '✓'
 
+--- What says, in the badge, the key that sends the marked issues, unless
+--- the answer's origin gives it.
+local DEFAULT_SEND_KEY = '\\s'
+
 --- The fewest characters of a label worth showing in the gutter.
 local SHORTEST_LABEL = 2
 
@@ -256,6 +260,7 @@ end
 ---@field texts table<integer, string> the text of each, by extmark id
 ---@field files table<integer, string> the absolute path of the file each was asked about, by extmark id
 ---@field marked table<integer, boolean> the extmark ids of those marked
+---@field send_key string what the badge says sends the marked issues
 ---@field pending boolean whether placing them again is scheduled
 
 --- The explanations that are shown, by the buffer and the name of their kind.
@@ -448,17 +453,23 @@ local function watch_edits(buffer)
   })
 end
 
+--- What the explanations of one answer were asked for.
+---@class aineo.explain.Origin
+---@field window integer the window they were asked in
+---@field file string the absolute path of the file they were asked about
+---@field send_key? string what the user presses to send the issues once marked; `\s` when absent
+
 --- Shows each of `explanations` in `buffer` as virtual lines above its line
 --- (`show_explanation()`) for a window showing it (`geometry_of()`), and
 --- keeps them to show again when that window's gutter changes
 --- (`keep_aligned()`). Tells the listeners (`on_change()`).
 ---
 ---@param buffer integer
----@param window integer the window the explanations were asked in
 ---@param kind aineo.explain.Kind
 ---@param explanations aineo.explain.Explanation[]
----@param file string the absolute path of the file they were asked about
-function M.place(buffer, window, kind, explanations, file)
+---@param origin aineo.explain.Origin where and for what they were asked
+function M.place(buffer, kind, explanations, origin)
+  local window, file = origin.window, origin.file
   local geometry = geometry_of(buffer, window)
   placed[buffer] = placed[buffer] or {}
   local record = placed[buffer][kind.name]
@@ -468,6 +479,7 @@ function M.place(buffer, window, kind, explanations, file)
   end
   record = record or { kind = kind, texts = {}, files = {}, marked = {}, pending = false }
   record.window, record.textoff = window, geometry.textoff
+  record.send_key = origin.send_key or DEFAULT_SEND_KEY
   placed[buffer][kind.name] = record
   for _, explanation in ipairs(explanations) do
     local id = show_explanation(buffer, {
@@ -584,20 +596,20 @@ function M.clear_issue_marks(buffer)
   notify(buffer, record.window)
 end
 
---- How many issues are marked among those placed for `window`, in any buffer.
+--- How many issues `buffer` shows that are marked, and the key the badge
+--- says sends them.
 ---
----@param window integer
----@return integer
-function M.marked_count(window)
-  local count = 0
-  for buffer, records in pairs(placed) do
-    local record = records[kinds.ISSUES.name]
-    if record and record.window == window and vim.api.nvim_buf_is_valid(buffer) then
-      forget_lost(buffer, record)
-      count = count + vim.tbl_count(record.marked)
-    end
+---@param buffer integer
+---@return integer count
+---@return string|nil send_key nothing when none is marked
+function M.marked_summary(buffer)
+  local record = issues_of(buffer)
+  if not record or not vim.api.nvim_buf_is_valid(buffer) then
+    return 0
   end
-  return count
+  forget_lost(buffer, record)
+  local count = vim.tbl_count(record.marked)
+  return count, count > 0 and record.send_key or nil
 end
 
 --- Forgets what was placed in `buffer`, which is gone, and tells the
