@@ -2,13 +2,17 @@
 --- the lines it is about, in the namespace of the kind of answer
 --- (`aineo.explain.Kind`).
 
+local kinds = require('aineo.explain.kinds')
+
 local M = {}
 
 --- What starts the text of every virtual line, after the line's indent.
 local MARK = '┊ '
 
---- What marks the gutter of every virtual line.
+--- What marks the gutter of every virtual line, and of every virtual line
+--- of a marked issue.
 local GUTTER_MARK = '▎'
+local MARKED_GUTTER_MARK = '✓'
 
 --- The fewest characters of a label worth showing in the gutter.
 local SHORTEST_LABEL = 2
@@ -118,54 +122,84 @@ local function indent_of(buffer, line, most)
   return (' '):rep(math.min(indent, most or indent))
 end
 
---- The chunks that fill the columns before the text, `textoff` of them: `▎`,
---- then spaces, and `label` right-aligned with a space after it, cut to the
---- cells left by `▎` and that space, and left out when fewer than
---- `SHORTEST_LABEL` fit; the `▎` and the label in the gutter group
---- of `kind` and the spaces in its fill group; none when there are no such
---- columns.
+--- How a band is drawn: the character that marks its gutter and the
+--- highlight groups of its text, gutter and the columns the gutter fills.
+---@class aineo.explain.Style
+---@field gutter_mark string
+---@field text string
+---@field gutter string
+---@field fill string
+
+--- The style of a band of `kind`, that of a marked issue when `marked`.
+---
+---@param kind aineo.explain.Kind
+---@param marked? boolean
+---@return aineo.explain.Style
+local function style_of(kind, marked)
+  if marked and kind.marked_groups then
+    return {
+      gutter_mark = MARKED_GUTTER_MARK,
+      text = kind.marked_groups.text,
+      gutter = kind.marked_groups.gutter,
+      fill = kind.groups.fill,
+    }
+  end
+  return {
+    gutter_mark = GUTTER_MARK,
+    text = kind.groups.text,
+    gutter = kind.groups.gutter,
+    fill = kind.groups.fill,
+  }
+end
+
+--- The chunks that fill the columns before the text, `textoff` of them: the
+--- style's mark, then spaces, and `label` right-aligned with a space after
+--- it, cut to the cells left by the mark and that space, and left out when
+--- fewer than `SHORTEST_LABEL` fit; the mark and the label in the style's
+--- gutter group and the spaces in its fill group; none when there are no
+--- such columns.
 ---
 ---@param textoff integer
 ---@param label string
----@param kind aineo.explain.Kind
+---@param style aineo.explain.Style
 ---@return table[] chunks
-local function gutter_chunks(textoff, label, kind)
+local function gutter_chunks(textoff, label, style)
   if textoff == 0 then
     return {}
   end
-  local mark_width = vim.fn.strdisplaywidth(GUTTER_MARK)
+  local mark_width = vim.fn.strdisplaywidth(style.gutter_mark)
   local room = textoff - mark_width - 1
   label = room >= SHORTEST_LABEL and label:sub(1, room) or ''
-  local chunks = { { GUTTER_MARK, kind.groups.gutter } }
+  local chunks = { { style.gutter_mark, style.gutter } }
   local spaces = textoff - mark_width - (label == '' and 0 or #label + 1)
   if spaces > 0 then
-    table.insert(chunks, { (' '):rep(spaces), kind.groups.fill })
+    table.insert(chunks, { (' '):rep(spaces), style.fill })
   end
   if label ~= '' then
-    table.insert(chunks, { label, kind.groups.gutter })
-    table.insert(chunks, { ' ', kind.groups.fill })
+    table.insert(chunks, { label, style.gutter })
+    table.insert(chunks, { ' ', style.fill })
   end
   return chunks
 end
 
 --- The virtual line that shows `row`: the gutter (`gutter_chunks()`, with
 --- `label`), `indent` unhighlighted, then `MARK` and `row` padded with
---- spaces to the end of the window, in the text group of `kind`.
+--- spaces to the end of the window, in the text group of `style`.
 ---
 ---@param row string
 ---@param indent string
 ---@param geometry aineo.explain.Geometry
 ---@param label string
----@param kind aineo.explain.Kind
+---@param style aineo.explain.Style
 ---@return table[] chunks
-local function band_row(row, indent, geometry, label, kind)
+local function band_row(row, indent, geometry, label, style)
   local body = MARK .. row
   local padding = geometry.width - geometry.textoff - #indent - vim.fn.strdisplaywidth(body)
-  local chunks = gutter_chunks(geometry.textoff, label, kind)
+  local chunks = gutter_chunks(geometry.textoff, label, style)
   if indent ~= '' then
     table.insert(chunks, { indent })
   end
-  table.insert(chunks, { body .. (' '):rep(math.max(padding, 0)), kind.groups.text })
+  table.insert(chunks, { body .. (' '):rep(math.max(padding, 0)), style.text })
   return chunks
 end
 
@@ -177,21 +211,23 @@ end
 ---@field rows string[]
 ---@field geometry aineo.explain.Geometry
 ---@field label string shown on the first row, in the gutter
+---@field marked? boolean whether it is drawn as a marked issue (`style_of()`)
 ---@field id? integer the extmark to set again; a new one when absent
 
 --- Shows `band.rows` in `buffer` as virtual lines above `band.line`, each
---- starting at the window's left column and showing as `band_row()` does.
---- The line's number shows in the number group of the kind. Returns the
---- extmark's id.
+--- starting at the window's left column and showing as `band_row()` does,
+--- in the style of the kind (`style_of()`). The line's number shows in the
+--- number group of the kind. Returns the extmark's id.
 ---
 ---@param buffer integer
 ---@param band aineo.explain.Band
 ---@return integer
 local function show_above(buffer, band)
   local virt_lines = {}
+  local style = style_of(band.kind, band.marked)
   for number, row in ipairs(band.rows) do
     virt_lines[number] =
-      band_row(row, band.indent, band.geometry, number == 1 and band.label or '', band.kind)
+      band_row(row, band.indent, band.geometry, number == 1 and band.label or '', style)
   end
   return vim.api.nvim_buf_set_extmark(
     buffer,
@@ -218,6 +254,7 @@ end
 ---@field window integer the window they were placed for
 ---@field textoff integer the columns before the text there, when they were placed
 ---@field texts table<integer, string> the text of each, by extmark id
+---@field marked table<integer, boolean> the extmark ids of those marked
 ---@field pending boolean whether placing them again is scheduled
 
 --- The explanations that are shown, by the buffer and the name of their kind.
@@ -262,31 +299,37 @@ local function line_of(buffer, kind, id)
   return position[1] and position[1] + 1
 end
 
---- Shows the explanation `text` in `buffer` as virtual lines above `line`,
---- from 1, indented as that line but by half the window's text width at
---- most, each row starting with `MARK`, and the text wrapped (`wrapped()`) at
---- the text width of `geometry` less that indent, in the look of `kind`, as
---- the extmark `id` when it is given. Returns the extmark's id.
+--- An explanation to show.
+---@class aineo.explain.Shown
+---@field kind aineo.explain.Kind
+---@field line integer from 1
+---@field text string
+---@field marked? boolean whether it shows as a marked issue
+---@field id? integer the extmark to set again; a new one when absent
+
+--- Shows the explanation `shown` in `buffer` as virtual lines above its
+--- line, indented as that line but by half the window's text width at most,
+--- each row starting with `MARK`, and the text wrapped (`wrapped()`) at the
+--- text width of `geometry` less that indent, in the look of its kind.
+--- Returns the extmark's id.
 ---
 ---@param buffer integer
----@param kind aineo.explain.Kind
----@param line integer
----@param text string
+---@param shown aineo.explain.Shown
 ---@param geometry aineo.explain.Geometry
----@param id? integer
 ---@return integer
-local function show_explanation(buffer, kind, line, text, geometry, id)
+local function show_explanation(buffer, shown, geometry)
   local width = geometry.width - geometry.textoff
-  local indent = indent_of(buffer, line, math.floor(width / 2))
+  local indent = indent_of(buffer, shown.line, math.floor(width / 2))
   local room = math.max(width - #indent - vim.fn.strdisplaywidth(MARK), NARROWEST)
   return show_above(buffer, {
-    id = id,
-    kind = kind,
-    line = line,
+    id = shown.id,
+    kind = shown.kind,
+    line = shown.line,
     indent = indent,
-    rows = wrapped(text, room),
+    rows = wrapped(shown.text, room),
     geometry = geometry,
-    label = kind.label,
+    label = shown.kind.label,
+    marked = shown.marked,
   })
 end
 
@@ -306,9 +349,16 @@ local function place_again(buffer, record)
   for id, text in pairs(record.texts) do
     local line = line_of(buffer, record.kind, id)
     if line then
-      show_explanation(buffer, record.kind, line, text, geometry, id)
+      show_explanation(buffer, {
+        kind = record.kind,
+        line = line,
+        text = text,
+        marked = record.marked[id],
+        id = id,
+      }, geometry)
     else
       record.texts[id] = nil
+      record.marked[id] = nil
     end
   end
 end
@@ -325,6 +375,7 @@ local function forget_lost(buffer, record)
   for id in pairs(record.texts) do
     if not line_of(buffer, record.kind, id) then
       record.texts[id] = nil
+      record.marked[id] = nil
       forgot = true
     end
   end
@@ -404,11 +455,15 @@ function M.place(buffer, window, kind, explanations)
     record.window = window
     place_again(buffer, record)
   end
-  record = record or { kind = kind, texts = {}, pending = false }
+  record = record or { kind = kind, texts = {}, marked = {}, pending = false }
   record.window, record.textoff = window, geometry.textoff
   placed[buffer][kind.name] = record
   for _, explanation in ipairs(explanations) do
-    local id = show_explanation(buffer, kind, explanation.line, explanation.text, geometry)
+    local id = show_explanation(buffer, {
+      kind = kind,
+      line = explanation.line,
+      text = explanation.text,
+    }, geometry)
     record.texts[id] = explanation.text
   end
   watch_edits(buffer)
@@ -434,6 +489,44 @@ function M.lines(buffer)
   end
   table.sort(lines)
   return lines
+end
+
+--- The record of the issues `buffer` shows, if any.
+---
+---@param buffer integer
+---@return aineo.explain.Placed|nil
+local function issues_of(buffer)
+  return (placed[buffer] or {})[kinds.ISSUES.name]
+end
+
+--- Marks each issue `buffer` shows above the lines from `first` to `last`
+--- that is not marked, and unmarks each that is, showing them again in the
+--- look that says so. An explanation is never marked. Tells the listeners
+--- (`on_change()`) when it marked or unmarked any. Returns how many issues
+--- lie above those lines.
+---
+---@param buffer integer
+---@param first integer from 1
+---@param last integer from 1
+---@return integer
+function M.toggle_issue_marks(buffer, first, last)
+  local record = issues_of(buffer)
+  if not record then
+    return 0
+  end
+  local found = 0
+  for id in pairs(record.texts) do
+    local line = line_of(buffer, record.kind, id)
+    if line and line >= first and line <= last then
+      found = found + 1
+      record.marked[id] = not record.marked[id] or nil
+    end
+  end
+  if found > 0 then
+    place_again(buffer, record)
+    notify(buffer, record.window)
+  end
+  return found
 end
 
 --- Has the explanations that are shown placed again, as the same extmarks,
