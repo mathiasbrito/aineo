@@ -230,7 +230,7 @@ T['showing the office']['says why the pack cannot be loaded, and opens nothing']
   eq(office_window(), vim.NIL)
   eq(child.lua_get([[_G.told]]), {
     {
-      message = 'aineo: the office cannot show: there is no pack “default” in any folder',
+      message = 'aineo: the office cannot show: default/pack.lua: there is no pack “default” in any folder',
       level = 4,
     },
   })
