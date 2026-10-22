@@ -1,0 +1,21 @@
+about: A person walking, two frames.
+colours: L = agent_light, A = agent, S = agent_shade, k = ink
+seconds per frame: 0.2
+---
+.LAA.
+LAAAS
+AkAkS
+AAAAS
+.AAS.
+.AAS.
+A...S
+A...S
+---
+.LAA.
+LAAAS
+AkAkS
+AAAAS
+.AAS.
+.AAS.
+..AS.
+..AS.
