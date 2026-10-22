@@ -299,6 +299,20 @@ T['the mappings']['leave when edits delete every line that is explained'] = func
   eq({ mapping('n', ']v'), mapping('o', '[v') }, { vim.NIL, vim.NIL })
 end
 
+T['the mappings']['leave when an edit and a jump come in one tick, the jump finding the lines gone first'] = function()
+  explain_lines({ 3 })
+
+  child.lua([[
+    vim.api.nvim_buf_set_lines(0, 2, 3, false, {})
+    require('aineo.explain').jump(vim.api.nvim_get_current_win(), 'next', 1)
+  ]])
+
+  vim.wait(explained.PATIENCE_MS, function()
+    return mapping('n', ']v') == vim.NIL
+  end, 20)
+  eq({ mapping('n', ']v'), mapping('o', '[v') }, { vim.NIL, vim.NIL })
+end
+
 T['the mappings']['of the user, local to the buffer, are never replaced nor removed'] = function()
   child.cmd('nnoremap <buffer> ]v :echo "mine"<CR>')
   explain_lines({ 3 })
