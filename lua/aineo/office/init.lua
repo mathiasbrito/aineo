@@ -58,11 +58,14 @@ function M.new_office(options)
   local transcript_path = nil
 
   --- What exists while the office shows; nil while it is hidden.
-  ---@type { float: aineo.office.Float, timer: uv.uv_timer_t, group: integer, follower: aineo.transcript.Follower|nil }|nil
+  ---@type { float: aineo.office.Float, timer: uv.uv_timer_t, group: integer, follower: aineo.transcript.Follower|nil, stage: aineo.office_scene.Stage, screen: aineo.office.Screen, area: aineo.layout.Area }|nil
   local showing = nil
 
   local office = {}
 
+  --- Closes the office if it shows: stops its frame timer and its follower,
+  --- removes its autocommands and closes its window. Does nothing when it is
+  --- hidden.
   local function close()
     local open = showing
     if not open then
@@ -104,17 +107,65 @@ function M.new_office(options)
     return tracker, follower
   end
 
-  --- Closes the office when the cursor enters a window the office covers.
+  --- Whether the current tab page is the one the office's window is in.
   ---
-  ---@param open { float: aineo.office.Float, group: integer }
-  local function wake_on_entering_covered_windows(open)
+  ---@param open { float: aineo.office.Float }
+  ---@return boolean
+  local function is_in_current_tab_page(open)
+    return vim.api.nvim_win_is_valid(open.float.window)
+      and vim.api.nvim_win_get_tabpage(open.float.window) == vim.api.nvim_get_current_tabpage()
+  end
+
+  --- Moves the office to where the right side is now, and resizes the stage
+  --- to it; closes it when the layout shows no right side. Does nothing from
+  --- another tab page, whose cells are not the office's.
+  ---
+  ---@param open { float: aineo.office.Float, stage: aineo.office_scene.Stage, area: aineo.layout.Area }
+  local function follow_right_side(open)
+    if not is_in_current_tab_page(open) then
+      return
+    end
+    local area = options.right_side()
+    if not area then
+      close_soon()
+    elseif not vim.deep_equal(area, open.area) then
+      float_module.place(open.float, area)
+      open.stage.resize(area.width, area.height)
+      open.area = area
+    end
+  end
+
+  --- Closes the office when the cursor enters a window the office covers, in
+  --- its own tab page; keeps it over the right side as the screen changes;
+  --- closes it when its window closes; and makes its colours again after a
+  --- colorscheme cleared them.
+  ---
+  ---@param open { float: aineo.office.Float, group: integer, stage: aineo.office_scene.Stage, area: aineo.layout.Area, screen: aineo.office.Screen }
+  local function watch_the_screen(open)
     vim.api.nvim_create_autocmd('WinEnter', {
       group = open.group,
       callback = function()
-        if float_module.covers(open.float, vim.api.nvim_get_current_win()) then
+        local entered = vim.api.nvim_get_current_win()
+        if
+          is_in_current_tab_page(open)
+          and vim.api.nvim_win_get_tabpage(entered) == vim.api.nvim_win_get_tabpage(
+            open.float.window
+          )
+          and float_module.covers(open.float, entered)
+        then
           close_soon()
         end
       end,
+    })
+    vim.api.nvim_create_autocmd({ 'WinResized', 'VimResized' }, {
+      group = open.group,
+      callback = function()
+        follow_right_side(open)
+      end,
+    })
+    vim.api.nvim_create_autocmd('ColorScheme', {
+      group = open.group,
+      callback = open.screen.forget_groups,
     })
     vim.api.nvim_create_autocmd('WinClosed', {
       group = open.group,
@@ -159,10 +210,17 @@ function M.new_office(options)
     return timer
   end
 
+  --- Records the transcript to follow from the next `show_now()`; one that
+  --- shows already goes on following the file it began with.
+  ---
+  ---@param path string|nil
   function office.follow_session(path)
     transcript_path = path
   end
 
+  --- Shows the office over the right side. With no right side, a pack that
+  --- cannot be loaded or a stage that cannot be made, it tells the user why and
+  --- shows nothing.
   function office.show_now()
     if showing then
       return
@@ -177,9 +235,14 @@ function M.new_office(options)
       vim.notify(('aineo: the office cannot show: %s'):format(problem), vim.log.levels.ERROR)
       return
     end
+    local made, stage =
+      pcall(office_scene.new_stage, { pack = pack, width = area.width, height = area.height })
+    if not made then
+      vim.notify(('aineo: the office cannot show: %s'):format(stage), vim.log.levels.ERROR)
+      return
+    end
     local float = float_module.open(area)
     local screen = screen_module.new_screen(float.buffer)
-    local stage = office_scene.new_stage({ pack = pack, width = area.width, height = area.height })
     local tracker, follower = follow_transcript()
     local function draw()
       stage.advance(tracker.agents(), options.clock())
@@ -190,12 +253,16 @@ function M.new_office(options)
       group = vim.api.nvim_create_augroup('aineo.office.' .. float.buffer, { clear = true }),
       follower = follower,
       timer = start_frames(draw),
+      stage = stage,
+      screen = screen,
+      area = area,
     }
-    wake_on_entering_covered_windows(open)
+    watch_the_screen(open)
     showing = open
     draw_frame(draw)
   end
 
+  --- Closes the office and forgets the transcript.
   function office.let_go()
     close()
     transcript_path = nil

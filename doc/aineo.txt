@@ -3705,8 +3705,10 @@ pieces of pixel art. aineo's own pack is `aineo-office/default/`, the one the
 office draws.
 
 The office shows the main agent alone, standing or working, and shows when
-you ask for it, not by itself. It does not follow the window as it is
-resized, nor a tab page you leave or return to, nor a change of colorscheme.
+you ask for it, not by itself. It stays over the right column as the screen
+or a window is resized, and closes when the layout shows no right column, as
+under `\Z`; it makes its colours again after a colorscheme. It does not
+pause for a tab page you leave or return to.
 It looks for the transcript of the session in `projects/` under Claude
 Code's configuration directory; when none is there, it follows none.
 

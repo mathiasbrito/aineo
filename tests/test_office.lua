@@ -1,5 +1,6 @@
 local MiniTest = require('mini.test')
 local fake_transcript = dofile('tests/helpers/fake_transcript.lua')
+local files = dofile('tests/helpers/office_pack_files.lua')
 local fixture = dofile('tests/helpers/fixture.lua')
 local layout = dofile('tests/helpers/layout.lua')
 local office_cells = dofile('tests/helpers/office_cells.lua')
@@ -38,8 +39,9 @@ end
 --- `_G.told`.
 ---
 ---@param path? string the transcript to follow
+---@param pack_folders? string[] the folders the office's packs are searched in, those of 'runtimepath' by default
 ---@return table buffers the layout's `claude`, `report` and `input` buffers
-local function open_office(path)
+local function open_office(path, pack_folders)
   local buffers = layout.open_with_stand_ins(child)
   child.lua(
     [[
@@ -51,7 +53,7 @@ local function open_office(path)
       right_side = function()
         return require('aineo.layout').right_column_area()
       end,
-      pack_folders = vim.api.nvim_get_runtime_file('aineo-office', true),
+      pack_folders = (select(2, ...)) or vim.api.nvim_get_runtime_file('aineo-office', true),
       clock = function()
         return vim.uv.hrtime() / 1e9
       end,
@@ -60,7 +62,7 @@ local function open_office(path)
       _G.office.follow_session((...))
     end
   ]],
-    { path }
+    { path, pack_folders }
   )
   return buffers
 end
@@ -232,6 +234,175 @@ T['showing the office']['says why the pack cannot be loaded, and opens nothing']
       level = 4,
     },
   })
+end
+
+T['showing the office']['opens no window, and says why, when the pack cannot be laid out'] = function()
+  local folder = files.write_pack(fixture.directory('office_hostile'), 'default', {
+    ['pack.lua'] = files.pack_text({
+      name = 'default',
+      floor = {
+        floor_colour = 'floor',
+        wall_colour = 'wall',
+        legend = { D = 5 },
+      },
+    }),
+    ['floor.txt'] = '# plan\n \n D..\n',
+  })
+  open_office(nil, { folder })
+
+  child.lua([[_G.office.show_now()]])
+  child.lua([[_G.office.show_now()]])
+
+  eq(office_window(), vim.NIL)
+  local told = child.lua_get([[_G.told]])
+  eq(#told, 2)
+  eq(vim.startswith(told[1].message, 'aineo: the office cannot show: '), true)
+  eq(told[1].level, 4)
+end
+
+T['showing the office']["covers the column without a border however 'winborder' is set"] = function()
+  open_office()
+  child.o.winborder = 'rounded'
+  local area = child.lua_get([[require('aineo.layout').right_column_area()]])
+
+  child.lua([[_G.office.show_now()]])
+
+  local config = child.lua_get([[vim.api.nvim_win_get_config(...)]], { office_window() })
+  eq({ row = config.row, col = config.col, width = config.width, height = config.height }, area)
+  eq(config.border == nil or config.border == 'none', true)
+end
+
+T['showing the office']['leaves the mouse to the window beneath, which the wheel then scrolls, not the picture'] = function()
+  local buffers = open_office()
+  child.lua(
+    [[vim.api.nvim_buf_set_lines(..., 0, -1, false, vim.tbl_map(tostring, vim.fn.range(1, 200)))]],
+    { buffers.report }
+  )
+  child.lua([[_G.office.show_now()]])
+  local config = child.lua_get([[vim.api.nvim_win_get_config(...)]], { office_window() })
+
+  for _ = 1, 3 do
+    child.api.nvim_input_mouse('wheel', 'down', '', 0, config.row + 3, config.col + 3)
+  end
+  vim.wait(QUIET_MS)
+
+  eq(config.mouse, false)
+  eq(child.lua_get([[vim.fn.getwininfo(...)[1].topline]], { office_window() }), 1)
+end
+
+T['showing the office']['shows only its own buffer, in the editor’s text colours'] = function()
+  open_office()
+  child.lua([[_G.office.show_now()]])
+
+  local options = child.lua_get(
+    [[(function(window)
+      return { winfixbuf = vim.wo[window].winfixbuf, winhighlight = vim.wo[window].winhighlight }
+    end)(...)]],
+    { office_window() }
+  )
+
+  eq(options, { winfixbuf = true, winhighlight = 'NormalFloat:Normal' })
+end
+
+T['following the screen'] = MiniTest.new_set()
+
+--- The cells the child's layout gives the right column, and those of the
+--- office's window.
+---
+---@return table area
+---@return table placed
+local function area_and_placement()
+  local area = child.lua_get([[require('aineo.layout').right_column_area()]])
+  local config = child.lua_get([[vim.api.nvim_win_get_config(...)]], { office_window() })
+  return area, { row = config.row, col = config.col, width = config.width, height = config.height }
+end
+
+T['following the screen']['moves and resizes the office with the right column when a window is resized'] = function()
+  local buffers = open_office()
+  layout.enter_window_showing(child, buffers.claude)
+  child.lua([[_G.office.show_now()]])
+
+  child.cmd('vertical resize -10')
+  local followed = wait_until(function()
+    local area, placed = area_and_placement()
+    return vim.deep_equal(area, placed)
+  end)
+
+  eq(followed, true)
+  local area = child.lua_get([[require('aineo.layout').right_column_area()]])
+  local drawn = wait_until(function()
+    return child.lua_get(
+      [[vim.fn.strchars(vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(...), 0, 1, false)[1])]],
+      { office_window() }
+    ) == area.width
+  end)
+  eq(drawn, true)
+  eq(
+    child.lua_get([[#vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(...), 0, -1, false)]], {
+      office_window(),
+    }),
+    area.height
+  )
+end
+
+T['following the screen']['moves and resizes the office when the editor is resized'] = function()
+  open_office()
+  child.lua([[_G.office.show_now()]])
+
+  child.o.columns = 100
+  child.o.lines = 30
+  local followed = wait_until(function()
+    local area, placed = area_and_placement()
+    return vim.deep_equal(area, placed)
+  end)
+
+  eq(followed, true)
+  eq(select(2, area_and_placement()).width, 100 - select(2, area_and_placement()).col)
+end
+
+T['following the screen']['closes the office when the right column leaves the screen, as a window zoomed over the tab page does'] = function()
+  local buffers = open_office()
+  layout.enter_window_showing(child, buffers.claude)
+  child.lua([[_G.office.show_now()]])
+
+  child.lua([[require('aineo.layout').toggle_full_zoom()]])
+
+  eq(
+    wait_until(function()
+      return office_window() == vim.NIL
+    end),
+    true
+  )
+  eq(child.lua_get([[_G.told]]), {})
+end
+
+T['following the screen']['stays open when a window is entered in another tab page'] = function()
+  local buffers = open_office()
+  layout.enter_window_showing(child, buffers.claude)
+  child.lua([[_G.office.show_now()]])
+
+  child.cmd('tabnew')
+  child.cmd('vsplit')
+  child.cmd('wincmd l')
+  child.cmd('tabprevious')
+  vim.wait(QUIET_MS)
+
+  eq(office_window() ~= vim.NIL, true)
+end
+
+T['following the screen']['makes its colours again after a colorscheme clears them'] = function()
+  open_office()
+  child.lua([[_G.office.show_now()]])
+  local _, group = office_cells.cell_at(child, 0, 0)
+
+  child.cmd('colorscheme blue')
+
+  eq(
+    wait_until(function()
+      return child.lua_get([[next(vim.api.nvim_get_hl(0, { name = ... })) ~= nil]], { group })
+    end),
+    true
+  )
 end
 
 T['what the office shows'] = MiniTest.new_set()
