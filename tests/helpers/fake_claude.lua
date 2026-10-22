@@ -77,8 +77,9 @@
 ---   `{ stdin }`, waits `AINEO_FAKE_CLAUDE_PRINT_MS` milliseconds (none when
 ---   unset), then prints the file `AINEO_FAKE_CLAUDE_PRINT` names, a result
 ---   with no explanation when that is unset, and exits 0; or, with
----   `AINEO_FAKE_CLAUDE_PRINT_EXIT` set, writes `Error: fake failure` on its
----   standard error and exits with that code. The answers the suites give it
+---   `AINEO_FAKE_CLAUDE_PRINT_EXIT` set, exits with that code after the
+---   answer when `AINEO_FAKE_CLAUDE_PRINT` names one, else after writing
+---   `Error: fake failure` on its standard error. The answers the suites give it
 ---   are synthetic, shaped as the headless documentation of Claude Code
 ---   2.1.306 describes `--output-format json` with `--json-schema`: one
 ---   result object, its `structured_output` holding the schema's object. No
@@ -371,19 +372,19 @@ local function answer_print()
     end, 50)
   end
   local failure_code = tonumber(os.getenv('AINEO_FAKE_CLAUDE_PRINT_EXIT'))
-  if failure_code then
+  local answer = os.getenv('AINEO_FAKE_CLAUDE_PRINT')
+  if failure_code and not answer then
     local errors = io.stderr
     errors:write('Error: fake failure\n')
     os.exit(failure_code)
   end
-  local answer = os.getenv('AINEO_FAKE_CLAUDE_PRINT')
   if answer then
     io.write(assert(io.open(answer, 'rb')):read('*a'))
   else
     io.write(EMPTY_PRINT_ANSWER)
   end
   io.flush()
-  os.exit(0)
+  os.exit(failure_code or 0)
 end
 
 if arg[1] == '-p' then

@@ -423,6 +423,27 @@ T['a failure']['an exit with a code other than 0 is told once, with the first li
   eq(child.lua_get(SHOWN), {})
 end
 
+T['a failure']['an error result on a non-zero exit is told with its text rather than the exit code'] = function()
+  start_with_project()
+  answer_text(vim.json.encode({
+    type = 'result',
+    subtype = 'success',
+    is_error = true,
+    result = 'Not logged in',
+  }))
+  child.lua('vim.env.AINEO_FAKE_CLAUDE_PRINT_EXIT = "1"')
+
+  explain()
+
+  eq(told(), {
+    {
+      message = 'aineo: explaining failed: Claude Code answered an error: Not logged in',
+      level = ERROR,
+    },
+  })
+  eq(child.lua_get(SHOWN), {})
+end
+
 T['a failure']['an answer that holds no explanations is told once, and nothing is shown'] =
   MiniTest.new_set({
     parametrize = {
@@ -827,6 +848,19 @@ T['a request']['runs Claude Code in the folder of a file outside any git reposit
   explain()
 
   eq(recorded(1)[1].cwd, vim.uv.fs_realpath(folder .. '/src'))
+end
+
+T['a request']['runs Claude Code in the nearest folder that exists for a new file outside any repository'] = function()
+  local folder = start_outside_git()
+  child.cmd('edit ' .. folder .. '/src/not-made/yet/new.lua')
+
+  explain()
+
+  eq(recorded(1)[1].cwd, vim.uv.fs_realpath(folder .. '/src'))
+  eq(
+    vim.startswith(recorded(2)[2].stdin, 'Explain the code of the file not-made/yet/new.lua '),
+    true
+  )
 end
 
 T['a request']['hands Claude Code the path from the project, the language, the range and the text with unsaved changes, each line numbered'] = function()

@@ -18,13 +18,31 @@ local M = {}
 ---@field model string the model that explains
 ---@field timeout_ms integer how long the request may run
 
+--- The nearest folder that exists among the folders holding `path`: its
+--- own, else the first of its parents, which a file not written yet may lack.
+---
+---@param path string a file's absolute path
+---@return string
+local function nearest_existing_folder(path)
+  local folder = vim.fs.dirname(path)
+  while not vim.uv.fs_stat(folder) do
+    local parent = vim.fs.dirname(folder)
+    if parent == folder then
+      break
+    end
+    folder = parent
+  end
+  return folder
+end
+
 --- The folder Claude Code runs in for the file at `path`: the top level of
---- the git repository holding it, else the file's own folder.
+--- the git repository holding it, else the nearest folder of the file that
+--- exists (`nearest_existing_folder()`).
 ---
 ---@param path string the file's absolute path
 ---@return string
 local function project_folder(path)
-  return vim.fs.root(path, '.git') or vim.fs.dirname(path)
+  return vim.fs.root(path, '.git') or nearest_existing_folder(path)
 end
 
 --- The first line of `text` that holds more than white space, or `nil`.
@@ -37,8 +55,8 @@ end
 
 --- The explanations of the lines from `first` to `last` that the run `ended`
 --- of Claude Code answered (`aineo.explain.answer`), or `nil` and what went
---- wrong: an exit with a code other than 0 is told with the first line of
---- its errors.
+--- wrong: an exit with a code other than 0 is told with the error result it
+--- printed, else with the first line of its errors.
 ---
 ---@param ended vim.SystemCompleted
 ---@param first integer
@@ -47,6 +65,10 @@ end
 ---@return string? problem
 local function explanations_of(ended, first, last)
   if ended.code ~= 0 then
+    local failure = answer.error_in(ended.stdout or '')
+    if failure then
+      return nil, failure
+    end
     local said = first_line(ended.stderr)
     return nil,
       ('Claude Code exited with code %d%s'):format(ended.code, said and ': ' .. said or '')
