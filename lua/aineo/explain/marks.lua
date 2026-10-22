@@ -10,6 +10,9 @@ local MARK = '┊ '
 --- What marks the gutter of every virtual line.
 local GUTTER_MARK = '▎'
 
+--- The fewest characters of a label worth showing in the gutter.
+local SHORTEST_LABEL = 2
+
 --- The fewest columns a virtual line's text is wrapped at, however narrow
 --- the window.
 local NARROWEST = 1
@@ -116,8 +119,9 @@ local function indent_of(buffer, line, most)
 end
 
 --- The chunks that fill the columns before the text, `textoff` of them: `▎`,
---- then spaces, and `label` right-aligned with a space after it when it
---- fits with `▎` and that space, the `▎` and the label in the gutter group
+--- then spaces, and `label` right-aligned with a space after it, cut to the
+--- cells left by `▎` and that space, and left out when fewer than
+--- `SHORTEST_LABEL` fit; the `▎` and the label in the gutter group
 --- of `kind` and the spaces in its fill group; none when there are no such
 --- columns.
 ---
@@ -130,9 +134,8 @@ local function gutter_chunks(textoff, label, kind)
     return {}
   end
   local mark_width = vim.fn.strdisplaywidth(GUTTER_MARK)
-  if #label + mark_width + 1 > textoff then
-    label = ''
-  end
+  local room = textoff - mark_width - 1
+  label = room >= SHORTEST_LABEL and label:sub(1, room) or ''
   local chunks = { { GUTTER_MARK, kind.groups.gutter } }
   local spaces = textoff - mark_width - (label == '' and 0 or #label + 1)
   if spaces > 0 then
