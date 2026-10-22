@@ -37,6 +37,7 @@ local M = {}
 ---@field editor_program string the editor's own program (`v:progpath`), which runs the hook relay
 ---@field on_session_switched? fun(id: string, source: string?, left: string, reason: string?) called when the session followed changes (`session_id()`): with the new id, how Claude Code started it (`clear`, `resume`, `fork`; `startup` or `resume` for a start that takes the place of the session followed), the id left, and why Claude Code left it (`clear`, `resume`; none for a start). Never for an editor's first start. For a start that resumes, it is called when Claude Code launches, once the list of the folder's sessions has answered, not before `start_session()` returns. An error it raises is told the user as a warning and goes no further
 ---@field on_session_ready? fun(id: string) called once per start of Claude Code — the new session's in place of a resume with no conversation among them — the first time it is ready for input (`session_status()` turns `'ready'`), with the session it follows then (`session_id()`): before that status is read, from the callback that sets it. Never for a start that is not the session any more, whose process has ended or whose terminal was wiped, or once Neovim is quitting (`v:exiting`): not for a resume Claude Code found no conversation for, a dialog never answered, or a Claude Code that exits before its input box settles. An error it raises is told the user as a warning and goes no further
+---@field on_permission_wait? fun(session_id: string, agent_id: string?) called when a `PermissionRequest` hook of this start's Claude Code tells the editor that an agent waits for the user (`receive_permission_wait()`): with the session the hook ran in and, when a subagent asks, its `agent_id` (nil for the main agent). Never for a start whose process has ended, or once Neovim is quitting (`v:exiting`). An error it raises is told the user as a warning and goes no further
 
 --- A start of Claude Code: its terminal buffer, the command that runs Claude
 --- Code in it and, once Claude Code has launched (`launch()`), the terminal
@@ -238,6 +239,7 @@ local function validate_settings(settings)
   vim.validate('settings.editor_program', settings.editor_program, 'string')
   vim.validate('settings.on_session_switched', settings.on_session_switched, 'function', true)
   vim.validate('settings.on_session_ready', settings.on_session_ready, 'function', true)
+  vim.validate('settings.on_permission_wait', settings.on_permission_wait, 'function', true)
 end
 
 --- A window that shows `buffer`, one in the current tab page when there is
@@ -400,7 +402,7 @@ end
 --- `aineo: <name> failed: <the error>`, so that what called it goes on.
 ---
 ---@param settings aineo.claude.Settings
----@param name 'on_session_switched'|'on_session_ready'
+---@param name 'on_session_switched'|'on_session_ready'|'on_permission_wait'
 ---@param ... any
 local function call_back(settings, name, ...)
   local callback = settings[name]
@@ -1296,6 +1298,17 @@ local function is_start_in_another_process(running, told)
   return own_pid ~= nil and told.pid ~= own_pid
 end
 
+--- The home whose last start has the token `start_token` (`started_homes`);
+--- nil when no home's does.
+---
+---@param start_token string
+---@return aineo.claude.Home?
+local function home_started_with(start_token)
+  return vim.iter(started_homes):find(function(started)
+    return started.session.start_token == start_token
+  end)
+end
+
 --- What `told` does to the session of the home whose last start has its
 --- token (`started_homes`): a `SessionStart` of another session from
 --- another Claude Code process (`is_start_in_another_process()`) is a switch
@@ -1312,9 +1325,7 @@ end
 ---
 ---@param told aineo.claude.SessionEvent
 local function take_session_event(told)
-  local home = vim.iter(started_homes):find(function(started)
-    return started.session.start_token == told.start_token
-  end)
+  local home = home_started_with(told.start_token)
   if
     vim.v.exiting ~= vim.NIL
     or not home
@@ -1392,6 +1403,48 @@ function M.receive_session_event(event, session_id, cause, start_token, ran, pid
       pid = type(pid) == 'number' and pid or nil,
       arrival = arrival,
     })
+  end)
+end
+
+--- Tells `settings.on_permission_wait` of the home whose last start has
+--- `start_token` that the agent `agent_id` of the session `session_id`
+--- waits for the user. Does nothing for a token that is no home's last
+--- start's, a start whose Claude Code process has ended, an id of another
+--- form than Claude Code's (`session_ids.is_session_id()`), and once Neovim
+--- is quitting (`v:exiting` set).
+---
+---@param start_token string
+---@param session_id string
+---@param agent_id string?
+local function take_permission_wait(start_token, session_id, agent_id)
+  local home = home_started_with(start_token)
+  if
+    vim.v.exiting ~= vim.NIL
+    or not home
+    or not is_process_alive(home)
+    or not session_ids.is_session_id(session_id)
+  then
+    return
+  end
+  call_back(home.session.settings, 'on_permission_wait', session_id, agent_id)
+end
+
+--- Takes what a `PermissionRequest` hook of Claude Code told the editor
+--- through the hook relay (`aineo.claude.hook_relay`): the agent `agent_id`
+--- of the session `session_id` waits for the user to answer a permission
+--- prompt. It reaches the session functions whose last start has
+--- `start_token`, and no others, as `on_permission_wait(session_id,
+--- agent_id)`; `agent_id` is nil, or `vim.NIL`, for the main agent. It
+--- decides nothing and answers nothing: Claude Code's prompt is the user's.
+--- It works from a callback scheduled now, never in the RPC handler that
+--- calls it, so that the editor answers the hook's request at once.
+---
+---@param start_token string
+---@param session_id string
+---@param agent_id string|userdata|nil
+function M.receive_permission_wait(start_token, session_id, agent_id)
+  vim.schedule(function()
+    take_permission_wait(start_token, session_id, type(agent_id) == 'string' and agent_id or nil)
   end)
 end
 
