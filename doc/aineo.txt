@@ -3743,15 +3743,22 @@ that move to a window of the right column. Moving to Claude's window or to a
 file leaves it as it is. When the office opens, the cursor stays in the
 window it was in.
 
-What the office knows comes from one file Claude Code writes, the transcript
-of the session: `projects/<folder>/<session id>.jsonl` under
-`$CLAUDE_CONFIG_DIR`, or under `~/.claude` when that is not set. The office
-reads the end of the file when it opens, and each line added while it shows.
-It calls no Claude, sends nothing to its terminal, makes no MCP call or
-network request, writes nothing and spends no token. While it shows, one
-timer draws 12 frames a second and one file watch follows the transcript;
-closing the office stops both. A session with no transcript yet shows its
-agent standing.
+What the office knows comes from the files Claude Code writes: the transcript
+of the session, `projects/<folder>/<session id>.jsonl` under
+`$CLAUDE_CONFIG_DIR`, or under `~/.claude` when that is not set, and, in the
+folder `<session id>/subagents` beside it, the transcript and the meta file
+of each subagent. The office reads the end of the transcript when it opens,
+and each line added while it shows; a subagent that runs when it opens, or
+starts while it shows, is followed until its meta file says it finished or
+the user stopped it. A transcript cut short or replaced by another is read
+again from its end. It calls no Claude, sends nothing to its terminal, makes
+no MCP call or network request, writes nothing and spends no token. While it
+shows, one timer draws 12 frames a second, one file watch follows the
+transcript and one the subagents' folder; where the system gives no file
+watch, or the file or folder is not there yet, aineo looks at it every half
+second instead. Closing the office stops all of them. A session with no
+transcript yet shows its agent standing, and the office follows the file
+from its first line once Claude Code writes it.
 
 The office draws two pixels to a cell, with half blocks, in the colours of
 the art, so it needs `'termguicolors'`.
@@ -3762,14 +3769,16 @@ never runs, `floor.txt`, the floor plan drawn as text, and `art/*.txt`, the
 pieces of pixel art. aineo's own pack is `aineo-office/default/`, the one the
 office draws.
 
-The office shows the main agent alone, standing or working, and shows when
-you ask for it, not by itself. It stays over the right column as the screen
+The office shows the main agent alone, standing or working (the subagents
+are followed, and not drawn yet), and shows when you ask for it, not by
+itself. It stays over the right column as the screen
 or a window is resized, and closes when the layout shows no right column, as
 under `\Z`; it makes its colours again after a colorscheme. It does not
 pause for a tab page you leave or return to.
 It follows the transcript Claude Code's `SessionStart` hook names; when no
 hook ran, it looks for the session's transcript in `projects/` under Claude
-Code's configuration directory, and when none is there, it follows none.
+Code's configuration directory, and when none is there, it waits for the file
+Claude Code makes in the folder named after the directory Neovim started in.
 
                                                           *aineo-office-hooks*
 Two of the hooks aineo gives the Claude Code it starts in `--settings`
