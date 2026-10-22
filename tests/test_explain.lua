@@ -1041,14 +1041,30 @@ T['the look']['starts a row with ▎ in the gutter, the label expl right-aligned
   })
 end
 
-T['the look']['leaves the label out of a gutter too narrow for it and ▎, and keeps it in one that just fits'] =
+T['the look']['cuts the label to the cells the gutter has, and leaves it out under two characters'] =
   MiniTest.new_set({
     parametrize = {
+      {
+        3,
+        {
+          { '▎', 'AineoExplainGutter' },
+          { '  ', 'AineoExplainGutterFill' },
+        },
+      },
+      {
+        4,
+        {
+          { '▎', 'AineoExplainGutter' },
+          { 'ex', 'AineoExplainGutter' },
+          { ' ', 'AineoExplainGutterFill' },
+        },
+      },
       {
         5,
         {
           { '▎', 'AineoExplainGutter' },
-          { '    ', 'AineoExplainGutterFill' },
+          { 'exp', 'AineoExplainGutter' },
+          { ' ', 'AineoExplainGutterFill' },
         },
       },
       {
@@ -1062,7 +1078,7 @@ T['the look']['leaves the label out of a gutter too narrow for it and ▎, and k
     },
   })
 
-T['the look']['leaves the label out of a gutter too narrow for it and ▎, and keeps it in one that just fits']['of'] = function(
+T['the look']['cuts the label to the cells the gutter has, and leaves it out under two characters']['of'] = function(
   numberwidth,
   gutter
 )
@@ -1076,6 +1092,22 @@ T['the look']['leaves the label out of a gutter too narrow for it and ▎, and k
   local row = chunks_once_it_holds('aineo_explain', 'Starts')[1].virt_lines[1]
   eq(vim.list_slice(row, 1, #gutter), gutter)
   eq(#row, #gutter + 1)
+end
+
+T['the look']['cuts the label of issues too: is in a gutter of four cells'] = function()
+  start_with_project()
+  child.wo.number = true
+  child.wo.numberwidth = 4
+  answer_explanations({ { line = 1, text = 'Starts.' } })
+
+  explain({ kind = 'issues' })
+
+  local row = chunks_once_it_holds('aineo_explain_issues', 'Starts')[1].virt_lines[1]
+  eq(vim.list_slice(row, 1, 3), {
+    { '▎', 'AineoExplainIssueGutter' },
+    { 'is', 'AineoExplainIssueGutter' },
+    { ' ', 'AineoExplainIssueGutterFill' },
+  })
 end
 
 --- Defines in the child the highlight groups `colours` names, each as its

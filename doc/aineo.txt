@@ -1838,8 +1838,9 @@ explanations, each tied to the first line it explains, and ends.
 
 An explanation shows above its line as a band of the window's width. A `▎`
 stands beside each of its rows in the number column, and the first row's
-carries the label `expl` (left out of a number column too narrow for it, and
-there is no `▎` where the window shows no number, sign or fold column). The
+carries the label `expl` (cut to the cells the number column has, `ex` in four
+and nothing in fewer than four, and there is no `▎` where the window shows no
+number, sign or fold column). The
 band starts at the indent of the explained line (by half the window's text
 width at most), each row after `┊ `, wrapped at the window's text width less
 that indent, in |hl-AineoExplain|. The number of the explained line shows in
