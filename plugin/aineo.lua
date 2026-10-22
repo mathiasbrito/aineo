@@ -305,6 +305,31 @@ local PREFIX_KEYS = {
   ['zoom full'] = 'Z',
 }
 
+--- What explaining code asks for, by the words of its `<Plug>` mappings
+--- after `aineo-`, in Normal mode and in Visual mode: the code alone, or
+--- with read-only tools (`aineo.entry`'s `explain()`).
+local EXPLAIN_ORDERS = {
+  explain = { tools = false },
+  ['explain-tools'] = { tools = true },
+}
+
+--- The keys that follow the prefix for each of `EXPLAIN_ORDERS`, the same
+--- in Normal mode and in Visual mode.
+local EXPLAIN_KEYS = { explain = 'v', ['explain-tools'] = 'V' }
+
+for words, order in pairs(EXPLAIN_ORDERS) do
+  vim.keymap.set('n', ('<Plug>(aineo-%s)'):format(words), function()
+    run(function()
+      require('aineo.entry').explain(order)
+    end)
+  end, { desc = 'aineo: ' .. words })
+  vim.keymap.set('x', ('<Plug>(aineo-%s)'):format(words), function()
+    run(function()
+      require('aineo.entry').explain_selection(order)
+    end)
+  end, { desc = 'aineo: ' .. words .. ' the selected lines' })
+end
+
 --- The keys that leave the mode a twin (`map_terminal_prefix()`) is pressed
 --- in, Terminal mode (`t`) or Insert mode (`i`), for Normal mode. In Terminal
 --- mode Neovim's own, which are not mapped. In Insert mode `<Esc>`'s effect:
@@ -372,6 +397,10 @@ local function map_prefix(prefix)
   end
   for argument in pairs(VISUAL_ACTIONS) do
     map_unless_mapped('x', prefix .. PREFIX_KEYS[argument], argument, '')
+  end
+  for words, keys in pairs(EXPLAIN_KEYS) do
+    map_unless_mapped('n', prefix .. keys, words, '')
+    map_unless_mapped('x', prefix .. keys, words, '')
   end
 end
 
@@ -615,4 +644,41 @@ end, {
   bar = true,
   complete = complete_subcommand,
   desc = 'aineo: send, open, report, input, claude, claude-numbers, sessions, new, pane agent|changes|terminal|run|explorer, run shell, claim [id], tab new|close|{n}, diff close, find, zoom or zoom full',
+})
+
+--- The words `:AineoExplain` takes, in the order it offers them: `tools`
+--- lets Claude Code read the project with read-only tools, and `clear`
+--- removes the buffer's explanations (`aineo.entry`'s
+--- `clear_explanations()`).
+local EXPLAIN_WORDS = { 'tools', 'clear' }
+
+vim.api.nvim_create_user_command('AineoExplain', function(command)
+  local word = command.fargs[1]
+  if word ~= nil and not vim.tbl_contains(EXPLAIN_WORDS, word) then
+    vim.notify(
+      'aineo: :AineoExplain takes ' .. table.concat(EXPLAIN_WORDS, ' or '),
+      vim.log.levels.ERROR
+    )
+    return
+  end
+  if word == 'clear' then
+    run(function()
+      require('aineo.entry').clear_explanations()
+    end)
+    return
+  end
+  local range = command.range > 0 and { command.line1, command.line2 } or nil
+  run(function()
+    require('aineo.entry').explain({ tools = word == 'tools', range = range })
+  end)
+end, {
+  nargs = '?',
+  range = true,
+  bar = true,
+  complete = function(argument_lead)
+    return vim.tbl_filter(function(word)
+      return vim.startswith(word, argument_lead)
+    end, EXPLAIN_WORDS)
+  end,
+  desc = 'aineo: explain the code of the buffer, or of the lines of the range; tools lets Claude Code read the project; clear removes the explanations',
 })
