@@ -1,4 +1,4 @@
---- What `\v`, `\V`, their `<Plug>` mappings and `:AineoExplain` do: hand
+--- What `\v`, `\V`, their `<Plug>` mappings and `:Aineo explain` do: hand
 --- the current buffer, a file's, to the explain home (`aineo.explain`), with
 --- the Claude Code command and the settings of the configuration.
 
@@ -64,7 +64,7 @@ function M.explain_selection(order)
   M.explain({ tools = order.tools, range = { math.min(first, last), math.max(first, last) } })
 end
 
---- What `:AineoExplain clear` does: removes every explanation the current
+--- What `:Aineo explain clear` does: removes every explanation the current
 --- buffer shows, and stops the request that runs for it
 --- (`aineo.explain`'s `clear()`).
 function M.clear_explanations()

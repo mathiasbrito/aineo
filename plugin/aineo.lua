@@ -49,21 +49,34 @@ local SUBCOMMANDS = {
   'diff',
   'find',
   'zoom',
+  'explain',
 }
+
+--- The words `:Aineo explain` takes, in the order it offers them: `tools`
+--- lets Claude Code read the project with read-only tools, and `clear`
+--- removes the buffer's explanations (`aineo.entry`'s
+--- `clear_explanations()`).
+local EXPLAIN_WORDS = { 'tools', 'clear' }
 
 --- The words each subcommand that takes one is followed by, in the order
 --- `:Aineo` offers them: `pane` takes the pane to show, `run` takes `shell`,
 --- and `tab` takes `new`, `close` or the number of a tab page to move to; only
 --- the numbers 1 to 9 have a `<Plug>` mapping, and `:Aineo tab` takes any
 --- number (`aineo.entry`'s `jump_to_tab()`); `diff` takes `close`, and `zoom`
---- takes `full` (`ACTS_WITHOUT_A_WORD`).
+--- takes `full` (`ACTS_WITHOUT_A_WORD`), and `explain` takes `EXPLAIN_WORDS`.
 local SUBCOMMAND_WORDS = {
   pane = { 'agent', 'changes', 'terminal', 'run', 'explorer' },
   run = { 'shell' },
   tab = { 'new', 'close', '1', '2', '3', '4', '5', '6', '7', '8', '9' },
   diff = { 'close' },
   zoom = { 'full' },
+  explain = EXPLAIN_WORDS,
 }
+
+--- The subcommand that takes a range, the lines whose code it explains: the
+--- others refuse one (`:Aineo` callback). It is no action of `ACTION_ARGUMENTS`:
+--- it has its own branch, and its own `<Plug>` mappings.
+local RANGE_SUBCOMMAND = 'explain'
 
 --- The subcommands that take words (`SUBCOMMAND_WORDS`) and run an action
 --- without one too: `:Aineo zoom` zooms the right column's window, and
@@ -101,7 +114,8 @@ local function usage(words)
   return ('aineo: :Aineo %s takes one of %s'):format(words[1], table.concat(subcommand_words, ', '))
 end
 
---- `:Aineo`'s arguments that each run an action, in `SUBCOMMANDS`' order:
+--- `:Aineo`'s arguments that each run an action, in `SUBCOMMANDS`' order,
+--- `RANGE_SUBCOMMAND` left out:
 --- each subcommand alone, or followed by each of its words
 --- (`SUBCOMMAND_WORDS`), as `pane agent`; a subcommand that runs without a
 --- word too (`ACTS_WITHOUT_A_WORD`) has both. Built with plain loops, so that
@@ -109,11 +123,13 @@ end
 local ACTION_ARGUMENTS = {}
 for _, subcommand in ipairs(SUBCOMMANDS) do
   local words = SUBCOMMAND_WORDS[subcommand]
-  if not words or ACTS_WITHOUT_A_WORD[subcommand] then
-    table.insert(ACTION_ARGUMENTS, subcommand)
-  end
-  for _, word in ipairs(words or {}) do
-    table.insert(ACTION_ARGUMENTS, subcommand .. ' ' .. word)
+  if subcommand ~= RANGE_SUBCOMMAND then
+    if not words or ACTS_WITHOUT_A_WORD[subcommand] then
+      table.insert(ACTION_ARGUMENTS, subcommand)
+    end
+    for _, word in ipairs(words or {}) do
+      table.insert(ACTION_ARGUMENTS, subcommand .. ' ' .. word)
+    end
   end
 end
 
@@ -620,7 +636,41 @@ else
   })
 end
 
+--- What `:Aineo` tells the user when it is given a range for a subcommand
+--- but `RANGE_SUBCOMMAND`.
+local RANGE_REFUSAL = 'aineo: only :Aineo ' .. RANGE_SUBCOMMAND .. ' takes a range'
+
+--- Does what `:Aineo explain` does with `words`, the words after it, and
+--- `range`, the lines given, or `nil` for the whole buffer: `tools` explains
+--- with read-only tools, `clear` removes the explanations, no word explains
+--- the code alone. Any other word is told as `:Aineo` tells its usage.
+---
+---@param words string[]
+---@param range integer[]|nil
+local function explain(words, range)
+  if #words > 1 or (words[1] ~= nil and not vim.tbl_contains(EXPLAIN_WORDS, words[1])) then
+    vim.notify(usage({ RANGE_SUBCOMMAND }), vim.log.levels.ERROR)
+    return
+  end
+  run(function()
+    if words[1] == 'clear' then
+      require('aineo.entry').clear_explanations()
+      return
+    end
+    require('aineo.entry').explain({ tools = words[1] == 'tools', range = range })
+  end)
+end
+
 vim.api.nvim_create_user_command('Aineo', function(command)
+  if command.range > 0 and command.fargs[1] ~= RANGE_SUBCOMMAND then
+    vim.notify(RANGE_REFUSAL, vim.log.levels.ERROR)
+    return
+  end
+  if command.fargs[1] == RANGE_SUBCOMMAND then
+    local range = command.range > 0 and { command.line1, command.line2 } or nil
+    explain(vim.list_slice(command.fargs, 2), range)
+    return
+  end
   local argument = table.concat(command.fargs, ' ')
   if vim.tbl_contains(ACTION_ARGUMENTS, argument) then
     run_action(argument)
@@ -641,44 +691,8 @@ vim.api.nvim_create_user_command('Aineo', function(command)
   vim.notify(usage(command.fargs), vim.log.levels.ERROR)
 end, {
   nargs = '*',
-  bar = true,
-  complete = complete_subcommand,
-  desc = 'aineo: send, open, report, input, claude, claude-numbers, sessions, new, pane agent|changes|terminal|run|explorer, run shell, claim [id], tab new|close|{n}, diff close, find, zoom or zoom full',
-})
-
---- The words `:AineoExplain` takes, in the order it offers them: `tools`
---- lets Claude Code read the project with read-only tools, and `clear`
---- removes the buffer's explanations (`aineo.entry`'s
---- `clear_explanations()`).
-local EXPLAIN_WORDS = { 'tools', 'clear' }
-
-vim.api.nvim_create_user_command('AineoExplain', function(command)
-  local word = command.fargs[1]
-  if word ~= nil and not vim.tbl_contains(EXPLAIN_WORDS, word) then
-    vim.notify(
-      'aineo: :AineoExplain takes ' .. table.concat(EXPLAIN_WORDS, ' or '),
-      vim.log.levels.ERROR
-    )
-    return
-  end
-  if word == 'clear' then
-    run(function()
-      require('aineo.entry').clear_explanations()
-    end)
-    return
-  end
-  local range = command.range > 0 and { command.line1, command.line2 } or nil
-  run(function()
-    require('aineo.entry').explain({ tools = word == 'tools', range = range })
-  end)
-end, {
-  nargs = '?',
   range = true,
   bar = true,
-  complete = function(argument_lead)
-    return vim.tbl_filter(function(word)
-      return vim.startswith(word, argument_lead)
-    end, EXPLAIN_WORDS)
-  end,
-  desc = 'aineo: explain the code of the buffer, or of the lines of the range; tools lets Claude Code read the project; clear removes the explanations',
+  complete = complete_subcommand,
+  desc = 'aineo: send, open, report, input, claude, claude-numbers, sessions, new, pane agent|changes|terminal|run|explorer, run shell, claim [id], tab new|close|{n}, diff close, find, zoom or zoom full, [range]explain [tools|clear]',
 })
