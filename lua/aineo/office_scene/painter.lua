@@ -4,6 +4,7 @@
 
 local canvas_module = require('aineo.office_scene.canvas')
 local colours = require('aineo.office_scene.colours')
+local stretch = require('aineo.office_scene.stretch')
 
 local M = {}
 
@@ -128,6 +129,9 @@ local function piece_items(canvas, drawing)
   local items = {}
   for _, placed in ipairs(drawing.layout.pieces) do
     local piece = drawing.pack.pieces[placed.piece]
+    if piece and placed.columns then
+      piece = stretch.to_width(piece, placed.columns)
+    end
     if piece and is_on_canvas(piece, placed.row, drawing.height) then
       table.insert(items, {
         depth = 2 * placed.row + 1,
