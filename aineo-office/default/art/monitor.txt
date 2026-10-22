@@ -1,0 +1,11 @@
+about: A monitor on a desk, its screen full of code.
+colours: F = monitor_frame, z = screen, c = code_cyan, g = code_green, m = code_mauve, y = code_yellow
+---
+FFFFFFFFFFFF
+FcccczgggzzF
+FzzmmmzccccF
+FzzcczyyyyzF
+FggggzzzzzzF
+FFFFFFFFFFFF
+.....FF.....
+....FFFF....
