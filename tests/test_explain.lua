@@ -240,6 +240,57 @@ local function chunks_once_it_holds(namespace, text)
   return shown
 end
 
+--- The floating windows of the child, each as the part of its configuration
+--- that matters, its text, and the 'winhighlight' it shows with.
+local FLOATS = [[(function()
+  local floats = {}
+  for _, window in ipairs(vim.api.nvim_list_wins()) do
+    local config = vim.api.nvim_win_get_config(window)
+    if config.relative ~= '' then
+      table.insert(floats, {
+        relative = config.relative,
+        win = config.win,
+        anchor = config.anchor,
+        row = config.row,
+        col = config.col,
+        focusable = config.focusable,
+        border = config.border,
+        text = table.concat(
+          vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(window), 0, -1, false),
+          '\n'
+        ),
+        winhighlight = vim.wo[window].winhighlight,
+      })
+    end
+  end
+  return floats
+end)()]]
+
+--- The floating windows of the child (`FLOATS`), once there are `count` of
+--- them, or after `PATIENCE_MS`.
+---
+---@param count integer
+---@return table[]
+local function floats_once(count)
+  local floats = {}
+  vim.wait(PATIENCE_MS, function()
+    floats = child.lua_get(FLOATS)
+    return #floats == count
+  end, 20)
+  return floats
+end
+
+--- The number of timers of the child that are active.
+local ACTIVE_TIMERS = [[(function()
+  local count = 0
+  vim.uv.walk(function(handle)
+    if handle:get_type() == 'timer' and handle:is_active() then
+      count = count + 1
+    end
+  end)
+  return count
+end)()]]
+
 T['an answer'] = MiniTest.new_set()
 
 T['an answer']['shows each explanation as a virtual line above its line, indented as it, after the mark ┊'] = function()
@@ -674,8 +725,9 @@ T['a failure']['a request that outlasts its timeout has Claude Code stopped, and
   eq(told_later(), {})
 end
 
-T['a failure']['a command that cannot run raises its error, shows nothing, and leaves no request running'] = function()
+T['a failure']['a command that cannot run raises its error, shows nothing, and leaves no request, badge or timer running'] = function()
   start_with_project()
+  local baseline_timers = child.lua_get(ACTIVE_TIMERS)
 
   local raised = child.lua([[
     local ran, failure = pcall(require('aineo.explain').ask, {
@@ -692,6 +744,8 @@ T['a failure']['a command that cannot run raises its error, shows nothing, and l
   eq(raised.ran, false)
   eq(raised.failure:find('claude.cmd cannot be run: ', 1, true) ~= nil, true)
   eq(child.lua_get(SHOWN), {})
+  eq(child.lua_get(FLOATS), {})
+  eq(child.lua_get(ACTIVE_TIMERS), baseline_timers)
   explain()
   eq(shown_once_it_holds('explaining'), { explaining_above(1, 0) })
 end
@@ -1639,46 +1693,6 @@ T['a badge'] = MiniTest.new_set()
 --- The ten frames of the spinner, in the order they show.
 local FRAMES = { '⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏' }
 
---- The floating windows of the child, each as the part of its configuration
---- that matters, its text, and the 'winhighlight' it shows with.
-local FLOATS = [[(function()
-  local floats = {}
-  for _, window in ipairs(vim.api.nvim_list_wins()) do
-    local config = vim.api.nvim_win_get_config(window)
-    if config.relative ~= '' then
-      table.insert(floats, {
-        relative = config.relative,
-        win = config.win,
-        anchor = config.anchor,
-        row = config.row,
-        col = config.col,
-        focusable = config.focusable,
-        border = config.border,
-        text = table.concat(
-          vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(window), 0, -1, false),
-          '\n'
-        ),
-        winhighlight = vim.wo[window].winhighlight,
-      })
-    end
-  end
-  return floats
-end)()]]
-
---- The floating windows of the child (`FLOATS`), once there are `count` of
---- them, or after `PATIENCE_MS`.
----
----@param count integer
----@return table[]
-local function floats_once(count)
-  local floats = {}
-  vim.wait(PATIENCE_MS, function()
-    floats = child.lua_get(FLOATS)
-    return #floats == count
-  end, 20)
-  return floats
-end
-
 --- The text of the only floating window of the child, once it holds
 --- `fragment`, or after `PATIENCE_MS`.
 ---
@@ -1702,17 +1716,6 @@ end
 local function badge_parts(text)
   return text:sub(2, 4), text:sub(6, -2)
 end
-
---- The number of timers of the child that are active.
-local ACTIVE_TIMERS = [[(function()
-  local count = 0
-  vim.uv.walk(function(handle)
-    if handle:get_type() == 'timer' and handle:is_active() then
-      count = count + 1
-    end
-  end)
-  return count
-end)()]]
 
 T['a badge']['shows in the top right corner of the window the request was made in, with a spinner, the words and the seconds'] = function()
   start_with_project()
@@ -1894,6 +1897,144 @@ T['a badge']['is gone with the window the request was made in, while the request
   eq(shown_once_it_holds('Adds')[1].line, 2)
 end
 
+T['a badge']['gives the progress line above the first line asked for the look of its kind: ▎ with no label, the band from the left column, the number highlight'] =
+  MiniTest.new_set({
+    parametrize = {
+      {
+        'explanations',
+        'aineo_explain',
+        'AineoExplain',
+        'AineoExplainGutter',
+        'AineoExplainGutterFill',
+        'AineoExplainNr',
+        'explaining…',
+      },
+      {
+        'issues',
+        'aineo_explain_issues',
+        'AineoExplainIssue',
+        'AineoExplainIssueGutter',
+        'AineoExplainIssueGutterFill',
+        'AineoExplainIssueNr',
+        'looking for issues…',
+      },
+    },
+  })
+
+T['a badge']['gives the progress line above the first line asked for the look of its kind: ▎ with no label, the band from the left column, the number highlight']['of'] = function(
+  kind,
+  namespace,
+  text_group,
+  gutter_group,
+  fill_group,
+  number_group,
+  words
+)
+  start_with_project()
+  child.wo.number = true
+  child.wo.numberwidth = 8
+  answer_after(4000)
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+
+  explain({ kind = kind, range = { 2, 3 } })
+
+  local progress = chunks_once_it_holds(namespace, words)[1]
+  local row = progress.virt_lines[1]
+  eq({ progress.line, progress.above, progress.leftcol, progress.number_hl_group }, {
+    2,
+    true,
+    true,
+    number_group,
+  })
+  eq(#progress.virt_lines, 1)
+  eq(vim.list_slice(row, 1, 3), {
+    { '▎', gutter_group },
+    { (' '):rep(7), fill_group },
+    { '  ' },
+  })
+  eq(#row, 4)
+  eq(row[4][2], text_group)
+  eq(row[4][1]:sub(1, 4), '┊ ' .. '')
+  eq(vim.tbl_contains(FRAMES, row[4][1]:sub(5, 7)), true)
+  eq((row[4][1]:sub(8):gsub(' +$', '')), ' ' .. words)
+  eq(vim.fn.strdisplaywidth(row[4][1]), 60 - 8 - 2)
+end
+
+T['a badge']['opens as a minimal float that fires no autocommand'] = function()
+  start_with_project()
+  child.o.number = true
+  child.o.cursorline = true
+  child.o.signcolumn = 'yes'
+  child.lua([[
+    _G.opened = 0
+    vim.api.nvim_create_autocmd({ 'WinNew', 'WinEnter', 'BufWinEnter' }, {
+      callback = function()
+        _G.opened = _G.opened + 1
+      end,
+    })
+  ]])
+  answer_after(4000)
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+
+  explain()
+  floats_once(1)
+
+  eq(child.lua_get('_G.opened'), 0)
+  eq(
+    child.lua_get([[(function()
+      for _, window in ipairs(vim.api.nvim_list_wins()) do
+        if vim.api.nvim_win_get_config(window).relative ~= '' then
+          return {
+            vim.wo[window].number,
+            vim.wo[window].cursorline,
+            vim.wo[window].signcolumn,
+            vim.wo[window].foldcolumn,
+            vim.wo[window].list,
+          }
+        end
+      end
+    end)()]]),
+    { false, false, 'auto', '0', false }
+  )
+end
+
+T['a badge']['advances its spinner a frame every 100 ms'] = function()
+  start_with_project()
+  answer_after(4000)
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+  child.lua([[
+    _G.changes = {}
+    local last
+    local timer = vim.uv.new_timer()
+    timer:start(0, 5, vim.schedule_wrap(function()
+      for _, window in ipairs(vim.api.nvim_list_wins()) do
+        if vim.api.nvim_win_get_config(window).relative ~= '' then
+          local line = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(window), 0, 1, false)[1]
+          local frame = line and line:sub(2, 4)
+          if frame ~= last then
+            last = frame
+            table.insert(_G.changes, vim.uv.now())
+          end
+        end
+      end
+    end))
+  ]])
+
+  explain()
+
+  vim.wait(PATIENCE_MS, function()
+    return #child.lua_get('_G.changes') >= 12
+  end, 50)
+  local changes = child.lua_get('_G.changes')
+  local gaps = {}
+  for index = 3, #changes do
+    table.insert(gaps, changes[index] - changes[index - 1])
+  end
+  table.sort(gaps)
+  eq(gaps[1] >= 70, true)
+  eq((changes[#changes] - changes[2]) / (#changes - 2) <= 130, true)
+end
+
 T['a kept answer'] = MiniTest.new_set()
 
 --- What the user is told when an answer is placed again instead of asked for.
@@ -2014,7 +2155,7 @@ T['a kept answer']['is replaced by asking again with new, which starts a request
   eq(processes_started(), 2)
 end
 
-T['a kept answer']['is forgotten with the buffer'] = function()
+T['a kept answer']['asked again for a file opened again after its buffer was wiped starts a request'] = function()
   local folder = start_with_project()
   explained_then_hidden()
   child.cmd('bwipeout!')
@@ -2063,6 +2204,18 @@ T['a kept answer']['asked again with new while it is shown asks again instead of
 
   eq(shown_once_it_holds('Ends')[1].line, 3)
   eq(processes_started(), 2)
+end
+
+T['a kept answer']['asked again for the same lines while it is shown places it once, each explanation drawn once'] = function()
+  start_with_project()
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+  explain({ range = { 1, 3 } })
+  local shown = shown_once_it_holds('Adds')
+
+  explain({ range = { 1, 3 } })
+
+  eq(told(), { told_kept('new ') })
+  eq(child.lua_get(SHOWN), shown)
 end
 
 return T
