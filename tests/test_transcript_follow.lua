@@ -223,7 +223,48 @@ T['follow()']['skips a line longer than a megabyte, reports it and goes on'] = f
     end, following.signals),
     { 'after_the_huge' }
   )
-  eq(#following.unreadable >= 1, true)
+  eq(following.unreadable, { #tool_line('huge', ('y'):rep(1100 * 1024)) })
+  following.follower.stop()
+end
+
+T['follow()']['counts a line of exactly a megabyte once, and delivers the line after it'] = function()
+  local following = follow_new_transcript()
+  local padding = 1024 * 1024 - #tool_line('exact', '')
+  local exact = tool_line('exact', ('y'):rep(padding))
+
+  fake_transcript.append(following.path, { exact, tool_line('after_the_exact') })
+  vim.wait(PATIENCE_MS, function()
+    return #following.signals > 0
+  end, 10)
+  vim.wait(QUIET_MS)
+
+  eq(#exact, 1024 * 1024)
+  eq(following.unreadable, { 1024 * 1024 })
+  eq(
+    vim.tbl_map(function(signal)
+      return signal.call
+    end, following.signals),
+    { 'after_the_exact' }
+  )
+  following.follower.stop()
+end
+
+T['follow()']['replays a first line of the tail that starts on a line boundary'] = function()
+  local first = vim.json.encode({ type = 'mode', padding = ('z'):rep(300) })
+  local call = tool_line('toolu_on_the_boundary')
+  local rest = 256 * 1024 - #call - 1
+  local padding = vim.json.encode({ type = 'mode', padding = '' })
+  local filler = vim.json.encode({ type = 'mode', padding = ('z'):rep(rest - #padding - 1) })
+
+  local following = follow_new_transcript({ first, call, filler })
+
+  eq(#call + 1 + #filler + 1, 256 * 1024)
+  eq(
+    vim.tbl_map(function(signal)
+      return signal.call
+    end, following.signals),
+    { 'toolu_on_the_boundary' }
+  )
   following.follower.stop()
 end
 
