@@ -4,10 +4,14 @@
 
 local literal = require('aineo.office_pack.literal')
 local loader = require('aineo.office_pack.loader')
+local problems = require('aineo.office_pack.problems')
 
 local M = {}
 
 M.load = loader.load
+M.check = loader.check
+M.describe_problem = problems.describe
+M.quickfix_items = problems.quickfix_items
 M.parse_table_literal = literal.parse
 
 return M
