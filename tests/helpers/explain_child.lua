@@ -101,22 +101,20 @@ local function counts(child, kind)
   return found[1], found[2]
 end
 
---- Has the fake `claude` answer `found`, each a line and a text, asks the
---- explain home about the child's current buffer for `kind`, and waits until
---- the child shows one virtual line for each and none says a request is
---- working, or `PATIENCE_MS` is over.
+--- Asks the explain home, afresh, about the lines `range` names of the
+--- child's current buffer, or all of them, for `kind`, with the fake `claude`.
 ---
 ---@param child table
 ---@param kind 'explanations'|'issues'
----@param found { line: integer, text: string }[]
-function M.place(child, kind, found)
-  answer(child, found)
+---@param range? integer[] the first and last line
+local function ask(child, kind, range)
   child.lua(
     [[
-    local kind, command = ...
+    local kind, command, range = ...
     require('aineo.explain').ask({
       buffer = vim.api.nvim_get_current_buf(),
       window = vim.api.nvim_get_current_win(),
+      range = range,
       tools = false,
       kind = kind,
       fresh = true,
@@ -125,12 +123,85 @@ function M.place(child, kind, found)
       timeout_ms = 180000,
     })
   ]],
-    { kind, M.FAKE_CLAUDE }
+    { kind, M.FAKE_CLAUDE, range }
   )
+end
+
+--- Has the fake `claude` answer `found`, each a line and a text, asks the
+--- explain home about the lines `range` names of the child's current
+--- buffer, or all of them, for `kind`, and waits until the request has
+--- ended and the child shows at least one virtual line for each answer, or
+--- `PATIENCE_MS` is over.
+---
+---@param child table
+---@param kind 'explanations'|'issues'
+---@param found { line: integer, text: string }[]
+---@param range? integer[] the first and last line
+function M.place(child, kind, found, range)
+  answer(child, found)
+  ask(child, kind, range)
   vim.wait(M.PATIENCE_MS, function()
     local shown, working = counts(child, kind)
-    return shown == #found and working == 0
+    return shown >= #found and working == 0
   end, 20)
+end
+
+--- Has the fake `claude` answer `found` after `delay_ms`, and asks the
+--- explain home about the child's current buffer for `kind`, without waiting
+--- for the answer: the request runs for `delay_ms`.
+---
+---@param child table
+---@param kind 'explanations'|'issues'
+---@param found { line: integer, text: string }[]
+---@param delay_ms integer
+function M.begin_slowly(child, kind, found, delay_ms)
+  answer(child, found)
+  child.lua('vim.env.AINEO_FAKE_CLAUDE_PRINT_MS = ...', { tostring(delay_ms) })
+  ask(child, kind)
+end
+
+--- The floating windows of the child, each as the part of its configuration
+--- that matters, its text and the 'winhighlight' it shows with.
+---
+---@param child table
+---@return { win: integer, anchor: string, row: integer, col: integer, text: string, winhighlight: string }[]
+function M.floats(child)
+  return child.lua_get([[(function()
+    local floats = {}
+    for _, window in ipairs(vim.api.nvim_list_wins()) do
+      local config = vim.api.nvim_win_get_config(window)
+      if config.relative ~= '' then
+        table.insert(floats, {
+          win = config.win,
+          anchor = config.anchor,
+          row = config.row,
+          col = config.col,
+          text = table.concat(
+            vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(window), 0, -1, false),
+            '\n'
+          ),
+          winhighlight = vim.wo[window].winhighlight,
+        })
+      end
+    end
+    return floats
+  end)()]])
+end
+
+--- The text of the child's only floating window once `predicate` holds for
+--- it, or after `PATIENCE_MS`; an empty string when there is none.
+---
+---@param child table
+---@param predicate fun(text: string): boolean
+---@return string
+function M.badge_text_once(child, predicate)
+  local text = ''
+  vim.wait(M.PATIENCE_MS, function()
+    local floats = M.floats(child)
+    text = floats[1] and floats[1].text or ''
+    return predicate(text)
+  end, 20)
+  return text
 end
 
 --- What the child was told through `vim.notify()` since `start()`: each
