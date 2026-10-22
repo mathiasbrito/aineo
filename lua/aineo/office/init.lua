@@ -102,7 +102,9 @@ function M.new_office(options)
     end
     local follower = transcript.follow({
       path = transcript_path,
-      on_signal = tracker.take,
+      on_signal = function(signal)
+        tracker.take(signal, options.clock())
+      end,
     })
     return tracker, follower
   end
@@ -239,7 +241,8 @@ function M.new_office(options)
     local screen = screen_module.new_screen(float.buffer)
     local tracker, follower = follow_transcript()
     local function draw()
-      stage.advance(tracker.agents(), options.clock())
+      local now = options.clock()
+      stage.advance(tracker.agents(now), now)
       screen.paint(stage.picture())
     end
     local open = {
