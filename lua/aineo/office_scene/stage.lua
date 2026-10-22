@@ -33,7 +33,7 @@ function M.new_stage(options)
   local layout, director
 
   local function lay_out()
-    layout = floor_layout.lay_out(pack.floor, width)
+    layout = floor_layout.lay_out(pack, width, height)
     director = director_module.new_director(pack, layout)
   end
   lay_out()
