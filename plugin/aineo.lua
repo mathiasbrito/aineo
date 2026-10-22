@@ -174,10 +174,10 @@ end
 --- cursor is in, the command's name first: its subcommands after the name
 --- alone, the words of a subcommand that takes them (`SUBCOMMAND_WORDS`)
 --- after that subcommand, the words `explain` may be followed by
---- (`explain_words_after()`), the running
---- sessions of this Neovim's directory after `claim` (`aineo.entry`'s `running_sessions_here()`), `new`,
---- `close` and the numbers of the tab pages after `tab` (`tab_words()`), and
---- nothing otherwise.
+--- (`explain_words_after()`), the running sessions of this Neovim's
+--- directory after `claim` (`aineo.entry`'s `running_sessions_here()`),
+--- `new`, `close` and the numbers of the tab pages after `tab`
+--- (`tab_words()`), and nothing otherwise.
 ---
 ---@param typed string[]
 ---@return string[]
