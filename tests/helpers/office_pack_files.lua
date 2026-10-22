@@ -43,14 +43,22 @@ function M.pack_text(changes)
     },
     states = { standing = 'stand', working = 'work' },
   }
-  local merged = vim.tbl_extend('force', pack, changes or {})
-  local keys = vim.tbl_keys(merged)
+  return M.description_text(vim.tbl_extend('force', pack, changes or {}))
+end
+
+--- The text of a `pack.lua` that holds exactly the fields of `description`,
+--- one field to a line, in the order of their names.
+---
+---@param description table
+---@return string
+function M.description_text(description)
+  local keys = vim.tbl_keys(description)
   table.sort(keys)
   local text = {}
   for _, key in ipairs(keys) do
     table.insert(
       text,
-      ('  %s = %s,'):format(key, vim.inspect(merged[key], { newline = ' ', indent = '' }))
+      ('  %s = %s,'):format(key, vim.inspect(description[key], { newline = ' ', indent = '' }))
     )
   end
   return 'return {\n' .. table.concat(text, '\n') .. '\n}\n'
