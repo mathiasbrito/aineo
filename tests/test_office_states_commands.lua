@@ -119,6 +119,25 @@ T['a command']['is classed past leading assignments'] = function()
   eq(state_while_running('AINEO_JOBS=2 DEBUG=1 make test', COMMANDS), 'running_tests')
 end
 
+T['a command']['is not classed by the directory a cd names'] = function()
+  local commands = { reading = { 'cat' } }
+
+  eq(state_while_running('cd cat && ls', commands), 'running_a_command')
+  eq(state_while_running('cd cat', commands), 'running_a_command')
+end
+
+T['a command']['is not classed by the value of an assignment it starts with'] = function()
+  local commands = { reading = { 'cat' } }
+
+  eq(state_while_running('KIND=cat ls', commands), 'running_a_command')
+end
+
+T['a command']['starts, for a match that must start it, after the assignments'] = function()
+  local commands = { tests = { { lua_pattern = '^make%s+test' } } }
+
+  eq(state_while_running('CI=1 DEBUG=1 make test', commands), 'running_tests')
+end
+
 T['a command']['is classed by a segment that is not its first'] = function()
   eq(state_while_running('echo starting && make test', COMMANDS), 'running_tests')
 end
