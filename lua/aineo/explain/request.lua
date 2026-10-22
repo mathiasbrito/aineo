@@ -14,18 +14,38 @@ M.SCHEMA = '{"type":"object","properties":{"explanations":{"type":"array","items
 --- The read-only tools a request with tools may use, each without asking.
 local READ_ONLY_TOOLS = 'Read,Grep,Glob'
 
---- The words that start Claude Code for one request: `command` in print
---- mode, answering one JSON result that holds the structured output
---- `SCHEMA` describes, keeping no session, using no MCP server and the
---- model `model`; with no tool, or, when `tools` is set, with the read-only
---- tools alone (`READ_ONLY_TOOLS`), each allowed without asking.
+--- The words of `command` before its first flag, a word that starts with
+--- `-`: the program and the words that wrap it. Every flag of the command,
+--- and the words after it, are left out, so that none of them (an MCP
+--- configuration, settings, a verbose output) reaches a request.
+---
+---@param command string[]
+---@return string[]
+local function program_of(command)
+  local program = {}
+  for _, word in ipairs(command) do
+    if vim.startswith(word, '-') then
+      break
+    end
+    table.insert(program, word)
+  end
+  return program
+end
+
+--- The words that start Claude Code for one request: the program of
+--- `command` (`program_of()`) in print mode, answering one JSON result that
+--- holds the structured output `SCHEMA` describes, keeping no session, using
+--- no MCP server, loading the user's own settings alone, never the
+--- project's, and the model `model`; with no tool, or, when `tools` is set,
+--- with the read-only tools alone (`READ_ONLY_TOOLS`), each allowed without
+--- asking.
 ---
 ---@param command string[] the words that run Claude Code, `claude.cmd`
 ---@param model string
 ---@param tools boolean
 ---@return string[]
 function M.arguments(command, model, tools)
-  local words = vim.list_extend(vim.list_slice(command), {
+  local words = vim.list_extend(program_of(command), {
     '-p',
     '--output-format',
     'json',
@@ -35,6 +55,8 @@ function M.arguments(command, model, tools)
     '--strict-mcp-config',
     '--model',
     model,
+    '--setting-sources',
+    'user',
     '--tools',
   })
   if tools then

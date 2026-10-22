@@ -393,9 +393,11 @@ right above the line it explains. In Visual mode only the selected lines are
 explained. `\V` does the same and lets that Claude Code read the project with
 `Read`, `Grep` and `Glob`, without asking, and no other tool; `\v` gives it
 the code alone, with no tool. The prompt carries the buffer as it stands,
-unsaved changes included. aineo starts one `claude` process for the request
-(`claude.cmd`, in the top of the repository), with no MCP server, none of
-aineo's settings and no session kept, and it ends with the answer.
+unsaved changes included. aineo starts one `claude` process for the request,
+in the top of the repository, with the program of `claude.cmd` (its words
+before the first flag, none of its flags), no MCP server, none of aineo's
+settings, no session kept and only your own Claude Code settings, never the
+project's (`--setting-sources user`), and it ends with the answer.
 
 `\v` or `\V` again in Normal mode clears the explanations; while a request
 runs they stop it. `:Aineo explain [tools]` with a range, and `:Aineo explain

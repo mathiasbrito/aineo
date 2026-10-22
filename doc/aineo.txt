@@ -1818,10 +1818,16 @@ Explaining code ~
 buffer, a file's, or, in Visual mode, of the lines selected, and show each
 explanation as virtual lines right above the line it explains. That Claude
 Code is never the session's agent: aineo starts one `claude` process for the
-request, with `claude.cmd`, in the top of the repository holding the file
-(else the file's folder), and it ends with its answer. Nothing of the
-session is used or kept: the request has no MCP server, none of aineo's
-settings, and no session to resume (`--no-session-persistence`).
+request, in the top of the repository holding the file (else the file's
+folder), and it ends with its answer. From
+`claude.cmd` it takes the program, the words before the first one that starts
+with `-`, and none of its flags (`--mcp-config`, `--settings`, `--verbose`
+and the others). Nothing of the session is used or kept: the request has no
+MCP server, none of aineo's settings, and no session to resume
+(`--no-session-persistence`). It loads your own Claude Code settings alone
+(`--setting-sources user`): the `.claude/settings*.json` of the project, with
+its hooks, `env` and `apiKeyHelper`, never apply to it, as `claude -p` asks
+no trust of the folder it runs in.
 
 `\v` hands Claude Code the code alone: it has no tool. `\V`, the verbose one,
 lets it read the project with `Read`, `Grep` and `Glob`, each without asking,
@@ -3565,9 +3571,10 @@ Explain code ~
   Which model `\v` and `\V` explain code with (`explain.model`,
   |aineo-config-explain.model|), after how long a request is stopped
   (`explain.timeout_ms`, |aineo-config-explain.timeout_ms|), that each request
-  starts a Claude Code of its own with `claude.cmd`, and what it may use:
-  nothing with `\v`, `Read`, `Grep` and `Glob` with `\V`, without asking, and
-  no MCP server and no settings of aineo (|aineo-explain|). Nothing while the
+  starts a Claude Code of its own with the program of `claude.cmd`, and what
+  it may use: nothing with `\v`, `Read`, `Grep` and `Glob` with `\V`, without
+  asking, no MCP server, no settings of aineo, and your own Claude Code
+  settings but never the project's (|aineo-explain|). Nothing while the
   configuration is wrong.
 
 Autostart ~
