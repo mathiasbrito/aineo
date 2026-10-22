@@ -9,6 +9,7 @@ local NAMESPACE = vim.api.nvim_create_namespace('aineo.office')
 
 ---@class aineo.office.Screen
 ---@field paint fun(picture: aineo.office_scene.Picture) writes the picture into the buffer
+---@field forget_groups fun() makes the highlight groups again as the next pictures name them, as after a colorscheme cleared them
 
 --- Makes the highlight group `name`, as `look` says.
 ---
@@ -57,6 +58,9 @@ function M.new_screen(buffer)
   local defined = {}
 
   return {
+    forget_groups = function()
+      defined = {}
+    end,
     paint = function(picture)
       for name, look in pairs(picture.looks) do
         if not defined[name] then

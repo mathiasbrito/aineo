@@ -16,8 +16,11 @@ local FILETYPE = 'aineo-office'
 --- The buffer is a scratch buffer no one edits, wiped when its window closes,
 --- named `aineo://office-<buffer number>`: the number keeps the names of the
 --- offices of several tab pages apart. The window shows only that buffer
---- (`'winfixbuf'`), draws no line numbers, sign column or cursor line, and
---- takes the colours of the editor's text.
+--- (`'winfixbuf'`), draws no line numbers, sign column, cursor line or border,
+--- whatever `'winborder'` says, and takes the colours of the editor's text. It
+--- takes no mouse event: a click or the wheel over it reaches the window
+--- beneath, so a click enters that window and the wheel never scrolls the
+--- picture.
 ---
 ---@param area aineo.layout.Area
 ---@return aineo.office.Float float
@@ -35,12 +38,28 @@ function M.open(area)
     width = area.width,
     height = area.height,
     style = 'minimal',
+    border = 'none',
     focusable = true,
+    mouse = false,
   })
   vim.wo[window].winfixbuf = true
   vim.wo[window].wrap = false
   vim.wo[window].winhighlight = 'NormalFloat:Normal'
   return { buffer = buffer, window = window }
+end
+
+--- Moves and resizes the window of `float` to cover `area`.
+---
+---@param float aineo.office.Float
+---@param area aineo.layout.Area
+function M.place(float, area)
+  vim.api.nvim_win_set_config(float.window, {
+    relative = 'editor',
+    row = area.row,
+    col = area.col,
+    width = area.width,
+    height = area.height,
+  })
 end
 
 --- Closes the window of `float`, which wipes its buffer, if it is open.
