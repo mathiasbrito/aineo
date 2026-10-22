@@ -336,10 +336,24 @@ function M.start_token(fake, count)
   return M.hook_command(fake, count, 'SessionStart'):match("'([^']*)' 'SessionStart'")
 end
 
---- Runs the `event` hook of the fake's `count`th start as Claude Code runs a
---- command hook: its command through `sh -c`, with `input` on stdin and the
---- address of `child`, the editor Claude Code runs in, as `NVIM`; returns
---- how it ended, once it has.
+--- Runs `command`, a hook's, through `sh -c`, with `input` on stdin and the
+--- address of `child` as `NVIM`; returns how it ended, once it has.
+---
+---@param child table
+---@param command string
+---@param input string
+---@return vim.SystemCompleted
+local function run_hook_command(child, command, input)
+  local options = { stdin = input, env = { NVIM = child.v.servername } }
+  return vim.system({ 'sh', '-c', command }, options):wait(M.PATIENCE_MS)
+end
+
+--- Runs the `event` hook of the fake's `count`th start as that start's
+--- Claude Code runs a command hook: its command through `sh -c`, with
+--- `input` on stdin and the address of `child`, the editor Claude Code runs
+--- in, as `NVIM`, and the fake's pid where the command has `"$PPID"`, the
+--- pid the shell Claude Code starts expands it to; returns how it ended,
+--- once it has.
 ---
 ---@param child table
 ---@param fake { record: string }
@@ -348,9 +362,24 @@ end
 ---@param input string such as `hook_input()` makes
 ---@return vim.SystemCompleted
 function M.run_session_hook(child, fake, count, event, input)
-  local command = M.hook_command(fake, count, event)
-  local options = { stdin = input, env = { NVIM = child.v.servername } }
-  return vim.system({ 'sh', '-c', command }, options):wait(M.PATIENCE_MS)
+  local pid = tostring(M.wait_for_starts(fake, count)[count].pid)
+  local command = M.hook_command(fake, count, event):gsub('"%$PPID"', pid)
+  return run_hook_command(child, command, input)
+end
+
+--- Runs the `event` hook of the fake's `count`th start as `run_session_hook()`
+--- does, but as another process Claude Code started with that start's
+--- `--settings` runs it: `"$PPID"` expands to this Neovim's pid, a process
+--- that is not the fake's nor started by it.
+---
+---@param child table
+---@param fake { record: string }
+---@param count integer
+---@param event string
+---@param input string such as `hook_input()` makes
+---@return vim.SystemCompleted
+function M.run_session_hook_elsewhere(child, fake, count, event, input)
+  return run_hook_command(child, M.hook_command(fake, count, event), input)
 end
 
 --- Waits, at most `PATIENCE_MS`, until no hook relay delivers to `child`
