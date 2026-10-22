@@ -43,14 +43,31 @@ function M.pack_text(changes)
     },
     states = { standing = 'stand', working = 'work' },
   }
+  local merged = vim.tbl_extend('force', pack, changes or {})
+  local keys = vim.tbl_keys(merged)
+  table.sort(keys)
   local text = {}
-  for key, value in pairs(vim.tbl_extend('force', pack, changes or {})) do
+  for _, key in ipairs(keys) do
     table.insert(
       text,
-      ('  %s = %s,'):format(key, vim.inspect(value, { newline = ' ', indent = '' }))
+      ('  %s = %s,'):format(key, vim.inspect(merged[key], { newline = ' ', indent = '' }))
     )
   end
   return 'return {\n' .. table.concat(text, '\n') .. '\n}\n'
+end
+
+--- The number of the line of `text`, the text of a `pack.lua`, that holds the
+--- field `key` at its top level, written `  <key> =`.
+---
+---@param text string
+---@param key string
+---@return integer|nil
+function M.line_of(text, key)
+  for number, line in ipairs(vim.split(text, '\n')) do
+    if vim.startswith(line, '  ' .. key .. ' =') then
+      return number
+    end
+  end
 end
 
 --- The text of the plan of the smallest pack: a wall, a floor and a seat.
