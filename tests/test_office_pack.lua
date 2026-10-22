@@ -290,4 +290,135 @@ T['load()']['says which art file has no frame'] = function()
   eq(problem, 'art/empty.txt: the piece has no pixels')
 end
 
+--- The characters of a pack whose agent has `count` poses, `p0` drawn and each
+--- of the others like the one before it.
+---
+---@param count integer
+---@return table characters
+local function characters_with_a_chain_of_poses(count)
+  local poses = { p0 = { art = { 'person' } } }
+  for index = 1, count - 1 do
+    poses['p' .. index] = { like = 'p' .. (index - 1) }
+  end
+  return { agent = { colours = { '#a6e3a1' }, poses = poses } }
+end
+
+T['load()']['takes a pose like a chain of up to eight others'] = function()
+  local folder = files.write_pack(pack_root(), 'small', {
+    ['pack.lua'] = files.pack_text({ characters = characters_with_a_chain_of_poses(9) }),
+  })
+
+  local pack = load_pack('small', { folder })
+
+  eq(pack.agent.poses.p8, { art = { 'person' } })
+end
+
+T['load()']['refuses a pose like a chain of more than eight others, naming the pose'] = function()
+  local folder = files.write_pack(pack_root(), 'small', {
+    ['pack.lua'] = files.pack_text({ characters = characters_with_a_chain_of_poses(10) }),
+  })
+
+  local pack, problem = load_pack('small', { folder })
+
+  eq(pack, nil)
+  eq(problem, 'pack.lua: the pose “p9” is like a chain of more than 8 poses')
+end
+
+T['load()']['refuses a long chain of poses at once, not after minutes'] = function()
+  local folder = files.write_pack(pack_root(), 'small', {
+    ['pack.lua'] = files.pack_text({ characters = characters_with_a_chain_of_poses(6000) }),
+  })
+  local started = vim.uv.hrtime()
+
+  local pack = load_pack('small', { folder })
+
+  eq(pack, nil)
+  eq((vim.uv.hrtime() - started) / 1e6 < 1000, true)
+end
+
+T['load()']['refuses a pose that is like itself, naming it'] = function()
+  local folder = files.write_pack(pack_root(), 'small', {
+    ['pack.lua'] = files.pack_text({
+      characters = { agent = { poses = { standing = { like = 'standing' } } } },
+    }),
+  })
+
+  local pack, problem = load_pack('small', { folder })
+
+  eq(pack, nil)
+  eq(problem, 'pack.lua: the pose “standing” is like itself')
+end
+
+T['load()']['refuses poses that are like each other in a ring'] = function()
+  local folder = files.write_pack(pack_root(), 'small', {
+    ['pack.lua'] = files.pack_text({
+      characters = { agent = { poses = { a = { like = 'b' }, b = { like = 'a' } } } },
+    }),
+  })
+
+  local pack, problem = load_pack('small', { folder })
+
+  eq(pack, nil)
+  eq(vim.endswith(problem, 'is like itself'), true)
+end
+
+T['load()']['refuses a pose like a pose the pack does not describe, naming that pose'] = function()
+  local folder = files.write_pack(pack_root(), 'small', {
+    ['pack.lua'] = files.pack_text({
+      characters = { agent = { poses = { standing = { like = 'floating' } } } },
+    }),
+  })
+
+  local raised, pack, problem = pcall(load_pack, 'small', { folder })
+
+  eq(raised, true)
+  eq(pack, nil)
+  eq(problem, 'pack.lua: the pose “floating” is not described')
+end
+
+T['load()']['gives an agent with no colours one grey'] = function()
+  local folder = files.write_pack(pack_root(), 'small', {
+    ['pack.lua'] = files.pack_text({
+      characters = { agent = { poses = { standing = { art = { 'person' } } } } },
+    }),
+  })
+
+  local pack = load_pack('small', { folder })
+
+  eq(pack.agent.colours, { '#a6adc8' })
+end
+
+T['load()']['refuses a file over 256 KiB, naming it'] = function()
+  local folder = files.write_pack(pack_root(), 'small', {
+    ['floor.txt'] = ('.'):rep(256 * 1024 + 1),
+  })
+
+  local pack, problem = load_pack('small', { folder })
+
+  eq(pack, nil)
+  eq(problem, 'floor.txt: the file is longer than 256 KiB')
+end
+
+T['load()']['takes a file of exactly 256 KiB'] = function()
+  local folder = files.write_pack(pack_root(), 'small', {
+    ['floor.txt'] = ' \n ' .. ('.'):rep(256 * 1024 - 3),
+  })
+
+  local pack = load_pack('small', { folder })
+
+  eq(#pack.floor.rows, 1)
+end
+
+T['load()']['says a folder named like a file is no file'] = function()
+  local folder = files.write_pack(pack_root(), 'small', {
+    ['floor.txt'] = false,
+    ['floor.txt/inner'] = 'x',
+  })
+
+  local pack, problem = load_pack('small', { folder })
+
+  eq(pack, nil)
+  eq(problem, 'floor.txt: the file is missing')
+end
+
 return T
