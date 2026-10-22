@@ -18,9 +18,22 @@ end
 ---@param name string
 ---@param folders string[]
 ---@return aineo.office_pack.Pack|nil pack
----@return string|nil problem
 local function load_pack(name, folders)
-  return office_pack.load({ name = name, folders = folders })
+  return (office_pack.load({ name = name, folders = folders }))
+end
+
+--- What is wrong with the pack `name` in the `aineo-office` folders `folders`,
+--- each problem as `{ file, line, message }`.
+---
+---@param name string
+---@param folders string[]
+---@return table[]
+local function problems_of(name, folders)
+  local told = {}
+  for _, problem in ipairs(office_pack.check({ name = name, folders = folders })) do
+    table.insert(told, { problem.file, problem.line, problem.message })
+  end
+  return told
 end
 
 local T = MiniTest.new_set({
@@ -57,7 +70,7 @@ T['load()']['reads an art file as a piece with its colours, anchor, speed and fr
     ['art/blinker.txt'] = table.concat({
       'about: Two frames.',
       'colours: A = agent, k = ink',
-      'anchor: 1, 2',
+      'anchor: 1, 1',
       'seconds per frame: 0.5',
       '---',
       'Ak',
@@ -73,8 +86,11 @@ T['load()']['reads an art file as a piece with its colours, anchor, speed and fr
 
   eq(pack.pieces.blinker, {
     name = 'blinker',
+    about = 'Two frames.',
     colours = { A = 'agent', k = 'ink' },
-    anchor = { column = 1, row = 2 },
+    anchor = { column = 1, row = 1 },
+    faces = 'right',
+    areas = {},
     seconds_per_frame = 0.5,
     frames = { { 'Ak', 'kA' }, { 'AA', 'kk' } },
     width = 2,
@@ -224,17 +240,15 @@ end
 T['load()']['says which pack was not found and where it looked'] = function()
   local folder = files.write_pack(pack_root(), 'small')
 
-  local pack, problem = load_pack('missing', { folder })
-
-  eq(pack, nil)
-  eq(problem, ('there is no pack “missing” in %s'):format(folder))
+  eq(problems_of('missing', { folder }), {
+    { 'pack.lua', nil, ('there is no pack “missing” in %s'):format(folder) },
+  })
 end
 
 T['load()']['says there is no pack when it is given no folder'] = function()
-  local pack, problem = load_pack('small', {})
-
-  eq(pack, nil)
-  eq(problem, 'there is no pack “small” in any folder')
+  eq(problems_of('small', {}), {
+    { 'pack.lua', nil, 'there is no pack “small” in any folder' },
+  })
 end
 
 T['load()']['says which line of pack.lua is not data'] = function()
@@ -242,10 +256,7 @@ T['load()']['says which line of pack.lua is not data'] = function()
     ['pack.lua'] = 'return {\n  format = 1,\n  name = os.getenv("HOME"),\n}\n',
   })
 
-  local pack, problem = load_pack('small', { folder })
-
-  eq(pack, nil)
-  eq(problem, 'pack.lua, line 3: `os` is not data')
+  eq(problems_of('small', { folder }), { { 'pack.lua', 3, '`os` is not data' } })
 end
 
 T['load()']['refuses a pack written for another format'] = function()
@@ -253,19 +264,15 @@ T['load()']['refuses a pack written for another format'] = function()
     ['pack.lua'] = files.pack_text({ format = 2 }),
   })
 
-  local pack, problem = load_pack('small', { folder })
-
-  eq(pack, nil)
-  eq(problem, 'pack.lua: the pack is written for format 2, and aineo reads format 1')
+  eq(problems_of('small', { folder }), {
+    { 'pack.lua', nil, 'the pack is written for format 2, and aineo reads format 1' },
+  })
 end
 
 T['load()']['says which file is missing'] = function()
   local folder = files.write_pack(pack_root(), 'small', { ['floor.txt'] = false })
 
-  local pack, problem = load_pack('small', { folder })
-
-  eq(pack, nil)
-  eq(vim.startswith(problem, 'floor.txt: '), true)
+  eq(problems_of('small', { folder }), { { 'floor.txt', nil, 'the file is missing' } })
 end
 
 T['load()']['says when the pack maps no activity to standing'] = function()
@@ -273,10 +280,9 @@ T['load()']['says when the pack maps no activity to standing'] = function()
     ['pack.lua'] = files.pack_text({ states = { working = 'work' } }),
   })
 
-  local pack, problem = load_pack('small', { folder })
-
-  eq(pack, nil)
-  eq(problem, 'pack.lua: states must give standing an activity')
+  eq(problems_of('small', { folder }), {
+    { 'pack.lua', nil, 'states must give standing an activity' },
+  })
 end
 
 T['load()']['says which art file has no frame'] = function()
@@ -284,10 +290,7 @@ T['load()']['says which art file has no frame'] = function()
     ['art/empty.txt'] = 'colours: A = agent\n---\n',
   })
 
-  local pack, problem = load_pack('small', { folder })
-
-  eq(pack, nil)
-  eq(problem, 'art/empty.txt: the piece has no pixels')
+  eq(problems_of('small', { folder }), { { 'art/empty.txt', 2, 'the piece has no pixels' } })
 end
 
 --- The characters of a pack whose agent has `count` poses, `p0` drawn and each
@@ -318,10 +321,9 @@ T['load()']['refuses a pose like a chain of more than eight others, naming the p
     ['pack.lua'] = files.pack_text({ characters = characters_with_a_chain_of_poses(10) }),
   })
 
-  local pack, problem = load_pack('small', { folder })
-
-  eq(pack, nil)
-  eq(problem, 'pack.lua: the pose “p9” is like a chain of more than 8 poses')
+  eq(problems_of('small', { folder }), {
+    { 'pack.lua', nil, 'the pose “p9” is like a chain of more than 8 poses' },
+  })
 end
 
 T['load()']['refuses a long chain of poses at once, not after minutes'] = function()
@@ -330,9 +332,9 @@ T['load()']['refuses a long chain of poses at once, not after minutes'] = functi
   })
   local started = vim.uv.hrtime()
 
-  local pack = load_pack('small', { folder })
+  local told = problems_of('small', { folder })
 
-  eq(pack, nil)
+  eq(#told > 0, true)
   eq((vim.uv.hrtime() - started) / 1e6 < 1000, true)
 end
 
@@ -343,10 +345,9 @@ T['load()']['refuses a pose that is like itself, naming it'] = function()
     }),
   })
 
-  local pack, problem = load_pack('small', { folder })
-
-  eq(pack, nil)
-  eq(problem, 'pack.lua: the pose “standing” is like itself')
+  eq(problems_of('small', { folder }), {
+    { 'pack.lua', nil, 'the pose “standing” is like itself' },
+  })
 end
 
 T['load()']['refuses poses that are like each other in a ring'] = function()
@@ -356,10 +357,10 @@ T['load()']['refuses poses that are like each other in a ring'] = function()
     }),
   })
 
-  local pack, problem = load_pack('small', { folder })
+  local told = problems_of('small', { folder })
 
-  eq(pack, nil)
-  eq(vim.endswith(problem, 'is like itself'), true)
+  eq(#told, 1)
+  eq(vim.endswith(told[1][3], 'is like itself'), true)
 end
 
 T['load()']['refuses a pose like a pose the pack does not describe, naming that pose'] = function()
@@ -369,11 +370,9 @@ T['load()']['refuses a pose like a pose the pack does not describe, naming that 
     }),
   })
 
-  local raised, pack, problem = pcall(load_pack, 'small', { folder })
-
-  eq(raised, true)
-  eq(pack, nil)
-  eq(problem, 'pack.lua: the pose “floating” is not described')
+  eq(problems_of('small', { folder }), {
+    { 'pack.lua', nil, 'the pose “floating” is not described' },
+  })
 end
 
 T['load()']['gives an agent with no colours one grey'] = function()
@@ -393,10 +392,9 @@ T['load()']['refuses a file over 256 KiB, naming it'] = function()
     ['floor.txt'] = ('.'):rep(256 * 1024 + 1),
   })
 
-  local pack, problem = load_pack('small', { folder })
-
-  eq(pack, nil)
-  eq(problem, 'floor.txt: the file is longer than 256 KiB')
+  eq(problems_of('small', { folder }), {
+    { 'floor.txt', nil, 'the file is longer than 256 KiB' },
+  })
 end
 
 T['load()']['takes a file of exactly 256 KiB'] = function()
@@ -415,11 +413,7 @@ T['load()']['says a folder named like a file is no file'] = function()
     ['floor.txt/inner'] = 'x',
   })
 
-  local raised, pack, problem = pcall(load_pack, 'small', { folder })
-
-  eq(raised, true)
-  eq(pack, nil)
-  eq(problem, 'floor.txt: the file is missing')
+  eq(problems_of('small', { folder }), { { 'floor.txt', nil, 'the file is missing' } })
 end
 
 return T

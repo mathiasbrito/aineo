@@ -224,9 +224,10 @@ function M.new_office(options)
       vim.notify(NO_RIGHT_SIDE, vim.log.levels.WARN)
       return
     end
-    local pack, problem = office_pack.load({ name = PACK_NAME, folders = options.pack_folders })
+    local pack, problems = office_pack.load({ name = PACK_NAME, folders = options.pack_folders })
     if not pack then
-      vim.notify(('aineo: the office cannot show: %s'):format(problem), vim.log.levels.ERROR)
+      local why = office_pack.describe_problem(problems[1])
+      vim.notify(('aineo: the office cannot show: %s'):format(why), vim.log.levels.ERROR)
       return
     end
     local made, stage =
