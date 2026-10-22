@@ -156,6 +156,15 @@ T['signals_of_line()']['takes a null input, call and failure flag as absent'] = 
   eq(finished, { { agent = 'main', kind = 'tool_finished', failed = false } })
 end
 
+T['signals_of_line()']['takes a call id that is not a string as no id'] = function()
+  local signals = transcript.signals_of_line(
+    '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash","id":5,"input":{}}]}}',
+    'main'
+  )
+
+  eq(signals, { { agent = 'main', kind = 'tool_started', tool = 'Bash', input = {} } })
+end
+
 T['signals_of_line()']['reads each of several blocks of one line'] = function()
   local line = vim.json.encode({
     type = 'assistant',
