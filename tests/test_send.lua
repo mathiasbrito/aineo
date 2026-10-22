@@ -652,4 +652,66 @@ T['paste()']['refuses, saying so once, behind the workspace-trust dialog'] = fun
   })
 end
 
+--- Submits `text` to Claude's prompt in `child` (`aineo.send`'s `submit()`),
+--- keeping an error it raises for `send.messages()`. Returns whether it
+--- sent, as `submit()` returns it.
+---
+---@param text string
+---@return boolean
+local function submit(text)
+  return child.lua(
+    [[
+      local submitted, sent = pcall(require('aineo.send').submit, ...)
+      if not submitted then
+        table.insert(_G.aineo_test_messages, { error = sent })
+        return false
+      end
+      return sent
+    ]],
+    { text }
+  )
+end
+
+T['submit()'] = MiniTest.new_set()
+
+T['submit()']['writes the text as one bracketed paste followed by Enter, its control bytes removed, and leaves Input as it is'] = function()
+  local fake = claude.fake('submit', 'ready')
+  start_ready_session(fake)
+  send.set_input(child, { 'a draft' })
+  local before = #claude.received(fake)
+  local expected = '\27[200~two\nlines a b\27[201~\r'
+
+  local sent = submit('two\nlines a\27 b')
+
+  eq(sent, true)
+  eq(claude.wait_for_received_after(fake, before, #expected + 1, ONE_WRITE_PATIENCE_MS), expected)
+  eq({ send.input(child).lines, send.messages(child) }, { { 'a draft' }, {} })
+end
+
+T['submit()']['refuses, saying so once and returning false, before Claude has started'] = function()
+  send.open_layout_without_session(child)
+
+  local sent = submit('text')
+
+  eq(sent, false)
+  eq(send.messages(child), {
+    { message = 'aineo: nothing sent — Claude has not started', level = WARN },
+  })
+end
+
+T['submit()']['refuses, saying so once and returning false, behind the workspace-trust dialog'] = function()
+  local fake = claude.fake('submit-trust', 'trust')
+  local buffer = start_session(fake)
+  claude.wait_for_screen(child, buffer, 'Yes, I trust this folder')
+  local before = #claude.received(fake)
+
+  local sent = submit('text')
+
+  eq({ sent, sent_after(fake, before), send.messages(child) }, {
+    false,
+    '',
+    { { message = NOT_READY, level = WARN } },
+  })
+end
+
 return T
