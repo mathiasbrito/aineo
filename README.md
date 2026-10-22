@@ -561,8 +561,9 @@ version may change the title.
 `:checkhealth aineo` reports the Neovim version, the configuration (an unknown
 key is named), whether `claude` runs, the shell, the server socket, the prefix
 mappings, the tab line, the activity indicator, the picker `\f` uses, how code
-is explained and why the autostart did or did not run. It starts no Claude session and opens no
-layout; the one command it runs is `claude.cmd` with `--version` appended.
+is explained and why the autostart did or did not run. It starts no Claude
+session and opens no layout; the one command it runs is `claude.cmd` with
+`--version` appended.
 
 ## More
 
