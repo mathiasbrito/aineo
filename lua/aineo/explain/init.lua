@@ -4,9 +4,11 @@
 
 local answer = require('aineo.explain.answer')
 local kinds = require('aineo.explain.kinds')
+local jump = require('aineo.explain.jump')
 local kept = require('aineo.explain.kept')
 local look = require('aineo.explain.look')
 local marks = require('aineo.explain.marks')
+local message = require('aineo.explain.message')
 local request = require('aineo.explain.request')
 local runs = require('aineo.explain.runs')
 
@@ -14,6 +16,15 @@ local M = {}
 
 look.keep_defined(kinds.ALL)
 marks.keep_aligned()
+marks.on_change(function(buffer, window)
+  jump.sync_keys(buffer)
+  if window then
+    runs.refresh_badge(window)
+  end
+  for _, shown_in in ipairs(vim.api.nvim_buf_is_valid(buffer) and vim.fn.win_findbuf(buffer) or {}) do
+    runs.refresh_badge(shown_in)
+  end
+end)
 
 --- One request to explain code.
 ---@class aineo.explain.Request
@@ -26,6 +37,7 @@ marks.keep_aligned()
 ---@field command string[] the words that run Claude Code, `claude.cmd`
 ---@field model string the model that explains
 ---@field timeout_ms integer how long the request may run
+---@field send_key? string what the user presses to send marked issues, said in the badge; `\s` when absent
 
 --- The nearest folder that exists among the folders holding `path`: its
 --- own, else the first of its parents, which a file not written yet may lack.
@@ -94,6 +106,8 @@ end
 ---@field buffer integer
 ---@field window integer
 ---@field path string
+---@field file string the file's absolute path
+---@field send_key? string
 ---@field first integer
 ---@field last integer
 ---@field key string what the answer is kept under (`aineo.explain.kept`'s `key()`)
@@ -125,7 +139,11 @@ local function show_answer(asked, ended)
     return
   end
   marks.clear(asked.buffer, asked.kind, asked.first, asked.last)
-  marks.place(asked.buffer, asked.window, asked.kind, explanations)
+  marks.place(asked.buffer, asked.kind, explanations, {
+    window = asked.window,
+    file = asked.file,
+    send_key = asked.send_key,
+  })
   kept.keep(
     asked.buffer,
     asked.key,
@@ -157,6 +175,8 @@ local function start(explaining)
     buffer = buffer,
     window = explaining.window,
     path = vim.fs.relpath(folder, path),
+    file = path,
+    send_key = explaining.send_key,
     first = range[1],
     last = range[2],
     key = kept.key(kind, explaining.tools, explaining.range),
@@ -216,12 +236,23 @@ vim.api.nvim_create_autocmd('VimLeavePre', {
   callback = runs.stop_all,
 })
 
+vim.api.nvim_create_autocmd({ 'BufWinEnter', 'WinNew' }, {
+  group = 'aineo_explain',
+  desc = 'aineo: say the marked issues of the buffer a window shows in its badge',
+  callback = function()
+    for _, window in ipairs(vim.fn.win_findbuf(vim.api.nvim_get_current_buf())) do
+      runs.refresh_badge(window)
+    end
+  end,
+})
+
 vim.api.nvim_create_autocmd('BufWipeout', {
   group = 'aineo_explain',
   desc = 'aineo: stop the Claude Code of the requests for a buffer wiped out',
   callback = function(event)
     runs.stop_all_of(event.buf)
     kept.forget(event.buf)
+    marks.forget(event.buf)
   end,
 })
 
@@ -256,7 +287,11 @@ local function place_kept(explaining, kind)
     return false
   end
   marks.clear(buffer, kind, range[1], range[2])
-  marks.place(buffer, explaining.window, kind, explanations)
+  marks.place(buffer, kind, explanations, {
+    window = explaining.window,
+    file = vim.api.nvim_buf_get_name(buffer),
+    send_key = explaining.send_key,
+  })
   vim.notify(
     ('aineo: the earlier answer, the code unchanged (:Aineo explain %sasks again)'):format(
       words_that_ask_again(explaining, kind)
@@ -311,6 +346,69 @@ function M.clear(buffer)
   for _, kind in ipairs(kinds.ALL) do
     marks.clear(buffer, kind)
   end
+end
+
+--- Marks the issues `buffer` shows above the lines from `first` to `last`,
+--- from 1, and unmarks those already marked (`aineo.explain.marks`'s
+--- `toggle_issue_marks()`); tells the user, once, when none lies above them.
+--- An explanation is never marked.
+---
+---@param buffer integer
+---@param first integer
+---@param last integer
+function M.toggle_issue_marks(buffer, first, last)
+  if marks.toggle_issue_marks(buffer, first, last) == 0 then
+    vim.notify(
+      first == last and 'aineo: no issue on this line' or 'aineo: no issue on the selected lines',
+      vim.log.levels.INFO
+    )
+  end
+end
+
+--- The issues `buffer` shows that are marked, in the order of their lines,
+--- each with the path of the file its request was made for — from `folder`
+--- when the file lies inside it, else absolute — the line it starts at now
+--- and its text.
+---
+---@param buffer integer
+---@param folder string the folder the paths are told from
+---@return aineo.explain.MarkedIssue[]
+function M.marked_issues(buffer, folder)
+  return vim.tbl_map(function(issue)
+    return {
+      path = vim.fs.relpath(folder, issue.file) or issue.file,
+      line = issue.line,
+      text = issue.text,
+    }
+  end, marks.marked_issues(buffer))
+end
+
+--- The message that asks Claude Code, after `prompt`, to check `issues`
+--- (`aineo.explain.message`'s `of_issues()`).
+---
+---@param prompt string
+---@param issues aineo.explain.MarkedIssue[]
+---@return string
+function M.issues_message(prompt, issues)
+  return message.of_issues(prompt, issues)
+end
+
+--- Unmarks every issue `buffer` shows; they stay shown.
+---
+---@param buffer integer
+function M.clear_issue_marks(buffer)
+  marks.clear_issue_marks(buffer)
+end
+
+--- Moves the cursor of `window` to the line of the next or the previous
+--- explanation or issue of its buffer, `count` of them on, wrapping around
+--- (`aineo.explain.jump`'s `go()`), or tells the user there is none.
+---
+---@param window integer
+---@param way 'next'|'previous'
+---@param count integer at least 1
+function M.jump(window, way, count)
+  jump.go(window, way, count)
 end
 
 return M

@@ -11,6 +11,12 @@ local M = {}
 ---@field fill string the gutter's other columns
 ---@field number string the number of the line the kind is shown for
 
+--- The highlight groups an issue is drawn with once it is marked, in place of
+--- the same groups of `aineo.explain.KindGroups`.
+---@class aineo.explain.MarkedGroups
+---@field text string the text of a row and the band behind it
+---@field gutter string the gutter's `✓` and label
+
 --- One kind of virtual line.
 ---@class aineo.explain.Kind
 ---@field name 'explanations'|'issues' what a request names it
@@ -21,6 +27,7 @@ local M = {}
 ---@field accent_group string the highlight group whose foreground is its accent
 ---@field accent_fallback integer the accent when that group has no foreground
 ---@field groups aineo.explain.KindGroups
+---@field marked_groups? aineo.explain.MarkedGroups the groups of a marked one, for a kind that can be marked
 
 ---@type aineo.explain.Kind
 M.EXPLANATIONS = {
@@ -53,6 +60,10 @@ M.ISSUES = {
     gutter = 'AineoExplainIssueGutter',
     fill = 'AineoExplainIssueGutterFill',
     number = 'AineoExplainIssueNr',
+  },
+  marked_groups = {
+    text = 'AineoExplainIssueMarked',
+    gutter = 'AineoExplainIssueMarkedGutter',
   },
 }
 

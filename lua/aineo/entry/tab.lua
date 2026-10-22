@@ -160,7 +160,7 @@ end
 ---@field homes aineo.entry.Homes
 ---@field running_processes fun(): string[] the names of the processes the tab's run pane runs, the oldest first
 ---@field start_in_run_stack fun(command: string, options: { name: string, directory: string? }): integer starts `command` at the bottom of the tab's run stack as a call of a run tool asks, the run pane shown when the tab page is the current one, the cursor staying where it is (`aineo.entry.run_pane`'s `start_in_stack()`)
----@field actions table<string, fun()> what each of `:Aineo`'s arguments that acts on a tab does, by the argument
+---@field actions table<string, fun(origin: integer)> what each of `:Aineo`'s arguments that acts on a tab does, by the argument, given the buffer the key was pressed in
 ---@field send_selection fun() what Send does in Visual mode
 ---@field claim_session fun(id: string) what `:Aineo claim {id}` does
 ---@field follow_told_switch fun(left: string, new: string)
@@ -1555,10 +1555,13 @@ local function make_tab(homes, key, callbacks)
 
   --- What each of `:Aineo`'s arguments that acts on the tab does, by the
   --- argument, its words joined by a space (`pane agent`).
-  ---@type table<string, fun()>
+  ---@type table<string, fun(origin: integer)>
   local actions = {
-    send = function()
-      if not refuses_send_while_claimed() then
+    send = function(origin)
+      local sent_issues = require('aineo.entry.explaining').send_marked_issues(function(message)
+        return require('aineo.send').submit(message, send_target())
+      end, origin, places.kept_places().working_directory)
+      if not sent_issues and not refuses_send_while_claimed() then
         require('aineo.send').send(send_target())
       end
     end,

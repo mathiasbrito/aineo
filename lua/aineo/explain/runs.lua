@@ -5,6 +5,7 @@
 --- that lists them (`aineo.explain.badge`).
 
 local badge = require('aineo.explain.badge')
+local kinds = require('aineo.explain.kinds')
 local marks = require('aineo.explain.marks')
 
 local M = {}
@@ -82,17 +83,34 @@ local function runs_of(window)
   return found
 end
 
+--- The part of a badge that says how many issues the buffer `window` shows
+--- has marked and what sends them, or `nil` when none is.
+---
+---@param window integer
+---@return aineo.explain.BadgePart|nil
+local function marked_part(window)
+  if not vim.api.nvim_win_is_valid(window) then
+    return nil
+  end
+  local count, send_key = marks.marked_summary(vim.api.nvim_win_get_buf(window))
+  if count == 0 then
+    return nil
+  end
+  return {
+    text = ('%d issue%s marked · %s sends'):format(count, count == 1 and '' or 's', send_key),
+    group = kinds.ISSUES.marked_groups.text,
+  }
+end
+
 --- Shows the badge of `window`, which lists the requests that run for it, in
 --- the order they started, each with the seconds it has run, after the
---- spinner's frame of the first; closes it when none runs.
+--- spinner's frame of the first, and last how many issues are marked in the
+--- buffer it shows (`marked_part()`); closes it when none runs and none is
+--- marked.
 ---
 ---@param window integer
 local function show_badge(window)
   local found = runs_of(window)
-  if #found == 0 then
-    badge.close(window)
-    return
-  end
   local parts = {}
   for _, run in ipairs(found) do
     local seconds = math.floor((vim.uv.now() - run.started_ms) / 1000)
@@ -101,7 +119,23 @@ local function show_badge(window)
       group = run.kind.groups.text,
     })
   end
-  badge.show(window, SPINNER[found[1].frame], parts)
+  local marked = marked_part(window)
+  if marked then
+    table.insert(parts, marked)
+  end
+  if #parts == 0 then
+    badge.close(window)
+    return
+  end
+  badge.show(window, found[1] and SPINNER[found[1].frame], parts)
+end
+
+--- Shows the badge of `window` again, as the requests that run and the
+--- issues marked for it say it now (`show_badge()`).
+---
+---@param window integer
+function M.refresh_badge(window)
+  show_badge(window)
 end
 
 --- Starts the bookkeeping of a request: records it, shows above its first

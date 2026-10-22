@@ -128,10 +128,11 @@ for _, argument in ipairs({
   'run shell',
 }) do
   ACTIONS[argument] = function()
+    local origin = vim.api.nvim_get_current_buf()
     if REOPENS_TABS_FIRST[argument] then
       reopening.reopen_folder_tabs()
     end
-    opening.acting_tab().actions[argument]()
+    opening.acting_tab().actions[argument](origin)
   end
 end
 

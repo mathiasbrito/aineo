@@ -34,5 +34,8 @@ M.tell_error = errors.tell_error
 M.explain = explaining.explain
 M.explain_selection = explaining.explain_selection
 M.clear_explanations = explaining.clear_explanations
+M.jump_to_explanation = explaining.jump
+M.mark_issues = explaining.mark_issues
+M.mark_issues_selection = explaining.mark_issues_selection
 
 return M

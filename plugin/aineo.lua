@@ -361,13 +361,14 @@ local EXPLAIN_ORDERS = {
   ['explain-issues-tools'] = { tools = true, kind = 'issues' },
 }
 
---- The keys that follow the prefix for each of `EXPLAIN_ORDERS`, the same
---- in Normal mode and in Visual mode.
+--- The keys that follow the prefix for each of `EXPLAIN_ORDERS` and for
+--- `<Plug>(aineo-explain-mark)`, the same in Normal mode and in Visual mode.
 local EXPLAIN_KEYS = {
   explain = 'v',
   ['explain-tools'] = 'V',
   ['explain-issues'] = 'vi',
   ['explain-issues-tools'] = 'VI',
+  ['explain-mark'] = 'vm',
 }
 
 for words, order in pairs(EXPLAIN_ORDERS) do
@@ -381,6 +382,31 @@ for words, order in pairs(EXPLAIN_ORDERS) do
       require('aineo.entry').explain_selection(order)
     end)
   end, { desc = 'aineo: ' .. words .. ' the selected lines' })
+end
+
+--- The `<Plug>` mapping that marks the issues on the cursor's line, or on
+--- the selected lines in Visual mode, or unmarks those marked
+--- (`aineo.entry`'s `mark_issues()` and `mark_issues_selection()`).
+vim.keymap.set('n', '<Plug>(aineo-explain-mark)', function()
+  run(function()
+    require('aineo.entry').mark_issues()
+  end)
+end, { desc = 'aineo: mark the issues on this line' })
+vim.keymap.set('x', '<Plug>(aineo-explain-mark)', function()
+  run(function()
+    require('aineo.entry').mark_issues_selection()
+  end)
+end, { desc = 'aineo: mark the issues on the selected lines' })
+
+--- The `<Plug>` mappings that jump to the next and the previous explanation
+--- or issue of the current buffer, by the direction they go, in Normal,
+--- Visual and Operator-pending mode (`aineo.entry`'s `jump_to_explanation()`).
+for _, way in ipairs({ 'next', 'previous' }) do
+  vim.keymap.set({ 'n', 'x', 'o' }, ('<Plug>(aineo-explain-%s)'):format(way), function()
+    run(function()
+      require('aineo.entry').jump_to_explanation(way)
+    end)
+  end, { desc = 'aineo: jump to the ' .. way .. ' explanation or issue' })
 end
 
 --- The keys that leave the mode a twin (`map_terminal_prefix()`) is pressed

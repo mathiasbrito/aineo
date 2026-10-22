@@ -26,12 +26,12 @@ local NAMESPACE = vim.api.nvim_create_namespace('aineo_explain_badge')
 --- The text of a badge that says `parts` after `frame`, and the columns each
 --- part takes in it.
 ---
----@param frame string the spinner's frame
+---@param frame string|nil the spinner's frame; none when nothing is working
 ---@param parts aineo.explain.BadgePart[]
 ---@return string text
 ---@return integer[][] spans the first and one past the last byte of each part
 local function laid_out(frame, parts)
-  local text, spans = ' ' .. frame .. ' ', {}
+  local text, spans = ' ' .. (frame and frame .. ' ' or ''), {}
   for index, part in ipairs(parts) do
     if index > 1 then
       text = text .. SEPARATOR
@@ -81,12 +81,12 @@ local function open_float(window, buffer, width)
 end
 
 --- Shows in the top right corner of `window` the badge that says `parts`
---- after the spinner's `frame`, opening it or changing what it says. A
---- window that cannot host the badge (one in another tab page, or gone) has
---- none.
+--- after the spinner's `frame`, when there is one, opening it or changing
+--- what it says. A window that cannot host the badge (one in another tab
+--- page, or gone) has none.
 ---
 ---@param window integer
----@param frame string
+---@param frame string|nil
 ---@param parts aineo.explain.BadgePart[]
 function M.show(window, frame, parts)
   if not vim.api.nvim_win_is_valid(window) then

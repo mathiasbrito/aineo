@@ -55,6 +55,7 @@ function M.explain(order)
     command = config.claude.cmd,
     model = config.explain.model,
     timeout_ms = config.explain.timeout_ms,
+    send_key = config.prefix and config.prefix .. 's' or ':Aineo send',
   })
 end
 
@@ -78,6 +79,64 @@ end
 --- (`aineo.explain`'s `clear()`).
 function M.clear_explanations()
   require('aineo.explain').clear(vim.api.nvim_get_current_buf())
+end
+
+--- What Send does when the current buffer has issues marked (`\vm`): hands
+--- `submit` one message that asks Claude Code to check them (`aineo.explain`'s
+--- `issues_message()`), opened by `explain.issues_prompt`, and, once `submit`
+--- says it sent, unmarks them (`clear_issue_marks()`); with no Claude Code
+--- ready to take it the marks stay. Reads the explain home only when it is
+--- loaded: until a request is made nothing is marked. Returns whether the
+--- buffer had marked issues, in which case Send has nothing else to do.
+---
+---@param submit fun(message: string): boolean sends the message, telling the user why when it cannot
+---@param buffer integer the buffer Send was pressed in, before any switch to aineo's tab page
+---@param folder string the folder the tab's Claude Code runs in, which the paths are told from
+---@return boolean
+function M.send_marked_issues(submit, buffer, folder)
+  local explain = package.loaded['aineo.explain']
+  if not explain then
+    return false
+  end
+  local issues = explain.marked_issues(buffer, folder)
+  if #issues == 0 then
+    return false
+  end
+  if submit(explain.issues_message(resolved_config().explain.issues_prompt, issues)) then
+    explain.clear_issue_marks(buffer)
+  end
+  return true
+end
+
+--- What `\vm` does in Normal mode: marks the issues shown above the cursor's
+--- line of the current buffer, or unmarks those marked (`aineo.explain`'s
+--- `toggle_issue_marks()`).
+function M.mark_issues()
+  local line = vim.fn.line('.')
+  require('aineo.explain').toggle_issue_marks(vim.api.nvim_get_current_buf(), line, line)
+end
+
+--- What `\vm` does in Visual mode: leaves Visual mode, then marks or unmarks
+--- the issues shown above the lines the selection spans, as `mark_issues()`
+--- does for one line.
+function M.mark_issues_selection()
+  local first, last = vim.fn.line('v'), vim.fn.line('.')
+  vim.cmd.normal({ args = { vim.keycode('<Esc>') }, bang = true })
+  require('aineo.explain').toggle_issue_marks(
+    vim.api.nvim_get_current_buf(),
+    math.min(first, last),
+    math.max(first, last)
+  )
+end
+
+--- What `<Plug>(aineo-explain-next)` and `<Plug>(aineo-explain-previous)`
+--- do: move the current window's cursor to the next or the previous
+--- explanation or issue of its buffer, as many on as the count typed before
+--- the mapping says, one without (`aineo.explain`'s `jump()`).
+---
+---@param way 'next'|'previous'
+function M.jump(way)
+  require('aineo.explain').jump(vim.api.nvim_get_current_win(), way, vim.v.count1)
 end
 
 return M
