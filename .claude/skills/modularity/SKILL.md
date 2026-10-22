@@ -20,7 +20,7 @@ Where a boundary sits, what crosses it, and how the clients of a module are foun
 
   | Path | Holds |
   |---|---|
-  | `lua/aineo/<concern>/` | one concern behind its `init.lua` — `config` (C1), `layout` (C2, C9, C12), `claude` (C3), `send` (C4), `mcp` (C5), `report` (C6, C10), `draft` (C11), `git` (C13), `changes` (C15), `tabs` (D63), `shell` (D68) |
+  | `lua/aineo/<concern>/` | one concern behind its `init.lua` — `config` (C1), `layout` (C2, C9, C12), `claude` (C3), `send` (C4), `mcp` (C5), `report` (C6, C10), `draft` (C11), `git` (C13), `changes` (C15), `run` (C16, D84), `explorer` (D92), `find` (D81), `explain` (D103–D105), `tabs` (D63), `shell` (D68); planned, the office's context (D107–D110, T123): `transcript` (C17), `office_states` (C18), `office_pack` (C19), `office_scene` (C20), `office` (C21) |
   | `lua/aineo/init.lua` | the plugin's public Lua API, `require('aineo')` (C1); it calls into homes, it never re-exports their symbols |
   | `lua/aineo/health.lua` | the `:checkhealth aineo` entry (C7) — a file Neovim looks up by name, not a home |
   | `plugin/aineo.lua` | the composition root (C1): commands, `<Plug>` mappings, autocommands; it `require()`s a home only inside a callback |
@@ -44,9 +44,20 @@ Where a boundary sits, what crosses it, and how the clients of a module are foun
   | `aineo.send` | `aineo.config`, `aineo.claude`, `aineo.layout` (the Input buffer into the session's terminal) |
   | `aineo.tabs` | `aineo.config` (the tab line's `tabs.padding`, A334); it is handed the tabs' names and pages |
   | `aineo.shell` | no aineo home (it is given a folder and runs `'shell'`) |
+  | `aineo.run` | no aineo home (it is given the folder, the environment and the shell's words by the composition root, C16) |
+  | `aineo.explorer` | no aineo home (it is handed the git home, the folder to show, the opening of a file and the paste into Claude Code's prompt, D92) |
+  | `aineo.find` | no aineo home (it reads no setting and knows no tab: it is handed the directory and the picker `find.picker` names, D81) |
+  | `aineo.explain` | no aineo home (it is handed the buffer, the Claude Code command and the settings, and runs a `claude` of its own, D103) |
+  | `aineo.transcript` *(planned, T124, T126)* | no aineo home (it is given a transcript path and a callback; C17) |
+  | `aineo.office_states` *(planned, T124, T127)* | no aineo home (pure: given signals, the time, the command classes and the triggers; C18) |
+  | `aineo.office_pack` *(planned, T124, T125)* | `aineo.office_states` (the state names it checks a pack's `states` against; C19) |
+  | `aineo.office_scene` *(planned, T124, T129)* | no aineo home (pure: given a pack, a size, the agents' states, the time and a random source; C20) |
+  | `aineo.office` *(planned, T124, T132)* | `aineo.transcript`, `aineo.office_states`, `aineo.office_pack`, `aineo.office_scene` (the office window of one tab, the only home of its context that touches windows, timers and autocommands; it is handed its settings and the function giving the right side's area; C21) |
   | `aineo` (`lua/aineo/init.lua`) | `aineo.config`, `aineo.tabs` (`tab_title()`, A301) |
   | `aineo.entry` (the composition root's body: each tab's homes made, routed, closed and reopened; A349) | any home's entry point — it is part of the composition root, which `plugin/aineo.lua` registers; no home requires it |
   | `plugin/aineo.lua`, `lua/aineo/health.lua`, `scripts/`, `tests/` | any home's entry point |
+
+  The office's five homes are one bounded context: nothing outside it requires them but the composition root (`lua/aineo/entry/`, `plugin/aineo.lua`, `lua/aineo/health.lua`). Their rows are planned; each takes effect when its packet creates the home, and that packet checks the row against what it built.
 
   A packet that needs an edge this table lacks reports it as a spec conflict; the edge is added on an `ai/` branch, not in the packet.
 - **A bounded context is a group of homes that share one vocabulary and own one set of data.** A context is the level at which a table has one owner (§9) and at which a collaborator must be a port (§4); inside a context, homes are still modules and every rule here still applies to them.
