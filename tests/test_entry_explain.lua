@@ -14,8 +14,9 @@ local PATIENCE_MS = 10000
 
 local CHECKOUT = vim.fn.fnamemodify('.', ':p'):gsub('/$', '')
 
---- The fake `claude`, run in the real one's place (`tests/helpers/fake_claude.lua`).
-local FAKE_CLAUDE = { 'nvim', '--clean', '-l', CHECKOUT .. '/tests/helpers/fake_claude.lua' }
+--- The fake `claude`, run in the real one's place (`tests/helpers/fake_claude.lua`,
+--- through `tests/helpers/fake_claude_print.sh`, whose words hold no flag).
+local FAKE_CLAUDE = { 'sh', CHECKOUT .. '/tests/helpers/fake_claude_print.sh' }
 
 --- The record the fake `claude` writes.
 local RECORD = vim.fs.joinpath(CHECKOUT, '.tests', 'fixtures', 'entry-explain', 'fake.jsonl')
@@ -70,7 +71,8 @@ local function recorded(count)
 end
 
 --- The words the fake `claude` was started with from the model on: the
---- model, `--tools` and the words that name the tools; none when it did not
+--- model, `--setting-sources` and its value, `--tools` and the words that
+--- name the tools; none when it did not
 --- start within `PATIENCE_MS`.
 ---
 ---@return string[]
@@ -93,7 +95,7 @@ T['\\v']['in Normal mode explains the whole buffer with the code alone, with the
 
   child.type_keys('\\v')
 
-  eq(model_and_tools(), { 'opus', '--tools', '' })
+  eq(model_and_tools(), { 'opus', '--setting-sources', 'user', '--tools', '' })
   eq(
     prompt_head(),
     'Explain the code of the file src/add.lua (language: lua), lines 1 to 5 as numbered below.'
@@ -107,10 +109,15 @@ T['\\V']['in Normal mode explains the whole buffer with read-only tools, with So
 
   child.type_keys('\\V')
 
-  eq(
-    model_and_tools(),
-    { 'sonnet', '--tools', 'Read,Grep,Glob', '--allowedTools', 'Read,Grep,Glob' }
-  )
+  eq(model_and_tools(), {
+    'sonnet',
+    '--setting-sources',
+    'user',
+    '--tools',
+    'Read,Grep,Glob',
+    '--allowedTools',
+    'Read,Grep,Glob',
+  })
   eq(
     prompt_head(),
     'Explain the code of the file src/add.lua (language: lua), lines 1 to 5 as numbered below.'
@@ -122,7 +129,7 @@ T['\\v']['in Visual mode explains the lines selected alone, and leaves Visual mo
 
   child.type_keys('2G', 'Vj', '\\v')
 
-  eq(model_and_tools(), { 'sonnet', '--tools', '' })
+  eq(model_and_tools(), { 'sonnet', '--setting-sources', 'user', '--tools', '' })
   eq(
     prompt_head(),
     'Explain the code of the file src/add.lua (language: lua), lines 2 to 3 as numbered below.'
@@ -148,10 +155,15 @@ T[':Aineo explain']['with a range and tools explains those lines with read-only 
 
   child.cmd('2,3Aineo explain tools')
 
-  eq(
-    model_and_tools(),
-    { 'sonnet', '--tools', 'Read,Grep,Glob', '--allowedTools', 'Read,Grep,Glob' }
-  )
+  eq(model_and_tools(), {
+    'sonnet',
+    '--setting-sources',
+    'user',
+    '--tools',
+    'Read,Grep,Glob',
+    '--allowedTools',
+    'Read,Grep,Glob',
+  })
   eq(
     prompt_head(),
     'Explain the code of the file src/add.lua (language: lua), lines 2 to 3 as numbered below.'

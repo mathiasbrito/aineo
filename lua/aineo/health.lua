@@ -965,13 +965,13 @@ local function check_explain(resolved_config)
   end
   vim.health.start('Explain code')
   vim.health.info(
-    ('\\v and \\V start a Claude Code of their own with claude.cmd for each request, and end it with the answer: model %s (explain.model), stopped after %g s (explain.timeout_ms): :help |aineo-explain|'):format(
+    ('\\v and \\V start a Claude Code of their own for each request, with the program of claude.cmd (the words before its first flag, none of its flags), and end it with the answer: model %s (explain.model), stopped after %g s (explain.timeout_ms): :help |aineo-explain|'):format(
       resolved_config.explain.model,
       resolved_config.explain.timeout_ms / 1000
     )
   )
   vim.health.info(
-    '\\v hands it the code alone, with no tool; \\V lets it read the project with Read, Grep and Glob, without asking; it gets no other tool, no MCP server and no settings of aineo, and asks no permission'
+    "\\v hands it the code alone, with no tool; \\V lets it read the project with Read, Grep and Glob, without asking; it gets no other tool, no MCP server and no settings of aineo, loads your own settings but never the project's (--setting-sources user), and asks no permission"
   )
 end
 

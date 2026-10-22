@@ -1867,8 +1867,8 @@ T['explaining code']['says what Claude Code explains with, and what it may use']
   local report = health.report(child)
 
   eq(health.section(report, 'Explain code'), {
-    '- \\v and \\V start a Claude Code of their own with claude.cmd for each request, and end it with the answer: model opus (explain.model), stopped after 90 s (explain.timeout_ms): :help |aineo-explain|',
-    '- \\v hands it the code alone, with no tool; \\V lets it read the project with Read, Grep and Glob, without asking; it gets no other tool, no MCP server and no settings of aineo, and asks no permission',
+    '- \\v and \\V start a Claude Code of their own for each request, with the program of claude.cmd (the words before its first flag, none of its flags), and end it with the answer: model opus (explain.model), stopped after 90 s (explain.timeout_ms): :help |aineo-explain|',
+    "- \\v hands it the code alone, with no tool; \\V lets it read the project with Read, Grep and Glob, without asking; it gets no other tool, no MCP server and no settings of aineo, loads your own settings but never the project's (--setting-sources user), and asks no permission",
   })
 end
 
