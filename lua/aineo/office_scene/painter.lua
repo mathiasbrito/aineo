@@ -107,7 +107,19 @@ end
 ---@field order? integer the order the items were made in, which breaks a tie of depth and rank
 ---@field paint fun() draws it
 
---- The items for the pieces the plan places.
+--- Whether any row of `piece`, placed with its anchor on the cell row `row`,
+--- lies on a canvas `height` cells tall.
+---
+---@param piece aineo.office_pack.Piece
+---@param row integer
+---@param height integer
+---@return boolean
+local function is_on_canvas(piece, row, height)
+  local top = 2 * row + 1 - piece.anchor.row
+  return top < 2 * height and top + piece.height > 0
+end
+
+--- The items for the pieces the plan places that lie on the canvas.
 ---
 ---@param canvas aineo.office_scene.Canvas
 ---@param drawing aineo.office_scene.Drawing
@@ -116,7 +128,7 @@ local function piece_items(canvas, drawing)
   local items = {}
   for _, placed in ipairs(drawing.layout.pieces) do
     local piece = drawing.pack.pieces[placed.piece]
-    if piece then
+    if piece and is_on_canvas(piece, placed.row, drawing.height) then
       table.insert(items, {
         depth = 2 * placed.row + 1,
         rank = RANK.piece,
@@ -253,7 +265,7 @@ local function write_effect(canvas, drawing, character)
   local text = effect.text[math.floor(drawing.now / effect.seconds_per_frame) % #effect.text + 1]
   local place = PLACES[effect.place] or PLACES.above
   local column, row =
-    place(round(character.column), math.floor(top_pixel / 2), vim.fn.strchars(text))
+    place(round(character.column), math.floor(top_pixel / 2), #vim.str_utf_pos(text))
   canvas.write_text(
     column,
     row,
