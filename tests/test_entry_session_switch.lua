@@ -3,6 +3,8 @@ local claude_session = dofile('tests/helpers/claude_session.lua')
 local entry = dofile('tests/helpers/entry.lua')
 local fixture = dofile('tests/helpers/fixture.lua')
 local git_repo = dofile('tests/helpers/git_repo.lua')
+local mcp_messages = dofile('tests/helpers/mcp_messages.lua')
+local mcp_relay = dofile('tests/helpers/mcp_relay.lua')
 
 local eq = MiniTest.expect.equality
 
@@ -639,6 +641,40 @@ T['a SessionStart of the session followed']['by /compact changes nothing: the Re
     report = { shown('Rename the lexer'), shown('Write the docs') },
     cursor = { 2, 4 },
     input = { 'notes for the first session' },
+  })
+end
+
+T['a session another Claude Code process starts'] = MiniTest.new_set()
+
+T['a session another Claude Code process starts']['under the tab’s start token is followed, and its process’s reports reach the tab’s Report'] = function()
+  local _, _, _, state_home = in_repository('session-switch-forked')
+  local fake = fake_running_hooks('session-switch-forked')
+  local started_on = open_until_ready(fake)
+  local forked = { XDG_STATE_HOME = state_home }
+
+  vim
+    .system({ 'sh', '-c', claude_session.hook_command(fake, 1, 'SessionStart') }, {
+      stdin = claude_session.hook_input('SessionStart', OTHER_SESSION_ID, 'resume'),
+      env = forked,
+    })
+    :wait(claude_session.PATIENCE_MS)
+  claude_session.wait_for_deliveries(child)
+  MiniTest.finally(mcp_relay.stop_all)
+  local relay = mcp_relay.start_relay(vim.tbl_extend('force', forked, {
+    AINEO_EDITOR_ADDRESS = child.v.servername,
+    AINEO_START_TOKEN = claude_session.start_token(fake, 1),
+    CLAUDE_CODE_SESSION_ID = started_on,
+  }))
+  relay:send(mcp_messages.recorded('tools/call'))
+
+  eq({
+    followed = followed_session(),
+    answer = vim.tbl_get(mcp_relay.decoded(relay:next_line()), 'result', 'content', 1, 'text'),
+    report = child.lua_get(REPORT_LINES),
+  }, {
+    followed = OTHER_SESSION_ID,
+    answer = 'Delivered to the Agent Report.',
+    report = { shown('Refactor the parser') },
   })
 end
 
