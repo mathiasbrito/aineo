@@ -137,6 +137,27 @@ T['\\v']['in Visual mode explains the lines selected alone, and leaves Visual mo
   eq(child.fn.mode(), 'n')
 end
 
+T['\\V']['in Visual mode explains the lines selected alone, with read-only tools'] = function()
+  start()
+
+  child.type_keys('2G', 'Vj', '\\V')
+
+  eq(model_and_tools(), {
+    'sonnet',
+    '--setting-sources',
+    'user',
+    '--tools',
+    'Read,Grep,Glob',
+    '--allowedTools',
+    'Read,Grep,Glob',
+  })
+  eq(
+    prompt_head(),
+    'Explain the code of the file src/add.lua (language: lua), lines 2 to 3 as numbered below.'
+  )
+  eq(child.fn.mode(), 'n')
+end
+
 T['\\v']['in Visual mode takes a selection made upwards as the same lines'] = function()
   start()
 
