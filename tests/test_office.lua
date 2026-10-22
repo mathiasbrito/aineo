@@ -606,7 +606,7 @@ T['the office’s timer and watch']['runs none while the office is hidden'] = fu
   eq({ open_handles('timer'), open_handles('fs_event') }, { timers, watches })
 end
 
-T['the office’s timer and watch']['runs one timer, the frames’, and one watch while the office shows'] = function()
+T['the office’s timer and watch']['runs the frames’ timer, a look every half second for the subagents there are none of, and one watch while the office shows'] = function()
   local path = transcript_path()
   fake_transcript.append(path, RECORDED_TURN)
   open_office(path)
@@ -614,10 +614,10 @@ T['the office’s timer and watch']['runs one timer, the frames’, and one watc
 
   child.lua([[_G.office.show_now()]])
   wait_until(function()
-    return open_handles('timer') == timers + 1
+    return open_handles('timer') == timers + 2
   end)
 
-  eq({ open_handles('timer'), open_handles('fs_event') }, { timers + 1, watches + 1 })
+  eq({ open_handles('timer'), open_handles('fs_event') }, { timers + 2, watches + 1 })
 end
 
 T['the office’s timer and watch']['stops both once the office is closed by the cursor entering the column'] = function()

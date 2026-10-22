@@ -27,9 +27,11 @@ M.MAIN_AGENT = 'main'
 --- What `signals_of_line()` says of a line that is not JSON.
 M.NOT_JSON = 'not JSON'
 
----@alias aineo.transcript.SignalKind 'prompt'|'thinking'|'tool_started'|'tool_finished'|'turn_ended'|'interrupted'|'compacted'|'background_done'
+---@alias aineo.transcript.SignalKind 'prompt'|'thinking'|'tool_started'|'tool_finished'|'turn_ended'|'interrupted'|'compacted'|'background_done'|'subagent_started'|'subagent_finished'
 
---- What an agent did, in plain words.
+--- What an agent did, in plain words. The lines of a transcript give every kind
+--- but `subagent_started` and `subagent_finished`, which the follower gives
+--- when a subagent's transcript appears and when its meta file says it is over.
 ---@class aineo.transcript.Signal
 ---@field agent string 'main', or a subagent's id
 ---@field kind aineo.transcript.SignalKind
