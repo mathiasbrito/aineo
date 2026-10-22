@@ -315,6 +315,23 @@ function M.clear(buffer)
   end
 end
 
+--- Marks the issues `buffer` shows above the lines from `first` to `last`,
+--- from 1, and unmarks those already marked (`aineo.explain.marks`'s
+--- `toggle_issue_marks()`); tells the user, once, when none lies above them.
+--- An explanation is never marked.
+---
+---@param buffer integer
+---@param first integer
+---@param last integer
+function M.toggle_issue_marks(buffer, first, last)
+  if marks.toggle_issue_marks(buffer, first, last) == 0 then
+    vim.notify(
+      first == last and 'aineo: no issue on this line' or 'aineo: no issue on the selected lines',
+      vim.log.levels.INFO
+    )
+  end
+end
+
 --- Moves the cursor of `window` to the line of the next or the previous
 --- explanation or issue of its buffer, `count` of them on, wrapping around
 --- (`aineo.explain.jump`'s `go()`), or tells the user there is none.
