@@ -56,12 +56,41 @@ local function first_non_blank(buffer, line)
   return (text:find('%S') or math.max(#text, 1)) - 1
 end
 
+--- The rows of the virtual lines shown above `line` of `window`.
+---
+---@param window integer
+---@param line integer
+---@return integer
+local function rows_above(window, line)
+  local row = line - 1
+  local whole = vim.api.nvim_win_text_height(window, { start_row = row, end_row = row }).all
+  local line_alone =
+    vim.api.nvim_win_text_height(window, { start_row = row, end_row = row, start_vcol = 0 }).all
+  return math.max(whole - line_alone, 0)
+end
+
+--- Shows the line `line` the cursor of `window` is on: opens the folds that
+--- hide it, and, when it is the top line of the window, scrolls up by the
+--- rows of the virtual lines above it, so that they show too.
+---
+---@param window integer
+---@param line integer
+local function reveal(window, line)
+  vim.api.nvim_win_call(window, function()
+    vim.cmd.normal({ args = { 'zv' }, bang = true })
+    vim.fn.winline()
+    if vim.fn.line('w0') == line then
+      vim.cmd.normal({ args = { ('\25'):rep(rows_above(window, line)) }, bang = true })
+    end
+  end)
+end
+
 --- Moves the cursor of `window` to the line of the explanation or issue
 --- `count` steps on in its buffer, `way` being `next` or `previous`, at the
 --- line's first non-blank, wrapping around at the buffer's ends, and sets the
 --- previous context mark first, so that `''` comes back. A line with an
---- explanation and an issue counts once. When the buffer shows none, tells
---- the user and leaves the cursor.
+--- explanation and an issue counts once. The line is revealed (`reveal()`).
+--- When the buffer shows none, tells the user and leaves the cursor.
 ---
 ---@param window integer
 ---@param way 'next'|'previous'
@@ -79,6 +108,7 @@ function M.go(window, way, count)
     vim.cmd.normal({ args = { "m'" }, bang = true })
   end)
   vim.api.nvim_win_set_cursor(window, { line, first_non_blank(buffer, line) })
+  reveal(window, line)
 end
 
 --- The mappings made here, by buffer and by the mode and key.

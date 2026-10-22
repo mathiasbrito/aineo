@@ -231,6 +231,35 @@ T['a jump']['to an explanation on the cursor’s own line, the only one, stays o
   eq(cursor(), { 6, 0 })
 end
 
+T['a jump']['into a closed fold opens it, at each landing'] = function()
+  explain_lines({ 4, 5, 9 })
+  child.cmd('4,7fold')
+
+  press(']v')
+  local first = child.fn.foldclosed(child.fn.line('.'))
+  press(']v')
+  local second = child.fn.foldclosed(child.fn.line('.'))
+
+  eq({ child.fn.line('.'), first, second }, { 5, -1, -1 })
+end
+
+T['a jump']['to the top line of the window scrolls up to show the explanation above it'] = function()
+  local lines = {}
+  for number = 1, 100 do
+    lines[number] = 'line ' .. number
+  end
+  explained.start(child, 'explain-jump-scroll', lines)
+  child.o.lines = 20
+  explained.place(child, 'explanations', { { line = 50, text = ('x'):rep(200) } })
+  child.cmd('normal! 52zt')
+  child.api.nvim_win_set_cursor(0, { 60, 0 })
+
+  press('[v')
+
+  local view = child.fn.winsaveview()
+  eq({ view.lnum, view.topline, view.topfill }, { 50, 50, 3 })
+end
+
 T['the mappings'] = MiniTest.new_set({ hooks = { pre_case = start } })
 
 --- The buffer-local mapping of `keys` in `mode` as the child holds it: its
