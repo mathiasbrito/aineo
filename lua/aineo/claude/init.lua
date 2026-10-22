@@ -47,9 +47,11 @@ local M = {}
 --- input now, and whether `on_session_ready` was called for it; and, once
 --- its process has ended, the process's exit code and when it ended; and
 --- when it launched, both by `vim.uv.hrtime()`; and whether its home's stop
---- has stopped it (`stop_running_session()`). A start with no job yet waits
---- for the list of the folder's sessions (`launch_once_listed()`).
----@alias aineo.claude.Start { buffer: integer, command: string[], job: integer?, choice: aineo.claude.SessionChoice, settings: aineo.claude.Settings, start_token: string, settings_unread: boolean, attached: boolean?, followed: string, unpaired: aineo.claude.SessionEvent[], ready: boolean?, ready_told: boolean?, exit_code: integer?, launched_at: number?, ended_at: number?, stopped: boolean? }
+--- has stopped it (`stop_running_session()`); and the pid of its own Claude
+--- Code once its first hook named it (`note_own_claude_pid()`). A start with
+--- no job yet waits for the list of the folder's sessions
+--- (`launch_once_listed()`).
+---@alias aineo.claude.Start { buffer: integer, command: string[], job: integer?, choice: aineo.claude.SessionChoice, settings: aineo.claude.Settings, start_token: string, settings_unread: boolean, attached: boolean?, followed: string, unpaired: aineo.claude.SessionEvent[], ready: boolean?, ready_told: boolean?, exit_code: integer?, launched_at: number?, ended_at: number?, stopped: boolean?, claude_pid: integer? }
 
 --- One Claude Code session home: what one copy of this module keeps, its
 --- last start (`new()`).
@@ -1179,9 +1181,9 @@ end
 --- What a session hook of Claude Code told (`receive_session_event()`): its
 --- event, the session that started or ended, its source or reason, the
 --- token of the start whose hook ran, when the hook ran, by
---- `vim.uv.hrtime()`, and its place in the order the hooks reached the
---- editor.
----@alias aineo.claude.SessionEvent { event: string, id: string, cause: string?, start_token: string, ran: number?, arrival: integer }
+--- `vim.uv.hrtime()`, the pid of the Claude Code process that ran it, and
+--- its place in the order the hooks reached the editor.
+---@alias aineo.claude.SessionEvent { event: string, id: string, cause: string?, start_token: string, ran: number?, pid: integer?, arrival: integer }
 
 --- Whether the hook that told `earlier` ran before the one that told
 --- `later`: by when each ran when both say, else by the order they reached
@@ -1244,8 +1246,62 @@ local function follow_switches(running)
   end
 end
 
+--- Keeps, as the pid of `running`'s own Claude Code, the pid `told` names
+--- when it is the first `SessionStart` of the session the start started on
+--- to tell one: Claude Code's first hook, which its own process runs.
+---
+---@param running aineo.claude.Start
+---@param told aineo.claude.SessionEvent
+local function note_own_claude_pid(running, told)
+  if
+    not running.claude_pid
+    and told.pid
+    and told.event == 'SessionStart'
+    and told.id == running.choice.id
+  then
+    running.claude_pid = told.pid
+  end
+end
+
+--- The pid of `running`'s own Claude Code: the one its first `SessionStart`
+--- named (`note_own_claude_pid()`), else, until one has, the pid of the
+--- process the start runs in its terminal; nil when neither is known.
+---
+---@param running aineo.claude.Start
+---@return integer?
+local function own_claude_pid(running)
+  if running.claude_pid then
+    return running.claude_pid
+  end
+  local read, job_pid = pcall(vim.fn.jobpid, running.job or -1)
+  return read and job_pid or nil
+end
+
+--- Whether `told` is a `SessionStart` of a session other than the one
+--- `running` follows, from a Claude Code process other than the start's
+--- own (`own_claude_pid()`): one Claude Code started with the start's
+--- `--settings`, such as the copy its background service runs a
+--- conversation in, on a new session id — whatever process it descends
+--- from, since that service can be a child of the start's own Claude Code.
+--- False when the hook told no pid, or the start's own pid is not known.
+---
+---@param running aineo.claude.Start
+---@param told aineo.claude.SessionEvent
+---@return boolean
+local function is_start_in_another_process(running, told)
+  if told.event ~= 'SessionStart' or told.id == running.followed or not told.pid then
+    return false
+  end
+  local own_pid = own_claude_pid(running)
+  return own_pid ~= nil and told.pid ~= own_pid
+end
+
 --- What `told` does to the session of the home whose last start has its
---- token (`started_homes`): held with the hooks of that start not paired
+--- token (`started_homes`): a `SessionStart` of another session from
+--- another Claude Code process (`is_start_in_another_process()`) is a switch
+--- to it at once (`follow_switch()`), with no `SessionEnd` before it, since
+--- the process the start runs need not end the session it is on. Else,
+--- held with the hooks of that start not paired
 --- yet, it may complete a switch (`follow_switches()`), whatever order the
 --- hooks reach the editor in — each comes from a process of its own.
 --- Anything else does nothing — a hook of a start that is no home's last, a
@@ -1267,6 +1323,11 @@ local function take_session_event(told)
   then
     return
   end
+  note_own_claude_pid(home.session, told)
+  if is_start_in_another_process(home.session, told) then
+    follow_switch(home.session, told.id, told.cause, nil)
+    return
+  end
   table.insert(home.session.unpaired, told)
   follow_switches(home.session)
 end
@@ -1276,25 +1337,33 @@ end
 --- start has `start_token`, and for no others: `event`, `SessionStart` or
 --- `SessionEnd`; `session_id`, the session that started or ended; `cause`,
 --- its `source` or `reason` (nil or `vim.NIL` when the hook gave none);
---- `start_token`, the token of the start whose hook ran; and `ran`, when the
---- hook began, by `vim.uv.hrtime()` (nil or `vim.NIL` when not told). It
---- works from a callback scheduled now, never in the RPC handler that calls
---- it, so that the editor answers the deliverer's next request without
---- waiting for that work.
+--- `start_token`, the token of the start whose hook ran; `ran`, when the
+--- hook began, by `vim.uv.hrtime()` (nil or `vim.NIL` when not told); and
+--- `pid`, the pid of the Claude Code process that ran the hook (nil or
+--- `vim.NIL` when not told). It works from a callback scheduled now, never
+--- in the RPC handler that calls it, so that the editor answers the
+--- deliverer's next request without waiting for that work.
 ---
 --- Claude Code 2.1.292 switches session — `/clear`, an in-session
 --- `/resume`, `/branch` — with a `SessionEnd` of the session it leaves, then
 --- a `SessionStart` of the one it switches to; so a `SessionStart` of another
---- id is a switch only when its hook is the first `SessionStart` to run after
---- the hook of a `SessionEnd` of the session followed, in whatever order the
+--- id from the start's own process is a switch only when its hook is the
+--- first `SessionStart` to run after the hook of a `SessionEnd` of the
+--- session followed, in whatever order the
 --- hooks reach the editor: each is held until a switch pairs it
 --- (`follow_switches()`), and when the hook ran stands for the order —
---- where a hook does not tell it, the order the hooks reached the editor. A
+--- where a hook does not tell it, the order the hooks reached the editor.
+--- A `SessionStart` of another id from another Claude Code process, while
+--- the start's own runs, is a switch at once: a process Claude Code started
+--- with the start's `--settings`, as its background service starts one,
+--- on a new session id, to run a conversation in. A
 --- switch makes the new id the one followed (`session_id()`), keeps it for
 --- the working directory as the session the next start there resumes, and
---- calls `on_session_switched(id, source, left, reason)`. A `SessionStart` of
+--- calls `on_session_switched(id, source, left, reason)`, `reason` nil for
+--- a switch with no `SessionEnd`. A `SessionStart` of
 --- the session followed (`/compact`, the start's own, a `/resume` of it), a
---- `SessionStart` with no `SessionEnd` of the session followed before it,
+--- `SessionStart` of the start's own process, or of a hook that told no pid,
+--- with no `SessionEnd` of the session followed before it,
 --- and a `SessionEnd`
 --- alone (Claude Code's exit) call nothing back, nor does a hook that ran
 --- after the start's Claude Code process ended: one of another process
@@ -1309,7 +1378,8 @@ end
 ---@param cause string|userdata|nil
 ---@param start_token string
 ---@param ran number|userdata|nil
-function M.receive_session_event(event, session_id, cause, start_token, ran)
+---@param pid integer|userdata|nil
+function M.receive_session_event(event, session_id, cause, start_token, ran, pid)
   hooks_received = hooks_received + 1
   local arrival = hooks_received
   vim.schedule(function()
@@ -1319,6 +1389,7 @@ function M.receive_session_event(event, session_id, cause, start_token, ran)
       cause = type(cause) == 'string' and cause or nil,
       start_token = start_token,
       ran = type(ran) == 'number' and ran or nil,
+      pid = type(pid) == 'number' and pid or nil,
       arrival = arrival,
     })
   end)

@@ -133,15 +133,19 @@ local THIRD_SESSION_ID = '7d0e3a4f-8e1a-4d2f-b5c7-91d0e3a4f853'
 --- The Lua, run in a Neovim, that stands in for the claude home where the
 --- hook relay's notification lands: it keeps the event, the session, the
 --- source or reason and the start token of each call of
---- `receive_session_event()` in `_G.session_events`, and the time its hook
---- ran, its fifth argument, at the same index of `_G.hook_times`.
+--- `receive_session_event()` in `_G.session_events`, the time its hook ran,
+--- its fifth argument, at the same index of `_G.hook_times`, and the pid of
+--- the process that ran the hook, its sixth, at the same index of
+--- `_G.hook_pids`.
 local NOTE_SESSION_EVENTS = [[
   _G.session_events = {}
   _G.hook_times = {}
+  _G.hook_pids = {}
   package.loaded['aineo.claude'] = {
-    receive_session_event = function(event, session_id, cause, start_token, ran)
+    receive_session_event = function(event, session_id, cause, start_token, ran, pid)
       table.insert(_G.session_events, { event, session_id, cause, start_token })
       _G.hook_times[#_G.session_events] = ran
+      _G.hook_pids[#_G.session_events] = pid
     end,
   }
 ]]
@@ -150,16 +154,19 @@ local hook_input = claude.hook_input
 
 --- Runs the hook relay for `event` as aineo's hook does, telling the editor
 --- at `address` with the start token `token`, `input` on its stdin, with
---- `options` for `vim.system()`; returns how it ended, once it has.
+--- `options` for `vim.system()`, and after the event `place`, the words
+--- aineo's hook gives there: the pid of Claude Code's process and the
+--- directory it runs in; returns how it ended, once it has.
 ---
 ---@param address string
 ---@param token string
 ---@param event string
 ---@param input string
 ---@param options? table
+---@param place? string[]
 ---@return vim.SystemCompleted
-local function run_relay(address, token, event, input, options)
-  local command = {
+local function run_relay(address, token, event, input, options, place)
+  local command = vim.list_extend({
     vim.v.progpath,
     '--headless',
     '--clean',
@@ -170,7 +177,7 @@ local function run_relay(address, token, event, input, options)
     address,
     token,
     event,
-  }
+  }, place or {})
   local relay_options = vim.tbl_extend('force', { stdin = input }, options or {})
   return vim.system(command, relay_options):wait(claude.PATIENCE_MS)
 end
@@ -986,6 +993,22 @@ T['the hook relay']['tells its editor when its hook began, by the clock every pr
   eq({ ran >= before, ran <= after }, { true, true })
 end
 
+T['the hook relay']['tells its editor the pid of the Claude Code process that ran the hook'] = function()
+  child.lua(NOTE_SESSION_EVENTS)
+
+  run_relay(
+    child.v.servername,
+    '7',
+    'SessionStart',
+    hook_input('SessionStart', CLAUDE_SESSION_ID, 'resume'),
+    {},
+    { '4242', vim.fn.getcwd() }
+  )
+
+  wait_for_session_events(child, 1)
+  eq(child.lua_get('_G.hook_pids[1]'), 4242)
+end
+
 T['the hook relay']['writes nothing on its stdout'] = function()
   child.lua(NOTE_SESSION_EVENTS)
 
@@ -1356,6 +1379,182 @@ T['a session switch']['is not made by a SessionStart of another session with no 
   eq(claude.wait_for_session_switches(child, 1), {
     { id = CLAUDE_SESSION_ID, source = 'clear', left = started_on, reason = 'clear' },
   })
+end
+
+T['a session switch']['is made by a SessionStart of another session that another process ran under the start’s token'] = function()
+  local fake = claude.fake('switch-other-process', 'ready')
+  claude.start_noting_switches(child, fake, kept_in('switch-other-process-state'))
+  local started_on = first_session_id(fake)
+
+  claude.run_session_hook_elsewhere(
+    child,
+    fake,
+    1,
+    'SessionStart',
+    hook_input('SessionStart', OTHER_SESSION_ID, 'resume')
+  )
+
+  eq({ claude.wait_for_session_switches(child, 1), claude.followed_session_id(child) }, {
+    { { id = OTHER_SESSION_ID, source = 'resume', left = started_on } },
+    OTHER_SESSION_ID,
+  })
+end
+
+--- Starts the session, noting switches, with a `claude.cmd` whose shell
+--- starts a process in the background and then becomes the fake, so that
+--- the process is a child of the start's Claude Code — as the background
+--- service Claude Code 2.1.307 starts from the client that needs it is,
+--- and the process it runs a conversation in, below it. Returns the fake,
+--- the session it started on, and that child's pid, which a case's end
+--- stops.
+---
+---@param name string the case's own name for its files
+---@return { record: string } fake
+---@return string started_on
+---@return integer child_pid
+local function start_with_a_child_of_claude_code(name)
+  local fake = claude.fake(name, 'ready')
+  local pid_file = vim.fs.joinpath(fixture.directory(name .. '-pid'), 'pid')
+  local cmd = vim.list_extend({
+    'sh',
+    '-c',
+    'sh -c "echo \\$\\$ > \\"$0\\"; exec sleep 30" "$0" & shift; exec "$@"',
+    pid_file,
+    'unused',
+  }, claude.fake_command())
+  claude.start_noting_switches(child, fake, kept_in(name .. '-state', { cmd = cmd }))
+  local child_pid
+  vim.wait(claude.PATIENCE_MS, function()
+    child_pid = tonumber(vim.fn.filereadable(pid_file) == 1 and vim.fn.readfile(pid_file)[1] or '')
+    return child_pid ~= nil
+  end, 20)
+  MiniTest.finally(function()
+    vim.uv.kill(child_pid, 'sigterm')
+  end)
+  return fake, first_session_id(fake), child_pid
+end
+
+T['a session switch']['is made by a SessionStart of another session from a process the start’s Claude Code started'] = function()
+  local fake, started_on, child_pid = start_with_a_child_of_claude_code('switch-claude-child')
+  local own_pid = claude.wait_for_starts(fake, 1)[1].pid
+  claude.run_session_hook(
+    child,
+    fake,
+    1,
+    'SessionStart',
+    hook_input('SessionStart', started_on, 'startup')
+  )
+
+  claude.run_session_hook_as(
+    child,
+    fake,
+    1,
+    'SessionStart',
+    hook_input('SessionStart', OTHER_SESSION_ID, 'resume'),
+    child_pid
+  )
+
+  eq({
+    parent = vim.api.nvim_get_proc(child_pid).ppid,
+    switches = claude.wait_for_session_switches(child, 1),
+    followed = claude.followed_session_id(child),
+  }, {
+    parent = own_pid,
+    switches = { { id = OTHER_SESSION_ID, source = 'resume', left = started_on } },
+    followed = OTHER_SESSION_ID,
+  })
+end
+
+T['a session switch']['is not made by a SessionStart alone of the start’s own Claude Code, which a program in claude.cmd runs as its child'] = function()
+  local fake = claude.fake('switch-wrapped-own', 'ready')
+  local wrapped = vim.list_extend({ 'sh', '-c', '"$@"; true', 'sh' }, claude.fake_command())
+  claude.start_noting_switches(child, fake, kept_in('switch-wrapped-own-state', { cmd = wrapped }))
+  local started_on = first_session_id(fake)
+  claude.run_session_hook(
+    child,
+    fake,
+    1,
+    'SessionStart',
+    hook_input('SessionStart', started_on, 'startup')
+  )
+
+  claude.run_session_hook(
+    child,
+    fake,
+    1,
+    'SessionStart',
+    hook_input('SessionStart', OTHER_SESSION_ID, 'resume')
+  )
+  claude.wait_for_deliveries(child)
+
+  eq(
+    { child.lua_get('_G.session_switches'), claude.followed_session_id(child) },
+    { {}, started_on }
+  )
+end
+
+T['a session switch']['of the start’s own Claude Code, which a program in claude.cmd runs as its child, is paired after /compact, /clear and /resume'] = function()
+  local fake = claude.fake('switch-wrapped-own-switches', 'ready')
+  local wrapped = vim.list_extend({ 'sh', '-c', '"$@"; true', 'sh' }, claude.fake_command())
+  claude.start_noting_switches(
+    child,
+    fake,
+    kept_in('switch-wrapped-own-switches-state', { cmd = wrapped })
+  )
+  local started_on = first_session_id(fake)
+  claude.run_session_hook(
+    child,
+    fake,
+    1,
+    'SessionStart',
+    hook_input('SessionStart', started_on, 'startup')
+  )
+
+  claude.run_session_hook(
+    child,
+    fake,
+    1,
+    'SessionStart',
+    hook_input('SessionStart', started_on, 'compact')
+  )
+  switch_by_hooks(
+    child,
+    fake,
+    1,
+    { from = started_on, to = OTHER_SESSION_ID, source = 'clear', reason = 'clear' }
+  )
+  switch_by_hooks(
+    child,
+    fake,
+    1,
+    { from = OTHER_SESSION_ID, to = started_on, source = 'resume', reason = 'resume' }
+  )
+
+  eq(claude.wait_for_session_switches(child, 2), {
+    { id = OTHER_SESSION_ID, source = 'clear', left = started_on, reason = 'clear' },
+    { id = started_on, source = 'resume', left = OTHER_SESSION_ID, reason = 'resume' },
+  })
+end
+
+T['a session switch']['is not made by a SessionStart that another process ran under a token no start has'] = function()
+  local fake = claude.fake('switch-other-token', 'ready')
+  claude.start_noting_switches(child, fake, kept_in('switch-other-token-state'))
+  local started_on = first_session_id(fake)
+  local foreign = claude
+    .hook_command(fake, 1, 'SessionStart')
+    :gsub("'[^']*' 'SessionStart'", "'a token no start has' 'SessionStart'")
+
+  vim
+    .system({ 'sh', '-c', foreign }, {
+      stdin = hook_input('SessionStart', OTHER_SESSION_ID, 'resume'),
+    })
+    :wait(claude.PATIENCE_MS)
+  claude.wait_for_deliveries(child)
+
+  eq(
+    { child.lua_get('_G.session_switches'), claude.followed_session_id(child) },
+    { {}, started_on }
+  )
 end
 
 T['a session switch']['is followed when the SessionEnd’s deliverer reaches the editor after the SessionStart’s'] = function()

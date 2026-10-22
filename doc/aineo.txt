@@ -2082,7 +2082,13 @@ Code's title, but a title is not a session's id: two sessions can share
 one. Claude Code tells aineo of a switch through the hooks aineo gives it
 at each start (|aineo-report|): Claude Code 2.1.292 ends the session it
 leaves (`SessionEnd`), then starts the next (`SessionStart`). `/compact`
-stays on the same session, and changes nothing. Where hooks do not run,
+stays on the same session, and changes nothing. A conversation Claude Code
+moves to another process of its own — its background service runs it there
+on a new session id, under the hooks of aineo's start — is followed as a
+switch too, while aineo's own Claude Code runs: the tab whose start gave
+those hooks follows the new session, and the reports from that process
+reach its Report. A process Claude Code started with another tab's hooks,
+or with none of aineo's, moves nothing. Where hooks do not run,
 aineo follows the session it started: see |aineo-limits|. Two Neovims in
 one directory resume the session of the last switch in either. A switch
 made by a Claude Code whose editor is gone — it quit while Claude Code ran
@@ -3869,16 +3875,29 @@ Claude Code no hooks when it cannot read the `--settings` of `claude.cmd`
 (|aineo-config-claude.cmd|). aineo then hears of no switch, and the next
 start resumes the session aineo started. Not seen: what Claude Code does
 once a folder's trust dialog is answered "Yes"; and whether a `/fork`
-background copy, a conversation moved to the background or a subagent
-tells of a new session. aineo follows a new session only when Claude Code
-started it after ending the session aineo follows, so such a session,
-without that end, is not followed. The teammates and background sessions
-Claude Code 2.1.292 starts are given its `--settings`, aineo's hooks among
-them (read in its program, not run); aineo ignores every hook that ran
-after its Claude Code exited, so a session they start then is not
-followed either. A hook that cannot reach the editor tells it nothing,
-but keeps a switch it completes as the session the next start in that
-directory resumes (|aineo-claude-session|); and once the end of the session
+background copy or a subagent tells of a new session. A conversation
+moved to the background was seen once running in a new process, started
+by Claude Code's background service with aineo's hooks, on a new session
+id, with no end of the session aineo followed. aineo follows a new session
+that Claude Code's own process in aineo's terminal starts only after it
+ends the session aineo follows; one that another process starts under
+aineo's hooks, it follows at once, while its own Claude Code runs. The
+tab's own Claude Code is the process whose `SessionStart` of the session
+the tab started on told aineo first, by its process id — until one has,
+the process aineo started in the terminal. Any other process id is
+another process, wherever it runs: Claude Code's background service can
+be a child of the tab's own Claude Code. So a `/fork` copy whose
+`SessionStart` reaches aineo moves the tab to the copy, and a teammate
+that runs as a process of its own would too (neither seen). The
+teammates and background sessions Claude Code 2.1.292 starts are given its
+`--settings`, aineo's hooks among them (read in its program, not run);
+aineo ignores every hook that ran after its Claude Code exited, so a
+session they start then is not followed. Once aineo follows a session
+another process started, a `/clear` or `/resume` in its own terminal is
+not followed: it ends a session aineo no longer follows. A hook that
+cannot reach the editor tells it nothing, but keeps a switch it completes
+as the session the next start in that directory resumes
+(|aineo-claude-session|); and once the end of the session
 aineo follows is lost, no later switch of that Claude Code is followed,
 until it starts again. Each hook starts
 a headless `nvim` and returns at once; that `nvim` tells the editor, waits
@@ -3904,8 +3923,13 @@ Where a report goes when the editor that started Claude Code is gone
 (|aineo-report-claims|) rests on what was not measured with Claude Code
 itself:
 - A conversation moved to Claude Code's background runs as a new Claude
-  Code process on a new session id, which no Neovim follows by itself: its
+  Code process on a new session id. While the Claude Code it was moved
+  from runs in a tab, that tab follows it (Session switches, above) and
+  gets its reports. Else no Neovim follows it by itself: its
   reports are kept on disk under that session until a Neovim follows it.
+  Once the tab follows it, a report from the tab's own Claude Code, still
+  on the session the tab left, is kept on disk under that session, unshown,
+  until a Neovim follows it again.
   `:Aineo claim {id}` does, and offers it when its Claude Code has a record
   — written by aineo's hooks, if the background keeps them, else by aineo's
   MCP server at its start. A Claude Code that runs neither aineo's hooks nor
