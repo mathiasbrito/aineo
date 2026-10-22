@@ -1836,12 +1836,17 @@ and no other tool. The prompt gives the file's path from that folder, its
 included, each line numbered. Claude Code answers a list of line numbers and
 explanations, each tied to the first line it explains, and ends.
 
-An explanation shows above its line, indented as that line (by half the
-window's text width at most), each row after `┊ `, wrapped at the window's
-text width less that indent, in
-|hl-AineoExplain|. The marks move with the edits made to the buffer and
+An explanation shows above its line as a band of the window's width. A `▎`
+stands beside each of its rows in the number column, and the first row's
+carries the label `expl` (left out of a number column too narrow for it, and
+there is no `▎` where the window shows no number, sign or fold column). The
+band starts at the indent of the explained line (by half the window's text
+width at most), each row after `┊ `, wrapped at the window's text width less
+that indent, in |hl-AineoExplain|. The number of the explained line shows in
+|hl-AineoExplainNr|. The marks move with the edits made to the buffer and
 vanish with a line deleted. While a request runs, one virtual line above the
-first line asked for says `┊ explaining…`. A request for some lines replaces
+first line asked for, in the same look without the label, says
+`┊ explaining…`. A request for some lines replaces
 the explanations above those lines alone. Lines outside the range or the
 buffer, empty texts and repeats are dropped, and several explanations of one
 line are joined in order.
@@ -1859,9 +1864,25 @@ buffer must hold a file: in aineo's own panes, `\v` and `\V` tell you so
 (|aineo-config-explain.model|). Each request is a model call, billed as
 Claude Code's own usage is.
 
+The groups are computed from your colour scheme when aineo first needs them
+and again after every `:colorscheme`, and a group you define yourself is kept.
+The accent is the foreground of |hl-DiagnosticInfo|, `#61afef` without one.
+
                                                              *hl-AineoExplain*
-AineoExplain		The virtual lines of an explanation, and the one that
-			says a request is explaining, linked to |hl-Comment|.
+AineoExplain		The text of an explanation, and the band behind its
+			rows, and the one that says a request is explaining:
+			the accent, italic, over the background of |hl-Normal|
+			blended 12% toward the accent (`#1e1e2e` when `Normal`
+			has none and 'background' is `dark`, `#ffffff` when it
+			is `light`).
+                                                      *hl-AineoExplainGutter*
+AineoExplainGutter	The `▎` and the label in the number column: the
+			accent over the background of |hl-LineNr|.
+                                                  *hl-AineoExplainGutterFill*
+AineoExplainGutterFill	The rest of the number column of a row: the
+			background of |hl-LineNr|.
+                                                          *hl-AineoExplainNr*
+AineoExplainNr		The number of an explained line: the accent, bold.
 
 Claude's session ~
                                                         *aineo-claude-session*

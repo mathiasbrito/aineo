@@ -152,11 +152,14 @@ local function answer_explanations(explanations)
   }))
 end
 
---- What the child shows of the explanations, line by line: for each line
---- with an extmark of the namespace `aineo_explain`, from the top, the line's
---- number from 1 and the virtual lines above it, each as its chunks.
-local SHOWN = [[(function()
-  local namespace = vim.api.nvim_get_namespaces().aineo_explain
+--- What the child shows of the explanations in the namespace `namespace`,
+--- line by line: for each line with an extmark of it, from the top, the
+--- line's number from 1, whether the virtual lines are above it, whether
+--- they start at the window's left column, the highlight group of its
+--- number, and the virtual lines as their chunks, as they are. `%s` is the
+--- namespace's name.
+local SHOWN_CHUNKS_OF = [[(function()
+  local namespace = vim.api.nvim_get_namespaces().%s
   if not namespace then
     return {}
   end
@@ -165,8 +168,35 @@ local SHOWN = [[(function()
     table.insert(shown, {
       line = mark[2] + 1,
       above = mark[4].virt_lines_above,
+      leftcol = mark[4].virt_lines_leftcol,
+      number_hl_group = mark[4].number_hl_group,
       virt_lines = mark[4].virt_lines,
     })
+  end
+  return shown
+end)()]]
+
+--- What the child shows of the explanations (`SHOWN_CHUNKS_OF`) with each
+--- row reduced to what it says: its text, the chunks of the gutter left out
+--- and the padding to the window's width cut, in the group of the text.
+local SHOWN = [[(function()
+  local namespace = vim.api.nvim_get_namespaces().aineo_explain
+  if not namespace then
+    return {}
+  end
+  local shown = {}
+  for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(0, namespace, 0, -1, { details = true })) do
+    local rows = {}
+    for _, row in ipairs(mark[4].virt_lines) do
+      local text = ''
+      for _, chunk in ipairs(row) do
+        if chunk[2] == nil or chunk[2] == 'AineoExplain' then
+          text = text .. chunk[1]
+        end
+      end
+      table.insert(rows, { { (text:gsub(' +$', '')), 'AineoExplain' } })
+    end
+    table.insert(shown, { line = mark[2] + 1, above = mark[4].virt_lines_above, virt_lines = rows })
   end
   return shown
 end)()]]
@@ -180,6 +210,22 @@ local function shown_once_it_holds(text)
   local shown = {}
   vim.wait(PATIENCE_MS, function()
     shown = child.lua_get(SHOWN)
+    return vim.inspect(shown):find(text, 1, true) ~= nil
+  end, 20)
+  return shown
+end
+
+--- What the child shows in the namespace `namespace` (`SHOWN_CHUNKS_OF`),
+--- as it is, once it shows a virtual line holding `text`, or after
+--- `PATIENCE_MS`.
+---
+---@param namespace string
+---@param text string
+---@return table[]
+local function chunks_once_it_holds(namespace, text)
+  local shown = {}
+  vim.wait(PATIENCE_MS, function()
+    shown = child.lua_get(SHOWN_CHUNKS_OF:format(namespace))
     return vim.inspect(shown):find(text, 1, true) ~= nil
   end, 20)
   return shown
@@ -200,16 +246,6 @@ T['an answer']['shows each explanation as a virtual line above its line, indente
       virt_lines = { { { '  ┊ Adds the two numbers.', 'AineoExplain' } } },
     },
   })
-end
-
-T['an answer']['shows explanations in AineoExplain, which links to Comment unless set'] = function()
-  start_with_project()
-  answer_explanations({ { line = 2, text = 'Adds the two numbers.' } })
-
-  explain()
-  shown_once_it_holds('Adds')
-
-  eq(child.api.nvim_get_hl(0, { name = 'AineoExplain' }), { link = 'Comment', default = true })
 end
 
 T['an answer']['wraps an explanation at the window’s text width, less the line’s indent, by display width'] = function()
@@ -920,6 +956,200 @@ T['a request']['aligns the numbers of the lines to the right'] = function()
   explain()
 
   eq(vim.list_slice(vim.split(recorded(2)[2].stdin, '\n'), 13, 14), { ' 9 | x', '10 | y' })
+end
+
+T['the look'] = MiniTest.new_set()
+
+T['the look']['shows a row as the indent unhighlighted, then the mark and the text padded to the window’s width in AineoExplain, from the left column'] = function()
+  start_with_project()
+  answer_explanations({ { line = 2, text = 'Adds the two numbers.' } })
+
+  explain()
+
+  eq(chunks_once_it_holds('aineo_explain', 'Adds'), {
+    {
+      line = 2,
+      above = true,
+      leftcol = true,
+      number_hl_group = 'AineoExplainNr',
+      virt_lines = {
+        { { '  ' }, { '┊ Adds the two numbers.' .. (' '):rep(35), 'AineoExplain' } },
+      },
+    },
+  })
+end
+
+T['the look']['starts a row with ▎ in the gutter, the label expl right-aligned on the first row alone, and the rest of the gutter filled'] = function()
+  start_with_project()
+  child.wo.number = true
+  child.wo.numberwidth = 8
+  answer_explanations({ { line = 2, text = 'First.\nSecond.' } })
+
+  explain()
+
+  eq(chunks_once_it_holds('aineo_explain', 'First')[1].virt_lines, {
+    {
+      { '▎', 'AineoExplainGutter' },
+      { '  ', 'AineoExplainGutterFill' },
+      { 'expl', 'AineoExplainGutter' },
+      { ' ', 'AineoExplainGutterFill' },
+      { '  ' },
+      { '┊ First.' .. (' '):rep(50 - 8), 'AineoExplain' },
+    },
+    {
+      { '▎', 'AineoExplainGutter' },
+      { (' '):rep(7), 'AineoExplainGutterFill' },
+      { '  ' },
+      { '┊ Second.' .. (' '):rep(50 - 9), 'AineoExplain' },
+    },
+  })
+end
+
+T['the look']['leaves the label out of a gutter too narrow for it and ▎, and keeps it in one that just fits'] =
+  MiniTest.new_set({
+    parametrize = {
+      {
+        5,
+        {
+          { '▎', 'AineoExplainGutter' },
+          { '    ', 'AineoExplainGutterFill' },
+        },
+      },
+      {
+        6,
+        {
+          { '▎', 'AineoExplainGutter' },
+          { 'expl', 'AineoExplainGutter' },
+          { ' ', 'AineoExplainGutterFill' },
+        },
+      },
+    },
+  })
+
+T['the look']['leaves the label out of a gutter too narrow for it and ▎, and keeps it in one that just fits']['of'] = function(
+  numberwidth,
+  gutter
+)
+  start_with_project()
+  child.wo.number = true
+  child.wo.numberwidth = numberwidth
+  answer_explanations({ { line = 1, text = 'Starts.' } })
+
+  explain()
+
+  local row = chunks_once_it_holds('aineo_explain', 'Starts')[1].virt_lines[1]
+  eq(vim.list_slice(row, 1, #gutter), gutter)
+  eq(#row, #gutter + 1)
+end
+
+--- Defines in the child the highlight groups `colours` names, each as its
+--- definition says.
+---
+---@param colours table<string, table>
+local function use_theme(colours)
+  child.lua(
+    [[for name, definition in pairs(...) do
+      vim.api.nvim_set_hl(0, name, definition)
+    end]],
+    { colours }
+  )
+end
+
+--- The definition the child holds of the group `name`, a link not followed.
+---
+---@param name string
+---@return table
+local function group(name)
+  return child.api.nvim_get_hl(0, { name = name })
+end
+
+T['the look']['computes its groups from the theme: the accent from DiagnosticInfo, the band from Normal blended 12% toward it, the gutter from LineNr'] = function()
+  start_with_project()
+  use_theme({
+    Normal = { bg = 0x101010, fg = 0xeeeeee },
+    DiagnosticInfo = { fg = 0x6090c0 },
+    LineNr = { bg = 0x202020 },
+  })
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+
+  explain()
+  shown_once_it_holds('Adds')
+
+  eq(
+    group('AineoExplain'),
+    { fg = 0x6090c0, bg = 0x1a1f25, italic = true, cterm = { italic = true }, default = true }
+  )
+  eq(group('AineoExplainGutter'), { fg = 0x6090c0, bg = 0x202020, default = true })
+  eq(group('AineoExplainGutterFill'), { bg = 0x202020, default = true })
+  eq(
+    group('AineoExplainNr'),
+    { fg = 0x6090c0, bold = true, cterm = { bold = true }, default = true }
+  )
+end
+
+T['the look']['falls back for the colours the theme lacks: Normal’s background by the background option, the accent, no LineNr background'] =
+  MiniTest.new_set({
+    parametrize = { { 'dark', 0x262f45 }, { 'light', 0xecf5fd } },
+  })
+
+T['the look']['falls back for the colours the theme lacks: Normal’s background by the background option, the accent, no LineNr background']['for'] = function(
+  background,
+  band
+)
+  start_with_project()
+  child.o.background = background
+  use_theme({ Normal = {}, DiagnosticInfo = {}, LineNr = {} })
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+
+  explain()
+  shown_once_it_holds('Adds')
+
+  eq(
+    group('AineoExplain'),
+    { fg = 0x61afef, bg = band, italic = true, cterm = { italic = true }, default = true }
+  )
+  eq(group('AineoExplainGutter'), { fg = 0x61afef, default = true })
+  eq(group('AineoExplainGutterFill'), { default = true })
+end
+
+T['the look']['computes its groups again when the colour scheme changes'] = function()
+  start_with_project()
+  use_theme({ Normal = { bg = 0x101010 }, DiagnosticInfo = { fg = 0x6090c0 } })
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+  explain()
+  shown_once_it_holds('Adds')
+
+  use_theme({ Normal = { bg = 0x000000 }, DiagnosticInfo = { fg = 0xffffff } })
+  child.cmd('doautocmd ColorScheme')
+
+  eq(
+    group('AineoExplain'),
+    { fg = 0xffffff, bg = 0x1f1f1f, italic = true, cterm = { italic = true } }
+  )
+end
+
+T['the look']['keeps a group the user defined, before it loads and after the colour scheme changes'] = function()
+  start_with_project()
+  use_theme({ AineoExplain = { fg = 0x123456, underline = true } })
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+
+  explain()
+  shown_once_it_holds('Adds')
+  child.cmd('doautocmd ColorScheme')
+
+  eq({ group('AineoExplain').fg, group('AineoExplain').underline }, { 0x123456, true })
+  eq(group('AineoExplainNr').bold, true)
+end
+
+T['the look']['shows no gutter where the window shows no number, sign or fold column'] = function()
+  start_with_project()
+  answer_explanations({ { line = 1, text = 'Starts.' } })
+
+  explain()
+
+  eq(chunks_once_it_holds('aineo_explain', 'Starts')[1].virt_lines, {
+    { { '┊ Starts.' .. (' '):rep(60 - 9), 'AineoExplain' } },
+  })
 end
 
 return T

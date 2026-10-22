@@ -3,10 +3,14 @@
 --- buffer, or of some of its lines.
 
 local answer = require('aineo.explain.answer')
+local kinds = require('aineo.explain.kinds')
+local look = require('aineo.explain.look')
 local marks = require('aineo.explain.marks')
 local request = require('aineo.explain.request')
 
 local M = {}
+
+look.keep_defined({ kinds.EXPLANATIONS })
 
 --- One request to explain code.
 ---@class aineo.explain.Request
@@ -124,8 +128,8 @@ local function show_answer(asked, ended)
     vim.notify('aineo: explaining failed: ' .. problem, vim.log.levels.ERROR)
     return
   end
-  marks.clear(asked.buffer, asked.first, asked.last)
-  marks.place(asked.buffer, asked.window, explanations)
+  marks.clear(asked.buffer, kinds.EXPLANATIONS, asked.first, asked.last)
+  marks.place(asked.buffer, asked.window, kinds.EXPLANATIONS, explanations)
 end
 
 --- Forgets the request that runs for `buffer`: closes its timer and removes
@@ -137,7 +141,7 @@ local function forget(buffer)
   local run = running[buffer]
   running[buffer] = nil
   run.timer:close()
-  marks.remove(buffer, run.explaining_mark)
+  marks.remove(buffer, kinds.EXPLANATIONS, run.explaining_mark)
   return run
 end
 
@@ -181,7 +185,7 @@ local function start(explaining)
     lines = lines,
   })
   local run = {
-    explaining_mark = marks.show_explaining(buffer, asked.first),
+    explaining_mark = marks.show_explaining(buffer, asked.window, kinds.EXPLANATIONS, asked.first),
     timer = assert(vim.uv.new_timer()),
   }
   running[buffer] = run
@@ -250,8 +254,8 @@ function M.ask(explaining)
     vim.notify('aineo: explaining stopped', vim.log.levels.INFO)
     return
   end
-  if not explaining.range and marks.is_showing(buffer) then
-    marks.clear(buffer)
+  if not explaining.range and marks.is_showing(buffer, kinds.EXPLANATIONS) then
+    marks.clear(buffer, kinds.EXPLANATIONS)
     return
   end
   start(explaining)
@@ -265,7 +269,7 @@ function M.clear(buffer)
   if running[buffer] then
     stop(buffer)
   end
-  marks.clear(buffer)
+  marks.clear(buffer, kinds.EXPLANATIONS)
 end
 
 return M
