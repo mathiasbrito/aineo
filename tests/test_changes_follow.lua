@@ -73,7 +73,9 @@ local BEGIN_AND_SHOW = [[
 ---@param name string
 ---@return string[]
 local function lines_of(name)
-  return child.lua_get('vim.api.nvim_buf_get_lines(vim.fn.bufnr(...), 0, -1, true)', { name })
+  return git_repo.without_against_line(
+    child.lua_get('vim.api.nvim_buf_get_lines(vim.fn.bufnr(...), 0, -1, true)', { name })
+  )
 end
 
 --- Waits until the child's buffer named `name` holds `expected`, at most
@@ -144,7 +146,7 @@ end
 --- with `one`, begins the session there with the pane shown, commits the
 --- three as `two`, writes them `three` into the working tree and waits for the
 --- files window to list them under Session work. The cursor is left in the
---- files window, on its header, with nothing shown.
+--- files window, on the second line of its heading, with nothing shown.
 ---
 ---@param case string the case's own name
 ---@param before_beginning? string Lua run in the child before the session begins
@@ -168,6 +170,7 @@ local function pane_with_three_edited_files(case, before_beginning)
   expect_lines(COMMITS, { 'Uncommitted', 'Session work', git_repo.commit_line(commit, 'Second') })
   expect_lines(FILES, { 'Files in: Session work', '  M a.txt', '  M b.txt', '  M c.txt' })
   enter_window_of(FILES)
+  child.lua('vim.api.nvim_win_set_cursor(0, { 2, 0 })')
   return top
 end
 
@@ -204,7 +207,7 @@ T['moving the cursor in the files window']['leaves the cursor in the files windo
   expect_last_shown_name('aineo://diff/b.txt')
   eq(
     { current_buffer_name(), child.lua_get('vim.api.nvim_win_get_cursor(0)') },
-    { FILES, { 3, 0 } }
+    { FILES, { 4, 0 } }
   )
 end
 
@@ -462,7 +465,7 @@ end
 --- with `one`, begins the session there with the pane shown, commits the three
 --- as `two` and waits for the files window to list them under Session work:
 --- the working tree is as `HEAD` has it, so a diff against `HEAD` is empty.
---- The cursor is left in the files window, on its header.
+--- The cursor is left in the files window, on the second line of its heading.
 ---
 ---@param case string the case's own name
 local function pane_with_three_committed_files(case)
@@ -478,6 +481,7 @@ local function pane_with_three_committed_files(case)
   expect_lines(COMMITS, { 'Uncommitted', 'Session work', git_repo.commit_line(commit, 'Second') })
   expect_lines(FILES, { 'Files in: Session work', '  M a.txt', '  M b.txt', '  M c.txt' })
   enter_window_of(FILES)
+  child.lua('vim.api.nvim_win_set_cursor(0, { 2, 0 })')
 end
 
 --- Everything the child's messages hold.
@@ -528,7 +532,7 @@ T['<BS> in a diff']['shown by Enter moves the cursor to the files window, on the
   child.type_keys('<BS>')
 
   expect_current_buffer(FILES)
-  eq(child.lua_get('vim.api.nvim_win_get_cursor(0)'), { 3, 0 })
+  eq(child.lua_get('vim.api.nvim_win_get_cursor(0)'), { 4, 0 })
 end
 
 T['<BS> in a diff']['shown by following the cursor moves the cursor to the files window, on the line of its file'] = function()
@@ -540,7 +544,7 @@ T['<BS> in a diff']['shown by following the cursor moves the cursor to the files
   child.type_keys('<BS>')
 
   expect_current_buffer(FILES)
-  eq(child.lua_get('vim.api.nvim_win_get_cursor(0)'), { 4, 0 })
+  eq(child.lua_get('vim.api.nvim_win_get_cursor(0)'), { 5, 0 })
 end
 
 T['<BS> in a diff']['shown by h moves the cursor to the files window, on the line of its file'] = function()
@@ -552,7 +556,7 @@ T['<BS> in a diff']['shown by h moves the cursor to the files window, on the lin
   child.type_keys('<BS>')
 
   expect_current_buffer(FILES)
-  eq(child.lua_get('vim.api.nvim_win_get_cursor(0)'), { 3, 0 })
+  eq(child.lua_get('vim.api.nvim_win_get_cursor(0)'), { 4, 0 })
 end
 
 T['<BS> in a diff']['shows the changes pane first when the files window is not on screen'] = function()
@@ -564,7 +568,7 @@ T['<BS> in a diff']['shows the changes pane first when the files window is not o
   child.type_keys('<BS>')
 
   expect_current_buffer(FILES)
-  eq(child.lua_get('vim.api.nvim_win_get_cursor(0)'), { 3, 0 })
+  eq(child.lua_get('vim.api.nvim_win_get_cursor(0)'), { 4, 0 })
   eq(child.lua_get('_G.pane_shown_times'), 1)
 end
 

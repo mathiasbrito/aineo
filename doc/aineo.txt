@@ -803,7 +803,48 @@ followed by
 lists the files of that one choice and nothing else, no other worktree's
 heading or files among them, whichever choice it is. It shows its first
 line, the cursor on it, each time the choice changes, and when a list is
-read again for the same choice the cursor stays on its file. Under Session
+read again for the same choice the cursor stays on its file.
+
+                                                    *aineo-changes-against*
+The second line, `Against: <left> → <right>`, says what Enter on a file of
+that list diffs, both sides, so that no diff is read against the wrong
+base. `<left>` is the side the diff runs from: the abbreviated id of its
+commit; between parentheses the branches, remote-tracking branches and tags
+whose tip that commit is, local branches first, then remote ones, then tags,
+comma separated, the first three and `…` when there are more, no parentheses
+for none; and where the commit came from, in words, one of:
+>
+    reported base          the base an agent reported for a worktree or
+                           branch, when aineo reads from it
+                           (|aineo-changes-reported-section|)
+    merge base with {ref}  the base aineo works out for a worktree or
+                           branch: its merge base with the working branch,
+                           named, or, where that gives none, with the commit
+                           your own branch compares against, by its
+                           abbreviated id; under Landed, the merge base of
+                           the session's base and the working branch
+    HEAD                   under Uncommitted
+    parent                 under a commit, its first parent; a root commit
+                           says `empty tree` alone
+<
+Under Session work the commit is the one `HEAD` named when the session
+began, said `session start`. `<right>` is `working tree` where the diff reads
+the files on disk (Session work, Uncommitted, a worktree's whole change),
+else the abbreviated id and names of the commit it reads (a commit; the tip
+of Landed's working branch or of a branch). With no base at all, `<left>` is
+`empty tree`. The line shows the id alone until aineo has read the names,
+with one git run off the main loop each time the files window is read and
+each time a branch or tag moves, a fetch included; it never waits for them.
+While aineo reads the commit `HEAD` names, a commit's parent or the merge
+base of Landed, the line says that side by its words alone, as in
+`Against: HEAD → working tree`, never the id of an earlier read, and the
+same holds for the bar of a diff read again with F. A branch aineo has not
+read yet says `Against: reading…`. The same line, for the same choice, is
+what the diff bar below says. The label shows in |hl-AineoChangesFilter|,
+an id in |hl-AineoChangesCommitId|, names in
+|hl-AineoChangesReportedBranch| and the words in |hl-AineoChangesNote|.
+
+Under Session
 work the window lists every file that differs from the base, committed
 since or not, staged or not, and every new file your ignore rules leave
 in, one per line, in git's order: >
@@ -1145,6 +1186,19 @@ does nothing. When the middle column has no room for the
 diff, aineo says so, shows nothing, and the cursor stays in the pane; so it
 does when showing the diff fails.
 
+                                                     *aineo-changes-diff-bar*
+Each diff window aineo opens shows in its 'winbar' `<left> ↔ <right>  <path>`:
+the two sides as the `Against:` line says them (|aineo-changes-against|),
+and, for one file's diff, its path as the files window shows it; a whole
+diff has no path. The bar belongs to the diff, not the window: a diff kept
+in a window, or opened earlier, still says what it compares, and another
+buffer shown in that window later draws your own 'winbar'. `h` shows a diff
+against `HEAD`, and its bar says so: from `HEAD` to the working tree under
+Session work, Uncommitted and a worktree, from `HEAD` to the tip under
+Landed and a branch, and from the commit to `HEAD` under a commit. `F`
+reads the diff again and the bar with it; the diff that follows the cursor
+draws the bar of the file it shows. Colours are the `Against:` line's.
+
 The name of every diff and of every file `gf` shows, here and below, is the
 first tab's. A tab after it names them with `copy{n}/` after `aineo://`, as it
 does its pane's buffers (|aineo-tabs|): `aineo://copy1/diff/{path}`,
@@ -1441,19 +1495,20 @@ section, and its age starts again. A worktree new to the reported work,
 other than your own, makes the reported work the focused view, from the
 default view or from a worktree or branch picked with `s`, that worktree's
 whole change chosen, the cursor on its heading, and aineo says once "aineo:
-Claude Code started work in Worktree <folder> (<branch>); the changes pane
-shows the reported work", with "tab <n>: " before it when that tab is not
-the current one. Your own worktree, reported as the main checkout's folder
-for work there, is listed in the Reported section but changes no view and
-is told nothing: its work is the default view's. The changes pane is not
-brought into view: when it is not on screen, the next `\g` shows the
-reported work. The focused view of the reported work shows each worktree
-under its own heading, `Worktree <folder> (<branch>)`, then each reported
-branch its worktree has not checked out, `Branch <name>`, in
-|hl-AineoChangesFilter|, newest first, and below each its commits, or its
-note and the line saying its last read failed, as a worktree or branch
-shown alone does; nothing else. Enter, `l`, `h` and `gf` under a branch's
-lines read that branch, as under a branch picked.
+Claude Code started work in Worktree <folder> (<branches>); the changes
+pane shows the reported work", <branches> the branches the agent reported of
+it, joined by ", ", whatever git lists its HEAD as at that moment, with "tab
+<n>: " before it when that tab is not the current one. Your own worktree,
+reported as the main checkout's folder for work there, is listed in the
+Reported section but changes no view and is told nothing: its work is the
+default view's. The changes pane is not brought into view: when it is not
+on screen, the next `\g` shows the reported work. The focused view of the
+reported work shows each worktree under its own heading, `Worktree <folder>
+(<branch>)`, then each reported branch its worktree has not checked out,
+`Branch <name>`, in |hl-AineoChangesFilter|, newest first, and below each
+its commits, or its note and the line saying its last read failed, as a
+worktree or branch shown alone does; nothing else. Enter, `l`, `h` and `gf`
+under a branch's lines read that branch, as under a branch picked.
 
 Each reported branch is read from the base its report gives, wherever the
 pane shows it, in place of a base of its own, while that base is behind
@@ -1479,6 +1534,8 @@ reported: >
     T111 reported tree 5m
       agent-1
         feature/b from 1a2b3c4
+          2c3d4e5 Ada 5m               Handle the empty report
+          1a2b3c5 Ada 1h               Draw the tree
         feature/a * from 1a2b3c4
     (no label) now
       agent-2
@@ -1494,6 +1551,25 @@ the abbreviated id of the base its work is read from (above) — on your
 own worktree's checked-out branch, the base the default view reads, which
 Enter on that line shows — or `from ?` for a report made before reports
 gave one.
+Below a branch's line, indented six cells, are its commits from that base,
+the one its line shows, to the branch's tip, newest first, each as any
+commit line of the window: its abbreviated id, its author and age, and its
+subject, in the same colours. A branch with no commit past its base has
+none, and nor has a branch whose line shows `from ?`. At most 20 are
+listed; for more, a last line says `… <n> more`, <n> the commits left out,
+in |hl-AineoChangesNote|, and Enter on it picks the branch as its line
+does. They are read off the main loop, once the pane has read the work of
+the branch, and read again each time the pane reads its worktrees: until
+then the tree shows without them, and no key waits for them. A commit
+under a branch is a commit line like any other: the files window lists its
+files once the cursor rests on it, Enter shows its diff, `l` moves to its
+files and `<BS>` comes back to its line, `gf` and `<S-CR>` open a file
+listed under it, and the diff following the cursor and `h` act as on a
+file of any commit. Under a branch another worktree than yours has
+checked out, whichever worktree's line the branch stands under, they are
+that worktree's commits, as in its own section: the files window names the
+worktree, and Enter, the diffs, `h`, `gf` and `<S-CR>` act in it, `h`
+against that worktree's `HEAD`.
 The line under the cursor chooses the files window's list, as any line
 does, and Enter on it shows what it names alone, as picking it with `s`
 does, the explorer following (|aineo-explorer|):
@@ -1578,7 +1654,11 @@ shows in the colours of its window, dimmed with it where a colour scheme dims
 a window not current (|hl-NormalNC|), until you colour the group. The commits
 window's two fixed lines, Uncommitted and Session work, its Landed heading,
 the heading of a worktree or branch shown alone, and the files window's first
-line show whole in |hl-AineoChangesFilter|. The Reported heading shows whole
+line show whole in |hl-AineoChangesFilter|. The files window's second line,
+`Against:`, and the bar of a diff window (|aineo-changes-against|) show the
+label in the same group, an id in |hl-AineoChangesCommitId|, names in
+|hl-AineoChangesReportedBranch| and the words saying where a base came from
+in |hl-AineoChangesNote|. The Reported heading shows whole
 in |hl-AineoChangesReportedHeading|, a label in
 |hl-AineoChangesReportedLabel|, its age in |hl-AineoChangesReportedAge|, a
 worktree's folder in |hl-AineoChangesReportedWorktree|, a branch's name in
@@ -1619,7 +1699,8 @@ AineoChangesDeleted      a deleted file, linked to `Removed`
                                                         *hl-AineoChangesSaved*
 AineoChangesSaved        the `*` of a file you saved, linked to `WarningMsg`
                                                      *hl-AineoChangesCommitId*
-AineoChangesCommitId     a commit's abbreviated id, linked to `Identifier`
+AineoChangesCommitId     a commit's abbreviated id, on the `Against:` line and
+                         in a diff bar too, linked to `Identifier`
                                                  *hl-AineoChangesCommitAuthor*
 AineoChangesCommitAuthor a commit's author, linked to `Identifier`
                                                     *hl-AineoChangesCommitAge*
@@ -1629,8 +1710,8 @@ AineoChangesCommitSubject  a commit's subject, empty
                                                        *hl-AineoChangesFilter*
 AineoChangesFilter       the two fixed lines of the commits window, its
                          Landed heading, the heading of a worktree shown
-                         alone and the files window's first line, linked
-                         to `Title`
+                         alone, the files window's first line and the
+                         `Against:` label, linked to `Title`
                                               *hl-AineoChangesReportedHeading*
 AineoChangesReportedHeading  the commits window's Reported heading, linked
                          to `Title`
@@ -1644,10 +1725,14 @@ AineoChangesReportedAge  how long ago a label's newest report came, linked
 AineoChangesReportedWorktree  a reported worktree's folder, linked to
                          `Directory`
                                                *hl-AineoChangesReportedBranch*
-AineoChangesReportedBranch  a reported branch's name, linked to `Label`, as
-                         the commit graph's branch names are by default
+AineoChangesReportedBranch  a reported branch's name, and the names of a
+                         commit on the `Against:` line and in a diff bar,
+                         linked to `Label`, as the commit graph's branch
+                         names are by default
                                                          *hl-AineoChangesNote*
-AineoChangesNote         a line that lists nothing, linked to `Comment`
+AineoChangesNote         a line that lists nothing, and the words saying where
+                         a base came from on the `Against:` line and in a
+                         diff bar, linked to `Comment`
                                                       *hl-AineoChangesFailure*
 AineoChangesFailure      a line that tells a failure, linked to
                          `DiagnosticWarn`

@@ -95,7 +95,9 @@ end
 ---@param name string
 ---@return string[]
 local function lines_of(name)
-  return child.lua_get('vim.api.nvim_buf_get_lines(vim.fn.bufnr(...), 0, -1, true)', { name })
+  return git_repo.without_against_line(
+    child.lua_get('vim.api.nvim_buf_get_lines(vim.fn.bufnr(...), 0, -1, true)', { name })
+  )
 end
 
 --- Waits until the child's buffer named `name` holds `expected`, at most
@@ -342,7 +344,7 @@ local function changes_pane_listing_a_file(name, pane_keys, settings)
   end
   expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
   child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { FILES })
-  child.lua('vim.api.nvim_win_set_cursor(0, { 2, 0 })')
+  child.lua('vim.api.nvim_win_set_cursor(0, { 3, 0 })')
   return top
 end
 
@@ -383,7 +385,7 @@ T['Enter']['then <BS> in the diff, with the agent pane on screen, shows the chan
   git_repo.wait_until('the files window entered', function()
     return entry.current_window(child) == FILES
   end)
-  eq(child.lua_get('vim.api.nvim_win_get_cursor(0)'), { 2, 0 })
+  eq(child.lua_get('vim.api.nvim_win_get_cursor(0)'), { 3, 0 })
 end
 
 T['Enter']['with none of the layout’s windows open moves the cursor to the diff above the pane'] = function()
@@ -392,7 +394,7 @@ T['Enter']['with none of the layout’s windows open moves the cursor to the dif
   child.cmd('only')
   child.lua('vim.api.nvim_win_set_buf(0, vim.fn.bufnr(...))', { FILES })
   expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
-  child.lua('vim.api.nvim_win_set_cursor(0, { 2, 0 })')
+  child.lua('vim.api.nvim_win_set_cursor(0, { 3, 0 })')
 
   entry.press(child, '<CR>')
 
@@ -564,7 +566,7 @@ local function changes_pane_listing_a_new_file(name)
   entry.press(child, '\\g')
   expect_lines(FILES, { 'Files in: Session work', '  ? has space.txt' })
   child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { FILES })
-  child.lua('vim.api.nvim_win_set_cursor(0, { 2, 0 })')
+  child.lua('vim.api.nvim_win_set_cursor(0, { 3, 0 })')
   return vim.fs.joinpath(top, 'has space.txt')
 end
 
@@ -586,7 +588,7 @@ T['gf']['with none of the layout’s windows open opens the file in the files wi
   child.cmd('only')
   child.lua('vim.api.nvim_win_set_buf(0, vim.fn.bufnr(...))', { FILES })
   expect_lines(FILES, { 'Files in: Session work', '  ? has space.txt' })
-  child.lua('vim.api.nvim_win_set_cursor(0, { 2, 0 })')
+  child.lua('vim.api.nvim_win_set_cursor(0, { 3, 0 })')
 
   entry.press(child, 'gf')
 
@@ -700,7 +702,7 @@ T['the focused view']['is kept by \\g from a diff Enter opened, with the pane on
   local _, scope_view = scoped_to_the_agent_worktree('changespane-entry-from-diff')
   child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { FILES })
   expect_lines(FILES, { 'Files in: Worktree agent (agent)', '  A agent.txt' })
-  child.lua('vim.api.nvim_win_set_cursor(0, { 2, 0 })')
+  child.lua('vim.api.nvim_win_set_cursor(0, { 3, 0 })')
   entry.press(child, '<CR>')
   git_repo.wait_until('the diff shown and entered', function()
     return entry.current_window(child):find('//diff/', 1, true) ~= nil
@@ -753,7 +755,7 @@ T['Diff close']['closes the diff the cursor is in and puts the cursor on the fil
     entry.current_window(child),
     child.api.nvim_win_get_cursor(0),
     child.api.nvim_get_mode().mode,
-  }, { { 'terminal', FILES, COMMITS }, FILES, { 2, 0 }, 'n' })
+  }, { { 'terminal', FILES, COMMITS }, FILES, { 3, 0 }, 'n' })
 end
 
 T['Diff close']['closes the diff from Claude’s window, the cursor staying there, by'] =

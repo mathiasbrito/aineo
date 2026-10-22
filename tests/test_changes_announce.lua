@@ -122,9 +122,11 @@ end
 ---@param which 'files'|'commits'
 ---@return string[]
 local function pane_lines(key, which)
-  return child.lua_get(
-    'vim.api.nvim_buf_get_lines(_G.panes[...][select(2, ...)], 0, -1, true)',
-    { key, which }
+  return git_repo.without_against_line(
+    child.lua_get(
+      'vim.api.nvim_buf_get_lines(_G.panes[...][select(2, ...)], 0, -1, true)',
+      { key, which }
+    )
   )
 end
 
@@ -431,6 +433,31 @@ T['a reported worktree']['shows under its heading with its commits, nothing else
     commit_line(work_a, 'Work a'),
   })
   eq(told('module'), { started_in('Worktree agent-1 (feature/a)') })
+end
+
+T['a reported worktree']['is told with the branch the report gave while git lists it detached'] = function()
+  local top = start_on_repository('announce-detached')
+  local agent = vim.fs.joinpath(vim.fs.dirname(top), 'agent-1')
+  git_repo.git(top, { 'worktree', 'add', '--quiet', '--detach', agent })
+
+  report('module', agent_call(agent))
+
+  wait_until('the user is told', function()
+    return #told('module') > 0
+  end)
+  eq(told('module'), { started_in('Worktree agent-1 (feature/a)') })
+end
+
+T['a reported worktree']['is told with every branch the report gave, joined by a comma'] = function()
+  local top = start_on_repository('announce-branches')
+  local agent = add_worktree(top, 'agent-1', 'feature/a')
+
+  report('module', call_for(agent, 'T', { on('feature/a'), on('feature/b') }))
+
+  wait_until('the user is told', function()
+    return #told('module') > 0
+  end)
+  eq(told('module'), { started_in('Worktree agent-1 (feature/a, feature/b)') })
 end
 
 T['a reported worktree']['is matched by its real path when reported through a symbolic link'] = function()
@@ -1258,12 +1285,88 @@ T['the Reported section']['shows a file’s diff from a branch’s base by Enter
   expect_pane_lines('module', 'files', { 'Files in: Branch feature/b', '  A branch.txt' })
 
   enter_window_of('module', 'files')
-  child.lua('vim.api.nvim_win_set_cursor(0, { 2, 0 })')
+  child.lua('vim.api.nvim_win_set_cursor(0, { 3, 0 })')
   child.lua([[pcall(vim.api.nvim_feedkeys, vim.keycode('<CR>'), 'mx', false)]])
 
   wait_until('the diff shown', function()
     return child.lua_get([[vim.fn.bufexists('aineo://branch/feature/b//diff/branch.txt') == 1]])
   end)
+end
+
+--- The second line of the files window of the module's home's pane, which
+--- says what its diffs compare against, as the buffer holds it.
+---
+---@return string
+local function against_line()
+  return child.lua_get('vim.api.nvim_buf_get_lines(_G.panes.module.files, 1, 2, true)[1]')
+end
+
+--- Waits until the second line of the module's files window is `expected`,
+--- at most `git_repo.PATIENCE_MS`, and asserts that it is.
+---
+---@param expected string
+local function expect_against_line(expected)
+  vim.wait(git_repo.PATIENCE_MS, function()
+    return against_line() == expected
+  end, 10)
+  eq(against_line(), expected)
+end
+
+T['the Reported section']['says on the Against line that a branch’s base is the reported one, when it is read from it'] = function()
+  local top = start_on_repository('announce-against-reported')
+  local base = git_repo.git(top, { 'rev-parse', 'HEAD' })
+  local agent = add_worktree(top, 'agent-1', 'feature/a')
+  local tip = add_branch(top, 'feature/b', 'Work b')
+  report('module', call_for(agent, 'T', { on('feature/a', base), on('feature/b', base) }))
+  wait_until('the report told', function()
+    return #told('module') == 1
+  end)
+  expect_reported_lines({
+    'Reported',
+    'T now',
+    '  agent-1',
+    ('    feature/a * from %s'):format(short(base)),
+    ('    feature/b from %s'):format(short(base)),
+  })
+
+  enter_on_line(5)
+
+  expect_against_line(
+    ('Against: %s (feature/a, main) reported base → %s (feature/b)'):format(
+      short(base),
+      short(tip)
+    )
+  )
+end
+
+T['the Reported section']['says on the Against line that a branch’s base is a merge base, when the reported one is not behind its tip'] = function()
+  local top = start_on_repository('announce-against-merge-base')
+  local base = git_repo.git(top, { 'rev-parse', 'HEAD' })
+  local agent = add_worktree(top, 'agent-1', 'feature/a')
+  local tip = add_branch(top, 'feature/b', 'Work b')
+  git_repo.write(top, 'main.txt', { 'main moves' })
+  local moved = git_repo.commit_all(top, 'Main moves')
+  report('module', call_for(agent, 'T', { on('feature/a', base), on('feature/b', moved) }))
+  wait_until('the report told', function()
+    return #told('module') == 1
+  end)
+  expect_reported_lines({
+    'Reported',
+    'T now',
+    '  agent-1',
+    ('    feature/a * from %s'):format(short(base)),
+    ('    feature/b from %s'):format(short(moved)),
+  })
+
+  enter_on_line(5)
+
+  expect_against_line(
+    ('Against: %s (feature/a) merge base with %s → %s (feature/b)'):format(
+      short(base),
+      short(moved),
+      short(tip)
+    )
+  )
 end
 
 T['the Reported section']['is offered first by s, as the tree, an item picked showing its work alone'] = function()
@@ -1353,6 +1456,7 @@ T['the Reported section']['adds a branch aineo’s hook saw made in a reported w
     'task now',
     '  agent-1',
     ('    feature/a from %s'):format(short(base)),
+    '      ' .. commit_line(one, 'One'),
     ('    feature/b * from %s'):format(short(one)),
     'Uncommitted',
   })

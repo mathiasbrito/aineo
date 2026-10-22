@@ -80,9 +80,11 @@ end
 ---@param which 'files'|'commits'
 ---@return string[]
 local function pane_lines(key, which)
-  return child.lua_get(
-    'vim.api.nvim_buf_get_lines(_G.panes[...][select(2, ...)], 0, -1, true)',
-    { key, which }
+  return git_repo.without_against_line(
+    child.lua_get(
+      'vim.api.nvim_buf_get_lines(_G.panes[...][select(2, ...)], 0, -1, true)',
+      { key, which }
+    )
   )
 end
 
@@ -1883,14 +1885,16 @@ local function lines_beginning(lines, prefix)
 end
 
 --- Types `keys` in the window `which` of the pane of the changes home
---- `module`, its cursor on line `line`.
+--- `module`, its cursor on line `line`; a line of the files window is counted
+--- without its `Against:` line (`git_repo.files_window_line()`).
 ---
 ---@param which 'files'|'commits'
 ---@param line integer
 ---@param keys string
 local function type_on(which, line, keys)
   enter_window_of('module', which)
-  child.lua('vim.api.nvim_win_set_cursor(0, { ..., 0 })', { line })
+  local at = which == 'files' and git_repo.files_window_line(line) or line
+  child.lua('vim.api.nvim_win_set_cursor(0, { ..., 0 })', { at })
   child.type_keys(keys)
 end
 
@@ -2067,6 +2071,14 @@ T['a branch']['tells that the diff of its whole change cannot be read when its f
   })
 end
 
+--- The second line of the files window of the module's home's pane, which
+--- says what its diffs compare against, as the buffer holds it.
+---
+---@return string
+local function against_line()
+  return child.lua_get('vim.api.nvim_buf_get_lines(_G.panes.module.files, 1, 2, false)[1] or ""')
+end
+
 T['a branch']['Enter on its heading before its first read tells that aineo is reading, not that a diff failed'] = function()
   local work = work_with_branch('changesscope-branch-enter-unread')
   child.lua([=[
@@ -2085,6 +2097,9 @@ T['a branch']['Enter on its heading before its first read tells that aineo is re
   ]=])
   pick('[branch] feature/x')
   expect_pane_lines('module', 'commits', { 'Branch feature/x', 'aineo is reading the repository' })
+  git_repo.wait_until('the files window says it is reading what it compares', function()
+    return against_line() == 'Against: reading…'
+  end)
 
   type_on('commits', 1, '<CR>')
 
@@ -2096,6 +2111,10 @@ T['a branch']['Enter on its heading before its first read tells that aineo is re
   end)
   child.lua('for _, release in ipairs(_G.held) do release() end')
   expect_pane_lines('module', 'commits', branch_view_of(work))
+  git_repo.wait_until('the files window says what the branch is compared against', function()
+    return vim.startswith(against_line(), 'Against: ')
+      and against_line():find('→', 1, true) ~= nil
+  end)
 end
 
 T['a branch']['deleted between the picker and the pick is told gone'] = function()

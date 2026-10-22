@@ -159,9 +159,11 @@ end
 ---@param which 'files'|'commits'
 ---@return string[]
 local function pane_lines(key, which)
-  return child.lua_get(
-    'vim.api.nvim_buf_get_lines(_G.panes[...][select(2, ...)], 0, -1, true)',
-    { key, which }
+  return git_repo.without_against_line(
+    child.lua_get(
+      'vim.api.nvim_buf_get_lines(_G.panes[...][select(2, ...)], 0, -1, true)',
+      { key, which }
+    )
   )
 end
 
@@ -549,6 +551,7 @@ T['a restart']['shows the tree again with each branch’s base, the label and ag
     'task now',
     '  agent-1',
     ('    feature/a * from %s'):format(one:sub(1, 7)),
+    '      ' .. commit_line(two, 'Two'),
     'Uncommitted',
     'Session work',
     'No commits on this session',
@@ -625,9 +628,11 @@ T['a restart']['loads the reports kept before reports were a tree: a worktree wi
     'old task now',
     '  agent-1',
     ('    feature/a * from %s'):format(one:sub(1, 7)),
+    '      ' .. commit_line(two, 'Two'),
     'branch task',
     '  ' .. vim.fs.basename(top),
     ('    feature/p from %s'):format(base:sub(1, 7)),
+    '      ' .. last_commit_line(top, 'feature/p', 'Work p'),
     'Uncommitted',
     'Session work',
     'No commits on this session',

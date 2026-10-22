@@ -380,6 +380,48 @@ function M.start_editor(child)
   child.lua(AWAIT, { M.PATIENCE_MS })
 end
 
+--- `lines`, the lines of a buffer of the changes pane, less the second line
+--- of the files window, `Against: …`, which says what the diffs compare
+--- against: the suites that pin the files a window lists leave it to the
+--- suites of that line (`tests/test_changes_against_pane.lua`).
+---
+---@param lines string[]
+---@return string[]
+function M.without_against_line(lines)
+  local heads_files = vim.startswith(lines[1] or '', 'Files in: ')
+  if heads_files and vim.startswith(lines[2] or '', 'Against: ') then
+    return vim.list_extend({ lines[1] }, vim.list_slice(lines, 3))
+  end
+  return lines
+end
+
+--- `colours`, as `{ line, first column, end column, group }` counted from 0,
+--- of a files window whose second line is `Against: …`, less that line's
+--- colours and with the lines below it counted as `M.without_against_line()`
+--- counts them.
+---
+---@param colours any[][]
+---@return any[][]
+function M.without_against_colours(colours)
+  local kept = {}
+  for _, colour in ipairs(colours) do
+    if colour[1] ~= 1 then
+      local line = colour[1] > 1 and colour[1] - 1 or colour[1]
+      table.insert(kept, { line, colour[2], colour[3], colour[4] })
+    end
+  end
+  return kept
+end
+
+--- The line of the files window that is line `line` as `M.without_against_line()`
+--- counts them: one further from the second on, under the `Against:` line.
+---
+---@param line integer
+---@return integer
+function M.files_window_line(line)
+  return line >= 2 and line + 1 or line
+end
+
 --- Waits, at most `PATIENCE_MS`, until `condition()` holds, and fails the
 --- case with `description` when it never does.
 ---

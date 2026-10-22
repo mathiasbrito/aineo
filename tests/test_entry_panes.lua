@@ -198,6 +198,17 @@ T['the agent pane']['moves the cursor into the Report from Claude’s window, hi
   eq({ entry.current_window(child), entry.windows(child) }, { 'aineo://report', AGENT_PANE })
 end
 
+--- The expression, run in the child, that gives the lines of the buffer it
+--- is applied to, less the second line of the files window, `Against: …`
+--- (`git_repo.without_against_line()`).
+local LINES_WITHOUT_AGAINST = [[(function(buffer)
+  local lines = vim.api.nvim_buf_get_lines(buffer, 0, -1, true)
+  if vim.startswith(lines[1] or '', 'Files in: ') and vim.startswith(lines[2] or '', 'Against: ') then
+    table.remove(lines, 2)
+  end
+  return lines
+end)]]
+
 --- What the buffer whose name is the argument is, read in the child: its
 --- options and its lines.
 local PANE_BUFFER = [[(function(name)
@@ -208,7 +219,7 @@ local PANE_BUFFER = [[(function(name)
     bufhidden = vim.bo[buffer].bufhidden,
     swapfile = vim.bo[buffer].swapfile,
     modifiable = vim.bo[buffer].modifiable,
-    lines = vim.api.nvim_buf_get_lines(buffer, 0, -1, true),
+    lines = ]] .. LINES_WITHOUT_AGAINST .. [[(buffer),
   }
 end)(...)]]
 
@@ -269,7 +280,7 @@ local NAME_AND_LINES = [[(function(buffer)
   if not vim.api.nvim_buf_is_valid(buffer) then
     return 'wiped'
   end
-  return { name = vim.api.nvim_buf_get_name(buffer), lines = vim.api.nvim_buf_get_lines(buffer, 0, -1, true) }
+  return { name = vim.api.nvim_buf_get_name(buffer), lines = ]] .. LINES_WITHOUT_AGAINST .. [[(buffer) }
 end)(...)]]
 
 T['a buffer already named as a buffer of the changes pane'] =
