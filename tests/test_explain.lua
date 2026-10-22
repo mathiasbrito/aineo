@@ -184,8 +184,9 @@ local SHOWN_CHUNKS_OF = [[(function()
 end)()]]
 
 --- What the child shows of the explanations (`SHOWN_CHUNKS_OF`) with each
---- row reduced to what it says: its text, the chunks of the gutter left out
---- and the padding to the window's width cut, in the group of the text.
+--- row reduced to what it says: its text, the chunks of the gutter left out,
+--- the padding to the window's width cut and the frame of the spinner of a
+--- row that says a request is working left out, in the group of the text.
 local SHOWN = [[(function()
   local namespace = vim.api.nvim_get_namespaces().aineo_explain
   if not namespace then
@@ -201,6 +202,7 @@ local SHOWN = [[(function()
           text = text .. chunk[1]
         end
       end
+      text = text:gsub('\226[\160-\163][\128-\191] ', '')
       table.insert(rows, { { (text:gsub(' +$', '')), 'AineoExplain' } })
     end
     table.insert(shown, { line = mark[2] + 1, above = mark[4].virt_lines_above, virt_lines = rows })
@@ -1196,7 +1198,8 @@ T['issues'] = MiniTest.new_set()
 local function lines_shown(namespace)
   local lines = {}
   for _, mark in ipairs(child.lua_get(SHOWN_CHUNKS_OF:format(namespace))) do
-    if not vim.inspect(mark.virt_lines):find('explaining', 1, true) then
+    local says = vim.inspect(mark.virt_lines)
+    if not says:find('explaining', 1, true) and not says:find('looking for issues', 1, true) then
       table.insert(lines, mark.line)
     end
   end
@@ -1446,6 +1449,266 @@ T['clear()']['removes the issues too'] = function()
   child.lua("require('aineo.explain').clear(vim.api.nvim_get_current_buf())")
 
   eq(lines_shown('aineo_explain_issues'), {})
+end
+
+T['a badge'] = MiniTest.new_set()
+
+--- The ten frames of the spinner, in the order they show.
+local FRAMES = { '⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏' }
+
+--- The floating windows of the child, each as the part of its configuration
+--- that matters, its text, and the 'winhighlight' it shows with.
+local FLOATS = [[(function()
+  local floats = {}
+  for _, window in ipairs(vim.api.nvim_list_wins()) do
+    local config = vim.api.nvim_win_get_config(window)
+    if config.relative ~= '' then
+      table.insert(floats, {
+        relative = config.relative,
+        win = config.win,
+        anchor = config.anchor,
+        row = config.row,
+        col = config.col,
+        focusable = config.focusable,
+        border = config.border,
+        text = table.concat(
+          vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(window), 0, -1, false),
+          '\n'
+        ),
+        winhighlight = vim.wo[window].winhighlight,
+      })
+    end
+  end
+  return floats
+end)()]]
+
+--- The floating windows of the child (`FLOATS`), once there are `count` of
+--- them, or after `PATIENCE_MS`.
+---
+---@param count integer
+---@return table[]
+local function floats_once(count)
+  local floats = {}
+  vim.wait(PATIENCE_MS, function()
+    floats = child.lua_get(FLOATS)
+    return #floats == count
+  end, 20)
+  return floats
+end
+
+--- The text of the only floating window of the child, once it holds
+--- `fragment`, or after `PATIENCE_MS`.
+---
+---@param fragment string
+---@return string
+local function badge_text_once_it_holds(fragment)
+  local text = ''
+  vim.wait(PATIENCE_MS, function()
+    local floats = child.lua_get(FLOATS)
+    text = floats[1] and floats[1].text or ''
+    return text:find(fragment, 1, true) ~= nil
+  end, 20)
+  return text
+end
+
+--- The spinner frame and the words of a badge's `text`: ` <frame> <words> `.
+---
+---@param text string
+---@return string frame
+---@return string words
+local function badge_parts(text)
+  return text:sub(2, 4), text:sub(6, -2)
+end
+
+--- The number of timers of the child that are active.
+local ACTIVE_TIMERS = [[(function()
+  local count = 0
+  vim.uv.walk(function(handle)
+    if handle:get_type() == 'timer' and handle:is_active() then
+      count = count + 1
+    end
+  end)
+  return count
+end)()]]
+
+T['a badge']['shows in the top right corner of the window the request was made in, with a spinner, the words and the seconds'] = function()
+  start_with_project()
+  answer_after(4000)
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+  local window = child.api.nvim_get_current_win()
+
+  explain()
+
+  local floats = floats_once(1)
+  local frame, words = badge_parts(floats[1].text)
+  eq(vim.tbl_contains(FRAMES, frame), true)
+  eq(words:match('^explaining… %d+s$') ~= nil, true)
+  floats[1].text = nil
+  eq(floats[1], {
+    relative = 'win',
+    win = window,
+    anchor = 'NE',
+    row = 0,
+    col = 60,
+    focusable = false,
+    border = 'none',
+    winhighlight = 'NormalFloat:AineoExplain',
+  })
+end
+
+T['a badge']['for issues says looking for issues, in the issue look'] = function()
+  start_with_project()
+  answer_after(4000)
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+
+  explain({ kind = 'issues' })
+
+  local floats = floats_once(1)
+  local _, words = badge_parts(floats[1].text)
+  eq(words:match('^looking for issues… %d+s$') ~= nil, true)
+  eq(floats[1].winhighlight, 'NormalFloat:AineoExplainIssue')
+end
+
+T['a badge']['advances its spinner every 100 ms, and counts the seconds'] = function()
+  start_with_project()
+  answer_after(4000)
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+  explain()
+  floats_once(1)
+  local seen = {}
+
+  vim.wait(1000, function()
+    local floats = child.lua_get(FLOATS)
+    local frame = badge_parts(floats[1].text)
+    seen[frame] = true
+    return false
+  end, 15)
+
+  eq(vim.tbl_count(seen) >= 5, true)
+  eq(badge_text_once_it_holds(' 1s'):find(' 1s', 1, true) ~= nil, true)
+end
+
+T['a badge']['animates the progress line above the first line asked for with the same spinner'] = function()
+  start_with_project()
+  answer_after(4000)
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+  explain({ range = { 1, 3 } })
+  local lines = {}
+
+  vim.wait(1000, function()
+    local row = child.lua_get(SHOWN_CHUNKS_OF:format('aineo_explain'))[1].virt_lines[1]
+    local text = row[#row][1]:gsub(' +$', '')
+    lines[text] = true
+    return false
+  end, 15)
+
+  eq(vim.tbl_count(lines) >= 5, true)
+  for line in pairs(lines) do
+    eq(vim.tbl_contains(FRAMES, line:sub(5, 7)), true)
+    eq(line:sub(1, 4) .. line:sub(8), '┊  explaining…')
+  end
+end
+
+T['a badge']['lists the requests that run in the order they started, joined by a dot, in one float'] =
+  MiniTest.new_set({
+    parametrize = {
+      { 'explanations', 'issues', '^explaining… %d+s · looking for issues… %d+s$' },
+      { 'issues', 'explanations', '^looking for issues… %d+s · explaining… %d+s$' },
+    },
+  })
+
+T['a badge']['lists the requests that run in the order they started, joined by a dot, in one float']['first'] = function(
+  first,
+  second,
+  pattern
+)
+  start_with_project()
+  answer_after(4000)
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+  explain({ kind = first })
+  floats_once(1)
+  explain({ kind = second })
+
+  local floats = floats_once(1)
+  local text = badge_text_once_it_holds('·')
+
+  eq(#floats, 1)
+  eq(select(2, badge_parts(text)):match(pattern) ~= nil, true)
+end
+
+T['a badge']['loses the part of a request that ends, and closes with the last'] = function()
+  start_with_project()
+  answer_after(4000)
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+  explain({ kind = 'explanations' })
+  explain({ kind = 'issues' })
+  badge_text_once_it_holds('·')
+
+  explain({ kind = 'explanations' })
+
+  local text = badge_text_once_it_holds('looking')
+  eq(select(2, badge_parts(text)):match('^looking for issues… %d+s$') ~= nil, true)
+  explain({ kind = 'issues' })
+  eq(floats_once(0), {})
+end
+
+T['a badge']['and its timer end with the request on every path'] = MiniTest.new_set({
+  parametrize = {
+    { 'an answer' },
+    { 'a cancel' },
+    { 'the timeout' },
+    { 'a failure' },
+    { 'a buffer wiped' },
+    { 'clear()' },
+    { 'quitting' },
+  },
+})
+
+T['a badge']['and its timer end with the request on every path']['by'] = function(path)
+  start_with_project()
+  local baseline = child.lua_get(ACTIVE_TIMERS)
+  local delay = (path == 'an answer' or path == 'a failure') and 300 or 20000
+  answer_after(delay)
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+  local timeout_ms = path == 'the timeout' and 600 or 180000
+  if path == 'a failure' then
+    child.lua('vim.env.AINEO_FAKE_CLAUDE_PRINT_EXIT = "2"')
+  end
+  explain({ timeout_ms = timeout_ms })
+  floats_once(1)
+
+  if path == 'a cancel' then
+    explain({ timeout_ms = timeout_ms })
+  elseif path == 'a buffer wiped' then
+    child.cmd('enew')
+    child.cmd('bwipeout! #')
+  elseif path == 'clear()' then
+    child.lua("require('aineo.explain').clear(vim.api.nvim_get_current_buf())")
+  elseif path == 'quitting' then
+    child.api.nvim_exec_autocmds('VimLeavePre', {})
+  end
+
+  eq(floats_once(0), {})
+  eq(
+    vim.wait(PATIENCE_MS, function()
+      return child.lua_get(ACTIVE_TIMERS) == baseline
+    end, 20),
+    true
+  )
+end
+
+T['a badge']['is gone with the window the request was made in, while the request goes on and shows its answer'] = function()
+  start_with_project()
+  answer_after(1500)
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+  child.cmd('vsplit')
+  explain()
+  floats_once(1)
+
+  child.cmd('close')
+
+  eq(floats_once(0), {})
+  eq(shown_once_it_holds('Adds')[1].line, 2)
 end
 
 return T

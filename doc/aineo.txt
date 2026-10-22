@@ -1846,7 +1846,16 @@ that indent, in |hl-AineoExplain|. The number of the explained line shows in
 |hl-AineoExplainNr|. The marks move with the edits made to the buffer and
 vanish with a line deleted. While a request runs, one virtual line above the
 first line asked for, in the same look without the label, says
-`┊ explaining…`. A request for some lines replaces
+`┊ ⠋ explaining…`, its spinner advancing every 100 ms, and a badge in the top
+right corner of the window the request was made in says ` ⠋ explaining… 12s `:
+the seconds it has run. A badge lists the requests that run for its window, in
+the order they started, joined by ` · `
+(` ⠋ explaining… 12s · looking for issues… 3s `); a part leaves when its
+request ends, and the badge closes with the last. The badge, the line and the
+timers end with the request, whichever way it ends: its answer, a key that
+stops it, `explain.timeout_ms`, an error, the buffer wiped out, `:Aineo
+explain clear`, or Neovim quitting; a window closed takes its badge and the
+request goes on. A request for some lines replaces
 the explanations above those lines alone. Lines outside the range or the
 buffer, empty texts and repeats are dropped, and several explanations of one
 line are joined in order.
