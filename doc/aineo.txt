@@ -1845,7 +1845,9 @@ band starts at the indent of the explained line (by half the window's text
 width at most), each row after `┊ `, wrapped at the window's text width less
 that indent, in |hl-AineoExplain|. The number of the explained line shows in
 |hl-AineoExplainNr|. The marks move with the edits made to the buffer and
-vanish with a line deleted. A request for some lines replaces the
+vanish with a line deleted. When the window gets another number, sign or fold
+column (a sign appears, 'number' is toggled), the bands are placed again for
+the new gutter. A request for some lines replaces the
 explanations above those lines alone. Lines outside the range or the buffer,
 empty texts and repeats are dropped, and several explanations of one line are
 joined in order.

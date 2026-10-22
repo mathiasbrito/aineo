@@ -1280,6 +1280,86 @@ T['the look']['leaves the cterm colours out that the theme lacks'] = function()
   }, {})
 end
 
+--- The ids of the extmarks of the explanations the child shows, by line.
+local EXTMARK_IDS = [[(function()
+  local ids = {}
+  local namespace = vim.api.nvim_get_namespaces().aineo_explain
+  for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(0, namespace, 0, -1, {})) do
+    ids[tostring(mark[2] + 1)] = mark[1]
+  end
+  return ids
+end)()]]
+
+--- The first row of the explanation of line 2 that the child shows, once its
+--- gutter holds `label` in the number column, or after `PATIENCE_MS`.
+---
+---@param label string
+---@return table[] chunks
+local function first_row_once_labelled(label)
+  local row = {}
+  vim.wait(PATIENCE_MS, function()
+    child.cmd('redraw')
+    local shown = child.lua_get(SHOWN_CHUNKS_OF:format('aineo_explain'))
+    row = shown[1] and shown[1].virt_lines[1] or {}
+    return vim.inspect(row):find("'" .. label .. "'", 1, true) ~= nil
+      or vim.inspect(row):find('"' .. label .. '"', 1, true) ~= nil
+  end, 50)
+  return row
+end
+
+T['the look']['places the bands again, the same extmarks, for a gutter that changed width after they were placed'] =
+  MiniTest.new_set({
+    parametrize = {
+      { 'no', 'yes', 'expl', 4, 6 },
+      { 'yes', 'no', 'ex', 6, 4 },
+    },
+  })
+
+T['the look']['places the bands again, the same extmarks, for a gutter that changed width after they were placed']['from'] = function(
+  before,
+  after,
+  label_after,
+  textoff_before,
+  textoff_after
+)
+  start_with_project()
+  child.wo.number = true
+  child.wo.numberwidth = 4
+  child.wo.signcolumn = before
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+  explain()
+  shown_once_it_holds('Adds')
+  local ids = child.lua_get(EXTMARK_IDS)
+  eq(child.fn.getwininfo(child.api.nvim_get_current_win())[1].textoff, textoff_before)
+
+  child.wo.signcolumn = after
+
+  local row = first_row_once_labelled(label_after)
+  eq(child.fn.getwininfo(child.api.nvim_get_current_win())[1].textoff, textoff_after)
+  eq(row[#row - 1], { '  ' })
+  eq(row[#row], { '┊ Adds.' .. (' '):rep(60 - textoff_after - 2 - 7), 'AineoExplain' })
+  eq(child.lua_get(EXTMARK_IDS), ids)
+end
+
+T['the look']['places the bands again when the number column goes, without a gutter'] = function()
+  start_with_project()
+  child.wo.number = true
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+  explain()
+  shown_once_it_holds('Adds')
+
+  child.wo.number = false
+
+  local row = {}
+  vim.wait(PATIENCE_MS, function()
+    child.cmd('redraw')
+    local shown = child.lua_get(SHOWN_CHUNKS_OF:format('aineo_explain'))
+    row = shown[1] and shown[1].virt_lines[1] or {}
+    return #row == 2
+  end, 50)
+  eq(row, { { '  ' }, { '┊ Adds.' .. (' '):rep(60 - 2 - 7), 'AineoExplain' } })
+end
+
 T['the look']['shows no gutter where the window shows no number, sign or fold column'] = function()
   start_with_project()
   answer_explanations({ { line = 1, text = 'Starts.' } })

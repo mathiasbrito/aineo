@@ -13,6 +13,7 @@ local runs = require('aineo.explain.runs')
 local M = {}
 
 look.keep_defined(kinds.ALL)
+marks.keep_aligned()
 
 --- One request to explain code.
 ---@class aineo.explain.Request
