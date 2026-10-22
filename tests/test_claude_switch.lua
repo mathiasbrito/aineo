@@ -58,8 +58,9 @@ local function settings_in_file(path)
 end
 
 --- The shape of aineo's own hooks in its `--settings` (`shape_of()`): a
---- `SessionStart` and a `SessionEnd` command hook, with no matcher, and a
---- `PostToolUse` command hook for `Bash` calls of git, run in the
+--- `SessionStart` and a `SessionEnd` command hook, with no matcher, a
+--- `PostToolUse` command hook for `Bash` calls of git, and a
+--- `PermissionRequest` command hook with no matcher, both run in the
 --- background.
 local AINEO_HOOKS_SHAPE = {
   SessionStart = { { hooks = { { type = 'command', command = 'command', timeout = 5 } } } },
@@ -77,6 +78,9 @@ local AINEO_HOOKS_SHAPE = {
         },
       },
     },
+  },
+  PermissionRequest = {
+    { hooks = { { type = 'command', command = 'command', timeout = 5, async = true } } },
   },
 }
 
@@ -842,6 +846,7 @@ T['start_session()']['keeps the user’s own session hooks beside its own'] = fu
     },
     SessionEnd = AINEO_HOOKS_SHAPE.SessionEnd,
     PostToolUse = AINEO_HOOKS_SHAPE.PostToolUse,
+    PermissionRequest = AINEO_HOOKS_SHAPE.PermissionRequest,
   })
 end
 
