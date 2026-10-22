@@ -11,9 +11,10 @@ CONTENTS                                                      *aineo-contents*
   6. Configuration .................................. |aineo-configuration|
   7. Send .................................................... |aineo-send|
   8. The Agent Report ...................................... |aineo-report|
-  9. The autostart ...................................... |aineo-autostart|
- 10. Health check ........................................ |aineo-health|
- 11. Limits .............................................. |aineo-limits|
+  9. The office ........................................ |aineo-office|
+ 10. The autostart ..................................... |aineo-autostart|
+ 11. Health check ........................................ |aineo-health|
+ 12. Limits .............................................. |aineo-limits|
 
 ==============================================================================
 1. INTRODUCTION                                                        *aineo*
@@ -52,6 +53,8 @@ whole height, and gives the heights back when pressed again (|aineo-zoom|).
 `\Z` zooms the window the cursor is in to the whole tab page, every other
 window shrinking to a sliver, and gives the sizes back when pressed again
 (|aineo-zoom-full|).
+`\O` shows the office over the right column, an animation of your Claude Code
+at work (|aineo-office|).
 In Visual mode, in Input, `\s` sends the selection alone and removes it from
 Input (|aineo-v_\s|).
 
@@ -2711,6 +2714,15 @@ moves you to that tab instead and claims nothing.
 			buffer shows, and stops the request that runs for it,
 			if any.
 
+                                                               *:Aineo-office*
+:Aineo office		Shows the office over the right side of the layout, at
+			once (|aineo-office|). It acts on the aineo tab of
+			the current tab page and makes none: with no aineo
+			tab it tells you, with one warning, so. Asked while
+			the office shows, it does nothing. `\O` and, in
+			Terminal mode and in Insert mode, `<C-\>O` do the
+			same (|aineo-keys|).
+
 When an action fails — `claude.cmd` is not executable, say — aineo tells you
 once, with one error message starting with `aineo:`, and opens nothing.
 
@@ -2858,6 +2870,10 @@ you turn the prefix off, or when a prefix key is yours: >lua
 			Does what `:Aineo zoom full` does
 			(|:Aineo-zoom-full|).
 
+                                                        *<Plug>(aineo-office)*
+<Plug>(aineo-office)
+			Does what `:Aineo office` does (|:Aineo-office|).
+
 Prefix keys ~
                                                                   *aineo-keys*
 Once the editor has started, aineo maps the prefix (|aineo-config-prefix|)
@@ -2909,6 +2925,8 @@ and `\vm` in Visual mode too:
 \z		|<Plug>(aineo-zoom)|
                                                                     *aineo-\Z*
 \Z		|<Plug>(aineo-zoom-full)|
+                                                                    *aineo-\O*
+\O		|<Plug>(aineo-office)|
                                                                     *aineo-\v*
 \v		|<Plug>(aineo-explain)|
                                                                     *aineo-\V*
@@ -3017,6 +3035,8 @@ twin's keys.
 <C-\>z		|<Plug>(aineo-zoom)|
                                                                 *aineo-<C-\>Z*
 <C-\>Z		|<Plug>(aineo-zoom-full)|
+                                                                *aineo-<C-\>O*
+<C-\>O		|<Plug>(aineo-office)|
 
 Send has no twin: it acts on a selection or on the line of Normal mode.
 `:Aineo claim` has no key of its own, so no twin either.
@@ -3650,7 +3670,48 @@ layout opened, for the editor's life; each new Claude Code starts in the
 working directory of its own moment.
 
 ==============================================================================
-9. THE AUTOSTART                                             *aineo-autostart*
+9. THE OFFICE                                                   *aineo-office*
+
+The office is a screensaver for your tab's Claude Code: an animated office
+that covers the right side of the layout, the whole column and its full
+height, whatever the column shows. Your Claude Code is a jelly bean at a
+desk. It stands beside the desk while nothing runs, and sits behind it and
+types, dots rising over its head, while a tool call runs.
+
+`:Aineo office` (|:Aineo-office|), `\O` and `<Plug>(aineo-office)` show it at
+once. The cursor entering any window the office covers closes it: a click on
+it, `<C-w>w` reaching the right column, `\r`, `\i`, `\g` and the other keys
+that move to a window of the right column. Moving to Claude's window or to a
+file leaves it as it is. When the office opens, the cursor stays in the
+window it was in.
+
+What the office knows comes from one file Claude Code writes, the transcript
+of the session: `projects/<folder>/<session id>.jsonl` under
+`$CLAUDE_CONFIG_DIR`, or under `~/.claude` when that is not set. The office
+reads the end of the file when it opens, and each line added while it shows.
+It calls no Claude, sends nothing to its terminal, makes no MCP call or
+network request, writes nothing and spends no token. While it shows, one
+timer draws 12 frames a second and one file watch follows the transcript;
+closing the office stops both. A session with no transcript yet shows its
+agent standing.
+
+The office draws two pixels to a cell, with half blocks, in the colours of
+the art, so it needs `'termguicolors'`.
+
+The art is a pack: a folder `aineo-office/<name>/` on 'runtimepath' with
+`pack.lua`, a description in the subset of a Lua table that aineo reads and
+never runs, `floor.txt`, the floor plan drawn as text, and `art/*.txt`, the
+pieces of pixel art. aineo's own pack is `aineo-office/default/`, the one the
+office draws.
+
+The office shows the main agent alone, standing or working, and shows when
+you ask for it, not by itself. It does not follow the window as it is
+resized, nor a tab page you leave or return to, nor a change of colorscheme.
+It looks for the transcript of the session in `projects/` under Claude
+Code's configuration directory; when none is there, it follows none.
+
+==============================================================================
+10. THE AUTOSTART                                            *aineo-autostart*
 
 A bare, interactive `nvim` opens the layout and starts Claude Code by itself,
 in the directory Neovim started in. Two scheduled callbacks after |VimEnter|,
@@ -3680,7 +3741,7 @@ nothing opens. `--cmd`, `-t` and `-q` alone still autostart.
 (|aineo-health|).
 
 ==============================================================================
-10. HEALTH CHECK                                                *aineo-health*
+11. HEALTH CHECK                                                *aineo-health*
 
 `:checkhealth aineo` reads the configuration and the editor's state and
 reports on them. It starts no Claude session, opens no layout and maps no
@@ -3815,7 +3876,7 @@ Limits ~
 The check passes when it shows no error; warnings are advice.
 
 ==============================================================================
-11. LIMITS                                                      *aineo-limits*
+12. LIMITS                                                      *aineo-limits*
 
 The explorer ~
 A folder git ignores whole, such as `node_modules/`, shows as one folder

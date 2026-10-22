@@ -171,6 +171,7 @@ resumes it.
 | `]v`, `[v` | jump to the next and the previous explanation or issue of the buffer |
 | `\z` | zooms the window of the right column the cursor is in, and gives the heights back when pressed again |
 | `\Z` | zooms the window the cursor is in to the whole tab page, and gives the sizes back when pressed again |
+| `\O` | shows the office, an animation of your Claude Code at work over the right column; the cursor entering a window it covers closes it |
 
 `\z` gives the right-column window with the cursor the column's whole height,
 in every pane, and the other windows of the column shrink to a line or so;
