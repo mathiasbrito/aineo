@@ -1,22 +1,43 @@
 --- Loads a pack from its folder: `pack.lua` read as data, the floor plan and
---- the art files, assembled into the fields the engine reads. Every problem
---- is told with its file and line; a pack that cannot be used gives way to
---- the default pack.
+--- the art files, laid over the pack it is based on, into the fields the
+--- engine reads. Every problem is told with its file and line; what has a
+--- problem is left out so that the pack it is based on shows through, and a
+--- pack that cannot be used gives way to the default pack.
 
 local art = require('aineo.office_pack.art')
-local description = require('aineo.office_pack.description')
+local characters = require('aineo.office_pack.characters')
+local entries = require('aineo.office_pack.entries')
 local files = require('aineo.office_pack.files')
 local floor = require('aineo.office_pack.floor')
 local literal = require('aineo.office_pack.literal')
+local pack_format = require('aineo.office_pack.pack_format')
 local problems_module = require('aineo.office_pack.problems')
+local schema = require('aineo.office_pack.schema')
+local states = require('aineo.office_pack.states')
 
 local M = {}
 
 --- The format of the vocabulary and the pack files this version of aineo reads.
 local SUPPORTED_FORMAT = 1
 
---- The name of the pack the office falls back to.
+--- The name of the pack the office falls back to, and that a pack is based on
+--- when it says nothing.
 local DEFAULT_NAME = 'default'
+
+--- How many packs deep a pack may be based on others.
+local MAX_BASE_DEPTH = 8
+
+--- The most art files a pack holds.
+local MAX_PIECES = 500
+
+--- The colours of the office's text when no pack names them: the highlight
+--- group of the editor each takes.
+local DEFAULT_TEXT_COLOURS = {
+  name = 'Comment',
+  status = 'Normal',
+  thought = 'Special',
+  warning = 'WarningMsg',
+}
 
 --- The colours the art of a character can name, besides the pack's.
 local CHARACTER_COLOUR_NAMES = { 'agent', 'agent_light', 'agent_shade', 'agent_blush' }
@@ -31,22 +52,43 @@ local CHARACTER_COLOUR_NAMES = { 'agent', 'agent_light', 'agent_shade', 'agent_b
 ---@field about string
 ---@field author string
 ---@field colours table<string, string> `#rrggbb` by name
----@field text_colours table<string, string> `#rrggbb` by role of the office's text
----@field agent { colours: string[], poses: table<string, aineo.office_pack.Pose> }
+---@field text_colours table<string, string> `#rrggbb` or the name of a highlight group, by role of the office's text
+---@field agent aineo.office_pack.Character
+---@field subagent aineo.office_pack.Character the looks of the agent unless the pack gives its own
+---@field cat? aineo.office_pack.Character none for a pack that draws no cat
 ---@field effects table<string, aineo.office_pack.Effect>
 ---@field pieces table<string, aineo.office_pack.Piece>
 ---@field floor aineo.office_pack.Floor
 ---@field activities table<string, table> what characters do, by name; each has `steps`
+---@field things table<string, table> what an activity leaves behind, by name
+---@field states table<string, string> the activity the pack maps to each state it maps
 ---@field state_activity table<string, string> the activity each state of the vocabulary plays
+---@field triggers table[] the custom matches, tried in order
+
+---@class aineo.office_pack.Effect
+---@field text string[] its frames
+---@field colour string a role of the office's text, a colour as `#rrggbb` or a highlight group
+---@field place string
+---@field seconds_per_frame number
+---@field bold boolean
 
 ---@class aineo.office_pack.LoadOptions
 ---@field name string the pack's name, the name of its folder
 ---@field folders string[] the folders that hold packs, searched in order
+---@field replaced_pieces? table<string, string> art files of the user's own, by the name of the piece each replaces
+---@field state_names? string[] the states a pack may map; the office's vocabulary when not given
 
 ---@class aineo.office_pack.Reading
----@field name string the pack being read
 ---@field folders string[]
 ---@field problems aineo.office_pack.Problems
+---@field state_names string[]
+
+---@class aineo.office_pack.Build
+---@field data table the pack's description
+---@field directory string
+---@field base aineo.office_pack.Pack|nil
+---@field context aineo.office_pack.SchemaContext
+---@field reporter_for fun(file: string): aineo.office_pack.Report
 
 --- The first folder of `folders` that holds the pack `name`, with its
 --- `pack.lua`; `nil` when none does.
@@ -78,18 +120,20 @@ local function report_missing(name, folders, problems)
   end
 end
 
---- `pack.lua` of the pack in `directory`, as data.
+--- `pack.lua` of the pack in `directory`, as data, with the lines of its
+--- entries.
 ---
 ---@param directory string
 ---@param report aineo.office_pack.Report
 ---@return table|nil data
+---@return table|nil lines
 local function read_description(directory, report)
   local text, read_problem = files.read_text(vim.fs.joinpath(directory, 'pack.lua'))
   if not text then
     report(nil, read_problem)
     return nil
   end
-  local data, problem = literal.parse(text)
+  local data, problem, lines = literal.parse(text)
   if not data then
     local line, message = problem:match('^line (%d+): (.*)$')
     report(tonumber(line), message or problem)
@@ -101,7 +145,7 @@ local function read_description(directory, report)
   end
   if data.format ~= SUPPORTED_FORMAT then
     report(
-      nil,
+      lines[data].format,
       ('the pack is written for format %s, and aineo reads format %d'):format(
         tostring(data.format),
         SUPPORTED_FORMAT
@@ -110,40 +154,10 @@ local function read_description(directory, report)
     return nil
   end
   if type(data.name) ~= 'string' then
-    report(nil, 'name is missing')
+    report(lines[data].name, 'name is missing')
     return nil
   end
-  return data
-end
-
---- The floor of the pack in `directory`: the plan `data.floor.plan` names
---- with the colours and legend `data.floor` gives.
----
----@param directory string
----@param data table
----@param reporter_for fun(file: string): aineo.office_pack.Report
----@return aineo.office_pack.Floor|nil loaded
-local function read_floor(directory, data, reporter_for)
-  if type(data.floor) ~= 'table' then
-    reporter_for('pack.lua')(nil, 'floor is missing')
-    return nil
-  end
-  local file = type(data.floor.plan) == 'string' and data.floor.plan or 'floor.txt'
-  local report = reporter_for(file)
-  local text, read_problem = files.read_text(vim.fs.joinpath(directory, file))
-  if not text then
-    report(nil, read_problem)
-    return nil
-  end
-  local plan = floor.parse(text, report)
-  if not plan then
-    return nil
-  end
-  plan.floor_colour = data.floor.floor_colour
-  plan.wall_colour = data.floor.wall_colour
-  plan.legend = type(data.floor.legend) == 'table' and data.floor.legend or {}
-  floor.check_letters(plan, plan.legend, report)
-  return plan
+  return data, lines
 end
 
 --- The names the colour headers of art may use: the pack's colours and the
@@ -152,121 +166,380 @@ end
 ---@param colours table<string, string>
 ---@return table<string, true>
 local function colour_names_of(colours)
-  local names = {}
-  for name in pairs(colours) do
-    names[name] = true
-  end
+  local names = entries.names_of(colours)
   for _, name in ipairs(CHARACTER_COLOUR_NAMES) do
     names[name] = true
   end
   return names
 end
 
---- The pieces of the pack in `directory`, one for each art file that has no
---- problem.
+--- The pieces of the art files in the folder `art` of `directory`, those with
+--- no problem.
 ---
 ---@param directory string
----@param colours table<string, string> the pack's colours
+---@param colour_names table<string, true>
 ---@param reporter_for fun(file: string): aineo.office_pack.Report
 ---@return table<string, aineo.office_pack.Piece> pieces
-local function read_pieces(directory, colours, reporter_for)
+local function read_pieces(directory, colour_names, reporter_for)
   local pieces = {}
-  local colour_names = colour_names_of(colours)
-  for _, name in ipairs(files.names_of_files(vim.fs.joinpath(directory, 'art'), '.txt')) do
+  local names = files.names_of_files(vim.fs.joinpath(directory, 'art'), '.txt')
+  for index, name in ipairs(names) do
     local file = ('art/%s.txt'):format(name)
     local report = reporter_for(file)
+    if index > MAX_PIECES then
+      report(nil, ('the pack has more than %d art files'):format(MAX_PIECES))
+      break
+    end
     local text, read_problem = files.read_text(vim.fs.joinpath(directory, file))
-    if not text then
-      report(nil, read_problem)
-    else
+    if text then
       pieces[name] = art.parse(name, text, { report = report, colour_names = colour_names })
+    else
+      report(nil, read_problem)
     end
   end
   return pieces
 end
 
---- Assembles the pack from its description, floor and pieces.
+--- The name of the pack the pack `name`, whose description is `data`, is
+--- based on: the one it names, none for `false`, and the default pack when it
+--- says nothing, except for the default pack itself.
 ---
+---@param name string
 ---@param data table
----@param loaded_floor aineo.office_pack.Floor
----@param pieces table<string, aineo.office_pack.Piece>
----@param report aineo.office_pack.Report the report of `pack.lua`
----@return aineo.office_pack.Pack|nil pack
-local function assemble(data, loaded_floor, pieces, report)
-  local agent = type(data.characters) == 'table' and data.characters.agent or {}
-  local poses, poses_problem = description.resolve_poses(agent.poses or {})
-  if not poses then
-    report(nil, poses_problem)
+---@return string|nil
+local function base_name_of(name, data)
+  if data.based_on == false then
     return nil
   end
-  local state_activity, states_problem = description.state_activities(data.states or {})
+  if data.based_on == nil then
+    return name ~= DEFAULT_NAME and DEFAULT_NAME or nil
+  end
+  return data.based_on
+end
+
+local resolve_pack
+
+--- The pack the pack `name` is based on, resolved, or `nil` when it is based
+--- on none or on a pack that cannot be used or that loops back.
+---
+---@param name string
+---@param data table
+---@param lines table
+---@param reading aineo.office_pack.Reading
+---@param chain string[] the packs being resolved, the pack `name` and those it is based on first
+---@param report aineo.office_pack.Report
+---@return aineo.office_pack.Pack|nil
+local function resolve_base(name, data, lines, reading, chain, report)
+  local base_name = base_name_of(name, data)
+  if type(base_name) ~= 'string' then
+    return nil
+  end
+  local line = lines[data].based_on
+  if vim.list_contains(chain, base_name) then
+    report(line, ('based_on loops back to the pack “%s”'):format(base_name))
+    return nil
+  end
+  if #chain >= MAX_BASE_DEPTH then
+    report(
+      line,
+      ('the pack is based on more than %d packs, one after another'):format(MAX_BASE_DEPTH)
+    )
+    return nil
+  end
+  local base = resolve_pack(base_name, reading, chain)
+  if not base then
+    report(line, ('the pack “%s” it is based on cannot be used'):format(base_name))
+  end
+  return base
+end
+
+--- The characters of `pack` by kind; none for a pack that is none.
+---
+---@param pack aineo.office_pack.Pack|nil
+---@return table<string, aineo.office_pack.Character>
+local function characters_of(pack)
+  if not pack then
+    return {}
+  end
+  return { agent = pack.agent, subagent = pack.subagent, cat = pack.cat }
+end
+
+--- The names the references of the pack's entries may name: the entries the
+--- pack declares, even when one has a problem, and those of the pack it is
+--- based on.
+---
+---@param build aineo.office_pack.Build
+---@param reading aineo.office_pack.Reading
+---@param colours table<string, string>
+---@param pieces table<string, aineo.office_pack.Piece>
+---@return table<string, table<string, true>>
+local function known_names(build, reading, colours, pieces)
+  local data, base = build.data, build.base or {}
+  local function declared(field)
+    return entries.names_of(base[field], type(data[field]) == 'table' and data[field] or nil)
+  end
+  local state_set = {}
+  for _, state in ipairs(reading.state_names) do
+    state_set[state] = true
+  end
+  return {
+    colour = entries.names_of(colours),
+    piece = entries.names_of(pieces),
+    effect = declared('effects'),
+    activity = declared('activities'),
+    thing = declared('things'),
+    pose = characters.pose_names(data, characters_of(build.base)),
+    state = state_set,
+    during = vim.tbl_extend('force', state_set, { always = true }),
+  }
+end
+
+--- The floor of the pack: the plan its `floor` field names read, with its
+--- colours and the legend entries that have no problem; the floor of the pack
+--- it is based on when the pack gives none or the plan cannot be used.
+---
+---@param build aineo.office_pack.Build
+---@return aineo.office_pack.Floor|nil
+local function read_floor(build)
+  local data, context = build.data, build.context
+  local base_floor = build.base and build.base.floor
+  if data.floor == nil then
+    if not base_floor then
+      context.report(nil, 'floor is missing')
+    end
+    return base_floor
+  end
+  if
+    not schema.check(data.floor, pack_format.FLOOR, context, 'floor', context.lines[data].floor)
+  then
+    return base_floor
+  end
+  local legend = entries.accepted(
+    data.floor.legend,
+    pack_format.LEGEND,
+    'floor.legend',
+    context,
+    context.lines[data.floor].legend
+  )
+  local report = build.reporter_for(data.floor.plan)
+  local text, read_problem = files.read_text(vim.fs.joinpath(build.directory, data.floor.plan))
+  if not text then
+    report(nil, read_problem)
+    return base_floor
+  end
+  local plan = floor.parse(text, report)
+  if not plan then
+    return base_floor
+  end
+  floor.check_letters(plan, type(data.floor.legend) == 'table' and data.floor.legend or {}, report)
+  return vim.tbl_extend('force', plan, {
+    floor_colour = data.floor.floor_colour,
+    wall_colour = data.floor.wall_colour,
+    legend = legend,
+  })
+end
+
+--- The triggers of the pack that have no problem, followed by those of the
+--- pack it is based on.
+---
+---@param build aineo.office_pack.Build
+---@return table[]
+local function read_triggers(build)
+  local data, context = build.data, build.context
+  local own = data.triggers
+  local triggers = {}
+  if own ~= nil and (type(own) ~= 'table' or not vim.islist(own)) then
+    context.report(context.lines[data].triggers, 'triggers must be a list')
+  elseif own ~= nil then
+    for index, trigger in ipairs(own) do
+      local path = ('triggers[%d]'):format(index)
+      if schema.check(trigger, pack_format.TRIGGER, context, path, context.lines[own][index]) then
+        table.insert(triggers, trigger)
+      end
+    end
+  end
+  return vim.list_extend(triggers, vim.deepcopy(build.base and build.base.triggers or {}))
+end
+
+--- Tells the problems of `pack.lua` that no entry has: a field no pack has, a
+--- name that is not the folder's.
+---
+---@param build aineo.office_pack.Build
+---@param folder_name string
+local function check_head(build, folder_name)
+  local data, context = build.data, build.context
+  schema.check(data, pack_format.HEAD, context, '', 1)
+  if data.name ~= folder_name then
+    context.report(
+      context.lines[data].name,
+      ('name is “%s”, and the pack’s folder is “%s”'):format(data.name, folder_name)
+    )
+  end
+end
+
+--- The entries of the field `field` of the pack that have no problem, laid
+--- over those of the pack it is based on.
+---
+---@param build aineo.office_pack.Build
+---@param field string
+---@param node aineo.office_pack.SchemaNode
+---@return table
+local function read_entries(build, field, node)
+  local data, context = build.data, build.context
+  local accepted = entries.accepted(data[field], node, field, context, context.lines[data][field])
+  return entries.overlaid(build.base and build.base[field], accepted)
+end
+
+--- The pack `name`, resolved from its description and the pack it is based on.
+---
+---@param name string
+---@param reading aineo.office_pack.Reading
+---@param chain string[] the packs being resolved, the outermost first
+---@return aineo.office_pack.Pack|nil pack `nil` when the pack cannot be used
+function resolve_pack(name, reading, chain)
+  local directory = find_directory(name, reading.folders)
+  if not directory then
+    report_missing(name, reading.folders, reading.problems)
+    return nil
+  end
+  local function reporter_for(file)
+    return reading.problems.reporter_for(name, directory, file)
+  end
+  local report = reporter_for('pack.lua')
+  local data, lines = read_description(directory, report)
+  if not data then
+    return nil
+  end
+  local base = resolve_base(name, data, lines, reading, vim.list_extend({ name }, chain), report)
+  local build = {
+    data = data,
+    directory = directory,
+    base = base,
+    context = { report = report, lines = lines, known = {} },
+    reporter_for = reporter_for,
+  }
+  check_head(build, name)
+  local colours = read_entries(build, 'colours', pack_format.COLOURS)
+  local pieces = entries.overlaid(
+    base and base.pieces,
+    read_pieces(directory, colour_names_of(colours), reporter_for)
+  )
+  build.context.known = known_names(build, reading, colours, pieces)
+  local pack_states = read_entries(build, 'states', pack_format.STATES)
+  local drawn = characters.read(data, characters_of(base), build.context)
+  local loaded_floor = read_floor(build)
+  local state_activity = states.activities(pack_states)
+  local usable = characters.check_agent(drawn, build.context, lines[data].characters)
   if not state_activity then
-    report(nil, states_problem)
+    report(lines[data].states, 'states must give standing an activity')
+    usable = false
+  end
+  if not loaded_floor or not usable then
     return nil
   end
   return {
     name = data.name,
-    about = data.about or '',
-    author = data.author or '',
-    colours = data.colours or {},
-    text_colours = description.fill_text_colours(data.text_colours),
-    agent = { colours = description.agent_colours(agent.colours), poses = poses },
-    effects = description.fill_effects(data.effects or {}),
+    about = data.about,
+    author = data.author,
+    colours = colours,
+    text_colours = vim.tbl_extend(
+      'force',
+      DEFAULT_TEXT_COLOURS,
+      base and base.text_colours or {},
+      entries.accepted(
+        data.text_colours,
+        pack_format.TEXT_COLOURS,
+        'text_colours',
+        build.context,
+        lines[data].text_colours
+      )
+    ),
+    agent = drawn.agent,
+    subagent = drawn.subagent,
+    cat = drawn.cat,
+    effects = read_entries(build, 'effects', pack_format.EFFECTS),
     pieces = pieces,
     floor = loaded_floor,
-    activities = data.activities or {},
+    activities = read_entries(build, 'activities', pack_format.ACTIVITIES),
+    things = read_entries(build, 'things', pack_format.THINGS),
+    states = pack_states,
     state_activity = state_activity,
+    triggers = read_triggers(build),
   }
 end
 
---- Loads the pack `name` from the first of `folders` that holds it, telling
---- its problems to `problems`.
+--- Puts the art files of `replaced_pieces` in the place of the pieces of
+--- their names, those with no problem.
+---
+---@param pack aineo.office_pack.Pack
+---@param replaced_pieces table<string, string> art files, by the name of the piece each replaces
+---@param problems aineo.office_pack.Problems
+local function replace_pieces(pack, replaced_pieces, problems)
+  local colour_names = colour_names_of(pack.colours)
+  for _, name in ipairs(entries.sorted_keys(replaced_pieces)) do
+    local path = replaced_pieces[name]
+    local directory, file = vim.fs.dirname(path), vim.fs.basename(path)
+    local report = problems.reporter_for('office.pieces', directory, file)
+    local text, read_problem = files.read_text(path)
+    if text then
+      pack.pieces[name] = art.parse(name, text, { report = report, colour_names = colour_names })
+        or pack.pieces[name]
+    else
+      report(nil, read_problem)
+    end
+  end
+end
+
+--- Reads the options, fills what they leave out.
+---
+---@param options aineo.office_pack.LoadOptions
+---@return aineo.office_pack.Reading
+local function reading_of(options)
+  vim.validate('options.name', options.name, 'string')
+  vim.validate('options.folders', options.folders, 'table')
+  vim.validate('options.replaced_pieces', options.replaced_pieces, 'table', true)
+  vim.validate('options.state_names', options.state_names, 'table', true)
+  return {
+    folders = options.folders,
+    problems = problems_module.new_problems(),
+    state_names = options.state_names or states.names(),
+  }
+end
+
+--- Loads the pack `name` with the art files of `options.replaced_pieces` in
+--- place of its pieces.
 ---
 ---@param name string
----@param folders string[]
----@param problems aineo.office_pack.Problems
----@return aineo.office_pack.Pack|nil pack `nil` when the pack cannot be used
-local function load_pack(name, folders, problems)
-  local directory = find_directory(name, folders)
-  if not directory then
-    report_missing(name, folders, problems)
-    return nil
+---@param options aineo.office_pack.LoadOptions
+---@param reading aineo.office_pack.Reading
+---@return aineo.office_pack.Pack|nil
+local function load_pack(name, options, reading)
+  local pack = resolve_pack(name, reading, {})
+  if pack and options.replaced_pieces then
+    replace_pieces(pack, options.replaced_pieces, reading.problems)
   end
-  local function reporter_for(file)
-    return problems.reporter_for(name, directory, file)
-  end
-  local data = read_description(directory, reporter_for('pack.lua'))
-  if not data then
-    return nil
-  end
-  local loaded_floor = read_floor(directory, data, reporter_for)
-  local pieces = read_pieces(directory, data.colours or {}, reporter_for)
-  if not loaded_floor then
-    return nil
-  end
-  return assemble(data, loaded_floor, pieces, reporter_for('pack.lua'))
+  return pack
 end
 
 --- Loads the pack `options.name` from the first of `options.folders` that
---- holds it, and gives the pack with every problem found in its files, each
---- with its file and line.
+--- holds it, laid over the pack it is based on, and gives the pack with every
+--- problem found in its files, each with its file and line.
 ---
---- A pack that cannot be used — not found, not data, without a floor — gives
---- the default pack in its place, and its problems are among the problems; the
---- pack is `nil` only when the default pack cannot be used either.
+--- A pack that cannot be used — not found, not data, without a floor or a
+--- standing agent — gives the default pack in its place, and its problems are
+--- among the problems; the pack is `nil` only when the default pack cannot be
+--- used either.
 ---
 ---@param options aineo.office_pack.LoadOptions
 ---@return aineo.office_pack.Pack|nil pack
 ---@return aineo.office_pack.Problem[] problems
 function M.load(options)
-  vim.validate('options.name', options.name, 'string')
-  vim.validate('options.folders', options.folders, 'table')
-  local problems = problems_module.new_problems()
-  local pack = load_pack(options.name, options.folders, problems)
+  local reading = reading_of(options)
+  local pack = load_pack(options.name, options, reading)
   if not pack and options.name ~= DEFAULT_NAME then
-    pack = load_pack(DEFAULT_NAME, options.folders, problems)
+    pack = load_pack(DEFAULT_NAME, options, reading)
   end
-  return pack, problems.list
+  return pack, problems_module.ordered(reading.problems.list)
 end
 
 --- Every problem of the pack `options.name` alone, whether or not it can be
@@ -275,11 +548,9 @@ end
 ---@param options aineo.office_pack.LoadOptions
 ---@return aineo.office_pack.Problem[] problems
 function M.check(options)
-  vim.validate('options.name', options.name, 'string')
-  vim.validate('options.folders', options.folders, 'table')
-  local problems = problems_module.new_problems()
-  load_pack(options.name, options.folders, problems)
-  return problems.list
+  local reading = reading_of(options)
+  load_pack(options.name, options, reading)
+  return problems_module.ordered(reading.problems.list)
 end
 
 return M
