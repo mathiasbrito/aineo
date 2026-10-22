@@ -1,0 +1,11 @@
+about: A person, facing right, in the agent's own colours.
+colours: L = agent_light, A = agent, S = agent_shade, k = ink
+---
+.LAA.
+LAAAS
+AkAkS
+AAAAS
+.AAS.
+.AAS.
+.A.S.
+.A.S.
