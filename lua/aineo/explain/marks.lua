@@ -254,6 +254,7 @@ end
 ---@field window integer the window they were placed for
 ---@field textoff integer the columns before the text there, when they were placed
 ---@field texts table<integer, string> the text of each, by extmark id
+---@field files table<integer, string> the absolute path of the file each was asked about, by extmark id
 ---@field marked table<integer, boolean> the extmark ids of those marked
 ---@field pending boolean whether placing them again is scheduled
 
@@ -358,6 +359,7 @@ local function place_again(buffer, record)
       }, geometry)
     else
       record.texts[id] = nil
+      record.files[id] = nil
       record.marked[id] = nil
     end
   end
@@ -375,6 +377,7 @@ local function forget_lost(buffer, record)
   for id in pairs(record.texts) do
     if not line_of(buffer, record.kind, id) then
       record.texts[id] = nil
+      record.files[id] = nil
       record.marked[id] = nil
       forgot = true
     end
@@ -447,7 +450,8 @@ end
 ---@param window integer the window the explanations were asked in
 ---@param kind aineo.explain.Kind
 ---@param explanations aineo.explain.Explanation[]
-function M.place(buffer, window, kind, explanations)
+---@param file string the absolute path of the file they were asked about
+function M.place(buffer, window, kind, explanations, file)
   local geometry = geometry_of(buffer, window)
   placed[buffer] = placed[buffer] or {}
   local record = placed[buffer][kind.name]
@@ -455,7 +459,7 @@ function M.place(buffer, window, kind, explanations)
     record.window = window
     place_again(buffer, record)
   end
-  record = record or { kind = kind, texts = {}, marked = {}, pending = false }
+  record = record or { kind = kind, texts = {}, files = {}, marked = {}, pending = false }
   record.window, record.textoff = window, geometry.textoff
   placed[buffer][kind.name] = record
   for _, explanation in ipairs(explanations) do
@@ -465,6 +469,7 @@ function M.place(buffer, window, kind, explanations)
       text = explanation.text,
     }, geometry)
     record.texts[id] = explanation.text
+    record.files[id] = file
   end
   watch_edits(buffer)
   notify(buffer, window)
@@ -529,11 +534,12 @@ function M.toggle_issue_marks(buffer, first, last)
   return found
 end
 
---- The issues `buffer` shows that are marked, each with the line it is above
---- and its text, in the order of the lines, then of the answer.
+--- The issues `buffer` shows that are marked, each with the line it is above,
+--- its text and the file its request was made for, in the order of the
+--- lines, then of the answer.
 ---
 ---@param buffer integer
----@return { line: integer, text: string }[]
+---@return { line: integer, text: string, file: string }[]
 function M.marked_issues(buffer)
   local record = issues_of(buffer)
   local found = {}
@@ -542,16 +548,18 @@ function M.marked_issues(buffer)
   end
   forget_lost(buffer, record)
   for id in pairs(record.marked) do
-    table.insert(
-      found,
-      { id = id, line = line_of(buffer, record.kind, id), text = record.texts[id] }
-    )
+    table.insert(found, {
+      id = id,
+      line = line_of(buffer, record.kind, id),
+      text = record.texts[id],
+      file = record.files[id],
+    })
   end
   table.sort(found, function(a, b)
     return a.line < b.line or (a.line == b.line and a.id < b.id)
   end)
   return vim.tbl_map(function(issue)
-    return { line = issue.line, text = issue.text }
+    return { line = issue.line, text = issue.text, file = issue.file }
   end, found)
 end
 

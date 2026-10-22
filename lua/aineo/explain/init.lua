@@ -102,6 +102,7 @@ end
 ---@field buffer integer
 ---@field window integer
 ---@field path string
+---@field file string the file's absolute path
 ---@field first integer
 ---@field last integer
 ---@field key string what the answer is kept under (`aineo.explain.kept`'s `key()`)
@@ -133,7 +134,7 @@ local function show_answer(asked, ended)
     return
   end
   marks.clear(asked.buffer, asked.kind, asked.first, asked.last)
-  marks.place(asked.buffer, asked.window, asked.kind, explanations)
+  marks.place(asked.buffer, asked.window, asked.kind, explanations, asked.file)
   kept.keep(
     asked.buffer,
     asked.key,
@@ -165,6 +166,7 @@ local function start(explaining)
     buffer = buffer,
     window = explaining.window,
     path = vim.fs.relpath(folder, path),
+    file = path,
     first = range[1],
     last = range[2],
     key = kept.key(kind, explaining.tools, explaining.range),
@@ -265,7 +267,7 @@ local function place_kept(explaining, kind)
     return false
   end
   marks.clear(buffer, kind, range[1], range[2])
-  marks.place(buffer, explaining.window, kind, explanations)
+  marks.place(buffer, explaining.window, kind, explanations, vim.api.nvim_buf_get_name(buffer))
   vim.notify(
     ('aineo: the earlier answer, the code unchanged (:Aineo explain %sasks again)'):format(
       words_that_ask_again(explaining, kind)
@@ -340,21 +342,21 @@ function M.toggle_issue_marks(buffer, first, last)
 end
 
 --- The issues `buffer` shows that are marked, in the order of their lines,
---- each with the file's path from the project's folder, the line it starts
---- at now and its text.
+--- each with the path of the file its request was made for — from `folder`
+--- when the file lies inside it, else absolute — the line it starts at now
+--- and its text.
 ---
 ---@param buffer integer
+---@param folder string the folder the paths are told from
 ---@return aineo.explain.MarkedIssue[]
-function M.marked_issues(buffer)
-  local marked = marks.marked_issues(buffer)
-  if #marked == 0 then
-    return {}
-  end
-  local name = vim.api.nvim_buf_get_name(buffer)
-  local path = vim.fs.relpath(project_folder(name), name) or name
+function M.marked_issues(buffer, folder)
   return vim.tbl_map(function(issue)
-    return { path = path, line = issue.line, text = issue.text }
-  end, marked)
+    return {
+      path = vim.fs.relpath(folder, issue.file) or issue.file,
+      line = issue.line,
+      text = issue.text,
+    }
+  end, marks.marked_issues(buffer))
 end
 
 --- The message that asks Claude Code, after `prompt`, to check `issues`

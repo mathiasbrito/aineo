@@ -1921,9 +1921,11 @@ not, and it closes at none.
 them to the Claude Code of the tab that Send acts on, at once, and leaves
 Input as it is. The message is `explain.issues_prompt`
 (|aineo-config-explain.issues_prompt|), then one line for each marked issue,
-in the order of the buffer: `- <path>:<line>: <text>`, the path from the
-folder the requests run in (the top of the repository holding the file), the
-line the issue is above now, and the text of the issue on one line. The marks
+in the order of the buffer: `- <path>:<line>: <text>`, the path of the file
+the issue was asked about (kept with the issue, whatever the buffer is called
+later) from the folder that Claude Code runs in when it lies inside it, else
+absolute, the line the issue is above now, and the text of the issue on one
+line. The marks
 are cleared once it is sent; the issues stay shown. When Claude Code cannot
 take it, Send tells you why as it does for Input, and the marks stay. A buffer
 with no marked issue sends Input, and Visual `\s` does what it does everywhere

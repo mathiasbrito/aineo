@@ -439,7 +439,8 @@ the issue shows a `✓` where `▎` is, in a stronger tint, and the badge in the
 window's corner counts them, ` 2 issues marked · \s sends `. Then `\s` in
 that window sends them at once to the session's Claude Code, leaving Input as
 it is: the words of `explain.issues_prompt`, then one line for each marked
-issue, `- <path>:<line>: <text>`, the path from the repository's top. The
+issue, `- <path>:<line>: <text>`, the path from the folder Claude Code runs in
+(absolute for a file outside it, as in another worktree). The
 marks are cleared once sent, and the issues stay shown; with nothing marked,
 `\s` sends Input as ever.
 

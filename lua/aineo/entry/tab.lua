@@ -1560,7 +1560,7 @@ local function make_tab(homes, key, callbacks)
     send = function(origin)
       local sent_issues = require('aineo.entry.explaining').send_marked_issues(function(message)
         return require('aineo.send').submit(message, send_target())
-      end, origin)
+      end, origin, places.kept_places().working_directory)
       if not sent_issues and not refuses_send_while_claimed() then
         require('aineo.send').send(send_target())
       end

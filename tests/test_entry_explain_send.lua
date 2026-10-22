@@ -2,6 +2,7 @@ local MiniTest = require('mini.test')
 local claude_session = dofile('tests/helpers/claude_session.lua')
 local entry = dofile('tests/helpers/entry.lua')
 local explained = dofile('tests/helpers/explain_child.lua')
+local fixture = dofile('tests/helpers/fixture.lua')
 local git_repo = dofile('tests/helpers/git_repo.lua')
 local send = dofile('tests/helpers/send.lua')
 
@@ -32,7 +33,8 @@ local function make_the_project()
   for name, value in pairs(git_repo.ENVIRONMENT) do
     vim.env[name] = value
   end
-  project = git_repo.create('explain-send', { ['src/code.lua'] = CODE })
+  project =
+    git_repo.create('explain-send', { ['src/code.lua'] = CODE, ['src/sub/other.lua'] = CODE })
 end
 
 --- The Lua that ends, in the child, the process of every terminal by a
@@ -318,6 +320,45 @@ T['\\s']['from a tab page of its own, whose aineo tab shows another file, sends 
 
   eq(send.writes(child), { paste(DEFAULT_PROMPT .. '\n- src/code.lua:2: Never used.') })
   eq(send.input(child).lines, { 'a draft' })
+end
+
+T['\\s']['names a file of another worktree of the repository by its absolute path'] = function()
+  local worktree = fixture.directory('explain-send-worktree')
+  git_repo.git(project, { 'worktree', 'add', '-f', worktree, '-b', 'explain-send-wt', 'HEAD' })
+  open_ready_layout('explain-send-worktree')
+  child.cmd('edit ' .. vim.fn.fnameescape(worktree .. '/src/code.lua'))
+  find_issues({ { line = 2, text = 'Never used.' } })
+  mark_issue_on(2)
+
+  press('\\s')
+
+  eq(
+    send.writes(child),
+    { paste(DEFAULT_PROMPT .. '\n- ' .. worktree .. '/src/code.lua:2: Never used.') }
+  )
+end
+
+T['\\s']['names a file from the folder the session was started in, when that is a subfolder'] = function()
+  child.cmd('cd ' .. vim.fn.fnameescape(project .. '/src'))
+  open_ready_layout('explain-send-subfolder')
+  child.cmd('edit ' .. vim.fn.fnameescape(project .. '/src/sub/other.lua'))
+  find_issues({ { line = 2, text = 'Never used.' } })
+  mark_issue_on(2)
+
+  press('\\s')
+
+  eq(send.writes(child), { paste(DEFAULT_PROMPT .. '\n- sub/other.lua:2: Never used.') })
+end
+
+T['\\s']['names the file its request was made for, after the buffer is renamed or has lost its name'] = function()
+  open_ready_layout('explain-send-renamed')
+  find_issues({ { line = 2, text = 'Never used.' } })
+  mark_issue_on(2)
+  child.cmd('0file')
+
+  press('\\s')
+
+  eq(send.writes(child), { paste(DEFAULT_PROMPT .. '\n- src/code.lua:2: Never used.') })
 end
 
 T['\\s']['keeps the marks, and tells the user as Send does, when Claude is not ready'] = function()
