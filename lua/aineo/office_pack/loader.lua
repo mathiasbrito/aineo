@@ -135,14 +135,14 @@ local function read_floor(directory, data, reporter_for)
     report(nil, read_problem)
     return nil
   end
-  local plan, problem = floor.parse(text)
+  local plan = floor.parse(text, report)
   if not plan then
-    report(nil, problem)
     return nil
   end
   plan.floor_colour = data.floor.floor_colour
   plan.wall_colour = data.floor.wall_colour
   plan.legend = type(data.floor.legend) == 'table' and data.floor.legend or {}
+  floor.check_letters(plan, plan.legend, report)
   return plan
 end
 
