@@ -12,6 +12,7 @@ local M = {}
 ---@class aineo.office_states.TrackerOptions
 ---@field report_tool? string the name of aineo's report tool, as Claude Code calls it (`mcp__<server>__<tool>`); none when the office is told of none
 ---@field commands? aineo.office_states.CommandClasses the classes of shell commands (`office.commands`); none when the office is told of none, and every command is then a command run
+---@field triggers? aineo.office_states.Trigger[] the pack's triggers, tried in order whenever a tool call starts; none when the pack has none
 
 --- The kinds of signal beyond the transcript's (`aineo.transcript.SignalKind`)
 --- that the office gives the tracker: a session that starts or ends, and an
@@ -21,6 +22,7 @@ local M = {}
 ---@class aineo.office_states.Agent
 ---@field id string 'main', or a subagent's id
 ---@field state string a state of the vocabulary
+---@field activity? string the activity a trigger of the pack names for what the agent is doing, in place of its state's own; none when no trigger matches
 ---@field since? number when the agent came into its state, on the caller's clock; none for an agent that has been in it since the tracker was made
 
 ---@class aineo.office_states.Tracker
@@ -48,7 +50,12 @@ end
 ---@return aineo.office_states.Tracker tracker
 function M.new_tracker(options)
   options = options or {}
-  local settings = { report_tool = options.report_tool, commands = options.commands }
+  ---@type aineo.office_states.Settings
+  local settings = {
+    report_tool = options.report_tool,
+    commands = options.commands,
+    triggers = options.triggers,
+  }
 
   ---@type aineo.office_states.Record[]
   local records
@@ -91,9 +98,9 @@ function M.new_tracker(options)
   local function refresh_facts(now)
     local running_subagents = count_running_subagents(records)
     for _, record in ipairs(records) do
-      local state = record_module.fact_state(record, running_subagents)
-      if state ~= record.fact.state then
-        record.fact = { state = state, since = now }
+      local state, activity = record_module.fact_state(record, running_subagents)
+      if state ~= record.fact.state or activity ~= record.fact.activity then
+        record.fact = { state = state, activity = activity, since = now }
       end
     end
   end
@@ -151,7 +158,12 @@ function M.new_tracker(options)
         if listed then
           local shown = display.shown_at(record, now)
           local since = shown.since ~= timing.BEFORE_THE_TRACKER and shown.since or nil
-          table.insert(agents, { id = record.id, state = shown.state, since = since })
+          table.insert(agents, {
+            id = record.id,
+            state = shown.state,
+            activity = shown.activity,
+            since = since,
+          })
         end
       end
       return agents
