@@ -136,6 +136,7 @@ function M.new_tracker(options)
   return {
     take = function(signal, now)
       vim.validate('now', now, 'number')
+      vim.validate('signal.agent', signal.agent, 'string')
       if signal.kind == 'session_started' then
         start_over()
         let_hear(signal, now)

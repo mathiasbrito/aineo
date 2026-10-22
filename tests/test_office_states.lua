@@ -173,6 +173,22 @@ T['a tracker']['says since when an agent has been in its state'] = function()
   eq(story.agents_after(1.3)[1].since, office_signals.PAUSE)
 end
 
+T['a tracker']['refuses a signal heard at a time that is no number'] = function()
+  local tracker = office_states.new_tracker()
+
+  MiniTest.expect.error(function()
+    tracker.take({ agent = 'main', kind = 'thinking' }, '12')
+  end, 'now: expected number')
+end
+
+T['a tracker']['refuses a signal that names no agent'] = function()
+  local tracker = office_states.new_tracker()
+
+  MiniTest.expect.error(function()
+    tracker.take({ kind = 'thinking' }, 1)
+  end, 'signal.agent: expected string')
+end
+
 T['a tracker']['reads a recorded turn as a turn that ended, and left alone, as idle'] = function()
   local fake_transcript = dofile('tests/helpers/fake_transcript.lua')
   local tracker = office_states.new_tracker()
