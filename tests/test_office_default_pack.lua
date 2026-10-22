@@ -148,4 +148,54 @@ T['the default office']['puts a monitor on each desk the width holds, 40 columns
   eq(cells_in_groups_starting_with(picture, 10, 'AineoOfficePixel_45475a_'), monitor_cells)
 end
 
+--- The picture of the default office 54 cells wide whose main agent was
+--- standing at time 0 and is working, so walking to its desk, at `now`.
+---
+---@param now number seconds
+---@return aineo.office_scene.Picture
+local function walking_picture_at(now)
+  local stage = office_scene.new_stage({ pack = default_pack(), width = 54, height = 18 })
+  stage.advance({ { id = 'main', state = 'standing' } }, 0)
+  stage.advance({ { id = 'main', state = 'working' } }, now)
+  return stage.picture()
+end
+
+--- The character at `column` of the row `row` of `picture`, both from 0.
+---
+---@param picture aineo.office_scene.Picture
+---@param row integer
+---@param column integer
+---@return string
+local function character_at(picture, row, column)
+  return vim.fn.strcharpart(picture.rows[row + 1].text, column, 1)
+end
+
+T['the default office']['has a door on the wall, its frame and its panels'] = function()
+  local picture = picture_of(54, 'standing')
+
+  eq(group_at(picture, 2, 0), 'AineoOfficePixel_6b4f3f_6b4f3f')
+  eq(group_at(picture, 4, 3), 'AineoOfficePixel_8b6a4f_8b6a4f')
+end
+
+T['the default office']['has desks whose top is wood over a darker edge'] = function()
+  local picture = picture_of(54, 'standing')
+
+  eq(group_at(picture, 30, 13), 'AineoOfficePixel_b4875a_7a5634')
+end
+
+T['the default office']['shows a walking agent’s legs apart, and the other pair of legs a fifth of a second on'] = function()
+  eq(group_at(walking_picture_at(0.1), 15, 15), 'AineoOfficePixel_303446_749f71')
+  eq(group_at(walking_picture_at(0.3), 20, 15), 'AineoOfficePixel_749f71_749f71')
+end
+
+T['the default office']['changes the dots over a typing agent every quarter of a second'] = function()
+  local stage = office_scene.new_stage({ pack = default_pack(), width = 54, height = 18 })
+  stage.advance({ { id = 'main', state = 'working' } }, 0)
+  local first = character_at(stage.picture(), 9, 32)
+  stage.advance({ { id = 'main', state = 'working' } }, 0.5)
+  local later = character_at(stage.picture(), 9, 32)
+
+  eq({ first, later }, { '▀', '.' })
+end
+
 return T
