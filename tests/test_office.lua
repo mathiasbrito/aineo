@@ -477,6 +477,22 @@ T['the office’s timer and watch']['stops both once the window is closed by han
   end)
 
   eq({ open_handles('timer'), open_handles('fs_event') }, { timers, watches })
+  eq(child.lua_get([[_G.told]]), {})
+end
+
+T['the office’s timer and watch']['draws no frame that was due before the office was let go'] = function()
+  open_office()
+  child.lua([[
+    _G.office.show_now()
+    vim.uv.sleep(250)
+    vim.schedule(function()
+      _G.office.let_go()
+    end)
+  ]])
+
+  vim.wait(QUIET_MS)
+
+  eq(child.lua_get([[_G.told]]), {})
 end
 
 T['the office’s timer and watch']['stops both when the office is let go'] = function()

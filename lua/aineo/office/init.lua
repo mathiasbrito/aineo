@@ -123,11 +123,14 @@ function M.new_office(options)
     })
   end
 
-  --- Draws a frame with `draw`. A frame that fails closes the office and
-  --- tells the user, once.
+  --- Draws a frame with `draw`, unless the office has closed since the frame
+  --- was due. A frame that fails closes the office and tells the user, once.
   ---
   ---@param draw fun()
   local function draw_frame(draw)
+    if not showing then
+      return
+    end
     local drawn, failure = pcall(draw)
     if not drawn then
       close()

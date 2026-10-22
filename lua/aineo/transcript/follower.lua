@@ -15,7 +15,7 @@ local TAIL_BYTES = 256 * 1024
 local MAX_LINE_BYTES = 1024 * 1024
 
 --- How long after the watch starts the follower reads once more. A file watch
---- is not effective at once (measured on macOS, 2026-10-23: a write less than
+--- is not effective at once (measured on macOS, 2026-10-22: a write less than
 --- about 300 ms after the watch started raised no event), so bytes appended
 --- meanwhile are read by this one read instead of waiting for the next event.
 local WATCH_SETTLE_MS = 500
