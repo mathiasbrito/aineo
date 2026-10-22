@@ -3127,8 +3127,8 @@ claude.cmd		A list of at least one string. Default: `{ 'claude' }`
 			exits 1. A `--settings` in it, inline JSON or a file
 			(named from the directory Claude Code starts in), is
 			kept whole: aineo adds its session hooks, its
-			`SubagentStart` hook and its `PostToolUse` hook
-			after the hooks it gives,
+			`SubagentStart` hook, its `PostToolUse` hook and its
+			`PermissionRequest` hook after the hooks it gives,
 			writes the result to a file only you can read and
 			write, in Neovim's own temporary
 			directory, which Neovim removes when it exits, and
@@ -3418,7 +3418,9 @@ aineo starts Claude Code with five additions of its own:
   system prompt nor what aineo appends to it. It contacts no editor. And
   a `PostToolUse` hook for `Bash` calls of git, run in the background,
   which tells the editor of a worktree or branch the call made
-  (|aineo-changes-hook|).
+  (|aineo-changes-hook|). And a `PermissionRequest` hook, run in the
+  background, which tells the editor that an agent waits for your answer
+  to a permission prompt, and decides nothing (|aineo-office-hooks|).
   aineo puts nothing else in `--settings`, and adds them after the hooks
   of a `--settings` in `claude.cmd`, passing the two together in a file
   only you can read (|aineo-config-claude.cmd|);
@@ -3765,8 +3767,25 @@ you ask for it, not by itself. It stays over the right column as the screen
 or a window is resized, and closes when the layout shows no right column, as
 under `\Z`; it makes its colours again after a colorscheme. It does not
 pause for a tab page you leave or return to.
-It looks for the transcript of the session in `projects/` under Claude
-Code's configuration directory; when none is there, it follows none.
+It follows the transcript Claude Code's `SessionStart` hook names; when no
+hook ran, it looks for the session's transcript in `projects/` under Claude
+Code's configuration directory, and when none is there, it follows none.
+
+                                                          *aineo-office-hooks*
+Two of the hooks aineo gives the Claude Code it starts in `--settings`
+(|aineo-report|) serve the office:
+- the `SessionStart` hook, which also tells the editor when Claude Code
+  switches session (|aineo-claude-session|), passes on the path of the
+  transcript that Claude Code names in its input. A session whose hook
+  never ran, as in a folder Claude Code does not trust yet, has its
+  transcript looked for in `projects/` when the office shows;
+- the `PermissionRequest` hook, which Claude Code runs in the background as
+  it is about to ask you to allow a tool. It tells the editor which agent
+  asks, the main one or the subagent whose `agent_id` the input names, and
+  in which tab. It prints nothing and so decides nothing: the prompt stays
+  yours to answer. It starts a headless `nvim` for about 20 ms per prompt,
+  which Claude Code does not wait for, and ends itself after 6 seconds
+  whatever the editor does.
 
 ==============================================================================
 10. THE AUTOSTART                                            *aineo-autostart*
@@ -3823,13 +3842,14 @@ Claude Code ~
   process it starts that leaves the group, by starting a session or a
   group of its own, is not killed and can outlive the check.
   When `claude.cmd` gives a `--settings`, whether aineo can add its
-  hooks to it, the session hooks, the `SubagentStart` hook and the
-  `PostToolUse` hook, read from the editor's working directory as a start
-  reads it (|aineo-config-claude.cmd|): a warning naming why it cannot —
+  hooks to it, the session hooks, the `SubagentStart` hook, the
+  `PostToolUse` hook and the `PermissionRequest` hook, read from the
+  editor's working directory as a start reads it
+  (|aineo-config-claude.cmd|): a warning naming why it cannot —
   the file missing, not a regular file or unreadable, settings that are
   not valid JSON or hold no object, `hooks` that are not an object, a
-  `SessionStart`, `SessionEnd`, `SubagentStart` or `PostToolUse` entry
-  that is not a list, or
+  `SessionStart`, `SessionEnd`, `SubagentStart`, `PostToolUse` or
+  `PermissionRequest` entry that is not a list, or
   no value after the flag. Whether aineo can write the file it passes
   them in is not checked.
 
