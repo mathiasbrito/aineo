@@ -1,0 +1,19 @@
+about: The office door, closed.
+colours: O = door_frame, d = door_panel, e = door_inset, y = brass
+---
+OOOOOOOO
+OddddddO
+OdeeeedO
+OdeeeedO
+OdeeeedO
+OddddddO
+OddddyyO
+OddddddO
+OdeeeedO
+OdeeeedO
+OdeeeedO
+OddddddO
+OddddddO
+OdeeeedO
+OddddddO
+OOOOOOOO
