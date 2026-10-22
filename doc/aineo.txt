@@ -1881,11 +1881,55 @@ corner of the window the request was made in says ` ⠋ explaining… 12s `: the
 seconds it has run. A badge lists the requests that run for its window, in the
 order they started, joined by ` · `
 (` ⠋ explaining… 12s · looking for issues… 3s `); a part leaves when its
-request ends, and the badge closes with the last. The badge, the line and the
+request ends, and the badge closes with the last, unless issues are marked
+(|aineo-explain-mark|). The badge, the line and the
 timers end with the request, whichever way it ends: its answer, a key that
 stops it, `explain.timeout_ms`, an error, the buffer wiped out,
 `:Aineo explain clear`, or Neovim quitting; a window closed takes its badge
 and the request goes on.
+
+                                                          *aineo-explain-jump*
+`]v` and `[v` move the cursor to the line of the next and the previous
+explanation or issue of the buffer, of either kind, after and before the
+cursor's line, at the line's first non-blank. A count moves that many on, and
+the jump wraps around at the ends of the buffer. A line that shows both kinds
+counts once. The jump sets the previous context mark first, so `''` and
+|CTRL-O| come back. In Visual mode it extends the selection; after an operator
+it is a charwise motion, as `d}` is. With nothing to jump to, you are told
+once, `aineo: no explanation to jump to`, and the cursor stays. The keys are
+local to a buffer: they are mapped, in Normal, Visual and Operator-pending
+mode, when the buffer first shows an explanation or an issue, and removed
+when it shows none (cleared, toggled off, or every line they were above
+deleted). A key you mapped yourself, local to the buffer or global, is never
+replaced or removed. They are |<Plug>(aineo-explain-next)| and
+|<Plug>(aineo-explain-previous)|, which are mapped in all three modes before
+anything is explained.
+
+                                                          *aineo-explain-mark*
+`\vm` marks the issues shown above the cursor's line, or above each selected
+line in Visual mode, and unmarks those already marked: each issue toggles on
+its own. A marked issue shows `✓` where `▎` is, on all its rows, keeping its
+label, and its band is blended 25% toward the accent, in
+|hl-AineoExplainIssueMarked| and |hl-AineoExplainIssueMarkedGutter|. A line
+with no issue tells you once, `aineo: no issue on this line` (`on the selected
+lines` in Visual mode); explanations are never marked. The badge of the window
+the issues were asked in says, last, how many are marked and what sends them:
+` 2 issues marked · \s sends ` (`1 issue marked`), with a request running or
+not, and it closes at none.
+
+`\s` (|aineo-send|), pressed in a window whose buffer has marked issues, sends
+them to the Claude Code of the tab that Send acts on, at once, and leaves
+Input as it is. The message is `explain.issues_prompt`
+(|aineo-config-explain.issues_prompt|), then one line for each marked issue,
+in the order of the buffer: `- <path>:<line>: <text>`, the path from the
+folder the requests run in (the top of the repository holding the file), the
+line the issue is above now, and the text of the issue on one line. The marks
+are cleared once it is sent; the issues stay shown. When Claude Code cannot
+take it, Send tells you why as it does for Input, and the marks stay. A buffer
+with no marked issue sends Input, and Visual `\s` does what it does everywhere
+else. A mark lives with its issue: an edit that deletes its line, a new answer
+for its lines, hiding the issues (`\vi`) and `:Aineo explain clear` drop it,
+and an answer kept (above) placed again comes unmarked.
 
 Every answer that was shown is kept in memory, for the buffer, by its kind
 (explanations or issues), whether it had tools, the lines asked about (the
@@ -1944,6 +1988,13 @@ AineoExplainIssueGutterFill
 			As |hl-AineoExplainGutterFill|, for issues.
                                                      *hl-AineoExplainIssueNr*
 AineoExplainIssueNr	As |hl-AineoExplainNr|, for issues.
+                                                  *hl-AineoExplainIssueMarked*
+AineoExplainIssueMarked	As |hl-AineoExplainIssue|, for a marked issue, the
+			background blended 25% toward the accent.
+                                            *hl-AineoExplainIssueMarkedGutter*
+AineoExplainIssueMarkedGutter
+			As |hl-AineoExplainIssueGutter|, for a marked issue:
+			the `✓` and the label.
 
 Claude's session ~
                                                         *aineo-claude-session*
@@ -2772,6 +2823,25 @@ you turn the prefix off, or when a prefix key is yours: >lua
 			`Grep` and `Glob`; what `:Aineo explain issues tools`
 			does (|:Aineo-explain|).
 
+                                                  *<Plug>(aineo-explain-mark)*
+<Plug>(aineo-explain-mark)
+			In Normal mode, marks the issues above the cursor's
+			line, or unmarks those marked; in Visual mode, does so
+			for each selected line and leaves Visual mode
+			(|aineo-explain-mark|).
+
+                                                  *<Plug>(aineo-explain-next)*
+<Plug>(aineo-explain-next)
+			Moves the cursor to the line of the next explanation
+			or issue of the buffer, as many on as the count says,
+			in Normal, Visual and Operator-pending mode
+			(|aineo-explain-jump|).
+
+                                              *<Plug>(aineo-explain-previous)*
+<Plug>(aineo-explain-previous)
+			Does what `<Plug>(aineo-explain-next)` does, to the
+			previous one.
+
                                                           *<Plug>(aineo-zoom)*
 <Plug>(aineo-zoom)
 			Does what `:Aineo zoom` does (|:Aineo-zoom|).
@@ -2840,6 +2910,8 @@ which has none, globally, in Normal mode, and `\s`, `\v`, `\V`, `\vi` and
 \vi		|<Plug>(aineo-explain-issues)|
                                                                    *aineo-\VI*
 \VI		|<Plug>(aineo-explain-issues-tools)|
+                                                                   *aineo-\vm*
+\vm		|<Plug>(aineo-explain-mark)|
                                                                   *aineo-v_\s*
 \s		|<Plug>(aineo-send)| in Visual mode (|aineo-send|)
                                                                   *aineo-v_\v*
@@ -2850,6 +2922,8 @@ which has none, globally, in Normal mode, and `\s`, `\v`, `\V`, `\vi` and
 \vi		|<Plug>(aineo-explain-issues)| in Visual mode
                                                                  *aineo-v_\VI*
 \VI		|<Plug>(aineo-explain-issues-tools)| in Visual mode
+                                                                 *aineo-v_\vm*
+\vm		|<Plug>(aineo-explain-mark)| in Visual mode
 
 Visual mode here is Visual mode alone: in Select mode, `\s` is text you
 type.
@@ -3152,6 +3226,14 @@ explain.timeout_ms	A whole number of at least 1. Default: `180000`
 			run. Past that, its Claude Code is stopped and aineo
 			tells you, once.
 
+                                        *aineo-config-explain.issues_prompt*
+explain.issues_prompt	A non-empty string. Default: `'Some issues were
+			found in this code, can you check and propose a fix
+			if the issue holds:'`
+			The words that open the message `\s` sends when
+			issues are marked (|aineo-explain-mark|), before the
+			line for each issue.
+
 ==============================================================================
 7. SEND                                                           *aineo-send*
 
@@ -3165,6 +3247,10 @@ Send also works while Claude is in a turn: Claude Code queues the message and
 runs it after the turn. A draft already in Claude's prompt stays, and the
 paste joins it. It sends Input while the changes pane or the terminal pane
 hides it, too.
+
+Pressed in a window whose buffer has issues marked (`\vm`), Normal mode `\s`
+sends those issues to Claude in place of Input, and leaves Input as it is
+(|aineo-explain-mark|).
 
 Visual Send ~
 In Visual mode, in Input, `\s` (|aineo-v_\s|, |<Plug>(aineo-send)|) sends
@@ -3694,7 +3780,10 @@ Explain code ~
   `claude.cmd`, and what it may use: nothing with `\v` and `\vi`, `Read`,
   `Grep` and `Glob` with `\V` and `\VI`, without asking, no MCP server, no
   settings of aineo, and your own Claude Code settings but never the
-  project's (|aineo-explain|). Nothing while the configuration is wrong.
+  project's (|aineo-explain|). That `\vm` marks issues for `\s` to send behind
+  `explain.issues_prompt` (|aineo-config-explain.issues_prompt|), and that
+  `]v` and `[v` jump between explanations and issues (|aineo-explain-jump|).
+  Nothing while the configuration is wrong.
 
 Autostart ~
   Whether the autostart opened the layout at startup, or which reason kept

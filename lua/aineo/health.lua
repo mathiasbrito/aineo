@@ -352,10 +352,12 @@ local PREFIX_KEYS = {
   { key = 'V', plug = '<Plug>(aineo-explain-tools)', mode = 'n' },
   { key = 'vi', plug = '<Plug>(aineo-explain-issues)', mode = 'n' },
   { key = 'VI', plug = '<Plug>(aineo-explain-issues-tools)', mode = 'n' },
+  { key = 'vm', plug = '<Plug>(aineo-explain-mark)', mode = 'n' },
   { key = 'v', plug = '<Plug>(aineo-explain)', mode = 'x' },
   { key = 'V', plug = '<Plug>(aineo-explain-tools)', mode = 'x' },
   { key = 'vi', plug = '<Plug>(aineo-explain-issues)', mode = 'x' },
   { key = 'VI', plug = '<Plug>(aineo-explain-issues-tools)', mode = 'x' },
+  { key = 'vm', plug = '<Plug>(aineo-explain-mark)', mode = 'x' },
 }
 
 --- The prefix keys that have no twin in Terminal and Insert mode, by their
@@ -367,6 +369,7 @@ local HAS_NO_TWIN = {
   ['<Plug>(aineo-explain-tools)'] = true,
   ['<Plug>(aineo-explain-issues)'] = true,
   ['<Plug>(aineo-explain-issues-tools)'] = true,
+  ['<Plug>(aineo-explain-mark)'] = true,
 }
 
 --- The modes a twin is mapped in, with how the Terminal prefix mappings
@@ -962,7 +965,9 @@ end
 
 --- Reports how `\v`, `\V`, `\vi` and `\VI` ask about code with `resolved_config`'s
 --- `explain.model` and `explain.timeout_ms`, and what the Claude Code they
---- start may use. Nothing while the configuration is wrong.
+--- start may use; and how `\vm`, `\s`, `]v` and `[v` work on what they
+--- answer, with `explain.issues_prompt`. Nothing while the configuration is
+--- wrong.
 ---
 ---@param resolved_config table|nil the configuration, `nil` when it is wrong
 local function check_explain(resolved_config)
@@ -981,6 +986,14 @@ local function check_explain(resolved_config)
   )
   vim.health.info(
     "\\vi and \\VI ask the same Claude Code for potential issues instead of explanations, \\vi with the code alone and \\VI with the read-only tools; \\v waits for 'timeoutlen' for a following i, and \\V for a following I"
+  )
+  vim.health.info(
+    ('\\vm marks the issues on a line (on each selected line in Visual mode), and \\s then sends the marked issues to the session\'s Claude Code in place of Input, after "%s" (explain.issues_prompt): :help |aineo-explain-mark|'):format(
+      resolved_config.explain.issues_prompt
+    )
+  )
+  vim.health.info(
+    ']v and [v jump to the next and the previous explanation or issue of a buffer that shows any, in Normal, Visual and Operator-pending mode, and are never mapped over a key of yours: :help |aineo-explain-jump|'
   )
 end
 

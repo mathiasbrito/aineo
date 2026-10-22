@@ -283,9 +283,7 @@ T['the mappings']['stay while the other kind is still shown'] = function()
   explain_lines({ 3 })
   find_issues_on({ 5 })
 
-  child.lua(
-    "require('aineo.explain.marks').clear(vim.api.nvim_get_current_buf(), require('aineo.explain.kinds').ISSUES)"
-  )
+  press('\\vi')
 
   eq(mapping('n', ']v').buffer, 1)
 end
