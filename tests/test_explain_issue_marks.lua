@@ -409,6 +409,31 @@ T['the badge']['names the command that sends when the prefix is false'] = functi
   )
 end
 
+T['the badge']['is gone when the buffer is wiped out, its window closing with it'] = function()
+  find_issues_on({ 3 })
+  mark_issue_on(3)
+  child.cmd('botright new')
+
+  child.cmd('bwipeout! 1')
+
+  eq(
+    explained.badge_text_once(child, function(text)
+      return text == ''
+    end),
+    ''
+  )
+  eq(explained.floats(child), {})
+end
+
+T['\\vm']['in Visual mode, selected upward from below the issues, toggles each of them'] = function()
+  find_issues_on({ 3, 5 })
+  child.api.nvim_win_set_cursor(0, { 6, 0 })
+
+  press('Vkkk\\vm')
+
+  eq({ look_of(3), look_of(5) }, { MARKED, MARKED })
+end
+
 T['the badge']['is gone when an edit deletes the marked line and a reader comes in the same tick'] = function()
   find_issues_on({ 3 })
   mark_issue_on(3)

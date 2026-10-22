@@ -361,6 +361,21 @@ T['\\s']['names the file its request was made for, after the buffer is renamed o
   eq(send.writes(child), { paste(DEFAULT_PROMPT .. '\n- src/code.lua:2: Never used.') })
 end
 
+T['\\s']['while another session is claimed is not refused: Input, the claimed draft, is not touched'] = function()
+  open_ready_layout('explain-send-claimed')
+  child.cmd('Aineo claim 063cc43c-8e1a-4d2f-b5c7-91d0e3a4f852')
+  entry.set_input(child, { 'the claimed draft' })
+  find_issues({ { line = 2, text = 'Never used.' } })
+  mark_issue_on(2)
+  local told_before = #entry.messages(child)
+
+  press('\\s')
+
+  eq(send.writes(child), { paste(DEFAULT_PROMPT .. '\n- src/code.lua:2: Never used.') })
+  eq(#entry.messages(child), told_before)
+  eq(send.input(child).lines, { 'the claimed draft' })
+end
+
 T['\\s']['keeps the marks, and tells the user as Send does, when Claude is not ready'] = function()
   local fake = open_layout('explain-send-trust', 'trust')
   claude_session.wait_for_screen(child, terminal_buffer(), 'Yes, I trust this folder')
