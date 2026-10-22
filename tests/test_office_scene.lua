@@ -33,6 +33,8 @@ local ART = {
   ['art/second.txt'] = cell_art('Y', 'yellow'),
   ['art/right.txt'] = cell_art('B', 'blue'),
   ['art/desk.txt'] = cell_art('W', 'brown'),
+  ['art/wide.txt'] = 'colours: W = brown\nanchor: 0, 1\n---\nWW\nWW\n',
+  ['art/bar.txt'] = 'colours: L = red, M = green, R = blue\nanchor: 0, 1\nstretch: columns 2-2\n---\nLMR\nLMR\n',
   ['art/blink.txt'] = 'colours: R = red, G = green\nanchor: 0, 1\nseconds per frame: 1\n---\nR\nR\n---\nG\nG\n',
   ['art/shades.txt'] = 'colours: L = agent_light, S = agent_shade, P = agent_blush\nanchor: 0, 1\n---\nLSP\nLSP\n',
 }
@@ -267,6 +269,132 @@ T['the floor plan']['is laid out again for the new size when the stage is resize
   eq(group_at(picture, 5, 1), solid('#0000ff'))
 end
 
+--- A plan of a wall row, a block of two rows that repeat, and a bottom wall.
+local REPEATING_ROWS_PLAN = '# plan\n \n ####\n~PDEQ\n~....\n ####\n'
+
+T['the floor plan']['repeats its marked rows once when the height holds them once'] = function()
+  local stage = stage_of(scene_pack(REPEATING_ROWS_PLAN, REPEATING_LEGEND), 4, 4)
+  stage.advance({}, 0)
+  local picture = stage.picture()
+
+  eq(row_groups(picture, 0, 1), { solid(WALL) })
+  eq(row_groups(picture, 1, 4)[2], solid('#00ff00'))
+  eq(row_groups(picture, 2, 1), { solid(FLOOR) })
+  eq(row_groups(picture, 3, 1), { solid(WALL) })
+end
+
+T['the floor plan']['repeats its marked rows as many whole times as the height holds'] = function()
+  local stage = stage_of(scene_pack(REPEATING_ROWS_PLAN, REPEATING_LEGEND), 4, 6)
+  stage.advance({}, 0)
+  local picture = stage.picture()
+
+  eq(row_groups(picture, 1, 4)[2], solid('#00ff00'))
+  eq(row_groups(picture, 2, 1), { solid(FLOOR) })
+  eq(row_groups(picture, 3, 4)[2], solid('#00ff00'))
+  eq(row_groups(picture, 4, 1), { solid(FLOOR) })
+  eq(row_groups(picture, 5, 1), { solid(WALL) })
+end
+
+T['the floor plan']['pads the rows the repeated block leaves over with floor, above the bottom rows'] = function()
+  local stage = stage_of(scene_pack(REPEATING_ROWS_PLAN, REPEATING_LEGEND), 4, 7)
+  stage.advance({}, 0)
+  local picture = stage.picture()
+
+  eq(row_groups(picture, 3, 4)[2], solid('#00ff00'))
+  eq(row_groups(picture, 4, 1), { solid(FLOOR) })
+  eq(row_groups(picture, 5, 4), { solid(FLOOR), solid(FLOOR), solid(FLOOR), solid(FLOOR) })
+  eq(row_groups(picture, 6, 1), { solid(WALL) })
+end
+
+T['the floor plan']['repeats rows and columns together'] = function()
+  local stage = stage_of(scene_pack('# plan\n  ~~\n ####\n~PDEQ\n ####\n', REPEATING_LEGEND), 6, 4)
+  stage.advance({}, 0)
+  local picture = stage.picture()
+
+  eq(row_groups(picture, 1, 6)[4], solid('#00ff00'))
+  eq(row_groups(picture, 2, 6)[4], solid('#00ff00'))
+end
+
+T['the floor plan']['shows a piece from the width its letter says, and not below it'] = function()
+  local legend = vim.tbl_extend('force', REPEATING_LEGEND, {
+    Q = { piece = 'right', from_width = 6 },
+  })
+  local narrow = stage_of(scene_pack(REPEATING_PLAN, legend), 4, 2)
+  local wide = stage_of(scene_pack(REPEATING_PLAN, legend), 6, 2)
+  narrow.advance({}, 0)
+  wide.advance({}, 0)
+
+  eq(group_at(narrow.picture(), 3, 1), solid(FLOOR))
+  eq(group_at(wide.picture(), 5, 1), solid('#0000ff'))
+end
+
+--- A plan of a wall row of `length` cells of the letter `*`, and a floor row.
+---
+---@param length integer
+---@return string
+local function decorated_wall_plan(length)
+  return ('# plan\n \n %s\n %s\n'):format(('*'):rep(length), ('.'):rep(length))
+end
+
+local DECORATED_LEGEND = {
+  ['*'] = { decorations = { 'wide', 'first', 'second' } },
+}
+
+T['the floor plan']['fills a run of a decorated letter with its decorations, in order, as many as fit'] = function()
+  local stage = stage_of(scene_pack(decorated_wall_plan(4), DECORATED_LEGEND), 4, 2)
+  stage.advance({}, 0)
+
+  eq(row_groups(stage.picture(), 0, 4), {
+    solid('#885500'),
+    solid('#885500'),
+    solid('#00ff00'),
+    solid('#ffff00'),
+  })
+end
+
+T['the floor plan']['leaves out the decoration that does not fit and goes on with the next'] = function()
+  local legend = { ['*'] = { decorations = { 'wide', 'wide', 'first' } } }
+  local stage = stage_of(scene_pack(decorated_wall_plan(3), legend), 3, 2)
+  stage.advance({}, 0)
+
+  eq(row_groups(stage.picture(), 0, 3), {
+    solid('#885500'),
+    solid('#885500'),
+    solid('#00ff00'),
+  })
+end
+
+T['the floor plan']['stretches a stretchable piece to the run of its letter'] = function()
+  local stage = stage_of(scene_pack('# plan\n \n BBBBB\n', { B = { piece = 'bar' } }), 5, 1)
+  stage.advance({}, 0)
+
+  eq(row_groups(stage.picture(), 0, 5), {
+    solid('#ff0000'),
+    solid('#00ff00'),
+    solid('#00ff00'),
+    solid('#00ff00'),
+    solid('#0000ff'),
+  })
+end
+
+T['the floor plan']['does not shrink a stretchable piece to a run shorter than it'] = function()
+  local stage = stage_of(scene_pack('# plan\n \n BB.\n', { B = { piece = 'bar' } }), 3, 1)
+  stage.advance({}, 0)
+
+  eq(row_groups(stage.picture(), 0, 3)[3], solid('#0000ff'))
+end
+
+T['the floor plan']['places a piece that does not stretch in every cell of a run of its letter'] = function()
+  local stage = stage_of(scene_pack('# plan\n \n DDD\n', { D = { piece = 'first' } }), 3, 1)
+  stage.advance({}, 0)
+
+  eq(row_groups(stage.picture(), 0, 3), {
+    solid('#00ff00'),
+    solid('#00ff00'),
+    solid('#00ff00'),
+  })
+end
+
 T['the picture'] = MiniTest.new_set()
 
 T['the picture']['has a row for each row of the stage, each of the width of the stage'] = function()
@@ -321,6 +449,17 @@ T['an agent']['stands at the spot its state’s activity names, in the colour it
   stage.advance(agents_in('standing'), 0)
 
   eq(group_at(stage.picture(), 1, 2), solid(AGENT))
+end
+
+T['an agent']['stands at the spot a decoration has, of its piece’s name, on the first floor row below it'] = function()
+  local pack = scene_pack(decorated_wall_plan(4), DECORATED_LEGEND, {
+    activities = { stand = { steps = { { at = 'first', pose = 'standing' } } } },
+  })
+  local stage = stage_of(pack, 4, 2)
+
+  stage.advance(agents_in('standing'), 0)
+
+  eq(group_at(stage.picture(), 2, 1), solid(AGENT))
 end
 
 T['an agent']['sits behind the piece that stands in front of its seat'] = function()
