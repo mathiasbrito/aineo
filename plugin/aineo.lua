@@ -383,6 +383,17 @@ for words, order in pairs(EXPLAIN_ORDERS) do
   end, { desc = 'aineo: ' .. words .. ' the selected lines' })
 end
 
+--- The `<Plug>` mappings that jump to the next and the previous explanation
+--- or issue of the current buffer, by the direction they go, in Normal,
+--- Visual and Operator-pending mode (`aineo.entry`'s `jump_to_explanation()`).
+for _, way in ipairs({ 'next', 'previous' }) do
+  vim.keymap.set({ 'n', 'x', 'o' }, ('<Plug>(aineo-explain-%s)'):format(way), function()
+    run(function()
+      require('aineo.entry').jump_to_explanation(way)
+    end)
+  end, { desc = 'aineo: jump to the ' .. way .. ' explanation or issue' })
+end
+
 --- The keys that leave the mode a twin (`map_terminal_prefix()`) is pressed
 --- in, Terminal mode (`t`) or Insert mode (`i`), for Normal mode. In Terminal
 --- mode Neovim's own, which are not mapped. In Insert mode `<Esc>`'s effect:
