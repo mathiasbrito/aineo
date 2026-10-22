@@ -436,7 +436,8 @@ keys exist in a buffer while it shows any, and a key you mapped yourself is
 never replaced. To send issues to your Claude Code, press `\vm` on the line
 an issue is shown above (in Visual mode, on the selected lines) to mark it:
 the issue shows a `✓` where `▎` is, in a stronger tint, and the badge in the
-window's corner counts them, ` 2 issues marked · \s sends `. Then `\s` in
+window's corner counts them, ` 2 issues marked · \s sends ` (naming your
+`prefix`'s key). Then `\s` in
 that window sends them at once to the session's Claude Code, leaving Input as
 it is: the words of `explain.issues_prompt`, then one line for each marked
 issue, `- <path>:<line>: <text>`, the path from the folder Claude Code runs in

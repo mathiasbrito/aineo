@@ -21,8 +21,14 @@ local CODE = {
 
 --- Starts the child with `CODE` open, nothing explained, and the keys of
 --- the prefix mapped, `\v` waiting 100 ms for a longer key (`\vi`, `\vm`).
-local function start()
-  explained.start(child, 'explain-marks', CODE, { claude = { cmd = explained.FAKE_CLAUDE } })
+---@param config? table more of `vim.g.aineo`
+local function start(config)
+  explained.start(
+    child,
+    'explain-marks',
+    CODE,
+    vim.tbl_extend('force', { claude = { cmd = explained.FAKE_CLAUDE } }, config or {})
+  )
   child.o.timeoutlen = 100
   child.wo.number = true
   child.wo.numberwidth = 8
@@ -120,12 +126,20 @@ local EXPLANATIONS_SHOWN = [=[(function()
   return shown
 end)()]=]
 
-T['a marked issue'] = MiniTest.new_set({ hooks = { pre_case = start } })
+T['a marked issue'] = MiniTest.new_set({ hooks = {
+  pre_case = function()
+    start()
+  end,
+} })
 
 local UNMARKED = { '▎', 'AineoExplainIssueGutter', 'AineoExplainIssue' }
 local MARKED = { '✓', 'AineoExplainIssueMarkedGutter', 'AineoExplainIssueMarked' }
 
-T['\\vm'] = MiniTest.new_set({ hooks = { pre_case = start } })
+T['\\vm'] = MiniTest.new_set({ hooks = {
+  pre_case = function()
+    start()
+  end,
+} })
 
 T['\\vm']['on the line an issue is shown above marks it: ✓ in its gutter, in the marked look'] = function()
   find_issues_on({ 3, 6 })
@@ -257,7 +271,11 @@ T['a marked issue']['keeps the label issue in its gutter'] = function()
   eq(issues_shown()[1].label, 'issue')
 end
 
-T['the badge'] = MiniTest.new_set({ hooks = { pre_case = start } })
+T['the badge'] = MiniTest.new_set({ hooks = {
+  pre_case = function()
+    start()
+  end,
+} })
 
 --- Marks the issue above `line` of the child's buffer, as \vm does there.
 ---
@@ -321,6 +339,76 @@ T['the badge']['is gone when edits delete the lines of the marked issues'] = fun
   )
 end
 
+T['the badge']['follows the buffer the window shows: gone for another buffer, back with this one'] = function()
+  find_issues_on({ 3 })
+  mark_issue_on(3)
+
+  child.cmd('enew')
+  local other = explained.badge_text_once(child, function(text)
+    return text == ''
+  end)
+  child.cmd('buffer #')
+
+  eq(other, '')
+  eq(
+    explained.badge_text_once(child, function(text)
+      return text ~= ''
+    end),
+    ' 1 issue marked · \\s sends '
+  )
+end
+
+T['the badge']['shows in every window that shows the buffer'] = function()
+  find_issues_on({ 3 })
+  mark_issue_on(3)
+
+  child.cmd('split')
+
+  vim.wait(explained.PATIENCE_MS, function()
+    return #explained.floats(child) == 2
+  end, 20)
+  eq(
+    vim.tbl_map(function(float)
+      return float.text
+    end, explained.floats(child)),
+    { ' 1 issue marked · \\s sends ', ' 1 issue marked · \\s sends ' }
+  )
+end
+
+T['the badge']['names the key that sends as the prefix configures it'] = function()
+  start({ prefix = ',' })
+  explained.answer(child, { { line = 3, text = 'Breaks.' } })
+  press(',vi')
+  explained.wait_for(child, 'issues', 1)
+  child.api.nvim_win_set_cursor(0, { 3, 0 })
+
+  press(',vm')
+
+  eq(
+    explained.badge_text_once(child, function(text)
+      return text ~= ''
+    end),
+    ' 1 issue marked · ,s sends '
+  )
+end
+
+T['the badge']['names the command that sends when the prefix is false'] = function()
+  start({ prefix = false })
+  explained.answer(child, { { line = 3, text = 'Breaks.' } })
+  child.cmd('Aineo explain issues')
+  explained.wait_for(child, 'issues', 1)
+  child.api.nvim_win_set_cursor(0, { 3, 0 })
+
+  press('<Plug>(aineo-explain-mark)')
+
+  eq(
+    explained.badge_text_once(child, function(text)
+      return text ~= ''
+    end),
+    ' 1 issue marked · :Aineo send sends '
+  )
+end
+
 T['the badge']['is gone when an edit deletes the marked line and a reader comes in the same tick'] = function()
   find_issues_on({ 3 })
   mark_issue_on(3)
@@ -362,7 +450,11 @@ T['the badge']['stays, with no spinner, once the requests have ended'] = functio
   eq(text, ' 1 issue marked · \\s sends ')
 end
 
-T['a mark'] = MiniTest.new_set({ hooks = { pre_case = start } })
+T['a mark'] = MiniTest.new_set({ hooks = {
+  pre_case = function()
+    start()
+  end,
+} })
 
 T['a mark']['is dropped with its issue by a new answer for the same lines'] = function()
   find_issues_on({ 3 })
@@ -404,7 +496,12 @@ T['a mark']['of an issue stays when an answer for other lines adds another'] = f
   eq({ look_of(3), look_of(6) }, { MARKED, UNMARKED })
 end
 
-T['<Plug>(aineo-explain-mark)'] = MiniTest.new_set({ hooks = { pre_case = start } })
+T['<Plug>(aineo-explain-mark)'] =
+  MiniTest.new_set({ hooks = {
+    pre_case = function()
+      start()
+    end,
+  } })
 
 T['<Plug>(aineo-explain-mark)']['marks the issue on the cursor’s line, as \\vm does'] = function()
   find_issues_on({ 3 })

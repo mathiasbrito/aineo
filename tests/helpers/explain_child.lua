@@ -25,7 +25,7 @@ local answers_made = 0
 
 --- Starts `child` afresh, its screen 80 columns wide, with the file
 --- `src/code.lua` of `lines` open in a git project made for `name`, `aineo`
---- configured as `config` says, and the notifications it shows kept for
+--- configured as `config` says before the plugin maps its keys, and the notifications it shows kept for
 --- `told()`. Returns the project's folder.
 ---
 ---@param child table a child from `MiniTest.new_child_neovim()`
@@ -34,7 +34,8 @@ local answers_made = 0
 ---@param config? table more of `vim.g.aineo`
 ---@return string folder
 function M.start(child, name, lines, config)
-  children.restart(child)
+  local settings = vim.tbl_deep_extend('force', { autostart = false }, config or {})
+  children.restart(child, { '--cmd', 'lua vim.g.aineo = ' .. vim.inspect(settings) })
   child.o.columns = 80
   child.o.lines = 40
   local folder = git_repo.create_unborn(name)
@@ -42,15 +43,13 @@ function M.start(child, name, lines, config)
   local record = fixture.directory(name .. '-record') .. '/fake.jsonl'
   child.lua(
     [[
-    local record, settings = ...
-    vim.env.AINEO_FAKE_CLAUDE_RECORD = record
-    vim.g.aineo = settings
+    vim.env.AINEO_FAKE_CLAUDE_RECORD = ...
     _G.told = {}
     vim.notify = function(message, level)
       table.insert(_G.told, { message = message, level = level })
     end
   ]],
-    { record, vim.tbl_deep_extend('force', { autostart = false }, config or {}) }
+    { record }
   )
   child.cmd('edit ' .. folder .. '/src/code.lua')
   return folder
@@ -75,6 +74,8 @@ local function answer(child, explanations)
     })
   child.lua('vim.env.AINEO_FAKE_CLAUDE_PRINT = ...', { path })
 end
+
+M.answer = answer
 
 --- How many extmarks the child holds in the namespace of `kind` that show an
 --- answer, and how many that say a request is working.
@@ -144,6 +145,19 @@ function M.place(child, kind, found, range)
   vim.wait(M.PATIENCE_MS, function()
     local shown, working = counts(child, kind)
     return shown >= #found and working == 0
+  end, 20)
+end
+
+--- Waits until the child shows at least `count` virtual lines of `kind` and
+--- none says a request is working, or `PATIENCE_MS` is over.
+---
+---@param child table
+---@param kind 'explanations'|'issues'
+---@param count integer
+function M.wait_for(child, kind, count)
+  vim.wait(M.PATIENCE_MS, function()
+    local shown, working = counts(child, kind)
+    return shown >= count and working == 0
   end, 20)
 end
 

@@ -55,6 +55,7 @@ function M.explain(order)
     command = config.claude.cmd,
     model = config.explain.model,
     timeout_ms = config.explain.timeout_ms,
+    send_key = config.prefix and config.prefix .. 's' or ':Aineo send',
   })
 end
 
