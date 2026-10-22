@@ -28,6 +28,7 @@ local ART = {
   ['art/person.txt'] = cell_art('A', 'agent'),
   ['art/walker.txt'] = 'colours: A = agent, B = blue\nanchor: 0, 1\n---\nAB\nAB\n',
   ['art/left.txt'] = cell_art('R', 'red'),
+  ['art/dot.txt'] = 'colours: R = red\nanchor: 0, 0\n---\nR\n',
   ['art/first.txt'] = cell_art('G', 'green'),
   ['art/second.txt'] = cell_art('Y', 'yellow'),
   ['art/right.txt'] = cell_art('B', 'blue'),
@@ -601,6 +602,15 @@ T['a piece']['partly on the canvas is painted'] = function()
   stage.advance({}, 0)
 
   eq(group_at(stage.picture(), 0, 1), solid('#ff0000'))
+end
+
+T['a piece']['one pixel tall on the canvas's last pixel row is painted'] = function()
+  local pack = scene_pack('# plan\n \n .\n D\n', { D = { piece = 'dot' } })
+  local stage = stage_of(pack, 1, 2)
+
+  stage.advance({}, 0)
+
+  eq(group_at(stage.picture(), 0, 1), 'AineoOfficePixel_404040_ff0000')
 end
 
 return T
