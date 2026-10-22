@@ -141,12 +141,12 @@ T['\\v']['in Visual mode takes a selection made upwards as the same lines'] = fu
   )
 end
 
-T[':AineoExplain'] = MiniTest.new_set()
+T[':Aineo explain'] = MiniTest.new_set()
 
-T[':AineoExplain']['with a range and tools explains those lines with read-only tools'] = function()
+T[':Aineo explain']['with a range and tools explains those lines with read-only tools'] = function()
   start()
 
-  child.cmd('2,3AineoExplain tools')
+  child.cmd('2,3Aineo explain tools')
 
   eq(
     model_and_tools(),
@@ -192,27 +192,66 @@ local function answer_explanations(explanations)
   child.lua('vim.env.AINEO_FAKE_CLAUDE_PRINT = ...', { answer })
 end
 
-T[':AineoExplain']['clear removes every explanation the buffer shows'] = function()
+T[':Aineo explain']['clear removes every explanation the buffer shows'] = function()
   start()
   answer_explanations({ { line = 2, text = 'Adds.' }, { line = 5, text = 'Returns it.' } })
-  child.cmd('AineoExplain')
+  child.cmd('Aineo explain')
   explained_lines_once(2)
 
-  child.cmd('AineoExplain clear')
+  child.cmd('Aineo explain clear')
 
   eq(explained_lines_once(0), 0)
   eq(child.lua_get('_G.told'), {})
 end
 
-T[':AineoExplain']['with another word says which it takes, and asks nothing'] = function()
+T[':Aineo explain']['with another word says which it takes, and asks nothing'] = function()
   start()
 
-  child.cmd('AineoExplain all')
+  child.cmd('Aineo explain all')
 
   eq(child.lua_get('_G.told'), {
-    { message = 'aineo: :AineoExplain takes tools or clear', level = vim.log.levels.ERROR },
+    { message = 'aineo: :Aineo explain takes one of tools, clear', level = vim.log.levels.ERROR },
   })
   eq(vim.uv.fs_stat(RECORD), nil)
+end
+
+local RANGE_REFUSAL = {
+  message = 'aineo: only :Aineo explain takes a range',
+  level = vim.log.levels.ERROR,
+}
+
+T[':Aineo explain']['is the only subcommand that takes a range'] = MiniTest.new_set({
+  parametrize = { { 'diff close' }, { 'zoom full' }, { 'tab 1' }, { 'claim' }, { 'bogus' } },
+})
+
+T[':Aineo explain']['is the only subcommand that takes a range']['given'] = function(arguments)
+  start()
+
+  child.cmd('2,3Aineo ' .. arguments)
+
+  eq(child.lua_get('_G.told'), { RANGE_REFUSAL })
+  eq(vim.uv.fs_stat(RECORD), nil)
+end
+
+T[':Aineo explain']['is offered after :Aineo, and tools and clear after it, after a range too'] =
+  MiniTest.new_set({
+    parametrize = {
+      { 'Aineo e', { 'explain' } },
+      { 'Aineo explain ', { 'tools', 'clear' } },
+      { 'Aineo explain t', { 'tools' } },
+      { '2,3Aineo explain ', { 'tools', 'clear' } },
+      { "'<,'>Aineo explain c", { 'clear' } },
+      { 'Aineo explain tools ', {} },
+    },
+  })
+
+T[':Aineo explain']['is offered after :Aineo, and tools and clear after it, after a range too']['typed'] = function(
+  typed,
+  completed
+)
+  start()
+
+  eq(child.fn.getcompletion(typed, 'cmdline'), completed)
 end
 
 T['\\v']['pressed again in Normal mode clears the explanations'] = function()

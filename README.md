@@ -398,7 +398,7 @@ unsaved changes included. aineo starts one `claude` process for the request
 aineo's settings and no session kept, and it ends with the answer.
 
 `\v` or `\V` again in Normal mode clears the explanations; while a request
-runs they stop it. `:AineoExplain [tools]` with a range, and `:AineoExplain
+runs they stop it. `:Aineo explain [tools]` with a range, and `:Aineo explain
 clear`, do the same. The model is `explain.model`, `'sonnet'` by default, and
 a request is stopped after `explain.timeout_ms`. If the buffer changes while
 Claude Code explains it, nothing is shown: ask again. The explanations show

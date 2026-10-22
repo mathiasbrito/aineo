@@ -7,20 +7,6 @@ local send = dofile('tests/helpers/send.lua')
 
 local eq = MiniTest.expect.equality
 
---- Expects `messages`, as `entry.messages()` gives them, to be one error
---- whose text holds `part`, character for character.
-local contains_one_error = MiniTest.new_expectation(
-  'one error containing a part',
-  function(messages, part)
-    return #messages == 1
-      and type(messages[1].error) == 'string'
-      and messages[1].error:find(part, 1, true) ~= nil
-  end,
-  function(messages, part)
-    return string.format('Messages: %s\nPart: %s', vim.inspect(messages), vim.inspect(part))
-  end
-)
-
 local child = MiniTest.new_child_neovim()
 
 --- The fixture repository of one commit every case's child works in, made
@@ -161,7 +147,7 @@ end
 
 T[':Aineo send'] = MiniTest.new_set()
 
-T[':Aineo send']['takes no range: after a Visual selection, Neovim refuses it, and nothing is sent or removed'] = function()
+T[':Aineo send']['takes no range: after a Visual selection, it refuses it, and nothing is sent or removed'] = function()
   open_ready_layout('selection-entry-range', { 'a1', 'a2', 'a3' })
   send.type_keys(child, 'ggjV<Esc>')
 
@@ -171,7 +157,9 @@ T[':Aineo send']['takes no range: after a Visual selection, Neovim refuses it, a
     writes = {},
     input = { 'a1', 'a2', 'a3' },
   })
-  contains_one_error(entry.messages(child), 'E481: No range allowed')
+  eq(entry.messages(child), {
+    { message = 'aineo: only :Aineo explain takes a range', level = vim.log.levels.ERROR },
+  })
 end
 
 --- What a Visual Send tells the user outside Input.
