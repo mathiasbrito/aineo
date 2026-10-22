@@ -90,7 +90,9 @@ T['a PermissionRequest hook']['tells the editor the start token and the session,
   eq({ ended, waits() }, { SILENT_END, { { 3, TOKEN, RECORDED_SESSION, vim.NIL } } })
 end
 
-T['a PermissionRequest hook']['names the subagent that asks, when the input does'] = function()
+T['a PermissionRequest hook from a subagent'] = MiniTest.new_set()
+
+T['a PermissionRequest hook from a subagent']['names the subagent that asks'] = function()
   local input = vim.json.decode(RECORDED_INPUTS[2])
   input.agent_id = 'a0000000000000001'
   input.agent_type = 'Explore'
