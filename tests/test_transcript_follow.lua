@@ -93,12 +93,12 @@ T['follow()'] = MiniTest.new_set()
 T['follow()']['replays the lines the file holds as replayed signals, in order'] = function()
   local following = follow_new_transcript(RECORDED_TURN)
 
-  eq(kinds_of(following.signals), { 'tool_started', 'tool_finished', 'turn_ended' })
+  eq(kinds_of(following.signals), { 'prompt', 'tool_started', 'tool_finished', 'turn_ended' })
   eq(
     vim.tbl_map(function(signal)
       return signal.replayed
     end, following.signals),
-    { true, true, true }
+    { true, true, true, true }
   )
   following.follower.stop()
 end
