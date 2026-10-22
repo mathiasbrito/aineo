@@ -62,7 +62,6 @@ local function close_call(record, signal)
   if record.open_calls[call] then
     record.open_calls[call] = nil
     record.open_call_count = record.open_call_count - 1
-    record.turn_ended = false
   end
 end
 
