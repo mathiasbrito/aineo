@@ -1908,8 +1908,12 @@ is `explain.model` (|aineo-config-explain.model|). Each request is a model
 call, billed as Claude Code's own usage is.
 
 The groups are computed from your colour scheme when aineo first needs them
-and again after every `:colorscheme`, and a group you define yourself is kept.
-The accent is the foreground of |hl-DiagnosticInfo|, `#61afef` without one.
+and again after every `:colorscheme` and every change of 'background', and a
+group you define yourself is kept, as a default too. The accent is the
+foreground of |hl-DiagnosticInfo|, `#61afef` without one. For a terminal
+without true colour the groups carry the accent's `ctermfg`, the `ctermbg` of
+|hl-LineNr| in the number column, and the `ctermbg` of |hl-CursorLine| behind
+the text, none when the colour scheme has none.
 
                                                              *hl-AineoExplain*
 AineoExplain		The text of an explanation, and the band behind its
