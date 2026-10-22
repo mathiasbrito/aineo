@@ -211,11 +211,74 @@ local function show_above(buffer, band)
   )
 end
 
---- Shows each of `explanations` in `buffer` as virtual lines above its
---- line, indented as that line but by half the window's text width at most,
---- each starting with `MARK`, and the text wrapped (`wrapped()`) at the text
---- width of a window showing it (`geometry_of()`) less that indent, in the
---- look of `kind`.
+--- The explanations of one kind shown in one buffer, and what they were
+--- placed for.
+---@class aineo.explain.Placed
+---@field kind aineo.explain.Kind
+---@field window integer the window they were placed for
+---@field textoff integer the columns before the text there, when they were placed
+---@field texts table<integer, string> the text of each, by extmark id
+---@field pending boolean whether placing them again is scheduled
+
+--- The explanations that are shown, by the buffer and the name of their kind.
+---@type table<integer, table<string, aineo.explain.Placed>>
+local placed = {}
+
+--- Shows the explanation `text` in `buffer` as virtual lines above `line`,
+--- from 1, indented as that line but by half the window's text width at
+--- most, each row starting with `MARK`, and the text wrapped (`wrapped()`) at
+--- the text width of `geometry` less that indent, in the look of `kind`, as
+--- the extmark `id` when it is given. Returns the extmark's id.
+---
+---@param buffer integer
+---@param kind aineo.explain.Kind
+---@param line integer
+---@param text string
+---@param geometry aineo.explain.Geometry
+---@param id? integer
+---@return integer
+local function show_explanation(buffer, kind, line, text, geometry, id)
+  local width = geometry.width - geometry.textoff
+  local indent = indent_of(buffer, line, math.floor(width / 2))
+  local room = math.max(width - #indent - vim.fn.strdisplaywidth(MARK), NARROWEST)
+  return show_above(buffer, {
+    id = id,
+    kind = kind,
+    line = line,
+    indent = indent,
+    rows = wrapped(text, room),
+    geometry = geometry,
+    label = kind.label,
+  })
+end
+
+--- Shows again, as the same extmarks, the explanations `record` holds for
+--- `buffer`, for the geometry of the window they were placed for now, and
+--- forgets those whose extmark is gone.
+---
+---@param buffer integer
+---@param record aineo.explain.Placed
+local function place_again(buffer, record)
+  record.pending = false
+  if not vim.api.nvim_buf_is_valid(buffer) then
+    return
+  end
+  local geometry = geometry_of(buffer, record.window)
+  record.textoff = geometry.textoff
+  for id, text in pairs(record.texts) do
+    local position = vim.api.nvim_buf_get_extmark_by_id(buffer, namespace_of(record.kind), id, {})
+    if #position == 0 then
+      record.texts[id] = nil
+    else
+      show_explanation(buffer, record.kind, position[1] + 1, text, geometry, id)
+    end
+  end
+end
+
+--- Shows each of `explanations` in `buffer` as virtual lines above its line
+--- (`show_explanation()`) for a window showing it (`geometry_of()`), and
+--- keeps them to show again when that window's gutter changes
+--- (`keep_aligned()`).
 ---
 ---@param buffer integer
 ---@param window integer the window the explanations were asked in
@@ -223,19 +286,40 @@ end
 ---@param explanations aineo.explain.Explanation[]
 function M.place(buffer, window, kind, explanations)
   local geometry = geometry_of(buffer, window)
-  local width = geometry.width - geometry.textoff
-  for _, explanation in ipairs(explanations) do
-    local indent = indent_of(buffer, explanation.line, math.floor(width / 2))
-    local room = math.max(width - #indent - vim.fn.strdisplaywidth(MARK), NARROWEST)
-    show_above(buffer, {
-      kind = kind,
-      line = explanation.line,
-      indent = indent,
-      rows = wrapped(explanation.text, room),
-      geometry = geometry,
-      label = kind.label,
-    })
+  placed[buffer] = placed[buffer] or {}
+  local record = placed[buffer][kind.name]
+  if record and record.textoff ~= geometry.textoff then
+    record.window = window
+    place_again(buffer, record)
   end
+  record = record or { kind = kind, texts = {}, pending = false }
+  record.window, record.textoff = window, geometry.textoff
+  placed[buffer][kind.name] = record
+  for _, explanation in ipairs(explanations) do
+    local id = show_explanation(buffer, kind, explanation.line, explanation.text, geometry)
+    record.texts[id] = explanation.text
+  end
+end
+
+--- Has the explanations that are shown placed again, as the same extmarks,
+--- when the window they were placed for shows the buffer with another
+--- number, sign or fold column than when they were placed. A decoration
+--- provider notices at each redraw and schedules the placing, as extmarks
+--- cannot change while redrawing. Called again, it leaves the provider it
+--- made.
+function M.keep_aligned()
+  vim.api.nvim_set_decoration_provider(vim.api.nvim_create_namespace('aineo_explain_align'), {
+    on_win = function(_, _, buffer)
+      for _, record in pairs(placed[buffer] or {}) do
+        if not record.pending and geometry_of(buffer, record.window).textoff ~= record.textoff then
+          record.pending = true
+          vim.schedule(function()
+            place_again(buffer, record)
+          end)
+        end
+      end
+    end,
+  })
 end
 
 --- Shows in `buffer`, above `line`, from 1, and indented as it, in the look
@@ -304,6 +388,9 @@ end
 ---@param first? integer
 ---@param last? integer
 function M.clear(buffer, kind, first, last)
+  if not first and placed[buffer] then
+    placed[buffer][kind.name] = nil
+  end
   vim.api.nvim_buf_clear_namespace(buffer, namespace_of(kind), first and first - 1 or 0, last or -1)
 end
 
