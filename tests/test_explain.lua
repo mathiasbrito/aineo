@@ -1177,6 +1177,77 @@ T['the look']['keeps a group the user defined, before it loads and after the col
   eq(group('AineoExplainNr').bold, true)
 end
 
+T['the look']['computes its groups again when the background option changes, with no colour scheme loaded'] = function()
+  start_with_project()
+  child.lua([[
+    vim.api.nvim_create_autocmd('OptionSet', {
+      pattern = 'background',
+      callback = function()
+        vim.api.nvim_set_hl(0, 'Normal', { bg = 0x000000 })
+        vim.api.nvim_set_hl(0, 'DiagnosticInfo', { fg = 0xffffff })
+      end,
+    })
+    vim.o.background = 'dark'
+  ]])
+  use_theme({ Normal = { bg = 0x101010 }, DiagnosticInfo = { fg = 0x6090c0 } })
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+  explain()
+  shown_once_it_holds('Adds')
+
+  child.o.background = 'light'
+
+  eq(group('AineoExplain').bg, 0x1f1f1f)
+  eq(group('AineoExplain').fg, 0xffffff)
+end
+
+T['the look']['keeps a group the user defined as a default, before it loads and after the colour scheme changes'] = function()
+  start_with_project()
+  use_theme({ AineoExplain = { link = 'Comment', default = true } })
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+
+  explain()
+  shown_once_it_holds('Adds')
+  child.cmd('doautocmd ColorScheme')
+
+  eq(group('AineoExplain'), { link = 'Comment', default = true })
+end
+
+T['the look']['carries the cterm colours: the accent’s foreground, LineNr’s background in the gutter, CursorLine’s behind the band'] = function()
+  start_with_project()
+  use_theme({
+    Normal = { bg = 0x101010 },
+    DiagnosticInfo = { fg = 0x6090c0, ctermfg = 14 },
+    LineNr = { bg = 0x202020, ctermbg = 240 },
+    CursorLine = { bg = 0x303030, ctermbg = 236 },
+  })
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+
+  explain()
+  shown_once_it_holds('Adds')
+
+  eq(group('AineoExplain').ctermfg, 14)
+  eq(group('AineoExplain').ctermbg, 236)
+  eq(group('AineoExplainGutter').ctermfg, 14)
+  eq(group('AineoExplainGutter').ctermbg, 240)
+  eq(group('AineoExplainGutterFill').ctermbg, 240)
+  eq(group('AineoExplainNr').ctermfg, 14)
+end
+
+T['the look']['leaves the cterm colours out that the theme lacks'] = function()
+  start_with_project()
+  use_theme({ DiagnosticInfo = { fg = 0x6090c0 }, LineNr = {}, CursorLine = {} })
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+
+  explain()
+  shown_once_it_holds('Adds')
+
+  eq({
+    group('AineoExplain').ctermfg,
+    group('AineoExplain').ctermbg,
+    group('AineoExplainGutter').ctermbg,
+  }, {})
+end
+
 T['the look']['shows no gutter where the window shows no number, sign or fold column'] = function()
   start_with_project()
   answer_explanations({ { line = 1, text = 'Starts.' } })
