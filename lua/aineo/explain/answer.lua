@@ -23,9 +23,22 @@ local function is_explanation_within(item, first, last)
     and vim.trim(item.text) ~= ''
 end
 
+--- `item` with the NUL characters of its text taken out, which Neovim cannot
+--- show as a string; `item` when it holds no text.
+---
+---@param item any
+---@return any
+local function without_nul(item)
+  if type(item) ~= 'table' or type(item.text) ~= 'string' then
+    return item
+  end
+  return { line = item.line, text = (item.text:gsub('%z', '')) }
+end
+
 --- The explanations of `items` that `is_explanation_within()` keeps, one per
 --- line, in the order their lines first come: a text a line already has is
---- dropped, and the texts of one line are joined with a space, in order.
+--- dropped, and the texts of one line are joined with a space, in order. The
+--- NUL characters of a text are taken out (`without_nul()`).
 ---
 ---@param items any[]
 ---@param first integer
@@ -33,7 +46,8 @@ end
 ---@return aineo.explain.Explanation[]
 local function one_per_line(items, first, last)
   local explanations, by_line, seen = {}, {}, {}
-  for _, item in ipairs(items) do
+  for _, original in ipairs(items) do
+    local item = without_nul(original)
     local key = is_explanation_within(item, first, last) and item.line .. '\n' .. item.text
     if key and not seen[key] then
       seen[key] = true

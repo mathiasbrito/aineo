@@ -16,19 +16,22 @@ local MARK = '┊ '
 local NARROWEST = 1
 
 --- The bytes of the longest start of `word` no wider than `width` display
---- columns, and at least its first character.
+--- columns, and at least its first character. Walks the characters of that
+--- start alone, so that a long word costs its length, not its length per row.
 ---
 ---@param word string
 ---@param width integer
 ---@return integer
 local function fitting_bytes(word, width)
-  local bytes = 0
-  for _, character in ipairs(vim.fn.split(word, '\\zs')) do
-    local wider = vim.fn.strdisplaywidth(word:sub(1, bytes + #character))
-    if wider > width and bytes > 0 then
+  local bytes, used = 0, 0
+  while bytes < #word do
+    local character = word:sub(bytes + 1, bytes + 1 + vim.str_utf_end(word, bytes + 1))
+    local wide = vim.fn.strdisplaywidth(character)
+    if used + wide > width and bytes > 0 then
       break
     end
     bytes = bytes + #character
+    used = used + wide
   end
   return bytes
 end
@@ -85,15 +88,18 @@ local function text_width(buffer, window)
   return info.width - info.textoff
 end
 
---- The indent of `line` of `buffer`, from 1, as the spaces that fill it.
+--- The indent of `line` of `buffer`, from 1, as the spaces that fill it, at
+--- most `most` of them.
 ---
 ---@param buffer integer
 ---@param line integer
+---@param most? integer no limit when absent
 ---@return string
-local function indent_of(buffer, line)
-  return (' '):rep(vim.api.nvim_buf_call(buffer, function()
+local function indent_of(buffer, line, most)
+  local indent = vim.api.nvim_buf_call(buffer, function()
     return vim.fn.indent(line)
-  end))
+  end)
+  return (' '):rep(math.min(indent, most or indent))
 end
 
 --- Shows `rows` in `buffer` as virtual lines above `line`, from 1, each after
@@ -117,9 +123,9 @@ local function show_above(buffer, line, prefix, rows)
 end
 
 --- Shows each of `explanations` in `buffer` as virtual lines above its
---- line, indented as that line, each starting with `MARK`, and the text
---- wrapped (`wrapped()`) at the text width of a window showing it
---- (`text_width()`) less that indent.
+--- line, indented as that line but by half the window's text width at most,
+--- each starting with `MARK`, and the text wrapped (`wrapped()`) at the text
+--- width of a window showing it (`text_width()`) less that indent.
 ---
 ---@param buffer integer
 ---@param window integer the window the explanations were asked in
@@ -127,7 +133,7 @@ end
 function M.place(buffer, window, explanations)
   local width = text_width(buffer, window)
   for _, explanation in ipairs(explanations) do
-    local prefix = indent_of(buffer, explanation.line) .. MARK
+    local prefix = indent_of(buffer, explanation.line, math.floor(width / 2)) .. MARK
     local room = math.max(width - vim.fn.strdisplaywidth(prefix), NARROWEST)
     show_above(buffer, explanation.line, prefix, wrapped(explanation.text, room))
   end

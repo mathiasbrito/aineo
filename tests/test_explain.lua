@@ -239,6 +239,42 @@ T['an answer']['cuts a word wider than the room into rows of its own'] = functio
   })
 end
 
+T['an answer']['cuts a very long word in time proportional to its length'] = function()
+  start_with_project()
+  answer_explanations({ { line = 2, text = ('x'):rep(60000) } })
+  local started = vim.uv.hrtime()
+
+  explain()
+
+  local shown = shown_once_it_holds('xxxx')
+  eq(#shown[1].virt_lines, math.ceil(60000 / 56))
+  eq((vim.uv.hrtime() - started) / 1e6 < 2500, true)
+end
+
+T['an answer']['drops the NUL characters of an explanation, and tells nothing'] = function()
+  start_with_project()
+  answer_explanations({ { line = 2, text = 'Ad\0ds.' } })
+
+  explain()
+
+  eq(shown_once_it_holds('Adds.')[1].virt_lines, { { { '  ┊ Adds.', 'AineoExplain' } } })
+  eq(child.lua_get('_G.told'), {})
+end
+
+T['an answer']['indents a line indented past half the room by half the room'] = function()
+  start_with_project()
+  child.o.columns = 30
+  child.api.nvim_buf_set_lines(0, 1, 2, false, { (' '):rep(40) .. 'return a + b' })
+  answer_explanations({ { line = 2, text = 'Adds the two numbers.' } })
+
+  explain()
+
+  eq(shown_once_it_holds('Adds')[1].virt_lines, {
+    { { (' '):rep(15) .. '┊ Adds the two', 'AineoExplain' } },
+    { { (' '):rep(15) .. '┊ numbers.', 'AineoExplain' } },
+  })
+end
+
 T['an answer']['starts a new row at each line break of an explanation'] = function()
   start_with_project()
   answer_explanations({ { line = 1, text = 'First.\nSecond.' } })
