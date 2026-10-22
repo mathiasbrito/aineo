@@ -129,11 +129,14 @@ local function recorded(count)
   return vim.tbl_map(vim.json.decode, lines)
 end
 
---- Has the fake `claude` print `text` as its answer.
+--- Has the fake `claude` print `text` as its answer, from the file `name`:
+--- a request that runs reads its answer from the file it was started with,
+--- so that a later answer in another file leaves it be.
 ---
 ---@param text string
-local function answer_text(text)
-  local answer = fixture.write('explain/answer.json', { text })
+---@param name? string a file name; `answer.json` when absent
+local function answer_text(text, name)
+  local answer = fixture.write('explain/' .. (name or 'answer.json'), { text })
   child.lua('vim.env.AINEO_FAKE_CLAUDE_PRINT = ...', { answer })
 end
 
@@ -142,14 +145,18 @@ end
 --- with `--json-schema`.
 ---
 ---@param explanations { line: any, text: any }[]
-local function answer_explanations(explanations)
-  answer_text(vim.json.encode({
-    type = 'result',
-    subtype = 'success',
-    is_error = false,
-    result = '',
-    structured_output = { explanations = explanations },
-  }))
+---@param name? string the file the answer is read from (`answer_text()`)
+local function answer_explanations(explanations, name)
+  answer_text(
+    vim.json.encode({
+      type = 'result',
+      subtype = 'success',
+      is_error = false,
+      result = '',
+      structured_output = { explanations = explanations },
+    }),
+    name
+  )
 end
 
 --- What the child shows of the explanations in the namespace `namespace`,
@@ -923,6 +930,33 @@ T['a request']['hands Claude Code the path from the project, the language, the r
   )
 end
 
+T['a request']['for issues asks for the potential issues of those lines instead, with the same answer schema and flags'] = function()
+  start_with_project()
+
+  explain({ kind = 'issues', range = { 2, 3 } })
+
+  local call = recorded(2)
+  eq(
+    call[2].stdin,
+    table.concat({
+      'Review the code of the file src/add.lua (language: lua), lines 2 to 3 as numbered below, for potential issues.',
+      '',
+      'List the potential issues in those lines: bugs, unhandled cases, error handling gaps,'
+        .. ' and security or performance risks. Tie each issue to the first line it concerns:'
+        .. ' its line is that line’s number, from 2 to 3. Be brief, make no style remarks,'
+        .. ' and answer an empty list when you find none.'
+        .. ' Give each issue as an item of the answer’s list.',
+      '',
+      '1 | local function add(a, b)',
+      '2 |   return a + b',
+      '3 | end',
+      '4 | ',
+      '5 | return add',
+    }, '\n')
+  )
+  eq(vim.json.decode(call[1].argv[5]), SCHEMA)
+end
+
 T['a request']['for some lines names them alone as the range, and still hands every line'] = function()
   start_with_project()
 
@@ -1150,6 +1184,268 @@ T['the look']['shows no gutter where the window shows no number, sign or fold co
   eq(chunks_once_it_holds('aineo_explain', 'Starts')[1].virt_lines, {
     { { '┊ Starts.' .. (' '):rep(60 - 9), 'AineoExplain' } },
   })
+end
+
+T['issues'] = MiniTest.new_set()
+
+--- The numbers of the lines the child shows virtual lines above in the
+--- namespace `namespace`, without the one that says a request is working.
+---
+---@param namespace string
+---@return integer[]
+local function lines_shown(namespace)
+  local lines = {}
+  for _, mark in ipairs(child.lua_get(SHOWN_CHUNKS_OF:format(namespace))) do
+    if not vim.inspect(mark.virt_lines):find('explaining', 1, true) then
+      table.insert(lines, mark.line)
+    end
+  end
+  return lines
+end
+
+--- The numbers of the lines the child shows virtual lines above in the
+--- namespace `namespace`, once there are `count` of them, or after
+--- `PATIENCE_MS`.
+---
+---@param namespace string
+---@param count integer
+---@return integer[]
+local function lines_shown_once(namespace, count)
+  local lines = {}
+  vim.wait(PATIENCE_MS, function()
+    lines = lines_shown(namespace)
+    return #lines == count
+  end, 20)
+  return lines
+end
+
+T['issues']['show in a namespace of their own, in the issue look: ▎ and the label issue, AineoExplainIssue, and the line’s number in AineoExplainIssueNr'] = function()
+  start_with_project()
+  child.wo.number = true
+  child.wo.numberwidth = 8
+  answer_explanations({ { line = 2, text = 'Overflows.' } })
+
+  explain({ kind = 'issues' })
+
+  eq(chunks_once_it_holds('aineo_explain_issues', 'Overflows'), {
+    {
+      line = 2,
+      above = true,
+      leftcol = true,
+      number_hl_group = 'AineoExplainIssueNr',
+      virt_lines = {
+        {
+          { '▎', 'AineoExplainIssueGutter' },
+          { ' ', 'AineoExplainIssueGutterFill' },
+          { 'issue', 'AineoExplainIssueGutter' },
+          { ' ', 'AineoExplainIssueGutterFill' },
+          { '  ' },
+          { '┊ Overflows.' .. (' '):rep(50 - 12), 'AineoExplainIssue' },
+        },
+      },
+    },
+  })
+  eq(child.lua_get(SHOWN), {})
+end
+
+T['issues']['draw their groups from DiagnosticWarn’s foreground, `#e5c07b` without one'] =
+  MiniTest.new_set({
+    parametrize = {
+      { { DiagnosticWarn = { fg = 0x808040 } }, 0x808040 },
+      { { DiagnosticWarn = {} }, 0xe5c07b },
+    },
+  })
+
+T['issues']['draw their groups from DiagnosticWarn’s foreground, `#e5c07b` without one']['with'] = function(
+  theme,
+  accent
+)
+  start_with_project()
+  use_theme(theme)
+  answer_explanations({ { line = 2, text = 'Overflows.' } })
+
+  explain({ kind = 'issues' })
+  chunks_once_it_holds('aineo_explain_issues', 'Overflows')
+
+  eq(group('AineoExplainIssue').fg, accent)
+  eq(group('AineoExplainIssueGutter').fg, accent)
+  eq(group('AineoExplainIssueNr').fg, accent)
+end
+
+T['issues']['coexist with explanations, and each key toggles its own kind'] = function()
+  start_with_project()
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+  explain()
+  lines_shown_once('aineo_explain', 1)
+  answer_explanations({ { line = 5, text = 'Returns nothing.' } })
+  explain({ kind = 'issues' })
+  eq(lines_shown_once('aineo_explain_issues', 1), { 5 })
+  eq(lines_shown('aineo_explain'), { 2 })
+
+  explain({ kind = 'issues' })
+
+  eq(lines_shown_once('aineo_explain_issues', 0), {})
+  eq(lines_shown('aineo_explain'), { 2 })
+
+  explain({ kind = 'issues' })
+  lines_shown_once('aineo_explain_issues', 1)
+  explain()
+
+  eq(lines_shown_once('aineo_explain', 0), {})
+  eq(lines_shown('aineo_explain_issues'), { 5 })
+end
+
+T['issues']['asked for some lines replace the issues inside them alone, and leave the explanations'] = function()
+  start_with_project()
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+  explain({ range = { 1, 3 } })
+  lines_shown_once('aineo_explain', 1)
+  answer_explanations({ { line = 2, text = 'Old.' }, { line = 5, text = 'Kept.' } })
+  explain({ kind = 'issues' })
+  lines_shown_once('aineo_explain_issues', 2)
+  answer_explanations({ { line = 3, text = 'New.' } })
+
+  explain({ kind = 'issues', range = { 1, 3 } })
+
+  chunks_once_it_holds('aineo_explain_issues', 'New.')
+  eq(lines_shown('aineo_explain_issues'), { 3, 5 })
+  eq(lines_shown('aineo_explain'), { 2 })
+end
+
+T['issues']['asked while explanations run start beside them, and both answers show'] = function()
+  start_with_project()
+  answer_after(1500)
+  answer_explanations({ { line = 2, text = 'Adds.' } }, 'explanations.json')
+  explain()
+  recorded(2)
+  answer_explanations({ { line = 5, text = 'Overflows.' } }, 'issues.json')
+
+  explain({ kind = 'issues' })
+
+  eq(#recorded(4), 4)
+  eq(lines_shown_once('aineo_explain', 1), { 2 })
+  eq(lines_shown_once('aineo_explain_issues', 1), { 5 })
+  eq(told_later(), {})
+end
+
+T['issues']['a key of the kind that runs cancels that request alone, says so, and leaves the other running'] =
+  MiniTest.new_set({
+    parametrize = {
+      { 'explanations', 'aineo_explain_issues', 'Overflows.' },
+      { 'issues', 'aineo_explain', 'Adds.' },
+    },
+  })
+
+T['issues']['a key of the kind that runs cancels that request alone, says so, and leaves the other running']['pressed for'] = function(
+  cancelled,
+  other_namespace,
+  other_text
+)
+  start_with_project()
+  answer_after(3000)
+  local answers = {
+    explanations = { { line = 2, text = 'Adds.' } },
+    issues = { { line = 5, text = 'Overflows.' } },
+  }
+  answer_explanations(answers.explanations, 'explanations.json')
+  explain({ kind = 'explanations' })
+  local first_pid = recorded(1)[1].pid
+  answer_explanations(answers.issues, 'issues.json')
+  explain({ kind = 'issues' })
+  local second_pid = recorded(3)[3].pid
+  local cancelled_pid = cancelled == 'explanations' and first_pid or second_pid
+  local other_pid = cancelled == 'explanations' and second_pid or first_pid
+
+  explain({ kind = cancelled })
+
+  eq(told(), { { message = 'aineo: explaining stopped', level = vim.log.levels.INFO } })
+  eq(has_ended(cancelled_pid), true)
+  eq(vim.uv.kill(other_pid, 0), 0)
+  chunks_once_it_holds(other_namespace, other_text)
+  eq(#lines_shown(other_namespace), 1)
+  eq(told_later(), {})
+end
+
+T['issues']['on a line both kinds show, the explanation rows sit above the issue rows, whichever answer came first'] =
+  MiniTest.new_set({
+    parametrize = { { 'explanations' }, { 'issues' } },
+  })
+
+T['issues']['on a line both kinds show, the explanation rows sit above the issue rows, whichever answer came first']['first'] = function(
+  first
+)
+  start_with_project()
+  local texts = {
+    explanations = { { line = 2, text = 'Explained.' } },
+    issues = { { line = 2, text = 'Issued.' } },
+  }
+  local second = first == 'explanations' and 'issues' or 'explanations'
+  answer_explanations(texts[first], first .. '.json')
+  explain({ kind = first })
+  lines_shown_once(first == 'explanations' and 'aineo_explain' or 'aineo_explain_issues', 1)
+  answer_explanations(texts[second], second .. '.json')
+  explain({ kind = second })
+  lines_shown_once(second == 'explanations' and 'aineo_explain' or 'aineo_explain_issues', 1)
+  child.cmd('redraw')
+
+  local rows = child.get_screenshot().text
+  local function row_of(text)
+    for number, row in ipairs(rows) do
+      if table.concat(row):find(text, 1, true) then
+        return number
+      end
+    end
+  end
+
+  eq(row_of('Explained.') < row_of('Issued.'), true)
+  eq(row_of('Issued.') < row_of('return a + b'), true)
+end
+
+T['clear()']['stops the requests of both kinds that run, silently'] = function()
+  start_with_project()
+  answer_after(20000)
+  explain({ kind = 'explanations' })
+  local first_pid = recorded(1)[1].pid
+  explain({ kind = 'issues' })
+  local second_pid = recorded(3)[3].pid
+
+  child.lua("require('aineo.explain').clear(vim.api.nvim_get_current_buf())")
+
+  eq(has_ended(first_pid), true)
+  eq(has_ended(second_pid), true)
+  eq(told_later(), {})
+end
+
+T['issues']['found in an empty answer are told once, and nothing is shown'] = function()
+  start_with_project()
+  answer_explanations({})
+
+  explain({ kind = 'issues' })
+
+  eq(told(), { { message = 'aineo: no potential issues found', level = vim.log.levels.INFO } })
+  eq(lines_shown('aineo_explain_issues'), {})
+end
+
+T['an answer']['with no explanation tells nothing'] = function()
+  start_with_project()
+  answer_explanations({})
+
+  explain()
+
+  eq(#recorded(2), 2)
+  eq(told_later(), {})
+  eq(child.lua_get(SHOWN), {})
+end
+
+T['clear()']['removes the issues too'] = function()
+  start_with_project()
+  answer_explanations({ { line = 2, text = 'Overflows.' } })
+  explain({ kind = 'issues' })
+  lines_shown_once('aineo_explain_issues', 1)
+
+  child.lua("require('aineo.explain').clear(vim.api.nvim_get_current_buf())")
+
+  eq(lines_shown('aineo_explain_issues'), {})
 end
 
 return T

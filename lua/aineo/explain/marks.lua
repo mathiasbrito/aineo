@@ -189,14 +189,21 @@ local function show_above(buffer, band)
     virt_lines[number] =
       band_row(row, band.indent, band.geometry, number == 1 and band.label or '', band.kind)
   end
-  return vim.api.nvim_buf_set_extmark(buffer, namespace_of(band.kind), band.line - 1, 0, {
-    virt_lines = virt_lines,
-    virt_lines_above = true,
-    virt_lines_leftcol = true,
-    number_hl_group = band.kind.groups.number,
-    invalidate = true,
-    undo_restore = false,
-  })
+  return vim.api.nvim_buf_set_extmark(
+    buffer,
+    namespace_of(band.kind),
+    band.line - 1,
+    band.kind.column,
+    {
+      virt_lines = virt_lines,
+      virt_lines_above = true,
+      virt_lines_leftcol = true,
+      number_hl_group = band.kind.groups.number,
+      invalidate = true,
+      undo_restore = false,
+      strict = false,
+    }
+  )
 end
 
 --- Shows each of `explanations` in `buffer` as virtual lines above its
