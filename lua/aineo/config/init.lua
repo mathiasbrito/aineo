@@ -101,6 +101,51 @@ local function is_find_picker(value)
   return vim.list_contains(FIND_PICKERS, value)
 end
 
+--- The classes of shell commands the office tells apart, in the order they are
+--- tried.
+local COMMAND_CLASSES = { 'tests', 'committing', 'searching', 'reading' }
+
+--- Whether `value` is a Lua pattern Lua can read.
+---
+---@param value any
+---@return boolean
+local function is_lua_pattern(value)
+  return type(value) == 'string' and (pcall(string.find, '', value))
+end
+
+--- Whether `value` is one match of a class of commands: plain words or a glob,
+--- a non-empty string; or `{ lua_pattern = '<pattern>' }` and nothing else.
+---
+---@param value any
+---@return boolean
+local function is_command_match(value)
+  if type(value) == 'string' then
+    return value ~= ''
+  end
+  return type(value) == 'table' and is_lua_pattern(value.lua_pattern) and vim.tbl_count(value) == 1
+end
+
+--- Whether `value` is the classes of shell commands: a table of at most the
+--- four classes, each a list of matches.
+---
+---@param value any
+---@return boolean
+local function is_command_classes(value)
+  if type(value) ~= 'table' then
+    return false
+  end
+  for class, matches in pairs(value) do
+    if
+      not vim.list_contains(COMMAND_CLASSES, class)
+      or not vim.islist(matches)
+      or not vim.iter(matches):all(is_command_match)
+    then
+      return false
+    end
+  end
+  return true
+end
+
 --- aineo's settings, each named by its path in `vim.g.aineo`, with its
 --- default and the check its value must pass (`vim.validate`'s validator and,
 --- for a function, the words that describe what it expects).
@@ -173,6 +218,27 @@ local SETTINGS = {
     default = 'Some issues were found in this code, can you check and propose a fix if the issue holds:',
     validator = is_prompt,
     expected = 'a non-empty string',
+  },
+  {
+    name = 'office.commands',
+    default = {
+      tests = {
+        'make test',
+        'make test_file',
+        'npm test',
+        'pytest',
+        'go test',
+        'cargo test',
+        'busted',
+        'mix test',
+        'rspec',
+      },
+      committing = { 'git commit', 'git push', 'gh pr create' },
+      searching = { 'rg', 'grep', 'git grep', 'find', 'fd', 'ag', 'ack' },
+      reading = { 'cat', 'head', 'tail', 'less', 'bat', 'sed -n' },
+    },
+    validator = is_command_classes,
+    expected = 'a table of tests, committing, searching and reading, each a list of matches: a non-empty string, or { lua_pattern = <pattern> }',
   },
 }
 
