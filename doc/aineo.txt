@@ -3881,11 +3881,14 @@ by Claude Code's background service with aineo's hooks, on a new session
 id, with no end of the session aineo followed. aineo follows a new session
 that Claude Code's own process in aineo's terminal starts only after it
 ends the session aineo follows; one that another process starts under
-aineo's hooks, it follows at once, while its own Claude Code runs. That
-other process is known by its process id: a process that is not the one
-aineo started, nor one a program in `claude.cmd` started. So a `/fork`
-copy whose `SessionStart` reaches aineo moves the tab to the copy, and a
-teammate that runs as a process of its own would too (neither seen). The
+aineo's hooks, it follows at once, while its own Claude Code runs. The
+tab's own Claude Code is the process whose `SessionStart` of the session
+the tab started on told aineo first, by its process id — until one has,
+the process aineo started in the terminal. Any other process id is
+another process, wherever it runs: Claude Code's background service can
+be a child of the tab's own Claude Code. So a `/fork` copy whose
+`SessionStart` reaches aineo moves the tab to the copy, and a teammate
+that runs as a process of its own would too (neither seen). The
 teammates and background sessions Claude Code 2.1.292 starts are given its
 `--settings`, aineo's hooks among them (read in its program, not run);
 aineo ignores every hook that ran after its Claude Code exited, so a
@@ -3924,6 +3927,9 @@ itself:
   from runs in a tab, that tab follows it (Session switches, above) and
   gets its reports. Else no Neovim follows it by itself: its
   reports are kept on disk under that session until a Neovim follows it.
+  Once the tab follows it, a report from the tab's own Claude Code, still
+  on the session the tab left, is kept on disk under that session, unshown,
+  until a Neovim follows it again.
   `:Aineo claim {id}` does, and offers it when its Claude Code has a record
   — written by aineo's hooks, if the background keeps them, else by aineo's
   MCP server at its start. A Claude Code that runs neither aineo's hooks nor
