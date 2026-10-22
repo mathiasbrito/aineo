@@ -372,7 +372,7 @@ local function issue_lines_once(count)
   vim.wait(PATIENCE_MS, function()
     marks = child.lua_get(
       [[#vim.tbl_filter(function(mark)
-      return not vim.inspect(mark[4].virt_lines):find('explaining', 1, true)
+      return not vim.inspect(mark[4].virt_lines):find('looking for issues', 1, true)
     end, vim.api.nvim_buf_get_extmarks(0, vim.api.nvim_create_namespace('aineo_explain_issues'), 0, -1, { details = true }))]]
     )
     return marks == count

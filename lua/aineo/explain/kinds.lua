@@ -16,6 +16,7 @@ local M = {}
 ---@field name 'explanations'|'issues' what a request names it
 ---@field namespace string the name of the namespace its extmarks live in
 ---@field column integer the column its extmarks are set at: a kind with a lower one shows above one with a higher on the same line
+---@field working string what it says while its request runs
 ---@field label string the word that names it in the gutter, on its first row
 ---@field accent_group string the highlight group whose foreground is its accent
 ---@field accent_fallback integer the accent when that group has no foreground
@@ -26,6 +27,7 @@ M.EXPLANATIONS = {
   name = 'explanations',
   namespace = 'aineo_explain',
   column = 0,
+  working = 'explaining…',
   label = 'expl',
   accent_group = 'DiagnosticInfo',
   accent_fallback = 0x61afef,
@@ -42,6 +44,7 @@ M.ISSUES = {
   name = 'issues',
   namespace = 'aineo_explain_issues',
   column = 1,
+  working = 'looking for issues…',
   label = 'issue',
   accent_group = 'DiagnosticWarn',
   accent_fallback = 0xe5c07b,

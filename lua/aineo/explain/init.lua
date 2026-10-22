@@ -205,6 +205,14 @@ vim.api.nvim_create_autocmd('VimLeavePre', {
   callback = runs.stop_all,
 })
 
+vim.api.nvim_create_autocmd('BufWipeout', {
+  group = 'aineo_explain',
+  desc = 'aineo: stop the Claude Code of the requests for a buffer wiped out',
+  callback = function(event)
+    runs.stop_all_of(event.buf)
+  end,
+})
+
 --- Explains the code of `explaining.buffer`, its whole text or the lines of
 --- `explaining.range`, or looks for its potential issues when
 --- `explaining.kind` says so. A buffer has one request of each kind at once:

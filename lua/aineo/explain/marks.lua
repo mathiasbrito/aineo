@@ -174,6 +174,7 @@ end
 ---@field rows string[]
 ---@field geometry aineo.explain.Geometry
 ---@field label string shown on the first row, in the gutter
+---@field id? integer the extmark to set again; a new one when absent
 
 --- Shows `band.rows` in `buffer` as virtual lines above `band.line`, each
 --- starting at the window's left column and showing as `band_row()` does.
@@ -195,6 +196,7 @@ local function show_above(buffer, band)
     band.line - 1,
     band.kind.column,
     {
+      id = band.id,
       virt_lines = virt_lines,
       virt_lines_above = true,
       virt_lines_leftcol = true,
@@ -235,19 +237,48 @@ end
 
 --- Shows in `buffer`, above `line`, from 1, and indented as it, in the look
 --- of `kind` with no label, the virtual line that says a request is
---- working. Returns its id, for `remove()`.
+--- working, `text`. Returns its id, for `update_progress()` and `remove()`.
 ---
 ---@param buffer integer
 ---@param window integer the window the request was made in
 ---@param kind aineo.explain.Kind
 ---@param line integer
+---@param text string
 ---@return integer
-function M.show_explaining(buffer, window, kind, line)
+function M.show_progress(buffer, window, kind, line, text)
   return show_above(buffer, {
     kind = kind,
     line = line,
     indent = indent_of(buffer, line),
-    rows = { 'explaining…' },
+    rows = { text },
+    geometry = geometry_of(buffer, window),
+    label = '',
+  })
+end
+
+--- Changes the text of the virtual line `id` that `show_progress()` showed
+--- to `text`, where the line it is above is now; nothing when it is gone.
+---
+---@param buffer integer
+---@param window integer the window the request was made in
+---@param kind aineo.explain.Kind
+---@param id integer
+---@param text string
+function M.update_progress(buffer, window, kind, id, text)
+  if not vim.api.nvim_buf_is_valid(buffer) then
+    return
+  end
+  local position = vim.api.nvim_buf_get_extmark_by_id(buffer, namespace_of(kind), id, {})
+  if #position == 0 then
+    return
+  end
+  local line = position[1] + 1
+  show_above(buffer, {
+    id = id,
+    kind = kind,
+    line = line,
+    indent = indent_of(buffer, line),
+    rows = { text },
     geometry = geometry_of(buffer, window),
     label = '',
   })
