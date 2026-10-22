@@ -289,6 +289,37 @@ T['a subagent that is over']['leaves after the last lines it wrote, and is follo
   )
 end
 
+T['a subagent whose meta is not a regular file'] = MiniTest.new_set()
+
+T['a subagent whose meta is not a regular file']['is taken to run, and the follower reads nothing from the meta'] = function()
+  local session = new_session()
+  vim.fn.mkdir(session.folder, 'p')
+  vim.system({ 'mkfifo', meta_file(session, SUBAGENT) }):wait()
+  fake_transcript.append(agent_file(session, SUBAGENT), RECORDED_SUBAGENT)
+
+  follow(session)
+
+  eq(kinds_of(signals_of_agent(session.signals, SUBAGENT)), ARRIVAL_KINDS)
+end
+
+T['a folder of more subagents than the office follows'] = MiniTest.new_set()
+
+T['a folder of more subagents than the office follows']['gets the first sixty-four followed and the rest left alone'] = function()
+  local session = new_session()
+  for number = 1, 65 do
+    local id = ('a%016d'):format(number)
+    fake_transcript.append(agent_file(session, id), { RECORDED_SUBAGENT[2] })
+  end
+
+  follow(session)
+
+  local arrivals = vim.tbl_filter(function(signal)
+    return signal.kind == 'subagent_started'
+  end, session.signals)
+  eq(#arrivals, 64)
+  eq(arrivals[64].agent, ('a%016d'):format(64))
+end
+
 T['two subagents'] = MiniTest.new_set()
 
 T['two subagents']['are followed apart, each signal naming its own'] = function()
