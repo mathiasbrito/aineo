@@ -93,7 +93,6 @@ local REFUSED = {
   { 'return { a = 1 + 2 }', 1 },
   { 'return { a = b }', 1 },
   { 'return { a = nil }', 1 },
-  { 'return { a = [[long]] }', 1 },
   { "return {\n a = 'open\n}", 2 },
   { 'return {\n a = 1', 2 },
   { "return { a = 'x' } extra", 1 },
@@ -126,6 +125,225 @@ T['parse_table_literal()']['refuses what is not data, and names the line']['text
 
   eq(value, nil)
   eq(vim.startswith(problem, ('line %d: '):format(line)), true)
+end
+
+T['parse_table_literal()']['skips a block comment as Lua does, over many lines'] = function()
+  local value = office_pack.parse_table_literal(
+    'return {\n--[[ a = 1,\nb = 2, ]] c = 3,\n--[==[ ]] still ]==] d = 4 }'
+  )
+
+  eq(value, { c = 3, d = 4 })
+end
+
+T['parse_table_literal()']['takes --[ and --[= as line comments, as Lua does'] = function()
+  local value = office_pack.parse_table_literal('return {\n--[ a = 1,\n--[= b = 2,\nc = 3 }')
+
+  eq(value, { c = 3 })
+end
+
+T['parse_table_literal()']['refuses a block comment that is not closed, at the line it opens on'] = function()
+  local value, problem = office_pack.parse_table_literal('return {\n  a = 1,\n--[[ never\nclosed')
+
+  eq(value, nil)
+  eq(problem, 'line 3: the comment is not closed')
+end
+
+T['parse_table_literal()']['reads long strings, without escapes and without the first line break'] = function()
+  local value = office_pack.parse_table_literal(
+    'return { a = [[one\\ntwo]], b = [==[\nfirst\n]]second]==], c = [[\r\nthird]] }'
+  )
+
+  eq(value, { a = 'one\\ntwo', b = 'first\n]]second', c = 'third' })
+end
+
+T['parse_table_literal()']['reads a long string as a list item, not as a key in brackets'] = function()
+  eq(office_pack.parse_table_literal('return { [[one]], [==[two]==] }'), { 'one', 'two' })
+end
+
+T['parse_table_literal()']['counts the lines a long string spans'] = function()
+  local value, problem = office_pack.parse_table_literal('return {\n a = [[\n\n]],\n b = f(),\n}')
+
+  eq(value, nil)
+  eq(problem, 'line 5: `f` is not data')
+end
+
+T['parse_table_literal()']['refuses a long string that is not closed, at the line it opens on'] = function()
+  local value, problem = office_pack.parse_table_literal('return {\n a = [==[ text ]] \n')
+
+  eq(value, nil)
+  eq(problem, 'line 2: the string is not closed')
+end
+
+T['parse_table_literal()']['lets a list item win over a key of the same number, in either order'] = function()
+  eq(office_pack.parse_table_literal("return { [1] = 'key', 'item' }"), { 'item' })
+  eq(office_pack.parse_table_literal("return { 'item', [1] = 'key' }"), { 'item' })
+  eq(office_pack.parse_table_literal("return { [2] = 'key', 'item' }"), { 'item', 'key' })
+end
+
+T['parse_table_literal()']['refuses a number too large to be one'] = function()
+  local value, problem =
+    office_pack.parse_table_literal('return {\n a = ' .. ('9'):rep(400) .. ' }')
+
+  eq(value, nil)
+  eq(problem, 'line 2: the number is too large')
+end
+
+T['parse_table_literal()']['reads the largest numbers that are numbers'] = function()
+  local digits = ('9'):rep(300)
+
+  eq(office_pack.parse_table_literal('return { a = ' .. digits .. ' }').a, tonumber(digits))
+  eq(office_pack.parse_table_literal('return { a = -' .. digits .. ' }').a, -tonumber(digits))
+end
+
+T['parse_table_literal()']['gives the line each entry starts on'] = function()
+  local value, _, lines = office_pack.parse_table_literal(
+    "return {\n  name = 'tiny',\n\n  steps = {\n    { at = 'door' },\n    { at = 'desk' },\n  },\n  ['*'] = 1,\n}"
+  )
+
+  eq(lines[value].name, 2)
+  eq(lines[value].steps, 4)
+  eq(lines[value.steps][2], 6)
+  eq(lines[value.steps[1]].at, 5)
+  eq(lines[value]['*'], 8)
+end
+
+--- Operators, keywords and shapes of code the reader must refuse, each
+--- tried as a value in a table whose other fields prove the text did not run.
+local NOT_DATA = {
+  '1 + 2',
+  '1 - 2',
+  '1 * 2',
+  '1 / 2',
+  '1 % 2',
+  '1 ^ 2',
+  '#x',
+  "'a' .. 'b'",
+  '1 == 1',
+  '1 ~= 2',
+  '1 < 2',
+  '1 <= 2',
+  '1 > 2',
+  '1 >= 2',
+  'not true',
+  'true and false',
+  'false or true',
+  '- -1',
+  '-(1)',
+  '(1)',
+  'x',
+  'nil',
+  'function() end',
+  'function() vim.g.office_pack_literal_ran = 1 end',
+  'f()',
+  'f{}',
+  "f''",
+  "('x'):rep(2)",
+  "string.rep('x', 2)",
+  'vim.g.office_pack_literal_ran',
+  'os.exit()',
+  '...',
+  'x.y',
+  'x[1]',
+  '{} .. {}',
+  '{}.a',
+  'true == true',
+  '1 // 2',
+  '1 & 2',
+  '1 | 2',
+  '1 ~ 2',
+  '1 << 2',
+  '1 >> 2',
+  '~1',
+  'goto',
+  'local',
+  'end',
+  'return',
+  '0x10',
+  '1e3',
+  '.5',
+  '5.',
+  '@',
+  '$',
+  '`',
+  '::label::',
+  'if',
+  'while true do end',
+}
+
+T['parse_table_literal()']['refuses every operator, keyword and call of the corpus, running none'] =
+  MiniTest.new_set({
+    parametrize = vim.tbl_map(function(code)
+      return { code }
+    end, NOT_DATA),
+  })
+
+T['parse_table_literal()']['refuses every operator, keyword and call of the corpus, running none']['code'] = function(
+  code
+)
+  vim.g.office_pack_literal_ran = nil
+
+  local value, problem =
+    office_pack.parse_table_literal('return {\n  ok = 1,\n  bad = ' .. code .. ',\n}')
+
+  eq(value, nil)
+  eq(vim.startswith(problem, 'line 3: '), true)
+  eq(vim.g.office_pack_literal_ran, nil)
+end
+
+T['parse_table_literal()']['answers any mix of tokens with a table or a problem, never an error'] = function()
+  local tokens = {
+    'return',
+    '{',
+    '}',
+    '=',
+    ',',
+    ';',
+    '[',
+    ']',
+    '[[',
+    ']]',
+    '[=[',
+    ']=]',
+    '--',
+    '--[[',
+    "'",
+    '"',
+    '\\',
+    '\n',
+    ' ',
+    'a',
+    'b',
+    '1',
+    '-',
+    '.',
+    '(',
+    ')',
+    'true',
+    'false',
+    'function',
+    'end',
+    '..',
+    '+',
+    '#',
+    '~',
+    '0x',
+    'e',
+    '\0',
+    '\255',
+  }
+  math.randomseed(20251023)
+  local answers = {}
+
+  for _ = 1, 400 do
+    local text = { 'return {' }
+    for _ = 1, math.random(1, 24) do
+      table.insert(text, tokens[math.random(#tokens)])
+    end
+    local ok, value, problem = pcall(office_pack.parse_table_literal, table.concat(text))
+    table.insert(answers, ok and (type(value) == 'table' or type(problem) == 'string'))
+  end
+
+  eq(vim.tbl_contains(answers, false), false)
 end
 
 T['parse_table_literal()']['refuses tables nested deeper than 32 levels'] = function()
