@@ -1899,7 +1899,7 @@ T['explaining code']['says what Claude Code explains with, and what it may use']
   eq(health.section(report, 'Explain code'), {
     '- \\v and \\V start a Claude Code of their own for each request, with the program of claude.cmd (the words before its first flag, none of its flags), and end it with the answer: model opus (explain.model), stopped after 90 s (explain.timeout_ms): :help |aineo-explain|',
     "- \\v hands it the code alone, with no tool; \\V lets it read the project with Read, Grep and Glob, without asking; it gets no other tool, no MCP server and no settings of aineo, loads your own settings but never the project's (--setting-sources user), and asks no permission",
-    "- \\vi and \\VI ask the same Claude Code for potential issues instead of explanations, \\vi with the code alone and \\VI with the read-only tools; \\v waits for 'timeoutlen' for a following i, and \\V for a following I",
+    "- \\vi and \\VI ask the same Claude Code for potential issues instead of explanations, \\vi with the code alone and \\VI with the read-only tools; \\v waits for 'timeoutlen' for a following i or m, and \\V for a following I",
     '- \\vm marks the issues on a line (on each selected line in Visual mode), and \\s then sends the marked issues to the session\'s Claude Code in place of Input, after "Some issues were found in this code, can you check and propose a fix if the issue holds:" (explain.issues_prompt): :help |aineo-explain-mark|',
     '- ]v and [v jump to the next and the previous explanation or issue of a buffer that shows any, in Normal, Visual and Operator-pending mode, and are never mapped over a key of yours: :help |aineo-explain-jump|',
   })
