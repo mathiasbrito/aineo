@@ -83,26 +83,30 @@ local function runs_of(window)
   return found
 end
 
---- The part of a badge that says how many issues are marked for `window`
---- and what sends them, or `nil` when none is.
+--- The part of a badge that says how many issues the buffer `window` shows
+--- has marked and what sends them, or `nil` when none is.
 ---
 ---@param window integer
 ---@return aineo.explain.BadgePart|nil
 local function marked_part(window)
-  local count = marks.marked_count(window)
+  if not vim.api.nvim_win_is_valid(window) then
+    return nil
+  end
+  local count, send_key = marks.marked_summary(vim.api.nvim_win_get_buf(window))
   if count == 0 then
     return nil
   end
   return {
-    text = ('%d issue%s marked · \\s sends'):format(count, count == 1 and '' or 's'),
+    text = ('%d issue%s marked · %s sends'):format(count, count == 1 and '' or 's', send_key),
     group = kinds.ISSUES.marked_groups.text,
   }
 end
 
 --- Shows the badge of `window`, which lists the requests that run for it, in
 --- the order they started, each with the seconds it has run, after the
---- spinner's frame of the first, and last how many issues are marked for it
---- (`marked_part()`); closes it when none runs and none is marked.
+--- spinner's frame of the first, and last how many issues are marked in the
+--- buffer it shows (`marked_part()`); closes it when none runs and none is
+--- marked.
 ---
 ---@param window integer
 local function show_badge(window)
