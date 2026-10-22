@@ -467,6 +467,20 @@ T['while it runs']['a change to the buffer has the answer dropped, and the user 
   eq(child.lua_get(SHOWN), {})
 end
 
+T['while it runs']['a write of the buffer, which moves its change count, leaves the answer shown, as the lines are those sent'] = function()
+  start_with_project()
+  child.api.nvim_buf_set_lines(0, 1, 2, false, { '  return a + b -- not saved' })
+  answer_after(1000)
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+
+  explain()
+  shown_once_it_holds('explaining')
+  child.cmd('silent write')
+
+  eq(told(), {})
+  eq(shown_once_it_holds('Adds.')[1].virt_lines[1][1][1], '  ┊ Adds.')
+end
+
 T['asked again'] = MiniTest.new_set()
 
 T['asked again']['for the whole buffer while it shows explanations clears them, and asks nothing'] = function()

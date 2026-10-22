@@ -67,7 +67,8 @@ local running = {}
 
 --- What a request needs once its Claude Code has ended: the buffer and
 --- window it was made in, the file's path from the project, the lines asked
---- for, and the buffer's `b:changedtick` when it was asked.
+--- for, the buffer's `b:changedtick` when it was asked, and the buffer's
+--- text it sent.
 ---@class aineo.explain.Asked
 ---@field buffer integer
 ---@field window integer
@@ -75,15 +76,21 @@ local running = {}
 ---@field first integer
 ---@field last integer
 ---@field tick integer
+---@field lines string[] every line of the buffer, as sent
 
 --- Shows what the run `ended` answered for `asked` in place of the
 --- explanations of its lines, or tells the user, once, why nothing is shown:
---- the buffer changed meanwhile, or the run failed (`explanations_of()`).
+--- the buffer's text changed meanwhile — a write moves `b:changedtick` and
+--- leaves the text as it was sent, which changes nothing — or the run failed
+--- (`explanations_of()`).
 ---
 ---@param asked aineo.explain.Asked
 ---@param ended vim.SystemCompleted
 local function show_answer(asked, ended)
-  if vim.api.nvim_buf_get_changedtick(asked.buffer) ~= asked.tick then
+  if
+    vim.api.nvim_buf_get_changedtick(asked.buffer) ~= asked.tick
+    and not vim.deep_equal(vim.api.nvim_buf_get_lines(asked.buffer, 0, -1, false), asked.lines)
+  then
     vim.notify(
       ('aineo: %s changed while it was explained: nothing is shown; ask again'):format(asked.path),
       vim.log.levels.WARN
@@ -142,6 +149,7 @@ local function start(explaining)
     first = range[1],
     last = range[2],
     tick = vim.api.nvim_buf_get_changedtick(buffer),
+    lines = lines,
   }
   local prompt = request.prompt({
     path = asked.path,

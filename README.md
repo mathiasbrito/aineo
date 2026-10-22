@@ -402,8 +402,8 @@ project's (`--setting-sources user`), and it ends with the answer.
 `\v` or `\V` again in Normal mode clears the explanations; while a request
 runs they stop it. `:Aineo explain [tools]` with a range, and `:Aineo explain
 clear`, do the same. The model is `explain.model`, `'sonnet'` by default, and
-a request is stopped after `explain.timeout_ms`. If the buffer changes while
-Claude Code explains it, nothing is shown: ask again. The explanations show
+a request is stopped after `explain.timeout_ms`. If the text of the buffer changes while
+Claude Code explains it (a write changes nothing), nothing is shown: ask again. The explanations show
 in `AineoExplain`, linked to `Comment`. Each request is a model call, billed
 as your Claude Code usage is.
 
