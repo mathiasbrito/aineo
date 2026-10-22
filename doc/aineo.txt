@@ -1894,8 +1894,10 @@ explanation or issue of the buffer, of either kind, after and before the
 cursor's line, at the line's first non-blank. A count moves that many on, and
 the jump wraps around at the ends of the buffer. A line that shows both kinds
 counts once. The jump sets the previous context mark first, so `''` and
-|CTRL-O| come back. In Visual mode it extends the selection; after an operator
-it is a charwise motion, as `d}` is. With nothing to jump to, you are told
+|CTRL-O| come back, opens the folds that hide the line, and, for a line at
+the top of the window, scrolls up to show the explanation above it. In Visual
+mode it extends the selection; after an operator it is a charwise motion, as
+`d}` is. With nothing to jump to, you are told
 once, `aineo: no explanation to jump to`, and the cursor stays. The keys are
 local to a buffer: they are mapped, in Normal, Visual and Operator-pending
 mode, when the buffer first shows an explanation or an issue, and removed
