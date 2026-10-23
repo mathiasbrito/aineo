@@ -95,6 +95,15 @@ function M.settings()
   return settings.resolved().office
 end
 
+--- The name of the pack the setting `office.pack` names, the first when it
+--- lists several. Raises the error naming the setting that is wrong.
+---
+---@return string
+function M.chosen_pack_name()
+  local pack = M.settings().pack
+  return type(pack) == 'table' and pack[1] or pack
+end
+
 --- The folders packs are in: the `aineo-office` folders of 'runtimepath'.
 ---
 ---@return string[]

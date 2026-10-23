@@ -127,21 +127,15 @@ T['Aineo office check']['refuses more than a pack’s name, and says what it tak
   entry.command(child, 'Aineo office checks')
 
   eq(entry.messages(child), {
-    {
-      message = 'aineo: :Aineo office takes check, and the name of a pack',
-      level = vim.log.levels.ERROR,
-    },
-    {
-      message = 'aineo: :Aineo office takes check, and the name of a pack',
-      level = vim.log.levels.ERROR,
-    },
+    { message = entry.OFFICE_USAGE, level = vim.log.levels.ERROR },
+    { message = entry.OFFICE_USAGE, level = vim.log.levels.ERROR },
   })
 end
 
 T['Aineo office check']['is offered after office, with the names of the packs found after check'] = function()
   add_pack('alt')
 
-  eq(child.fn.getcompletion('Aineo office ', 'cmdline'), { 'check' })
+  eq(child.fn.getcompletion('Aineo office ', 'cmdline'), { 'check', 'states', 'new' })
   eq(child.fn.getcompletion('Aineo office check ', 'cmdline'), { 'alt', 'default' })
   eq(child.fn.getcompletion('Aineo office check a', 'cmdline'), { 'alt' })
 end
