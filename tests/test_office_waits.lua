@@ -1,6 +1,7 @@
 local MiniTest = require('mini.test')
 local fake_transcript = dofile('tests/helpers/fake_transcript.lua')
 local fixture = dofile('tests/helpers/fixture.lua')
+local office_cells = dofile('tests/helpers/office_cells.lua')
 local office_child = dofile('tests/helpers/office_child.lua')
 
 local eq = MiniTest.expect.equality
@@ -29,10 +30,11 @@ local KEEP_THE_TRACKER = [[
 --- whose tracker is kept.
 ---
 ---@param path? string
-local function open_office(path)
+---@param more_options? string the source of a table of options of the office over the usual
+local function open_office(path, more_options)
   office_child.open_layout(child)
   child.lua(KEEP_THE_TRACKER)
-  office_child.make_office(child)
+  office_child.make_office(child, nil, more_options)
   if path then
     office_child.follow_transcript(child, path)
   end
@@ -104,24 +106,115 @@ T['a permission wait']['ends with the next line of the agent in the transcript']
   )
 end
 
-T['a permission wait']['is not kept for an office that is hidden'] = function()
-  open_office()
+--- Seconds since 1970 of 2026-01-01T00:00:28Z: after the recorded turn's
+--- call (27.5 s into its stamps), before its result (28.8 s).
+local WHEN_THE_WAIT_IS_TOLD = 1767225628
+
+--- Opens the layout and makes an office that follows `path` and whose wall
+--- clock says it is `WHEN_THE_WAIT_IS_TOLD`.
+---
+---@param path string
+local function open_office_at_the_time_of_the_wait(path)
+  open_office(path, '{ wall_clock = function() return _G.wall_now end }')
+  child.lua('_G.wall_now = ...', { WHEN_THE_WAIT_IS_TOLD })
+end
+
+T['a permission wait']['told while the office is hidden is shown once it shows, for a call still open'] = function()
+  local path = transcript_path()
+  fake_transcript.append(path, vim.list_slice(RECORDED_TURN, 1, 5))
+  open_office_at_the_time_of_the_wait(path)
 
   child.lua([[_G.office.permission_wait('main')]])
   child.lua([[_G.office.show_now()]])
 
+  eq(
+    vim.wait(PATIENCE_MS, function()
+      return state_of('main') == 'needs_permission'
+    end, 10),
+    true
+  )
+end
+
+T['a permission wait']['told while the office is hidden is dropped once it shows, when the agent went on since'] = function()
+  local path = transcript_path()
+  fake_transcript.append(path, vim.list_slice(RECORDED_TURN, 1, 10))
+  open_office_at_the_time_of_the_wait(path)
+
+  child.lua([[_G.office.permission_wait('main')]])
+  child.lua([[_G.office.show_now()]])
+  vim.wait(1800)
+
   eq(state_of('main') == 'needs_permission', false)
 end
 
-T['a permission wait']['is not kept for an office that is paused while its tab page is left'] = function()
+T['a permission wait']['stays up when the office is closed and shown again while the call is still open'] = function()
+  local path = transcript_path()
+  fake_transcript.append(path, vim.list_slice(RECORDED_TURN, 1, 5))
+  open_office_at_the_time_of_the_wait(path)
+  child.lua([[_G.office.show_now()]])
+  child.lua([[_G.office.permission_wait('main')]])
+  vim.wait(PATIENCE_MS, function()
+    return state_of('main') == 'needs_permission'
+  end, 10)
+  child.lua([[vim.api.nvim_win_close(..., true)]], { office_cells.window(child) })
+  vim.wait(PATIENCE_MS, function()
+    return office_cells.window(child) == vim.NIL
+  end, 10)
+
+  child.lua([[_G.office.show_now()]])
+
+  eq(
+    vim.wait(PATIENCE_MS, function()
+      return state_of('main') == 'needs_permission'
+    end, 10),
+    true
+  )
+end
+
+T['a permission wait']['told before the start of the call that asked is read still counts, though that start is stamped later'] = function()
+  local path = transcript_path()
+  fake_transcript.append(path, vim.list_slice(RECORDED_TURN, 1, 5))
+  open_office_at_the_time_of_the_wait(path)
+  child.lua('_G.wall_now = ...', { WHEN_THE_WAIT_IS_TOLD - 1 })
+
+  child.lua([[_G.office.permission_wait('main')]])
+  child.lua([[_G.office.show_now()]])
+
+  eq(
+    vim.wait(PATIENCE_MS, function()
+      return state_of('main') == 'needs_permission'
+    end, 10),
+    true
+  )
+end
+
+T['a permission wait']['told while the office is hidden is kept for 64 agents at most'] = function()
   open_office()
+
+  child.lua([[for index = 1, 70 do
+    _G.office.permission_wait(('a%016d'):format(index))
+  end]])
+  child.lua([[_G.office.show_now()]])
+
+  eq(child.lua_get([[#_G.tracker.agents(vim.uv.hrtime() / 1e9)]]), 65)
+end
+
+T['a permission wait']['told while its tab page is left is shown when the tab page is entered again'] = function()
+  local path = transcript_path()
+  fake_transcript.append(path, vim.list_slice(RECORDED_TURN, 1, 5))
+  open_office_at_the_time_of_the_wait(path)
   child.lua([[_G.office.show_now()]])
   child.cmd('tabnew')
 
   child.lua([[_G.office.permission_wait('main')]])
   child.cmd('tabprevious')
 
-  eq(state_of('main') == 'needs_permission', false)
+  eq(
+    vim.wait(PATIENCE_MS, function()
+      return state_of('main') == 'needs_permission'
+    end, 10),
+    true
+  )
 end
 
 return T
