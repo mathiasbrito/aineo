@@ -30,14 +30,14 @@ local function feet_row_of(character)
   return 2 * items.round(character.row) + 1
 end
 
---- The colours the art of the agent at `index` names: the pack's, and the
+--- The colours the art of the agent in its place names: the pack's, and the
 --- agent's own and its shades.
 ---
 ---@param pack aineo.office_pack.Pack
 ---@param character aineo.office_scene.Character
 ---@return table<string, string>
 local function art_colours(pack, character)
-  local own = colours.of_agent(pack[character.kind].colours, character.index)
+  local own = colours.of_agent(pack[character.kind].colours, character.place)
   return vim.tbl_extend('force', pack.colours, colours.agent_shades(own))
 end
 

@@ -22,7 +22,7 @@ local PLAIN_CELLS = { [WALL] = true, [FLOOR] = true, [UNWALKED_FLOOR] = true }
 ---@field walk_over? boolean whether the piece lies on the floor, under the characters
 ---@field in_use? string the piece that shows in its place while a character is at its spot
 ---@field used_at? aineo.office_scene.Spot the spot nearest to a piece that has `in_use` art
----@field owner_index? integer for a piece with a screen area: the place among the agents of the agent whose monitor it is
+---@field owner_place? integer for a piece with a screen area: the place of the agent whose monitor it is
 ---@field shows? string the live content drawn into the piece's area of that name
 ---@field decoration? boolean whether the piece is one of a run's decorations
 ---@field on_a_spot? boolean whether the piece stands on a cell that is a spot
@@ -293,9 +293,9 @@ local function place_run(layout, entry, column, row, length)
 end
 
 --- Gives each placed piece that has `in_use` art the spot it is used from,
---- and each one that has a screen area the place among the agents of the agent
---- whose monitor it is: the n-th such piece, as the plan reads, is the n-th
---- agent's.
+--- and each one that has a screen area the place of the agent whose monitor it
+--- is: the n-th such piece, as the plan reads, is the monitor of the agent
+--- with the n-th place.
 ---
 ---@param layout aineo.office_scene.Layout
 local function assign_users(layout)
@@ -308,7 +308,7 @@ local function assign_users(layout)
     end
     if piece and piece.areas.screen then
       monitors = monitors + 1
-      placed.owner_index = monitors
+      placed.owner_place = monitors
     end
   end
 end

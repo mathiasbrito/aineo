@@ -64,7 +64,7 @@ end
 local function paint_screen(canvas, drawing, placed, monitor)
   local area = monitor.areas.screen
   local owner = vim.iter(drawing.characters):find(function(character)
-    return character.index == placed.owner_index
+    return character.place == placed.owner_place
   end)
   local pose = owner and poses.of(drawing.pack, owner)
   local content = pose and pose.screen and drawing.pack.pieces[pose.screen]

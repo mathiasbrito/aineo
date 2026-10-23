@@ -260,7 +260,7 @@ T['an agent']['appears once the agent that had its spot is gone'] = function()
   stage.advance({ { id = 'agent2', state = 'standing' } }, 1)
   stage.advance({ { id = 'agent2', state = 'standing' } }, 2)
 
-  eq(scene.agent_cell(stage.picture(), 8, 1), '0,0')
+  eq(scene.agent_cell(stage.picture(), 8, 1, scene.SECOND_AGENT), '0,0')
 end
 
 T['an agent']['appears once a spot it had none for is let go'] = function()

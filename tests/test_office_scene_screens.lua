@@ -112,6 +112,16 @@ T['a screen']['belongs to the agent whose place among the agents is the monitorâ
   })
 end
 
+T['a screen']['stays the monitor of its agent when an agent before it leaves'] = function()
+  local stage = scene.stage_of(monitor_pack(), 10, 2)
+  stage.advance(scene.agents_in('standing', 'working'), 0)
+
+  stage.advance({ { id = 'agent2', state = 'working' } }, 1)
+  local row = scene.row_groups(stage.picture(), 0, 10)
+
+  eq({ row[4], row[7] }, { scene.solid(BROWN), ON_BROWN })
+end
+
 T['a screen']['begins at its first frame when its agent takes the pose'] = function()
   local pack = scene.people_pack(
     '# plan\n \n ..m.......\n .s........\n',

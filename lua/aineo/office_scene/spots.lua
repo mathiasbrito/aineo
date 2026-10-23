@@ -1,8 +1,9 @@
 --- Choosing the spot a character goes to, and the way there.
 ---
---- The spot called `desk` is each agent's own: the agent given first has the
---- first desk of the plan, the next the next. Any other spot is the nearest
---- one by walking that no other character has taken.
+--- The spot called `desk` is each agent's own: the agent with the first place
+--- has the first desk of the plan, the agent with the second place the second.
+--- Any other spot is the nearest one by walking that no other character has
+--- taken.
 
 local paths = require('aineo.office_scene.paths')
 
@@ -10,6 +11,12 @@ local M = {}
 
 --- The name of the spots that belong to one agent each.
 local OWN_DESK = 'desk'
+
+--- Why a character has no route to the spot it wants: every spot of the name
+--- is taken by others, or the plan has none of the name, or none that can be
+--- walked to.
+M.TAKEN = 'taken'
+M.UNREACHABLE = 'unreachable'
 
 ---@class aineo.office_scene.Route
 ---@field spot aineo.office_scene.Spot
@@ -20,31 +27,17 @@ local OWN_DESK = 'desk'
 ---
 ---@param layout aineo.office_scene.FloorLayout
 ---@param name string
----@param who { id: string, index: integer }
+---@param who { id: string, place: integer }
 ---@param taken table<aineo.office_scene.Spot, string> the id of the character that has each spot taken
 ---@return aineo.office_scene.Spot[]
 local function open_spots(layout, name, who, taken)
   local named = layout.spots[name] or {}
   if name == OWN_DESK then
-    return { named[who.index] }
+    return { named[who.place] }
   end
   return vim.tbl_filter(function(spot)
     return taken[spot] == nil or taken[spot] == who.id
   end, named)
-end
-
---- The route to the nearest of `spots` by walking from the cell the character
---- is at.
----
----@param layout aineo.office_scene.FloorLayout
----@param character { column: number, row: number }
----@param spots aineo.office_scene.Spot[]
----@return aineo.office_scene.Route|nil route nil when none of the spots can be walked to
-local function nearest_route(layout, character, spots)
-  return paths.nearest(layout, {
-    column = math.floor(character.column + 0.5),
-    row = math.floor(character.row + 0.5),
-  }, spots)
 end
 
 --- Where the character goes for a step that names the spot `name`: the spot
@@ -53,15 +46,27 @@ end
 ---
 ---@param layout aineo.office_scene.FloorLayout
 ---@param name string
----@param character { id: string, index: integer, column?: number, row?: number }
+---@param character { id: string, place: integer, column?: number, row?: number }
 ---@param taken table<aineo.office_scene.Spot, string> the id of the character that has each spot taken
 ---@return aineo.office_scene.Route|nil route nil when no spot of the name is open and can be walked to
+---@return string|nil why `TAKEN` when the plan has spots of the name that other characters have, `UNREACHABLE` otherwise; none with a route
 function M.route(layout, name, character, taken)
-  local spots = open_spots(layout, name, character, taken)
-  if not character.column then
-    return spots[1] and { spot = spots[1], path = {} }
+  local open = open_spots(layout, name, character, taken)
+  if #open == 0 then
+    local others_have_them = name ~= OWN_DESK and #(layout.spots[name] or {}) > 0
+    return nil, others_have_them and M.TAKEN or M.UNREACHABLE
   end
-  return nearest_route(layout, character, spots)
+  if not character.column then
+    return { spot = open[1], path = {} }
+  end
+  local route = paths.nearest(layout, {
+    column = math.floor(character.column + 0.5),
+    row = math.floor(character.row + 0.5),
+  }, open)
+  if route then
+    return route
+  end
+  return nil, M.UNREACHABLE
 end
 
 return M
