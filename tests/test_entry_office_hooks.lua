@@ -531,6 +531,19 @@ T['a permission wait']['reaches the office when it is of a session of the chain 
   eq(child.lua_get('_G.taken'), { 'permission_asked' })
 end
 
+T['a permission wait']['reaches the office when it is of the session the tab’s panes follow, a claim'] = function()
+  local claimed = claimed_session_numbered(4)
+  open_layout('office-wait-claim')
+  child.lua(KEEP_THE_SIGNALS_TAKEN)
+  child.cmd('Aineo claim ' .. claimed)
+  entry.command(child, 'Aineo office')
+  child.lua('_G.taken = {}')
+
+  tell_permission_wait(claimed, vim.NIL)
+
+  eq(child.lua_get('_G.taken'), { 'permission_asked' })
+end
+
 T['a permission wait']['does not reach the office when it is of a session outside the chain the office follows'] = function()
   open_layout('office-wait-outside')
   child.lua(KEEP_THE_SIGNALS_TAKEN)
