@@ -171,6 +171,63 @@ T['a trigger']['is shown for the dwell like a state: a new activity holds the on
   eq(story.agents_after(1.5)[1].activity, 'second')
 end
 
+T['trying the triggers of a call'] = MiniTest.new_set()
+
+--- A clock that is read at a time later by `step` each time it is asked.
+---
+---@param step number
+---@return fun(): number
+local function clock_stepping(step)
+  local now = 0
+  return function()
+    now = now + step
+    return now
+  end
+end
+
+local TWO_TRIGGERS = {
+  { when = { tool = 'Read', file_path = 'never' }, play = 'first' },
+  { when = { tool = 'Read' }, play = 'second' },
+}
+
+T['trying the triggers of a call']['stops after 20 ms, the triggers after that not tried, and tells once'] = function()
+  local told = 0
+  local story = office_signals.tell({
+    triggers = TWO_TRIGGERS,
+    clock = clock_stepping(0.015),
+    on_slow_triggers = function()
+      told = told + 1
+    end,
+  })
+
+  story.started('a', 'Read', { file_path = 'x' })
+  story.started('b', 'Read', { file_path = 'y' })
+
+  eq({ story.activity(), told }, { nil, 1 })
+end
+
+T['trying the triggers of a call']['tries every trigger when the clock says it is quick'] = function()
+  local story = office_signals.tell({
+    triggers = TWO_TRIGGERS,
+    clock = clock_stepping(0.0001),
+    on_slow_triggers = function()
+      error('not slow')
+    end,
+  })
+
+  story.started('a', 'Read', { file_path = 'x' })
+
+  eq(story.activity(), 'second')
+end
+
+T['trying the triggers of a call']['has no limit when it is given no clock'] = function()
+  local story = office_signals.tell({ triggers = TWO_TRIGGERS })
+
+  story.started('a', 'Read', { file_path = 'x' })
+
+  eq(story.activity(), 'second')
+end
+
 T['an office with no triggers'] = MiniTest.new_set()
 
 T['an office with no triggers']['names no activity'] = function()
