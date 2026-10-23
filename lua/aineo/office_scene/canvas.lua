@@ -50,6 +50,14 @@ local NO_COLOUR = 'none'
 ---@field row integer the pixel row the piece's anchor stands on
 ---@field colours table<string, string> `#rrggbb` by the colour names the piece's letters stand for
 ---@field mirrored? boolean drawn facing the other way, about the anchor
+---@field clip? aineo.office_scene.PixelArea the only pixels the piece may paint; the whole canvas when not given
+
+--- A rectangle of the canvas, in pixels.
+---@class aineo.office_scene.PixelArea
+---@field column integer from 0
+---@field row integer from 0
+---@field width integer
+---@field height integer
 
 ---@class aineo.office_scene.Canvas
 ---@field paint_pixel fun(column: integer, row: integer, colour: string) paints the pixel at a pixel column and row, from 0; outside the canvas it paints nothing
@@ -117,6 +125,25 @@ local function text_group(look)
   )
 end
 
+--- The first and the last of the `count` pixels of a run, counted from 1,
+--- that lie from pixel `low` to pixel `high`, when the first pixel of the run
+--- is at `origin` and the run goes to the right, or to the left when
+--- `mirrored`. The last is before the first when none lies there.
+---
+---@param origin integer
+---@param mirrored boolean|nil
+---@param low integer
+---@param high integer
+---@param count integer
+---@return integer first
+---@return integer last
+local function indices_within(origin, mirrored, low, high, count)
+  if mirrored then
+    return math.max(1, origin - high + 1), math.min(count, origin - low + 1)
+  end
+  return math.max(1, low - origin + 1), math.min(count, high - origin + 1)
+end
+
 --- A canvas of `width` by `height` cells, with no pixel and no text.
 ---
 ---@param width integer cells
@@ -146,16 +173,29 @@ function M.new_canvas(width, height)
     local left = placement.mirrored and placement.column + piece.anchor.column
       or placement.column - piece.anchor.column
     local top = placement.row - piece.anchor.row
-    for row_index, art_row in ipairs(piece.frames[placement.frame]) do
-      for column_index = 1, #art_row do
+    local clip = placement.clip or { column = 0, row = 0, width = width, height = 2 * height }
+    local first_row, last_row = indices_within(
+      top,
+      false,
+      math.max(0, clip.row),
+      math.min(2 * height, clip.row + clip.height) - 1,
+      #piece.frames[placement.frame]
+    )
+    for row_index = first_row, last_row do
+      local art_row = piece.frames[placement.frame][row_index]
+      local first_column, last_column = indices_within(
+        left,
+        placement.mirrored,
+        math.max(0, clip.column),
+        math.min(width, clip.column + clip.width) - 1,
+        #art_row
+      )
+      for column_index = first_column, last_column do
         local colour = placement.colours[piece.colours[art_row:sub(column_index, column_index)]]
         if colour then
           local offset = column_index - 1
-          canvas.paint_pixel(
-            placement.mirrored and left - offset or left + offset,
-            top + row_index - 1,
+          pixels[top + row_index - 1][placement.mirrored and left - offset or left + offset] =
             colour
-          )
         end
       end
     end
