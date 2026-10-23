@@ -37,7 +37,7 @@ end
 ---@param character aineo.office_scene.Character
 ---@return table<string, string>
 local function art_colours(pack, character)
-  local own = colours.of_agent(pack[character.kind].colours, character.place)
+  local own = colours.of_agent(pack[character.kind].colours, character.colour_index)
   return vim.tbl_extend('force', pack.colours, colours.agent_shades(own))
 end
 
