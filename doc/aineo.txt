@@ -765,6 +765,20 @@ reopens nothing either. A tab closed with `\Q` or by Neovim's own commands is
 no longer in the list and does not reopen; `\S` brings its session back. `:qa`
 keeps every tab in the list, and so does `\Q` on the last tab.
 
+The list keeps a claim too (|:Aineo-claim|): the session a tab follows by a
+claim, beside the session of its own Claude Code, kept as you claim it, as a
+claim moves, and at the quit. When the list reopens, that tab claims the
+session again while a Claude Code that aineo started still runs it — such as
+one Claude Code's background service runs a conversation of the tab in, or the
+Claude Code of another aineo tab — and its own Claude Code resumes its own
+session. When none runs it, the tab's Claude Code resumes the claimed session
+in place of its own, and that becomes the tab's own session; the other stays
+among the folder's sessions, where `\S` lists it. A claim you end — `:Aineo
+claim` back to the tab's own session, or a claim of another session — is
+forgotten with it. Whether a session runs is read from what aineo keeps of
+the Claude Codes it started (|aineo-report-claims|): a session that only a
+Claude Code you started yourself runs counts as not running, and is resumed.
+
 The changes pane ~
                                                                *aineo-changes*
 The changes pane lists what changed in your repository since the base of
@@ -2148,10 +2162,11 @@ moves to another process of its own — its background service runs it there
 on a new session id, under the hooks of aineo's start — is followed too,
 while aineo's own Claude Code runs, as a claim of it (|:Aineo-claim|): the
 tab whose start gave those hooks claims the new session, its Report, Input
-and changes pane follow it, and the reports from that process reach its
-Report. The tab's own Claude Code stays on its own session; Send sends
-nothing while the claim holds, and `:Aineo claim` returns the tab to its own
-session. Each such session is followed once: a later hook that names it
+and changes pane follow it, the reports from that process reach its Report,
+and the folder's list of tabs keeps the claim for the next start
+(|aineo-tabs|). The tab's own Claude Code stays on its own session; Send
+sends nothing while the claim holds, and `:Aineo claim` returns the tab to its
+own session. Each such session is followed once: a later hook that names it
 again does not take the tab back to it. A process Claude Code started with
 another tab's hooks, or with none of aineo's, moves nothing. Where hooks do
 not run, aineo follows the session it started: see |aineo-limits|. Two
@@ -2583,7 +2598,8 @@ only in place of a resume Claude Code has no conversation for
 With tabs (|aineo-tabs|) `:Aineo claim` acts in the current tab: the Report,
 the changes pane and Input of that tab follow the claimed session. When
 another tab of this Neovim runs the session {id} names, `:Aineo claim {id}`
-moves you to that tab instead and claims nothing.
+moves you to that tab instead and claims nothing. The folder's list of tabs
+keeps the tab's claim, and the next start takes it up again (|aineo-tabs|).
 
                                                                   *:Aineo-tab*
 :Aineo tab new		Opens a tab page at the end with a tab of
@@ -3649,14 +3665,17 @@ None of the four is a tool error.
 A claim lasts until the claiming Neovim follows another session, returns to
 its own (|:Aineo-claim|) or quits, or until another Neovim claims the
 session; a claim another Neovim took over does not come back when that one
-lets go. When Claude Code switches session — `/clear`, `/resume`, `/branch` —
-the claim moves to the new session, and a Neovim that follows the session
-left by a claim follows the new one, whether or not the editor that started
-Claude Code answers, and while it, or another such Neovim, waits for you at
-a hit-enter prompt. What aineo keeps for this, under `stdpath('state')` in
-`aineo/editors/`, `aineo/claims/` and `aineo/claude-processes/`, only you can
-read: the running aineo Neovims and the session each follows, the claims,
-and the session each Claude Code process aineo started is on.
+lets go. A tab's claim the folder's list of tabs kept at the quit is made
+again when the list reopens, while a Claude Code aineo started runs its
+session (|aineo-tabs|). When Claude Code switches session — `/clear`,
+`/resume`, `/branch` — the claim moves to the new session, and a Neovim that
+follows the session left by a claim follows the new one, whether or not the
+editor that started Claude Code answers, and while it, or another such
+Neovim, waits for you at a hit-enter prompt. What aineo keeps for this, under
+`stdpath('state')` in `aineo/editors/`, `aineo/claims/` and
+`aineo/claude-processes/`, only you can read: the running aineo Neovims and
+the session each follows, the claims, and the session each Claude Code
+process aineo started is on.
 
 A report holds a `task`, a `status` — `started`, `progress`, `blocked`,
 `done` or `failed` — a one-line `summary` and, optionally, `details`. The
