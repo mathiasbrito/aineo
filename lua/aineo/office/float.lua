@@ -71,6 +71,19 @@ function M.close(float)
   end
 end
 
+--- Whether the window `window` lies in `area`: its top left cell is inside.
+---
+---@param area aineo.layout.Area
+---@param window integer
+---@return boolean
+function M.area_holds(area, window)
+  local position = vim.api.nvim_win_get_position(window)
+  return position[1] >= area.row
+    and position[1] < area.row + area.height
+    and position[2] >= area.col
+    and position[2] < area.col + area.width
+end
+
 --- Whether the window `window` lies in the cells the office's window covers:
 --- its top left cell is inside them.
 ---
@@ -79,13 +92,12 @@ end
 ---@return boolean
 function M.covers(float, window)
   local covered = vim.api.nvim_win_get_position(float.window)
-  local width = vim.api.nvim_win_get_width(float.window)
-  local height = vim.api.nvim_win_get_height(float.window)
-  local position = vim.api.nvim_win_get_position(window)
-  return position[1] >= covered[1]
-    and position[1] < covered[1] + height
-    and position[2] >= covered[2]
-    and position[2] < covered[2] + width
+  return M.area_holds({
+    row = covered[1],
+    col = covered[2],
+    width = vim.api.nvim_win_get_width(float.window),
+    height = vim.api.nvim_win_get_height(float.window),
+  }, window)
 end
 
 return M
