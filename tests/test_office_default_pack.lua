@@ -221,6 +221,12 @@ T['the default pack']['has the pieces the scene looks for by name'] = function()
   end
 end
 
+T['the default pack']["draws the cat's puddle as an oval standing on its bottom row"] = function()
+  local puddle = default.load_pack().pieces.cat_puddle
+
+  eq({ puddle.frames[1], puddle.anchor.row }, { { '.AAAA.', 'AAAAAA', '.AAAA.' }, 2 })
+end
+
 T['the default pack']['has an agent that pets the cat do it with an arm reaching out'] = function()
   local pack = default.load_pack()
 
