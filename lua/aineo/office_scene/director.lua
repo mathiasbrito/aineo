@@ -38,6 +38,9 @@ local ENTRANCE = 'door'
 --- the editor.
 local MOST_STEPS_BEGUN_AN_UPDATE = 8
 
+--- How many cats there are at most, whatever the pack asks for.
+local MOST_CATS = 4
+
 --- How many seconds an agent whose step's spots are all taken waits before it
 --- looks again, and a performer whose activity is over waits before it looks
 --- again for an activity it can pick.
@@ -47,12 +50,14 @@ local SECONDS_BETWEEN_LOOKS = 1
 --- picked at random once that was over, or an interlude, which it plays
 --- because of something that happened and after which it goes back to the one
 --- its state asks for.
+local CAT = 'cat'
 local WANTED, RANDOM, INTERLUDE = 'wanted', 'random', 'interlude'
 
 ---@class aineo.office_scene.Character
 ---@field id string the agent's id
 ---@field kind string 'agent' for the main agent, 'subagent' for the others
----@field place integer the agent's place among the agents, from 1, kept while it stays
+---@field place? integer the agent's place among the agents, from 1, kept while it stays; none for the cat
+---@field colour_index integer which of its kind's colours it takes: its place for an agent, its number for a cat
 ---@field column number the cell column it is at, between cells while it walks
 ---@field row number the cell row its feet are at
 ---@field facing string 'left' or 'right'
@@ -69,6 +74,8 @@ local WANTED, RANDOM, INTERLUDE = 'wanted', 'random', 'interlude'
 ---@field activity table the activity it plays
 ---@field playing string `WANTED` when it plays the activity its state asks for, `RANDOM` when it plays one it picked at random, `INTERLUDE` when it plays one because of something that happened
 ---@field party? aineo.office_scene.Party the party it plays its activity in with others; none when it plays alone
+---@field following? aineo.office_scene.Performer the character on the move it follows, until its step is over
+---@field displaces? string the id of the character that has the spot it is going to, which it takes from it on arriving
 ---@field cleaning? aineo.office_scene.LyingThing the thing it has gone to clean up
 ---@field looks_for_life_at? number when a performer whose activity is over looks again for an activity to pick; none when it is not waiting for one
 ---@field step_index integer the step it is on
@@ -92,6 +99,8 @@ local WANTED, RANDOM, INTERLUDE = 'wanted', 'random', 'interlude'
 ---@field lives aineo.office_scene.Lives the activities picked at random
 ---@field things aineo.office_scene.Things what lies on the floor
 ---@field agents aineo.office_scene.Performer[] the agents' performers, in the order the agents were given
+---@field by_id table<string, aineo.office_scene.Performer> every performer, by its id
+---@field cats aineo.office_scene.Performer[] the cats' performers, none until the office has been advanced
 ---@field layout aineo.office_scene.FloorLayout
 ---@field random fun(): number a number from 0 up to, not including, 1
 ---@field taken table<aineo.office_scene.Spot, string> the id of the character that has each spot taken
@@ -116,7 +125,9 @@ end
 ---@param performer aineo.office_scene.Performer
 local function let_go_of_spot(context, performer)
   if performer.spot then
-    context.taken[performer.spot] = nil
+    if context.taken[performer.spot] == performer.id then
+      context.taken[performer.spot] = nil
+    end
     performer.spot = nil
   end
 end
@@ -144,6 +155,8 @@ end
 ---@param route aineo.office_scene.Route
 local function take_route(context, performer, route)
   let_go_of_spot(context, performer)
+  local holder = context.taken[route.spot]
+  performer.displaces = holder ~= performer.id and holder or nil
   performer.spot = route.spot
   context.taken[route.spot] = performer.id
   performer.path = route.path
@@ -161,6 +174,8 @@ end
 local function wait_for_a_spot(performer, time)
   performer.looks_again_at = time + SECONDS_BETWEEN_LOOKS
 end
+
+local settle_at_spot
 
 --- Starts the performer on its step once it has a place on the plan: draws
 --- how long the step lasts, and has it walk to its spot or take the pose.
@@ -181,8 +196,47 @@ local function start_step(context, performer, step, time)
     performer.pose, performer.pose_since = walking.POSE, time
     performer.at_a_seat = false
   else
-    arrive(performer, step, time)
+    settle_at_spot(context, performer, step, time)
   end
+end
+
+--- The character on the move that is nearest to `performer`, other than it.
+---
+---@param context aineo.office_scene.DirectorContext
+---@param performer aineo.office_scene.Performer
+---@return aineo.office_scene.Performer|nil
+local function nearest_walker(context, performer)
+  local nearest, nearest_distance = nil, math.huge
+  for _, group in ipairs({ context.agents, context.cats }) do
+    for _, other in ipairs(group) do
+      if other ~= performer and other.column and #other.path > 0 then
+        local distance = math.abs(other.column - performer.column)
+          + math.abs(other.row - performer.row)
+        if distance < nearest_distance then
+          nearest, nearest_distance = other, distance
+        end
+      end
+    end
+  end
+  return nearest
+end
+
+--- Has the performer follow the nearest character on the move for the time
+--- of `step`; a performer with no one to follow has the step over at once.
+---
+---@param context aineo.office_scene.DirectorContext
+---@param performer aineo.office_scene.Performer
+---@param step table
+---@param time number
+local function start_following(context, performer, step, time)
+  let_go_of_spot(context, performer)
+  local target = nearest_walker(context, performer)
+  performer.following = target
+  performer.step_seconds = target and seconds_of(step.for_seconds, context.random) or 0
+  performer.arrived_at = time
+  performer.effect = nil
+  performer.pose, performer.pose_since = walking.POSE, time
+  performer.at_a_seat = false
 end
 
 --- Begins step `index` of the performer's activity at `time`.
@@ -199,6 +253,11 @@ local function begin_step(context, performer, index, time)
   performer.arrived_at = nil
   performer.looks_again_at = nil
   performer.path = {}
+  performer.following = nil
+  if step.follow and performer.column then
+    start_following(context, performer, step, time)
+    return
+  end
   local spot_name = step.at or (not performer.column and ENTRANCE) or nil
   local route, why
   if spot_name then
@@ -388,6 +447,10 @@ end
 ---@param step table
 ---@param time number
 local function finish_step(context, performer, step, time)
+  if performer.following then
+    performer.following, performer.path = nil, {}
+    arrive(performer, step, time)
+  end
   local column, row = math.floor(performer.column + 0.5), math.floor(performer.row + 0.5)
   if step.remove then
     context.things.remove_at(step.remove, column, row)
@@ -401,8 +464,9 @@ local function finish_step(context, performer, step, time)
   end
 end
 
---- The characters that could join `performer` in `activity`: the others of
---- its kind, placed on the plan, in a state the activity names.
+--- The characters that could join `performer` in `activity`: the other
+--- agents, or the other cats, placed on the plan, in a state the activity
+--- names.
 ---
 ---@param context aineo.office_scene.DirectorContext
 ---@param performer aineo.office_scene.Performer
@@ -413,11 +477,12 @@ local function possible_partners(context, performer, activity)
     return other ~= performer
       and other.column ~= nil
       and vim.list_contains(activity.during, other.state)
-  end, context.agents)
+  end, performer.kind == CAT and context.cats or context.agents)
 end
 
 --- Whether the plan has the spots for `activity`: as many open spots as
---- players for its first step with a spot, and a spot for each step after.
+--- players for its first step with a spot, and a spot for each step after;
+--- and, for a step that follows someone, someone on the move.
 ---
 ---@param context aineo.office_scene.DirectorContext
 ---@param performer aineo.office_scene.Performer
@@ -426,6 +491,9 @@ end
 local function has_the_spots_for(context, performer, activity)
   local needed = activity.players
   for _, step in ipairs(activity.steps) do
+    if step.follow and not nearest_walker(context, performer) then
+      return false
+    end
     if step.at then
       local choice = named_spots.availability(context, step.at, performer, step.even_if_taken)
       if choice.free < needed or not choice.any then
@@ -449,6 +517,30 @@ local function can_play(context, performer, activity)
     and #possible_partners(context, performer, activity) >= activity.players - 1
 end
 
+--- Has the performer take the pose of `step` at the spot it has come to; if it
+--- took the spot from a character that was on it, that one is moved: it plays
+--- what the step says, or looks for another spot.
+---
+---@param context aineo.office_scene.DirectorContext
+---@param performer aineo.office_scene.Performer
+---@param step table
+---@param time number
+function settle_at_spot(context, performer, step, time)
+  arrive(performer, step, time)
+  local occupant = performer.displaces and context.by_id[performer.displaces]
+  performer.displaces = nil
+  if not (occupant and occupant.spot == performer.spot) then
+    return
+  end
+  occupant.spot = nil
+  local activity_name = step.the_one_moved_plays
+  if activity_name and context.pack.activities[activity_name] then
+    make_play(context, occupant, activity_name, INTERLUDE, time)
+  else
+    begin_step(context, occupant, occupant.step_index, math.max(time, occupant.clock))
+  end
+end
+
 --- Has the performer, whose activity is over, go back to the activity its
 --- state asks for when it played an interlude, or else play an activity
 --- picked at random among those that name its state, and the characters it
@@ -466,7 +558,7 @@ local function start_next_activity(context, performer, time)
     return true
   end
   local life = random_life.pick(
-    context.lives.agents,
+    performer.kind == CAT and context.lives.cat or context.lives.agents,
     performer.state,
     performer.activity_name,
     function(candidate)
@@ -492,6 +584,28 @@ local function start_next_activity(context, performer, time)
   return true
 end
 
+--- Has the performer that follows a character go the way to where it is now;
+--- when that one has stopped or is gone, the performer's step is over.
+---
+---@param context aineo.office_scene.DirectorContext
+---@param performer aineo.office_scene.Performer
+local function chase(context, performer)
+  local target = performer.following
+  if not target then
+    return
+  end
+  if context.by_id[target.id] ~= target or #target.path == 0 then
+    performer.path = {}
+    performer.arrived_at, performer.step_seconds = performer.clock, 0
+    return
+  end
+  local route = paths.nearest(context.layout, {
+    column = math.floor(performer.column + 0.5),
+    row = math.floor(performer.row + 0.5),
+  }, { { column = math.floor(target.column + 0.5), row = math.floor(target.row + 0.5) } })
+  performer.path = route and route.path or {}
+end
+
 --- Brings the performer up to `now`: walks it, and goes on to the next step,
 --- or the next activity, whenever a step ends on the way.
 ---
@@ -503,14 +617,17 @@ local function bring_up_to(context, performer, now)
     begin_step(context, performer, performer.step_index, now)
   end
   look_again(context, performer, now)
+  chase(context, performer)
   local clock = performer.clock
   while performer.column do
     if #performer.path > 0 then
       clock = clock + walking.advance(performer, now - clock)
-      if #performer.path > 0 then
+      if #performer.path > 0 and not performer.following then
         break
       end
-      arrive(performer, performer.activity.steps[performer.step_index], clock)
+      if #performer.path == 0 and not performer.following then
+        settle_at_spot(context, performer, performer.activity.steps[performer.step_index], clock)
+      end
     end
     local ends_at = step_end_before(performer, now)
     if not ends_at or performer.steps_begun >= MOST_STEPS_BEGUN_AN_UPDATE then
@@ -563,6 +680,7 @@ local function new_performer(context, agent, now)
     id = agent.id,
     kind = roles.kind_of(agent),
     place = place,
+    colour_index = place,
     clock = now,
     path = {},
     step_index = 1,
@@ -608,6 +726,51 @@ local function move_into_layout(context, performer)
   end
 end
 
+--- The cats of the office, a performer for each: as many as the pack says,
+--- and none when it draws no cat or has no activity for one.
+---
+---@param context aineo.office_scene.DirectorContext
+---@param now number
+---@return aineo.office_scene.Performer[]
+local function new_cats(context, now)
+  local cats = {}
+  local looks = context.pack.cat
+  if not looks or #context.lives.cat == 0 then
+    return cats
+  end
+  for number = 1, math.min(looks.how_many, MOST_CATS) do
+    cats[number] = {
+      id = CAT .. number,
+      kind = CAT,
+      colour_index = number,
+      state = random_life.ALWAYS,
+      playing = RANDOM,
+      clock = now,
+      path = {},
+      step_index = 1,
+      steps_begun = 0,
+    }
+  end
+  return cats
+end
+
+--- Brings the cat up to `now`: it picks the activity of its life when it has
+--- none, and plays it.
+---
+---@param context aineo.office_scene.DirectorContext
+---@param cat aineo.office_scene.Performer
+---@param now number
+local function bring_cat_up_to(context, cat, now)
+  cat.steps_begun = 0
+  local waiting = cat.looks_for_life_at ~= nil and cat.looks_for_life_at > now
+  if not cat.activity and not waiting then
+    start_next_activity(context, cat, now)
+  end
+  if cat.activity then
+    bring_up_to(context, cat, now)
+  end
+end
+
 --- A director of the agents of `pack`'s office, laid out as `layout`.
 ---
 ---@param pack aineo.office_pack.Pack
@@ -620,6 +783,8 @@ function M.new_director(pack, layout, random)
     pack = pack,
     lives = random_life.index(pack),
     agents = {},
+    cats = {},
+    by_id = {},
     things = things.new_register(pack.things),
     layout = layout,
     random = random,
@@ -630,6 +795,7 @@ function M.new_director(pack, layout, random)
   local known = {}
   ---@type aineo.office_scene.Performer[]
   local placed = {}
+  local cats_arrived = false
 
   local director = {}
 
@@ -639,11 +805,19 @@ function M.new_director(pack, layout, random)
     for _, agent in ipairs(agents) do
       local performer = known[agent.id] or new_performer(context, agent, now)
       known[agent.id] = performer
+      context.by_id[agent.id] = performer
       performer.steps_begun = 0
       performer.state_changed = performer.state ~= nil and performer.state ~= agent.state
       performer.state = agent.state
       present[agent.id] = true
       table.insert(context.agents, performer)
+    end
+    if not cats_arrived then
+      context.cats = new_cats(context, now)
+      for _, cat in ipairs(context.cats) do
+        context.by_id[cat.id] = cat
+      end
+      cats_arrived = true
     end
     placed = {}
     for index, agent in ipairs(agents) do
@@ -665,6 +839,12 @@ function M.new_director(pack, layout, random)
         table.insert(placed, performer)
       end
     end
+    for _, cat in ipairs(context.cats) do
+      bring_cat_up_to(context, cat, now)
+      if cat.column then
+        table.insert(placed, cat)
+      end
+    end
     for _, thing in ipairs(context.things.all()) do
       send_cleaner_to(context, thing, now)
     end
@@ -672,6 +852,7 @@ function M.new_director(pack, layout, random)
       if not present[id] then
         let_go_of_spot(context, performer)
         performer.cleaning = nil
+        context.by_id[id] = nil
         context.places_taken[performer.place] = nil
         known[id] = nil
       end
@@ -699,6 +880,9 @@ function M.new_director(pack, layout, random)
     context.taken = {}
     for _, performer in pairs(known) do
       move_into_layout(context, performer)
+    end
+    for _, cat in ipairs(context.cats) do
+      move_into_layout(context, cat)
     end
     placed = vim.tbl_filter(function(performer)
       return performer.column ~= nil
