@@ -202,6 +202,64 @@ T['a pack based on the default pack when it says nothing']['has nothing from it 
   eq(problems[1].pack, 'child')
 end
 
+--- `count` triggers that each play `work`, named by a number of `kind`.
+---
+---@param count integer
+---@param kind string
+---@return table[]
+local function triggers_numbered(count, kind)
+  local triggers = {}
+  for number = 1, count do
+    triggers[number] = { when = { tool = 'Bash', command = kind .. number }, play = 'work' }
+  end
+  return triggers
+end
+
+T['the triggers of a chain of packs'] = MiniTest.new_set()
+
+T['the triggers of a chain of packs']['are at most 64, the pack’s own first, and the rest told once and left out'] = function()
+  local root = pack_root()
+  files.write_pack(root, 'base', {
+    ['pack.lua'] = files.pack_text({ name = 'base', triggers = triggers_numbered(40, 'base') }),
+  })
+  local text = files.description_text({
+    format = 1,
+    name = 'child',
+    based_on = 'base',
+    triggers = triggers_numbered(40, 'child'),
+  })
+  local folder = files.write_pack(root, 'child', {
+    ['pack.lua'] = text,
+    ['floor.txt'] = false,
+    ['art/person.txt'] = false,
+  })
+
+  local pack, problems = load_pack('child', folder)
+
+  eq(#pack.triggers, 64)
+  eq(pack.triggers[40].when.command, 'child40')
+  eq(pack.triggers[41].when.command, 'base1')
+  eq(pack.triggers[64].when.command, 'base24')
+  eq(told(problems), {
+    {
+      'child',
+      'pack.lua',
+      files.line_of(text, 'triggers'),
+      'the pack and the packs it is based on have more than 64 triggers; the rest are left out',
+    },
+  })
+end
+
+T['the triggers of a chain of packs']['of one pack are at most 64 too'] = function()
+  local text = files.pack_text({ triggers = triggers_numbered(70, 'own') })
+  local folder = files.write_pack(pack_root(), 'small', { ['pack.lua'] = text })
+
+  local pack, problems = load_pack('small', folder)
+
+  eq(#pack.triggers, 64)
+  eq(#problems, 1)
+end
+
 T['a pack with something wrong'] = MiniTest.new_set()
 
 T['a pack with something wrong']['takes a piece of the pack it is based on for one with a problem, with one problem'] = function()
