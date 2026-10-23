@@ -41,6 +41,17 @@ local FRAME_MS = 83
 --- right side to cover.
 local NO_RIGHT_SIDE = "aineo: the office has no right side of aineo's layout to cover"
 
+--- What the status list says of each state: the words of the vocabulary.
+---
+---@return table<string, string>
+local function state_labels()
+  local labels = {}
+  for _, state in ipairs(office_states.vocabulary()) do
+    labels[state.name] = state.label
+  end
+  return labels
+end
+
 ---@class aineo.office.Options
 ---@field right_side fun(): aineo.layout.Area|nil the screen cells the layout's right side takes now, nil when it shows none
 ---@field pack_folders string[] the `aineo-office` folders the office's packs are searched in
@@ -297,8 +308,12 @@ function M.new_office(options)
     end
     warn_of(name, problems)
     local refresh_colours = colours.follow_highlights(pack)
-    local made, stage =
-      pcall(office_scene.new_stage, { pack = pack, width = area.width, height = area.height })
+    local made, stage = pcall(office_scene.new_stage, {
+      pack = pack,
+      width = area.width,
+      height = area.height,
+      state_labels = state_labels(),
+    })
     if not made then
       vim.notify(('aineo: the office cannot show: %s'):format(stage), vim.log.levels.ERROR)
       return
