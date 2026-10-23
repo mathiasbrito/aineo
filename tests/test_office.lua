@@ -191,6 +191,28 @@ T['showing the office']['gives the scene the words of the vocabulary for its sta
   eq(child.lua_get([[_G.state_labels.error]]), 'hit an error')
 end
 
+T['showing the office']['tells once, when it shows, that pieces of the plan are left out, however often the scene says so'] = function()
+  open_office()
+  child.lua([[
+    local office_scene = require('aineo.office_scene')
+    local new_stage = office_scene.new_stage
+    office_scene.new_stage = function(options)
+      _G.left_out = options.on_left_out
+      return new_stage(options)
+    end
+  ]])
+
+  child.lua([[_G.office.show_now()]])
+  child.lua([[_G.left_out(5)]])
+  child.lua([[_G.left_out(7)]])
+
+  eq(child.lua_get([[#_G.told]]), 1)
+  eq(
+    child.lua_get([[_G.told[1].message]]),
+    'aineo: the office pack “default” places more pieces than a frame can paint; 5 of them are left out'
+  )
+end
+
 T['showing the office']['gives the scene the time on the wall, from the wall clock it was given'] = function()
   open_office(
     nil,
