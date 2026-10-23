@@ -294,6 +294,41 @@ T['a thing that is cleaned up']['is left to another idle agent when the one who 
   eq(group_at(stage, 6), scene.solid(scene.FLOOR))
 end
 
+T['a thing that is cleaned up']['leaves the other idle agents to what they are doing'] = function()
+  local pack = scene.people_pack('# plan\n \n d.d.d.s...m.........v\n', {
+    d = { spot = 'desk', sitting = true },
+    s = { spot = 'seat', sitting = true },
+    m = { spot = 'away' },
+    v = { spot = 'sofa', sitting = true },
+  }, {
+    characters = THREE_COLOURS,
+    activities = {
+      stand = { steps = { { at = 'desk', for_seconds = 0.5 } } },
+      lounge = { during = { 'idle' }, steps = { { at = 'sofa', for_seconds = 30 } } },
+      messy = {
+        steps = {
+          { at = 'seat', pose = 'sitting', for_seconds = 1, leave = 'mess' },
+          { at = 'away' },
+        },
+      },
+      clean_up = { steps = { { at = 'mess', for_seconds = 1, remove = 'mess' } } },
+    },
+    things = { mess = { piece = 'left', cleaned_up_by = 'clean_up' } },
+    states = { standing = 'stand', idle = 'stand', working = 'messy' },
+  })
+  local stage = scene.stage_of(pack, 21, 1, { random = scene.always(0) })
+  local crew = scene.agents_in('working', 'idle', 'idle')
+  stage.advance(crew, 0)
+  stage.advance(crew, 0.6)
+  stage.advance(crew, 1.8)
+  stage.advance(crew, 5)
+  stage.advance(crew, 6.6)
+
+  stage.advance(crew, 7.9)
+
+  eq(scene.agent_cell(stage.picture(), 21, 1, scene.SECOND_AGENT), '20,0')
+end
+
 T['a thing that lies on the floor'] = MiniTest.new_set()
 
 T['a thing that lies on the floor']['no longer keeps an agent waiting for its spot once it is gone'] = function()
