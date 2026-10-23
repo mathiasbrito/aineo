@@ -3696,7 +3696,8 @@ the user stopped it. A transcript cut short or replaced by another is read
 again from its end. It calls no Claude, sends nothing to its terminal, makes
 no MCP call or network request, writes nothing and spends no token. While it
 shows, one timer draws 12 frames a second, one file watch follows the
-transcript and one the subagents' folder; where the system gives no file
+transcript, one the subagents' folder and one each subagent it follows, 64 at
+most; where the system gives no file
 watch, or the file or folder is not there yet, aineo looks at it every half
 second instead. Closing the office stops all of them. A session with no
 transcript yet shows its agent standing, and the office follows the file
