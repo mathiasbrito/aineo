@@ -46,6 +46,9 @@ local T = MiniTest.new_set({
 T['the printer'] = MiniTest.new_set()
 
 T['the printer']['prints no page before anyone reports'] = function()
+  MiniTest.expect.no_error(function()
+    printer_cells({}, 2)
+  end)
   eq(printer_cells({}, 2), { scene.solid(BROWN), scene.solid(BROWN) })
 end
 
