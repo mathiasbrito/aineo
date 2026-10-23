@@ -31,6 +31,11 @@ local M = {}
 --- no countdown.
 local DEFAULT_SETTINGS = { pack = 'default', pieces = {}, idle_ms = false }
 
+--- What `show_now()` tells the user, as a warning, when the editor draws no
+--- true colours: the office draws half-block pixels of two colours each.
+local NEEDS_TRUE_COLOUR =
+  "aineo: the office needs 'termguicolors' to draw its pixels, and it is off, so it does not show"
+
 --- How many offices have been made, which names the autocommand group of
 --- each.
 local offices_made = 0
@@ -106,6 +111,20 @@ function M.new_office(options)
   --- needs.
   ---@type fun()
   local settle
+
+  --- Why the office cannot show over `area` now: the editor draws no true
+  --- colours, or the layout shows no right side; nil when it can.
+  ---
+  ---@param area aineo.layout.Area|nil the right side now
+  ---@return string|nil
+  local function why_it_cannot_show(area)
+    if not vim.o.termguicolors then
+      return NEEDS_TRUE_COLOUR
+    end
+    if not area then
+      return NO_RIGHT_SIDE
+    end
+  end
 
   --- What exists while the office shows; nil while it is hidden.
   ---@type { float: aineo.office.Float, timer: uv.uv_timer_t, group: integer, follower: aineo.transcript.Follower|nil, stage: aineo.office_scene.Stage, screen: aineo.office.Screen, area: aineo.layout.Area, refresh_colours: fun() }|nil
@@ -417,7 +436,7 @@ function M.new_office(options)
       countdown.stop()
       idle_time_has_passed = false
     elseif idle_time_has_passed then
-      if area then
+      if not why_it_cannot_show(area) then
         idle_time_has_passed = false
         show_over(area)
       end
@@ -453,8 +472,9 @@ function M.new_office(options)
       return
     end
     local area = options.right_side()
-    if not area then
-      vim.notify(NO_RIGHT_SIDE, vim.log.levels.WARN)
+    local why = why_it_cannot_show(area)
+    if why then
+      vim.notify(why, vim.log.levels.WARN)
       return
     end
     idle_time_has_passed = false
