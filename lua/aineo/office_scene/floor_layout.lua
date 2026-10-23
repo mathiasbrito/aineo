@@ -296,27 +296,64 @@ local function place_run(layout, entry, column, row, length)
   end
 end
 
+---@alias aineo.office_scene.OwnerFinder fun(placed: aineo.office_scene.PlacedPiece, piece: aineo.office_pack.Piece|nil): integer|nil
+
+--- The finders of the place of the agent a name plate and a monitor belong
+--- to. With `desk_spots`, the agent at the `desk` spot under the plate (the
+--- nearest, in the columns the desk covers) or nearest to the monitor (each
+--- spot given to one monitor), so that a width that cuts a desk off from its
+--- seat or its monitor leaves that desk without an owner and the others with
+--- theirs. Without, the n-th plate or monitor, as the plan reads, belongs to
+--- the agent with the n-th place.
+---
+---@param desk_spots? aineo.office_scene.Spot[]
+---@return aineo.office_scene.OwnerFinder plate_owner
+---@return aineo.office_scene.OwnerFinder monitor_owner
+local function new_owner_finders(desk_spots)
+  if not desk_spots then
+    local plates, monitors = 0, 0
+    return function()
+      plates = plates + 1
+      return plates
+    end, function()
+      monitors = monitors + 1
+      return monitors
+    end
+  end
+  local nearest_seat = use_spot.new_finder(desk_spots)
+  local seats_with_a_monitor = {}
+  return function(placed, piece)
+    local seat = piece and nearest_seat(placed, piece)
+    local left = piece and placed.column - piece.anchor.column
+    if seat and seat.column >= left and seat.column < left + (placed.columns or piece.width) then
+      return seat.number
+    end
+  end, function(placed, piece)
+    local seat = piece and nearest_seat(placed, piece)
+    if seat and not seats_with_a_monitor[seat] then
+      seats_with_a_monitor[seat] = true
+      return seat.number
+    end
+  end
+end
+
 --- Gives each placed piece that has `in_use` art the spot it is used from,
 --- and each one that has a screen area, or whose plate shows a name, the
---- place of the agent it belongs to: the n-th such piece, as the plan reads,
---- belongs to the agent with the n-th place, monitors and name plates
---- counted apart.
+--- place of the agent it belongs to.
 ---
 ---@param layout aineo.office_scene.Layout
 local function assign_users(layout)
-  local monitors, plates = 0, 0
   local nearest_spot = use_spot.new_finder(layout.spot_order)
+  local plate_owner, monitor_owner = new_owner_finders(layout.spots.desk)
   for _, placed in ipairs(layout.pieces) do
     local piece = layout.pack.pieces[placed.piece]
     if placed.in_use and piece then
       placed.used_at = nearest_spot(placed, piece)
     end
     if placed.shows == 'name' then
-      plates = plates + 1
-      placed.owner_place = plates
+      placed.owner_place = plate_owner(placed, piece)
     elseif piece and piece.areas.screen then
-      monitors = monitors + 1
-      placed.owner_place = monitors
+      placed.owner_place = monitor_owner(placed, piece)
     end
   end
 end
