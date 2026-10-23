@@ -143,6 +143,17 @@ T['the plan']['leaves out a task deleted, and starts at the first not done after
   eq(text_of(picture, 1, 10), '○ Three   ')
 end
 
+T['the plan']['writes only the whole rows of an area of an odd height'] = function()
+  local art = {
+    ['art/board.txt'] = 'colours: W = brown\nanchor: 0, 3\narea plan: 0, 0, 10 x 3\n---\nWWWWWWWWWW\nWWWWWWWWWW\nWWWWWWWWWW\nWWWWWWWWWW\n',
+  }
+
+  local picture = board_with(main_with({ task('One', false), task('Two', false) }), art)
+
+  eq(text_of(picture, 0, 10), '○ One     ')
+  eq(text_of(picture, 1, 10), '          ')
+end
+
 T['the plan']['starts at the first task not done when the tasks outgrow the area'] = function()
   local picture = board_with(
     main_with({ task('One', true), task('Two', true), task('Three', false), task('Four', false) })

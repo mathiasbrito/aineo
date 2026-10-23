@@ -107,6 +107,38 @@ T['a monitor']['of an agent who is not there shows nothing and is no error'] = f
   eq(top_text(monitors_with({}), 2, 6), '      ')
 end
 
+local COMBINING_ACUTE = vim.fn.nr2char(0x301)
+local VARIATION_SELECTOR = vim.fn.nr2char(0xFE0F)
+
+T['a monitor']['shows a combining mark as ? so that its row keeps its width'] = function()
+  local picture =
+    monitors_with({ agent('main', 'on_the_web', { web_clue = 'cafe' .. COMBINING_ACUTE .. 's' }) })
+
+  eq(top_text(picture, 2, 6), 'cafe?s')
+  eq(vim.fn.strdisplaywidth(picture.rows[1].text), 20)
+end
+
+--- Clues of a base character and a mark that takes no cell of its own.
+local CLUES_WITH_MARKS = {
+  { 'cafe' .. COMBINING_ACUTE .. 's' },
+  { 'สำหรับ' },
+  { 'हिन्दी' },
+  { 'a' .. VARIATION_SELECTOR .. 'b' },
+}
+
+T['a monitor']['keeps its row as wide as the office whatever marks the clue has'] =
+  MiniTest.new_set({
+    parametrize = CLUES_WITH_MARKS,
+  })
+
+T['a monitor']['keeps its row as wide as the office whatever marks the clue has'][''] = function(
+  clue
+)
+  local picture = monitors_with({ agent('main', 'on_the_web', { web_clue = clue }) })
+
+  eq(vim.fn.strdisplaywidth(picture.rows[1].text), 20)
+end
+
 T['a monitor']['shows the clue of its own agent, not the other’s'] = function()
   local picture = monitors_with({
     agent('main', 'standing', {}),
