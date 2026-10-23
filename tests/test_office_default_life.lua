@@ -462,6 +462,20 @@ T['the cat']['leaves a mess that an idle agent cleans up'] = function()
   eq(listed:find('cleans up the mess', 1, true) ~= nil, true)
 end
 
+T['the cat']['leaves a mess or a puddle that upsets an agent standing eight cells from it'] =
+  MiniTest.new_set({ parametrize = { { 'leave_a_mess' }, { 'leave_a_puddle' } } })
+
+T['the cat']['leaves a mess or a puddle that upsets an agent standing eight cells from it']['activity'] = function(
+  name
+)
+  local pack = pack_with_life({ name })
+  pack.activities[name].steps[1].at = 'right_of_desk'
+
+  local listed = listed_over(pack, { { id = 'main', state = 'delegating' } }, 10)
+
+  eq(listed:find('is upset by what the cat left', 1, true) ~= nil, true)
+end
+
 T['the cat']['leaves a puddle that an idle agent mops up'] = function()
   local pack = pack_with_life({ 'leave_a_puddle' })
 
