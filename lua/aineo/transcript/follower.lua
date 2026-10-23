@@ -9,6 +9,9 @@ local subagents = require('aineo.transcript.subagents')
 
 local M = {}
 
+---@class aineo.transcript.SessionFollower : aineo.transcript.Follower
+---@field sessions string[] the sessions of the chain followed: the one of `options.path` first, the one of the file followed last
+
 ---@class aineo.transcript.FollowOptions
 ---@field path string the session's transcript file, which need not exist yet
 ---@field on_signal fun(signal: aineo.transcript.Signal) called for each signal, with the editor's API usable; a raise in it is caught and told once (`consumer.protect()`)
@@ -35,7 +38,7 @@ end
 --- again.
 ---
 ---@param options aineo.transcript.FollowOptions
----@return aineo.transcript.Follower follower
+---@return aineo.transcript.SessionFollower follower
 function M.follow(options)
   vim.validate('options.path', options.path, 'string')
   vim.validate('options.on_signal', options.on_signal, 'function')
@@ -43,7 +46,7 @@ function M.follow(options)
   vim.validate('options.since', options.since, 'number', true)
 
   local on_signal = consumer.protect(options.on_signal)
-  local path = continuation.resolve(options.path, options.since)
+  local path, sessions = continuation.resolve(options.path, options.since)
   local session = file_follower.follow_file({
     path = path,
     agent = signals.MAIN_AGENT,
@@ -66,6 +69,7 @@ function M.follow(options)
   end
 
   return {
+    sessions = sessions,
     stop = function()
       session.stop()
       subagents_followed.stop()
