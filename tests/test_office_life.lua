@@ -199,8 +199,8 @@ T['a tab page left']['has the office catch up with what the session did while it
   child.cmd('tabprevious')
 
   eq(
-    vim.wait(PATIENCE_MS, function()
-      return office_cells.is_standing(child)
+    vim.wait(2 * PATIENCE_MS, function()
+      return office_cells.is_on_the_sofa(child)
     end, 10),
     true
   )

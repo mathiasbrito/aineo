@@ -114,6 +114,13 @@ local function is_typing()
   return office_cells.is_typing(child)
 end
 
+--- Whether the main agent rests on the sofa.
+---
+---@return boolean
+local function is_on_the_sofa()
+  return office_cells.is_on_the_sofa(child)
+end
+
 T['showing the office'] = MiniTest.new_set()
 
 T['showing the office']['opens a window over exactly the cells of the right column'] = function()
@@ -693,7 +700,7 @@ T['what the office shows']['has the main agent sit and type while the transcript
   eq(is_standing(), false)
 end
 
-T['what the office shows']['has the main agent stand when the transcript holds a turn that ended'] = function()
+T['what the office shows']['has the main agent rest on the sofa when the transcript holds a turn that ended'] = function()
   local path = transcript_path()
   fake_transcript.append(path, RECORDED_TURN)
   open_office(path)
@@ -701,7 +708,7 @@ T['what the office shows']['has the main agent stand when the transcript holds a
   child.lua([[_G.office.show_now()]])
 
   eq(is_typing(), false)
-  eq(is_standing(), true)
+  eq(is_on_the_sofa(), true)
 end
 
 T['what the office shows']['has the main agent walk to its desk and type when a call starts while it shows'] = function()
@@ -748,7 +755,7 @@ T['what the office shows']['shows the main agent standing when the transcript fi
 end
 
 T['what the office shows']['draws a frame that changed nothing without writing the buffer'] = function()
-  open_office()
+  open_office(nil, { write_packs('alt', '#ff0000') }, settings_naming('alt'))
   child.lua([[_G.office.show_now()]])
   local buffer = child.lua_get([[vim.api.nvim_win_get_buf(...)]], { office_window() })
   local before = child.lua_get([[vim.api.nvim_buf_get_changedtick(...)]], { buffer })

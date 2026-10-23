@@ -132,7 +132,12 @@ T['the transcript a SessionStart hook named']['is the one the office follows, wh
 
   entry.command(child, 'Aineo office')
 
-  eq(office_cells.is_typing(child), true)
+  eq(
+    vim.wait(5000, function()
+      return office_cells.is_at(child, 'file_cabinet')
+    end, 50),
+    true
+  )
 end
 
 T['the transcript a SessionStart hook named']['wins over one Claude Code’s folder rule finds for the session'] = function()
@@ -150,7 +155,12 @@ T['the transcript a SessionStart hook named']['wins over one Claude Code’s fol
 
   entry.command(child, 'Aineo office')
 
-  eq(office_cells.is_typing(child), true)
+  eq(
+    vim.wait(5000, function()
+      return office_cells.is_at(child, 'file_cabinet')
+    end, 50),
+    true
+  )
 end
 
 T['the transcript a SessionStart hook named']['is not followed for a session the tab does not run'] = function()
@@ -162,7 +172,7 @@ T['the transcript a SessionStart hook named']['is not followed for a session the
 
   entry.command(child, 'Aineo office')
 
-  eq(office_cells.is_standing(child), true)
+  eq(office_cells.is_on_the_sofa(child), true)
 end
 
 --- Opens the layout as `open_layout()` does, with the office module a
