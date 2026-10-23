@@ -164,31 +164,34 @@ end
 
 T['what the office shows'] = MiniTest.new_set()
 
-T['what the office shows']['has the main agent sit and type while the session’s transcript holds a call that runs'] = function()
-  open_layout('office-typing')
+T['what the office shows']['has the main agent search the file cabinet while the session’s transcript holds a search that runs'] = function()
+  open_layout('office-searching')
   write_transcript(vim.list_slice(RECORDED_TURN, 1, 5))
 
   entry.command(child, 'Aineo office')
 
-  eq(office_cells.is_typing(child), true)
+  local searching = vim.wait(5000, function()
+    return office_cells.is_at(child, 'file_cabinet')
+  end, 50)
+  eq(searching, true)
 end
 
-T['what the office shows']['has the main agent stand when the session’s transcript holds a turn that ended'] = function()
+T['what the office shows']['has the main agent rest on the sofa when the session’s transcript holds a turn that ended'] = function()
   open_layout('office-ended')
   write_transcript(RECORDED_TURN)
 
   entry.command(child, 'Aineo office')
 
-  eq(office_cells.is_standing(child), true)
+  eq(office_cells.is_on_the_sofa(child), true)
   eq(office_cells.is_typing(child), false)
 end
 
-T['what the office shows']['has the main agent stand when the session has no transcript yet'] = function()
+T['what the office shows']['has the main agent rest on the sofa when the session has no transcript yet'] = function()
   open_layout('office-none')
 
   entry.command(child, 'Aineo office')
 
-  eq(office_cells.is_standing(child), true)
+  eq(office_cells.is_on_the_sofa(child), true)
   eq(entry.messages(child), {})
 end
 
@@ -259,7 +262,7 @@ T['what the office shows']["follows the transcript of the session's id that exis
   write_transcript_in_the_sessions_own_folder(vim.list_slice(RECORDED_TURN, 1, 5))
   vim.wait(1500)
 
-  eq(office_cells.is_standing(child), true)
+  eq(office_cells.is_on_the_sofa(child), true)
   eq(office_cells.is_typing(child), false)
 end
 
@@ -400,7 +403,7 @@ T['the setting office.pieces']['leave the pieces of the pack alone when none is 
 
   entry.command(child, 'Aineo office')
 
-  eq(office_cells.shows_colour(child, 'b4875a'), true)
+  eq(office_cells.shows_colour(child, '414559'), true)
 end
 
 T['the setting office.pieces']['name art files that replace the pieces of the pack'] = function()
@@ -409,14 +412,14 @@ T['the setting office.pieces']['name art files that replace the pieces of the pa
   entry.use_fake(
     child,
     claude_session.fake('office-pieces', 'ready'),
-    { office = { pieces = { desk = mine } } }
+    { office = { pieces = { baseboard = mine } } }
   )
   child.cmd('Aineo open')
   claude_session.wait_for_status(child, 'ready')
 
   entry.command(child, 'Aineo office')
 
-  eq(office_cells.shows_colour(child, 'b4875a'), false)
+  eq(office_cells.shows_colour(child, '414559'), false)
   eq(entry.messages(child), {})
 end
 
