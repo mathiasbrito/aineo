@@ -93,7 +93,7 @@ T['a tab page left']['pauses the frame timer and the watch of its office, which 
   fake_transcript.append(path, vim.list_slice(RECORDED_TURN, 1, 5))
   office_child.open_layout(child)
   office_child.make_office(child)
-  child.lua([[_G.office.follow_session(...)]], { path })
+  office_child.follow_transcript(child, path)
   local hidden = handles()
   child.lua([[_G.office.show_now()]])
   local shown = handles()
@@ -105,6 +105,25 @@ T['a tab page left']['pauses the frame timer and the watch of its office, which 
   eq(away, hidden)
   eq(handles(), shown)
   eq(shown.timers > hidden.timers and shown.watches > hidden.watches, true)
+end
+
+T['a tab page left']['has the office ask again which transcript to follow when it starts following again'] = function()
+  office_child.open_layout(child)
+  office_child.make_office(
+    child,
+    nil,
+    [[{ transcript = function()
+      _G.asked = (_G.asked or 0) + 1
+      return nil
+    end }]]
+  )
+  child.lua([[_G.office.show_now()]])
+  eq(child.lua_get('_G.asked'), 1)
+
+  child.cmd('tabnew')
+  child.cmd('tabprevious')
+
+  eq(child.lua_get('_G.asked'), 2)
 end
 
 T['a tab page left']['keeps the office on screen for when the tab page is entered again'] = function()
@@ -123,7 +142,7 @@ T['a tab page left']['has the office catch up with what the session did while it
   fake_transcript.append(path, vim.list_slice(RECORDED_TURN, 1, 5))
   office_child.open_layout(child)
   office_child.make_office(child)
-  child.lua([[_G.office.follow_session(...)]], { path })
+  office_child.follow_transcript(child, path)
   child.lua([[_G.office.show_now()]])
   vim.wait(PATIENCE_MS, function()
     return office_cells.is_typing(child)

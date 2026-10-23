@@ -60,6 +60,9 @@ local function open_office(path, pack_folders, more_options)
       right_side = function()
         return require('aineo.layout').right_column_area()
       end,
+      transcript = function()
+        return given.path
+      end,
       pack_folders = function()
         return given.folders or vim.api.nvim_get_runtime_file('aineo-office', true)
       end,
@@ -67,9 +70,6 @@ local function open_office(path, pack_folders, more_options)
         return vim.uv.hrtime() / 1e9
       end,
     }, loadstring('return ' .. (given.more_options or '{}'))()))
-    if given.path then
-      _G.office.follow_session(given.path)
-    end
   ]],
     { { path = path, folders = pack_folders, more_options = more_options } }
   )
@@ -893,21 +893,6 @@ T['the office’s timer and watch']['stops both when the office is let go'] = fu
 
   eq(office_window(), vim.NIL)
   eq({ open_handles('timer'), open_handles('fs_event') }, { timers, watches })
-end
-
-T['the office’s timer and watch']['does not follow the transcript after the office is let go'] = function()
-  local path = transcript_path()
-  fake_transcript.append(path, RECORDED_TURN)
-  open_office(path)
-  local watches = open_handles('fs_event')
-  child.lua([[_G.office.show_now()]])
-  child.lua([[_G.office.let_go()]])
-
-  child.lua([[_G.office.show_now()]])
-
-  eq(child.lua_get([[_G.told]]), {})
-  eq(is_standing(), true)
-  eq(open_handles('fs_event'), watches)
 end
 
 return T

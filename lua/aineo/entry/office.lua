@@ -123,6 +123,9 @@ local function office_of(tab)
         return vim.uv.hrtime() / 1e9
       end,
       settings = M.settings,
+      transcript = function()
+        return transcript_of(tab)
+      end,
       random = random_pick,
       report_tool = require('aineo.mcp').report_tool_name(),
     })
@@ -151,13 +154,11 @@ function M.let_go(tab)
   end
 end
 
---- Shows the office of `tab` over the right side of its layout, following the
---- transcript of the session its Claude Code runs.
+--- Shows the office of `tab` over the right side of its layout.
 ---
 ---@param tab aineo.entry.Tab
 function M.show(tab)
   local office = office_of(tab)
-  office.follow_session(transcript_of(tab))
   office.show_now()
 end
 
