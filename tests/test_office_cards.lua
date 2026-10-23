@@ -410,4 +410,30 @@ T['a report card']['is drawn again in its colours after a colorscheme cleared th
   )
 end
 
+T['a report card']['stands above the status list the scene really draws'] = function()
+  office_child.open_layout(child)
+  child.lua([[_G.now = 0]])
+  office_child.make_office(child, nil, CLOCK_OF_THE_CASE)
+  office_child.enter_the_left_window(child)
+  child.lua([[_G.office.show_now()]])
+
+  report('done', 'finished')
+
+  local function row_with(text)
+    for row, line in ipairs(lines()) do
+      if line:find(text, 1, true) then
+        return row
+      end
+    end
+  end
+  eq(
+    vim.wait(PATIENCE_MS, function()
+      return row_with('finished') ~= nil
+    end, 10),
+    true
+  )
+  local rule_row = row_with('─────')
+  eq({ row_with('finished') < rule_row, rule_row }, { true, #lines() - 4 })
+end
+
 return T
