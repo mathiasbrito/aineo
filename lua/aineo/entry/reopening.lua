@@ -34,8 +34,8 @@ end
 --- its kept session and no aineo tab exists yet: opens every tab of the list in
 --- its order, the first in the current tab page and each next one after the
 --- tab before it (`opening.lua`'s `open_new_tab()`), each with its Claude
---- Code started on its session at once (`aineo.entry.Tab`'s
---- `open_on_session()`), and moves to the
+--- Code started on its session at once, with the claim the list keeps for
+--- it (`aineo.entry.Tab`'s `open_on_session()`), and moves to the
 --- tab at the list's place among them. The list is kept once all have opened,
 --- with the sessions cut off by the most tabs a reopening opens, which the user
 --- is told of. The first open uses the list once: later runs, and an open that
@@ -65,7 +65,7 @@ local function reopen_folder_tabs()
     for index, session in ipairs(list.sessions) do
       failed_at = index
       opening.open_new_tab(function(tab)
-        tab.open_on_session(session)
+        tab.open_on_session(session, list.claims and list.claims[session])
         table.insert(opened, tab)
       end, true)
     end
