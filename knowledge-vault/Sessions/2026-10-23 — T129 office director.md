@@ -1,7 +1,7 @@
 # 2026-10-23 — T129 office director
 
 **Author:** the repository's maintainer, with Claude — implementer agent (`neovim-lua-developer`)
-**Branch:** `feature/t129-office-director` · **Pull request:** into `feature/t123-office` (number recorded in the pull request itself)
+**Branch:** `feature/t129-office-director` · **Pull request:** #334, into `feature/t123-office`
 
 A regular packet of the office screensaver (T123; D26 applies). `aineo.office_scene` (C20) now has a director: agents walk the shortest way over the floor, take spots, and play the steps of their activity for their times; poses are drawn with mirrored layers, rises, props and screens; pieces show their `in_use` art and lie on the floor when `walk_over`; a status list takes the last rows; a plan can no longer make a frame costly.
 
