@@ -9,7 +9,6 @@ local M = {}
 
 ---@class aineo.tests.OfficeTold
 ---@field made integer the offices made
----@field follows any[] the transcript path of each `follow_session()`, `vim.NIL` for none
 ---@field waits string[] the agent of each `permission_wait()`
 ---@field reports table[] each report `report_arrived()` was given
 ---@field let_go integer the `let_go()` calls
@@ -17,15 +16,12 @@ local M = {}
 
 --- The Lua that makes `aineo.office` the stand-in.
 M.INSTALL = [[
-  _G.office_told = { made = 0, follows = {}, waits = {}, reports = {}, let_go = 0 }
+  _G.office_told = { made = 0, waits = {}, reports = {}, let_go = 0 }
   package.loaded['aineo.office'] = {
     new_office = function(options)
       _G.office_told.made = _G.office_told.made + 1
       _G.office_told.settings = _G.office_told.settings or options.settings()
       return {
-        follow_session = function(path)
-          table.insert(_G.office_told.follows, path or vim.NIL)
-        end,
         permission_wait = function(agent)
           table.insert(_G.office_told.waits, agent)
         end,
