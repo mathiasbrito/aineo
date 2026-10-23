@@ -243,6 +243,7 @@ end
 
 T['an agent']['reaches 22 of the 24 states in turn on a pass, at the spot each ends at; idle and waiting_for_subagents go on with a random life'] = function()
   local pack = default.load_pack()
+  pack.cat = nil
   local size = LARGE
   local spots = default.spots(pack, size[1], size[2] - LIST_ROWS)
   local stage = default.stage(pack, size[1], size[2])
