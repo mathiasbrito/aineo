@@ -227,10 +227,112 @@ T['a match']['with a lua_pattern that is no string matches nothing'] = function(
   eq(state_while_running('make test', commands), 'running_a_command')
 end
 
-T['a match']['reads a command only up to 4096 bytes'] = function()
-  local long_command = string.rep('x', 4096) .. ' && make test'
+T['a match']['reads a command up to its 4096th byte and no further'] = function()
+  local up_to_the_limit = string.rep('x', 4096 - #' && make test') .. ' && make test'
+  local one_byte_further = 'x' .. up_to_the_limit
 
-  eq(state_while_running(long_command, COMMANDS), 'running_a_command')
+  eq(#up_to_the_limit, 4096)
+  eq(state_while_running(up_to_the_limit, COMMANDS), 'running_tests')
+  eq(state_while_running(one_byte_further, COMMANDS), 'running_a_command')
+end
+
+T['a match']['with a Lua pattern reads a command up to its 1024th byte and no further'] = function()
+  local commands = { tests = { { lua_pattern = 'make test' } } }
+  local up_to_the_limit = string.rep('x', 1024 - #'make test') .. 'make test'
+  local one_byte_further = 'x' .. up_to_the_limit
+
+  eq(#up_to_the_limit, 1024)
+  eq(state_while_running(up_to_the_limit, commands), 'running_tests')
+  eq(state_while_running(one_byte_further, commands), 'running_a_command')
+end
+
+T['a match']['with a Lua pattern that repeats twice matches nothing'] = function()
+  local commands = { tests = { { lua_pattern = 'make.*test.*now' } } }
+
+  eq(state_while_running('make a test right now', commands), 'running_a_command')
+end
+
+T['a match']['with a Lua pattern that repeats once matches'] = function()
+  local commands = { tests = { { lua_pattern = 'make.*test' } } }
+
+  eq(state_while_running('make a test right now', commands), 'running_tests')
+end
+
+T['a match']['with a Lua pattern Lua reads as a plain text of its own is no problem'] = function()
+  local commands = { tests = { { lua_pattern = '[%w_-]+ test' } } }
+
+  eq(state_while_running('make test', commands), 'running_tests')
+end
+
+T['a match']['with a glob takes ? for one character, not one byte'] = function()
+  local commands = { reading = { 'cat caf?.md' } }
+
+  eq(state_while_running('cat café.md', commands), 'reading')
+  eq(state_while_running('cat cafe.md', commands), 'reading')
+  eq(state_while_running('cat cafee.md', commands), 'running_a_command')
+end
+
+T['a match']['with a glob takes * for any run of characters, none included'] = function()
+  local commands = { reading = { 'cat *.md', 'cat a*b*c' } }
+
+  eq(state_while_running('cat .md', commands), 'reading')
+  eq(state_while_running('cat aXbYc', commands), 'reading')
+  eq(state_while_running('cat abc', commands), 'reading')
+  eq(state_while_running('cat aXbY', commands), 'running_a_command')
+  eq(state_while_running('cat a**b', commands), 'running_a_command')
+end
+
+T['a match']['with a glob keeps the characters of a Lua pattern as themselves'] = function()
+  local commands = { reading = { 'cat [x]*', 'cat %d*', 'cat (a)*' } }
+
+  eq(state_while_running('cat [x]1', commands), 'reading')
+  eq(state_while_running('cat %d1', commands), 'reading')
+  eq(state_while_running('cat (a)1', commands), 'reading')
+  eq(state_while_running('cat x', commands), 'running_a_command')
+  eq(state_while_running('cat 5', commands), 'running_a_command')
+end
+
+--- How long, in milliseconds, the office takes to hear a call of `command`
+--- when it is told of `commands`.
+---
+---@param command string
+---@param commands table
+---@return number milliseconds
+local function milliseconds_to_hear(command, commands)
+  local story = office_signals.tell({ commands = commands })
+  local start = vim.uv.hrtime()
+  story.started('a', 'Bash', { command = command })
+  return (vim.uv.hrtime() - start) / 1e6
+end
+
+--- The slowest time, in milliseconds, a command of 4096 bytes may take to be
+--- heard.
+local MOST_MILLISECONDS = 50
+
+T['a match']['with a glob of many stars on a command of 4096 bytes is heard within 50 ms'] = function()
+  local commands = { reading = { '*a*a*a*a*b', '* * * *x' } }
+
+  eq(milliseconds_to_hear(string.rep('a', 4096), commands) < MOST_MILLISECONDS, true)
+  eq(milliseconds_to_hear(string.rep('w ', 2048), commands) < MOST_MILLISECONDS, true)
+end
+
+T['a match']['with a Lua pattern that repeats once on a command of 4096 bytes is heard within 50 ms'] = function()
+  local commands = {
+    reading = {
+      { lua_pattern = '[%w_]-x' },
+      { lua_pattern = '.*x' },
+      { lua_pattern = '%a*x' },
+      { lua_pattern = 'a+x' },
+    },
+  }
+
+  eq(milliseconds_to_hear(string.rep('a', 4096), commands) < MOST_MILLISECONDS, true)
+end
+
+T['a match']['with a Lua pattern that repeats twice on a command of 4096 bytes is heard within 50 ms'] = function()
+  local commands = { reading = { { lua_pattern = '.-.-x' }, { lua_pattern = '.*a.*a.*b' } } }
+
+  eq(milliseconds_to_hear(string.rep('a', 4096), commands) < MOST_MILLISECONDS, true)
 end
 
 return T
