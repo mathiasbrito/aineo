@@ -72,6 +72,36 @@ local AREA_NAMES = {
 ---@field report aineo.office_pack.Report tells a problem of the file
 ---@field colour_names table<string, true> the colours a header may name: the pack's, and the character's own
 
+--- The most characters of a line a problem repeats.
+local MOST_ECHOED = 40
+
+--- `text` without the white space at its ends, found in one pass over it
+--- (`vim.trim()` and a pattern with `%s*` on both sides take time that grows
+--- with the square of a run of spaces).
+---
+---@param text string
+---@return string
+local function trimmed(text)
+  local first = text:find('%S')
+  if not first then
+    return ''
+  end
+  return text:sub(first, text:match('^.*()%S'))
+end
+
+--- The start of `text`, trimmed, for a problem to repeat: its first
+--- `MOST_ECHOED` bytes, and `…` when there is more.
+---
+---@param text string
+---@return string
+local function echoed(text)
+  local whole = trimmed(text)
+  if #whole <= MOST_ECHOED then
+    return whole
+  end
+  return whole:sub(1, MOST_ECHOED) .. '…'
+end
+
 --- The lines of `text` without line ends.
 ---
 ---@param text string
@@ -93,7 +123,7 @@ local function read_colours(value, line, context)
   for entry in vim.gsplit(value, ',', { plain = true }) do
     local letter, name = entry:match('^%s*(%S)%s*=%s*([%w_]+)%s*$')
     if not letter then
-      context.report(line, ('“%s” is not “letter = colour”'):format(vim.trim(entry)))
+      context.report(line, ('“%s” is not “letter = colour”'):format(echoed(entry)))
       is_readable = false
     else
       colours[letter] = name
@@ -221,12 +251,13 @@ local function read_header(lines, last, context)
   local header = { areas = {}, area_lines = {} }
   for line = 1, last do
     local text = lines[line]
-    if text:match('%S') then
-      local key, value = text:match('^%s*([%a ]-)%s*:%s*(.-)%s*$')
-      if key then
-        read_field(header, key, value, line, context)
+    if text:find('%S') then
+      local colon = text:find(':', 1, true)
+      local key = colon and trimmed(text:sub(1, colon - 1))
+      if key and key:find('^[%a ]*$') then
+        read_field(header, key, trimmed(text:sub(colon + 1)), line, context)
       else
-        context.report(line, ('“%s” is not “field: value”'):format(vim.trim(text)))
+        context.report(line, ('“%s” is not “field: value”'):format(echoed(text)))
       end
     end
   end
@@ -292,10 +323,12 @@ end
 local function check_rows(read, colours, report)
   local first_width = #read.frames[1][1]
   local told = {}
+  local told_width = false
   for frame_index, rows in ipairs(read.frames) do
     for row_index, row in ipairs(rows) do
       local line = read.row_lines[frame_index][row_index]
-      if #row ~= first_width then
+      if #row ~= first_width and not told_width then
+        told_width = true
         report(
           line,
           ('this row is %d pixels wide, and the first row is %d'):format(#row, first_width)
@@ -353,6 +386,37 @@ local function check_header_against_size(header, width, height, report)
   end
 end
 
+--- Tells each line of `lines` that holds a control character: art is drawn in
+--- characters a screen shows.
+---
+---@param lines string[]
+---@param report aineo.office_pack.Report
+---@return boolean told whether any line did
+local function tell_control_characters(lines, report)
+  local told = false
+  for line, text in ipairs(lines) do
+    if text:find('%c') then
+      report(line, 'this line holds a control character')
+      told = true
+    end
+  end
+  return told
+end
+
+--- The number of the first line of `lines` that is the line `---`; 0 when
+--- there is none.
+---
+---@param lines string[]
+---@return integer
+local function index_of_separator(lines)
+  for line, text in ipairs(lines) do
+    if text == FRAME_SEPARATOR then
+      return line
+    end
+  end
+  return 0
+end
+
 --- Reads the art file `text` as the piece `name`, telling every problem of the
 --- file to `context.report` with its line.
 ---
@@ -374,7 +438,10 @@ function M.parse(name, text, context)
     end,
   }
   local lines = lines_of(text)
-  local separator = vim.fn.index(lines, FRAME_SEPARATOR) + 1
+  if tell_control_characters(lines, counted.report) then
+    return nil
+  end
+  local separator = index_of_separator(lines)
   if separator == 0 then
     counted.report(1, 'the header is not followed by a line “---”')
     return nil

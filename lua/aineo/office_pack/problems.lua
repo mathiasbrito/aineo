@@ -115,7 +115,8 @@ end
 ---@return table[] items
 function M.quickfix_items(problems)
   return vim.tbl_map(function(problem)
-    return { filename = problem.path, lnum = problem.line or 0, text = problem.message }
+    local text = problem.message:gsub('%z', '^@')
+    return { filename = problem.path, lnum = problem.line or 0, text = text }
   end, problems)
 end
 
