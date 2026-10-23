@@ -223,8 +223,11 @@ end
 ---@param name string
 ---@param how string `WANTED` or `RANDOM`
 ---@param time number
----@param party? aineo.office_scene.Party the party it plays with others in
+---@param party? aineo.office_scene.Party the party it plays with others in; the performer's own, if it has one, is broken: its other players stop
 local function play(context, performer, name, how, time, party)
+  if performer.party and performer.party ~= party then
+    performer.party.broken = true
+  end
   performer.activity_name, performer.activity = name, context.pack.activities[name]
   performer.playing = how
   performer.party = party
@@ -335,13 +338,20 @@ local function start_next_activity(context, performer, time)
   return true
 end
 
---- Brings the performer up to `now`: walks it, and goes on to the next step,
---- or the next activity, whenever a step ends on the way.
+--- Brings the performer up to `now`: ends the game it plays when a player has
+--- left it, walks it, and goes on to the next step, or the next activity,
+--- whenever a step ends on the way.
 ---
 ---@param context aineo.office_scene.DirectorContext
 ---@param performer aineo.office_scene.Performer
 ---@param now number
 local function bring_up_to(context, performer, now)
+  if performer.party and performer.party.broken then
+    performer.party = nil
+    if not start_next_activity(context, performer, performer.clock) and performer.wanted_name then
+      play(context, performer, performer.wanted_name, WANTED, performer.clock)
+    end
+  end
   if not performer.column then
     begin_step(context, performer, performer.step_index, now)
   end
@@ -497,6 +507,9 @@ function M.new_director(pack, layout, random)
     end
     for id, performer in pairs(known) do
       if not present[id] then
+        if performer.party then
+          performer.party.broken = true
+        end
         holding.let_go_of_spot(context, performer)
         performer.cleaning = nil
         context.by_id[id] = nil

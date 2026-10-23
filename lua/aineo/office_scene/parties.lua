@@ -1,11 +1,12 @@
 --- Characters that play an activity together: an activity for `players`
---- characters begins for all of them at once, and each step of it lasts the
---- same time for all.
+--- characters begins for all of them at once, each step of it lasts the same
+--- time for all, and it ends for all when one of them leaves it.
 
 local M = {}
 
 ---@class aineo.office_scene.Party
 ---@field seconds table<integer, number|false> how long each step lasts, by the step's number, once the first player has begun it; false for a step that lasts until the activity changes
+---@field broken? boolean whether a player has left the activity: the others stop playing it too
 
 --- A party that has drawn no time yet.
 ---
