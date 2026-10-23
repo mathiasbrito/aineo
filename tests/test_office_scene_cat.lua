@@ -423,4 +423,31 @@ T['the cat']['is drawn in a colour of its own for each cat, and there are four c
   )
 end
 
+T['the cat']['does not move for ever two cats that take each other’s seat'] = function()
+  local pack = scene.people_pack('# plan\n \n s...\n', { s = { spot = 'seat', sitting = true } }, {
+    characters = {
+      agent = PEOPLE.agent,
+      cat = {
+        how_many = 2,
+        poses = { standing = { art = { 'first' } }, walking = { art = { 'first' } } },
+      },
+    },
+    activities = {
+      stand = { steps = { { at = 'seat' } } },
+      usurp = {
+        who = 'cat',
+        during = { 'always' },
+        steps = { { at = 'seat', even_if_taken = true, the_one_moved_plays = 'usurp' } },
+      },
+    },
+    states = { standing = 'stand' },
+  })
+  local stage = scene.stage_of(pack, 4, 1, { random = scene.always(0) })
+
+  MiniTest.expect.no_error(function()
+    stage.advance({}, 0)
+    stage.advance({}, 1)
+  end)
+end
+
 return T
