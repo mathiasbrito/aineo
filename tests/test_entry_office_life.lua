@@ -160,7 +160,7 @@ T['the office of a tab']['that shows by itself acts out what the session does, a
 
   eq(
     vim.wait(PATIENCE_MS, function()
-      return office_cells.is_typing(child)
+      return office_cells.is_at(child, 'file_cabinet')
     end, 20),
     true
   )
