@@ -78,6 +78,36 @@ function M.describe(problem)
   return ('%s: %s'):format(place, problem.message)
 end
 
+--- What to tell the user, in one message, of the problems of the pack `name`:
+--- how many there are, the first problem of each file that has one — at most
+--- `most` files — and the command that lists them all.
+---
+---@param problems aineo.office_pack.Problem[]
+---@param name string
+---@param most integer
+---@return string
+function M.warning_of(problems, name, most)
+  local lines, files_told = {}, {}
+  for _, problem in ipairs(M.ordered(problems)) do
+    local file = problem.pack .. '/' .. problem.file
+    if not files_told[file] then
+      files_told[file] = true
+      table.insert(lines, M.describe(problem))
+    end
+  end
+  local listed = vim.list_slice(lines, 1, most)
+  if #lines > most then
+    table.insert(listed, ('and the problems of %d more files'):format(#lines - most))
+  end
+  local counted = #problems == 1 and '1 problem' or ('%d problems'):format(#problems)
+  local head = ('aineo: the office pack “%s” has %s; :Aineo office check %s lists them'):format(
+    name,
+    counted,
+    name
+  )
+  return head .. '\n' .. table.concat(listed, '\n')
+end
+
 --- `problems` as entries of a quickfix list (`:h setqflist()`), each with the
 --- file's whole path, its line and what is wrong.
 ---
