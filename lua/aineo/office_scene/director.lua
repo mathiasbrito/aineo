@@ -134,7 +134,7 @@ local function begin_step(context, performer, index, time)
   performer.looks_again_at = nil
   performer.path = {}
   performer.following = nil
-  if step.follow and performer.column then
+  if following.is_followed_by(step) and performer.column then
     following.start(context, performer, step, time)
     return
   end
