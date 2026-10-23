@@ -998,6 +998,38 @@ local function check_explain(resolved_config)
   )
 end
 
+--- Reports whether the office can draw ('termguicolors' on, an error when off:
+--- it does not show) and when it shows by itself, from `office.idle_ms`; the
+--- second only while the configuration is valid.
+---
+---@param resolved_config table|nil the configuration, `nil` when it is wrong
+local function check_office(resolved_config)
+  vim.health.start('Office')
+  if vim.o.termguicolors then
+    vim.health.ok("'termguicolors' is on: the office draws its pixels")
+  else
+    vim.health.error(
+      "'termguicolors' is off, so the office does not show",
+      "Set 'termguicolors' in your configuration, as a terminal that draws true colours allows: :help aineo-office"
+    )
+  end
+  if not resolved_config then
+    return
+  end
+  local idle_ms = resolved_config.office.idle_ms
+  if idle_ms then
+    vim.health.info(
+      ('the office shows by itself after %g s without the cursor in the right side (office.idle_ms), and for :Aineo office and \\O: :help |aineo-office|'):format(
+        idle_ms / 1000
+      )
+    )
+  else
+    vim.health.info(
+      'the office shows only for :Aineo office and \\O (office.idle_ms is false): :help |aineo-office|'
+    )
+  end
+end
+
 --- Reports what the autostart decided when the editor started, and why, from
 --- aineo's record (`startup_record()`), with the error an open that failed
 --- met when the record holds it as text.
@@ -1041,6 +1073,7 @@ function M.check()
   check_tab_line(resolved_config)
   check_find(resolved_config)
   check_explain(resolved_config)
+  check_office(resolved_config)
   check_autostart()
   name_limits()
 end
