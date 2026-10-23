@@ -2051,6 +2051,27 @@ T['the office']['warns of an art file of office.pieces that cannot be used, with
     ),
     true
   )
+  eq(
+    vim.tbl_contains(
+      health.section(report, 'Office'),
+      ('- ✅ OK the office pack “default” in %s, named by office.pack, has no problem'):format(
+        shipped_pack_folder('default')
+      )
+    ),
+    true
+  )
+end
+
+T['the office']['tells a pack once when office.pack names it twice'] = function()
+  start_with_packs({ autostart = false, office = { pack = { 'broken', 'broken' } } })
+  child.o.termguicolors = true
+
+  local report = health.report(child)
+
+  local told = vim.tbl_filter(function(line)
+    return line:find('the office pack “broken”', 1, true) ~= nil
+  end, health.section(report, 'Office'))
+  eq(#told, 1)
 end
 
 T['the office']["is an error when 'termguicolors' is off: it does not show, and says why"] = function()
