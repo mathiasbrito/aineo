@@ -93,9 +93,11 @@ end
 
 T['the printer']['prints nothing when the pack has no page'] = function()
   local art = vim.deepcopy(PRINTER_ART)
+  art['art/printer.txt'] =
+    'colours: P = brown, Y = yellow\nanchor: 0, 3\narea page: 0, 2, 1 x 2\n---\nP\nP\nY\nY\n'
   art['art/printed_page.txt'] = nil
 
-  eq(printer_cells({ main = 10 }, 2, art), { scene.solid(BROWN), scene.solid(BROWN) })
+  eq(printer_cells({ main = 10 }, 2, art), { scene.solid(BROWN), scene.solid('#ffff00') })
 end
 
 return T
