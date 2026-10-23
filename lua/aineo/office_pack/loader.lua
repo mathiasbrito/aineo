@@ -84,6 +84,7 @@ local CHARACTER_COLOUR_NAMES = { 'agent', 'agent_light', 'agent_shade', 'agent_b
 ---@field folders string[]
 ---@field problems aineo.office_pack.Problems
 ---@field state_names string[]
+---@field files aineo.office_pack.FileSession
 
 ---@class aineo.office_pack.Build
 ---@field data table the pack's description
@@ -91,17 +92,19 @@ local CHARACTER_COLOUR_NAMES = { 'agent', 'agent_light', 'agent_shade', 'agent_b
 ---@field base aineo.office_pack.Pack|nil
 ---@field context aineo.office_pack.SchemaContext
 ---@field reporter_for fun(file: string): aineo.office_pack.Report
+---@field files aineo.office_pack.FileSession
 
 --- The first folder of `folders` that holds the pack `name`, with its
 --- `pack.lua`; `nil` when none does.
 ---
 ---@param name string
 ---@param folders string[] folders that hold packs, each in a folder of its own named for it
+---@param session aineo.office_pack.FileSession
 ---@return string|nil directory
-local function find_directory(name, folders)
+local function find_directory(name, folders, session)
   for _, folder in ipairs(folders) do
     local directory = vim.fs.joinpath(folder, name)
-    if vim.uv.fs_stat(vim.fs.joinpath(directory, 'pack.lua')) then
+    if session.exists(vim.fs.joinpath(directory, 'pack.lua')) then
       return directory
     end
   end
@@ -140,17 +143,34 @@ local function report_not_a_name(name, folders, problems)
   )
 end
 
+--- The text of the file `path`, read in `session`; when it cannot be read, the
+--- reason is told to `report` (once, for the reasons that are told once) and
+--- there is no text.
+---
+---@param session aineo.office_pack.FileSession
+---@param path string
+---@param boundary string|nil the folder the file must lie in
+---@param report aineo.office_pack.Report
+---@return string|nil
+local function text_of(session, path, boundary, report)
+  local text, problem, told = session.read_text(path, boundary)
+  if not text and not told then
+    report(nil, problem)
+  end
+  return text
+end
+
 --- `pack.lua` of the pack in `directory`, as data, with the lines of its
 --- entries.
 ---
 ---@param directory string
 ---@param report aineo.office_pack.Report
+---@param session aineo.office_pack.FileSession
 ---@return table|nil data
 ---@return table|nil lines
-local function read_description(directory, report)
-  local text, read_problem = files.read_text(vim.fs.joinpath(directory, 'pack.lua'), directory)
+local function read_description(directory, report, session)
+  local text = text_of(session, vim.fs.joinpath(directory, 'pack.lua'), directory, report)
   if not text then
-    report(nil, read_problem)
     return nil
   end
   local data, problem, lines = literal.parse(text)
@@ -199,10 +219,11 @@ end
 ---@param directory string
 ---@param colour_names table<string, true>
 ---@param reporter_for fun(file: string): aineo.office_pack.Report
+---@param session aineo.office_pack.FileSession
 ---@return table<string, aineo.office_pack.Piece> pieces
-local function read_pieces(directory, colour_names, reporter_for)
+local function read_pieces(directory, colour_names, reporter_for, session)
   local pieces = {}
-  local names = files.names_of_files(vim.fs.joinpath(directory, 'art'), '.txt')
+  local names = session.names_of_files(vim.fs.joinpath(directory, 'art'), '.txt')
   for index, name in ipairs(names) do
     local file = ('art/%s.txt'):format(name)
     local report = reporter_for(file)
@@ -210,11 +231,9 @@ local function read_pieces(directory, colour_names, reporter_for)
       report(nil, ('the pack has more than %d art files'):format(MAX_PIECES))
       break
     end
-    local text, read_problem = files.read_text(vim.fs.joinpath(directory, file), directory)
+    local text = text_of(session, vim.fs.joinpath(directory, file), directory, report)
     if text then
       pieces[name] = art.parse(name, text, { report = report, colour_names = colour_names })
-    else
-      report(nil, read_problem)
     end
   end
   return pieces
@@ -342,10 +361,9 @@ local function read_floor(build)
     context.lines[data.floor].legend
   )
   local report = build.reporter_for(data.floor.plan)
-  local text, read_problem =
-    files.read_text(vim.fs.joinpath(build.directory, data.floor.plan), build.directory)
+  local text =
+    text_of(build.files, vim.fs.joinpath(build.directory, data.floor.plan), build.directory, report)
   if not text then
-    report(nil, read_problem)
     return base_floor
   end
   local plan = floor.parse(text, report)
@@ -460,7 +478,7 @@ function resolve_pack(name, reading, chain)
     report_not_a_name(name, reading.folders, reading.problems)
     return nil
   end
-  local directory = find_directory(name, reading.folders)
+  local directory = find_directory(name, reading.folders, reading.files)
   if not directory then
     report_missing(name, reading.folders, reading.problems)
     return nil
@@ -469,7 +487,7 @@ function resolve_pack(name, reading, chain)
     return reading.problems.reporter_for(name, directory, file)
   end
   local report = reporter_for('pack.lua')
-  local data, lines = read_description(directory, report)
+  local data, lines = read_description(directory, report, reading.files)
   if not data then
     return nil
   end
@@ -480,13 +498,14 @@ function resolve_pack(name, reading, chain)
     base = base,
     context = { report = report, lines = lines, known = {} },
     reporter_for = reporter_for,
+    files = reading.files,
   }
   check_head(build, name)
   local pack = { name = data.name, about = data.about, author = data.author }
   pack.colours = read_entries(build, 'colours', pack_format.COLOURS)
   pack.pieces = entries.overlaid(
     base and base.pieces,
-    read_pieces(directory, colour_names_of(pack.colours), reporter_for)
+    read_pieces(directory, colour_names_of(pack.colours), reporter_for, reading.files)
   )
   build.context.known = known_names(build, reading, pack.colours, pack.pieces)
   pack.text_colours = read_text_colours(build)
@@ -519,18 +538,17 @@ end
 ---@param pack aineo.office_pack.Pack
 ---@param replaced_pieces table<string, string> art files, by the name of the piece each replaces
 ---@param problems aineo.office_pack.Problems
-local function replace_pieces(pack, replaced_pieces, problems)
+---@param session aineo.office_pack.FileSession
+local function replace_pieces(pack, replaced_pieces, problems, session)
   local colour_names = colour_names_of(pack.colours)
   for _, name in ipairs(entries.sorted_keys(replaced_pieces)) do
     local path = vim.fs.normalize(replaced_pieces[name])
     local directory, file = vim.fs.dirname(path), vim.fs.basename(path)
     local report = problems.reporter_for('office.pieces', directory, file)
-    local text, read_problem = files.read_text(path)
+    local text = text_of(session, path, nil, report)
     if text then
       pack.pieces[name] = art.parse(name, text, { report = report, colour_names = colour_names })
         or pack.pieces[name]
-    else
-      report(nil, read_problem)
     end
   end
 end
@@ -548,6 +566,7 @@ local function reading_of(options)
     folders = options.folders,
     problems = problems_module.new_problems(),
     state_names = options.state_names or states.names(),
+    files = files.new_session(),
   }
 end
 
@@ -561,9 +580,50 @@ end
 local function load_pack(name, options, reading)
   local pack = resolve_pack(name, reading, {})
   if pack and options.replaced_pieces then
-    replace_pieces(pack, options.replaced_pieces, reading.problems)
+    replace_pieces(pack, options.replaced_pieces, reading.problems, reading.files)
   end
   return pack
+end
+
+--- The loads kept, by what was asked for, so that the office showing again
+--- reads a pack only when a file of it has changed.
+---@type table<string, { files: aineo.office_pack.FileSession, pack: aineo.office_pack.Pack|nil, problems: aineo.office_pack.Problem[] }>
+local kept_loads = {}
+
+--- How many loads are kept at most.
+local MOST_KEPT_LOADS = 8
+
+--- What a load asked for, as one string: the name, the folders, the pieces
+--- of the user's own and the states.
+---
+---@param options aineo.office_pack.LoadOptions
+---@return string
+local function key_of(options)
+  local pieces = {}
+  for _, name in ipairs(entries.sorted_keys(options.replaced_pieces or {})) do
+    table.insert(pieces, name .. '=' .. options.replaced_pieces[name])
+  end
+  return table.concat({
+    options.name,
+    table.concat(options.folders, '\1'),
+    table.concat(pieces, '\1'),
+    table.concat(options.state_names or {}, '\1'),
+  }, '\0')
+end
+
+--- `pack` with the tables a caller changes - the colours of its text and its
+--- effects, which the office makes from highlight groups into colours - copied.
+---
+---@param pack aineo.office_pack.Pack|nil
+---@return aineo.office_pack.Pack|nil
+local function copy_for_showing(pack)
+  if not pack then
+    return nil
+  end
+  return vim.tbl_extend('force', pack, {
+    text_colours = vim.deepcopy(pack.text_colours),
+    effects = vim.deepcopy(pack.effects),
+  })
 end
 
 --- Loads the pack `options.name` from the first of `options.folders` that
@@ -575,16 +635,34 @@ end
 --- among the problems; the pack is `nil` only when the default pack cannot be
 --- used either.
 ---
+--- A load is kept, and the next one with the same options gives it again, no
+--- file read, while every file and folder it looked at is as it was (its type,
+--- size and time of change); the pack it gives is its own to change.
+---
 ---@param options aineo.office_pack.LoadOptions
 ---@return aineo.office_pack.Pack|nil pack
 ---@return aineo.office_pack.Problem[] problems
 function M.load(options)
   local reading = reading_of(options)
+  local key = key_of(options)
+  local kept = kept_loads[key]
+  if kept and kept.files.is_unchanged() then
+    return copy_for_showing(kept.pack), vim.deepcopy(kept.problems)
+  end
   local pack = load_pack(options.name, options, reading)
   if not pack and options.name ~= DEFAULT_NAME then
     pack = load_pack(DEFAULT_NAME, options, reading)
   end
-  return pack, problems_module.ordered(reading.problems.list)
+  local problems = problems_module.ordered(reading.problems.list)
+  if vim.tbl_count(kept_loads) >= MOST_KEPT_LOADS then
+    kept_loads = {}
+  end
+  kept_loads[key] = {
+    files = reading.files,
+    pack = copy_for_showing(pack),
+    problems = vim.deepcopy(problems),
+  }
+  return pack, problems
 end
 
 --- Every problem of the pack `options.name` alone, whether or not it can be
