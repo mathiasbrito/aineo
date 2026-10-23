@@ -9,6 +9,7 @@ local characters = require('aineo.office_pack.characters')
 local checks = require('aineo.office_pack.checks')
 local entries = require('aineo.office_pack.entries')
 local files = require('aineo.office_pack.files')
+local pack_names = require('aineo.office_pack.names')
 local floor = require('aineo.office_pack.floor')
 local literal = require('aineo.office_pack.literal')
 local pack_format = require('aineo.office_pack.pack_format')
@@ -113,12 +114,30 @@ end
 ---@param folders string[]
 ---@param problems aineo.office_pack.Problems
 local function report_missing(name, folders, problems)
-  local report = problems.reporter_for(name, folders[1] or '', 'pack.lua')
+  local report = problems.reporter_for(pack_names.shown(name), folders[1] or '', 'pack.lua')
   if #folders == 0 then
-    report(nil, ('there is no pack “%s” in any folder'):format(name))
+    report(nil, ('there is no pack “%s” in any folder'):format(pack_names.shown(name)))
   else
-    report(nil, ('there is no pack “%s” in %s'):format(name, table.concat(folders, ', ')))
+    report(
+      nil,
+      ('there is no pack “%s” in %s'):format(
+        pack_names.shown(name),
+        table.concat(folders, ', ')
+      )
+    )
   end
+end
+
+--- Tells that `name` is no pack's name.
+---
+---@param name string
+---@param folders string[]
+---@param problems aineo.office_pack.Problems
+local function report_not_a_name(name, folders, problems)
+  problems.reporter_for(pack_names.shown(name), folders[1] or '', 'pack.lua')(
+    nil,
+    ('the pack name “%s” is not letters, digits, _ and -'):format(pack_names.shown(name))
+  )
 end
 
 --- `pack.lua` of the pack in `directory`, as data, with the lines of its
@@ -129,7 +148,7 @@ end
 ---@return table|nil data
 ---@return table|nil lines
 local function read_description(directory, report)
-  local text, read_problem = files.read_text(vim.fs.joinpath(directory, 'pack.lua'))
+  local text, read_problem = files.read_text(vim.fs.joinpath(directory, 'pack.lua'), directory)
   if not text then
     report(nil, read_problem)
     return nil
@@ -191,7 +210,7 @@ local function read_pieces(directory, colour_names, reporter_for)
       report(nil, ('the pack has more than %d art files'):format(MAX_PIECES))
       break
     end
-    local text, read_problem = files.read_text(vim.fs.joinpath(directory, file))
+    local text, read_problem = files.read_text(vim.fs.joinpath(directory, file), directory)
     if text then
       pieces[name] = art.parse(name, text, { report = report, colour_names = colour_names })
     else
@@ -323,7 +342,8 @@ local function read_floor(build)
     context.lines[data.floor].legend
   )
   local report = build.reporter_for(data.floor.plan)
-  local text, read_problem = files.read_text(vim.fs.joinpath(build.directory, data.floor.plan))
+  local text, read_problem =
+    files.read_text(vim.fs.joinpath(build.directory, data.floor.plan), build.directory)
   if not text then
     report(nil, read_problem)
     return base_floor
@@ -436,6 +456,10 @@ end
 ---@param chain string[] the packs being resolved, the outermost first
 ---@return aineo.office_pack.Pack|nil pack `nil` when the pack cannot be used
 function resolve_pack(name, reading, chain)
+  if not pack_names.is_plain(name) then
+    report_not_a_name(name, reading.folders, reading.problems)
+    return nil
+  end
   local directory = find_directory(name, reading.folders)
   if not directory then
     report_missing(name, reading.folders, reading.problems)
