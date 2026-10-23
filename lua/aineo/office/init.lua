@@ -105,6 +105,9 @@ function M.new_office(options)
   --- could not.
   local idle_time_has_passed = false
 
+  --- Whether `let_go()` has been called: the office counts no more.
+  local has_been_let_go = false
+
   --- Whether the user was told that the settings cannot be read.
   local settings_unreadable_told = false
 
@@ -469,6 +472,9 @@ function M.new_office(options)
   local countdown = countdown_module.new_countdown({
     schedule_after = options.schedule_after,
     on_elapsed = function()
+      if not idle_time() then
+        return
+      end
       idle_time_has_passed = true
       settle()
     end,
@@ -481,7 +487,7 @@ function M.new_office(options)
   --- soon as there is a right side. The settings are read only when a
   --- countdown is to start.
   function settle()
-    if showing then
+    if showing or has_been_let_go then
       return
     end
     local area = options.right_side()
@@ -556,6 +562,7 @@ function M.new_office(options)
 
   --- Closes the office and stops its countdown.
   function office.let_go()
+    has_been_let_go = true
     countdown.stop()
     pcall(vim.api.nvim_del_augroup_by_id, life_group)
     close()
