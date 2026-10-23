@@ -3,6 +3,8 @@
 --- above the status list. The reports that came in are kept until the user
 --- enters the right side.
 
+local text_module = require('aineo.office.text')
+
 local M = {}
 
 --- The most cards drawn at once; the older reports are counted in a line
@@ -16,10 +18,8 @@ local MARGIN_CELLS = 1
 local DOT = '●'
 local DOT_HIDDEN = ' '
 
---- The words that join the parts of a card, and the mark of a summary cut
---- short.
+--- The words that join the parts of a card.
 local SEPARATOR = ' · '
-local CUT_MARK = '…'
 
 --- How long the dot of a report that cannot go on shows, and then hides, in
 --- seconds.
@@ -73,36 +73,6 @@ function M.define_groups()
   end
 end
 
---- `text` on one line: every run of white space and control characters is a
---- single space, and the ends are trimmed.
----
----@param text string
----@return string
-local function on_one_line(text)
-  local spaced = text:gsub('[%c%s]+', ' ')
-  return vim.trim(spaced)
-end
-
---- `text` cut to at most `cells` cells of the screen, with the mark of a cut
---- as its last character when it was cut.
----
----@param text string
----@param cells integer
----@return string
-local function cut_to_cells(text, cells)
-  if vim.fn.strdisplaywidth(text) <= cells then
-    return text
-  end
-  local kept = ''
-  for _, character in ipairs(vim.fn.split(text, '\\zs')) do
-    if vim.fn.strdisplaywidth(kept .. character .. CUT_MARK) > cells then
-      break
-    end
-    kept = kept .. character
-  end
-  return kept .. CUT_MARK
-end
-
 --- `report` as the text of its card, opening with `dot`, at most `cells`
 --- cells wide.
 ---
@@ -111,8 +81,8 @@ end
 ---@param cells integer
 ---@return string
 local function card_text(report, dot, cells)
-  local text = dot .. ' ' .. report.status .. SEPARATOR .. on_one_line(report.summary)
-  return cut_to_cells(text, cells)
+  local text = dot .. ' ' .. report.status .. SEPARATOR .. text_module.on_one_line(report.summary)
+  return text_module.cut_to_cells(text, cells)
 end
 
 --- The byte of `text` that the character `index` begins, with `index` from 0.

@@ -141,4 +141,105 @@ T['a tab page left']['has the office catch up with what the session did while it
   )
 end
 
+--- The source of the options that give the office the right side `_G.area`
+--- holds in the child, which a case sets.
+local RIGHT_SIDE_OF_THE_CASE = '{ right_side = function() return vim.deepcopy(_G.area) end }'
+
+--- Shows an office over an area of `width` by `height` cells.
+---
+---@param width integer
+---@param height integer
+local function show_over_an_area_of(width, height)
+  office_child.open_layout(child)
+  child.lua(
+    [[_G.area = { row = 0, col = 0, width = ..., height = select(2, ...) }]],
+    { width, height }
+  )
+  office_child.make_office(child, nil, RIGHT_SIDE_OF_THE_CASE)
+  child.lua([[_G.office.show_now()]])
+end
+
+--- The lines of the office's buffer.
+---
+---@return string[]
+local function office_lines()
+  return child.lua_get(
+    [[vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(...), 0, -1, false)]],
+    { office_cells.window(child) }
+  )
+end
+
+--- What the office says in its first line when its window is too small.
+local TOO_SMALL = 'This window is too small for the office: it needs 60 by 24 cells.'
+
+--- What the first line of the office says in a window `width` cells wide: the
+--- sentence, cut with a mark when the window is narrower than it.
+---
+---@param width integer
+---@return string
+local function first_line_in(width)
+  if #TOO_SMALL <= width then
+    return TOO_SMALL
+  end
+  return TOO_SMALL:sub(1, width - 1) .. '…'
+end
+
+T['a window of the size the office needs'] = MiniTest.new_set()
+
+T['a window too small'] = MiniTest.new_set({
+  parametrize = { { 59, 30 }, { 100, 23 }, { 10, 3 } },
+})
+
+T['a window too small']['shows one line saying so, and no scene'] = function(width, height)
+  show_over_an_area_of(width, height)
+
+  local lines = office_lines()
+
+  eq(#lines, height)
+  eq(lines[1], first_line_in(width))
+  eq(table.concat(vim.list_slice(lines, 2)), '')
+end
+
+T['a window too small']['draws the scene once the window grows to the size the office needs'] = function(
+  width,
+  height
+)
+  show_over_an_area_of(width, height)
+
+  child.lua([[_G.area.width = 100; _G.area.height = 30]])
+  child.cmd('doautocmd VimResized')
+
+  eq(
+    vim.wait(PATIENCE_MS, function()
+      return office_lines()[1]:find('▀', 1, true) ~= nil
+    end, 10),
+    true
+  )
+end
+
+T['a window of the size the office needs']['draws the scene'] = function()
+  show_over_an_area_of(60, 24)
+
+  eq(
+    vim.wait(PATIENCE_MS, function()
+      return office_lines()[1]:find('▀', 1, true) ~= nil
+    end, 10),
+    true
+  )
+end
+
+T['a window of the size the office needs']['says it is too small once it shrinks below'] = function()
+  show_over_an_area_of(100, 30)
+
+  child.lua([[_G.area.width = 59]])
+  child.cmd('doautocmd VimResized')
+
+  eq(
+    vim.wait(PATIENCE_MS, function()
+      return office_lines()[1] == first_line_in(59)
+    end, 10),
+    true
+  )
+end
+
 return T
