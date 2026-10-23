@@ -678,6 +678,7 @@ local function make_tab(homes, key, callbacks)
         homes.layout.follow_claude_terminal(terminal)
       end,
       on_session_switched = function(id, source, left)
+        offices.began_following(tab)
         if id == replacing_session and source == 'startup' then
           replacing_session = nil
           hand_over_dead_session(left, id, working_directory)
@@ -711,6 +712,7 @@ local function make_tab(homes, key, callbacks)
     local report = require('aineo.report')
     local mcp = require('aineo.mcp')
     local replacement = replacement_callbacks(working_directory)
+    offices.began_following(tab)
     return {
       cmd = config.claude.cmd,
       hide_multiplexer = config.claude.hide_multiplexer,
