@@ -233,6 +233,17 @@ T['an agent']['has its own desk, the one in its place among the agents, even whe
   eq(scene.agent_cell(stage.picture(), 5, 1, scene.SECOND_AGENT), '3,0')
 end
 
+T['an agent']['appears once the agent that had its spot is gone'] = function()
+  local pack = scene.people_pack('# plan\n \n a...s...\n', AISLE_LEGEND)
+  local stage = scene.stage_of(pack, 8, 1)
+  stage.advance(scene.agents_in('standing', 'standing'), 0)
+
+  stage.advance({ { id = 'agent2', state = 'standing' } }, 1)
+  stage.advance({ { id = 'agent2', state = 'standing' } }, 2)
+
+  eq(scene.agent_cell(stage.picture(), 8, 1), '0,0')
+end
+
 T['an agent']['appears once a spot it had none for is let go'] = function()
   local pack = scene.people_pack('# plan\n \n a...s...\n', AISLE_LEGEND)
   local stage = scene.stage_of(pack, 8, 1)

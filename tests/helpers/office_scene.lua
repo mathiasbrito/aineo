@@ -195,6 +195,34 @@ function M.new(directory_name)
     return groups
   end
 
+  --- The picture drawn as a line of letters for each row, a letter for each
+  --- cell: the one `letters` gives for the colour of a cell that is a pixel
+  --- pair of one colour, `t` for a cell with text in it, and `?` for any other.
+  ---
+  ---@param picture aineo.office_scene.Picture
+  ---@param width integer
+  ---@param letters table<string, string> a letter by `#rrggbb`
+  ---@return string[]
+  function scene.sketch(picture, width, letters)
+    local by_group = {}
+    for colour, letter in pairs(letters) do
+      by_group[scene.solid(colour)] = letter
+    end
+    local lines = {}
+    for index, row in ipairs(picture.rows) do
+      local starts = vim.str_utf_pos(row.text)
+      local cells = {}
+      for column = 1, width do
+        local group = (vim.iter(row.runs):find(function(run)
+          return run.from <= starts[column] - 1 and starts[column] - 1 < run.to
+        end) or {}).group
+        cells[column] = by_group[group] or (group and group:find('^AineoOfficeText') and 't') or '?'
+      end
+      lines[index] = table.concat(cells)
+    end
+    return lines
+  end
+
   --- The cell an agent is drawn in, as `column .. ',' .. row`, or 'nowhere'
   --- when no cell of the picture is drawn in the agent's colour: the first
   --- agent's unless `colour` says another's. The picture is of cells that
