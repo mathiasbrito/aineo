@@ -22,6 +22,9 @@ local function possible_partners(context, performer, activity)
     return other ~= performer
       and other.column ~= nil
       and vim.list_contains(activity.during, other.state)
+      and other.playing ~= performers.INTERLUDE
+      and other.activity ~= activity
+      and (other.party == nil or other.looks_for_life_at ~= nil)
   end, performer.kind == performers.CAT and context.cats or context.agents)
 end
 
