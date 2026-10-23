@@ -11,6 +11,7 @@ local M = {}
 ---@field pack aineo.office_pack.Pack
 ---@field width integer cells
 ---@field height integer cells
+---@field random? fun(): number the source of the random times of steps: a number from 0 up to, not including, 1; `math.random` when not given
 
 ---@class aineo.office_scene.Stage
 ---@field advance fun(agents: aineo.office_states.Agent[], now: number) puts the agents where their states and the time put them; `now` is in seconds, from any origin
@@ -26,6 +27,7 @@ function M.new_stage(options)
   vim.validate('options.pack', options.pack, 'table')
   vim.validate('options.width', options.width, 'number')
   vim.validate('options.height', options.height, 'number')
+  vim.validate('options.random', options.random, 'function', true)
 
   local pack = options.pack
   local width, height = options.width, options.height
@@ -34,7 +36,7 @@ function M.new_stage(options)
 
   local function lay_out()
     layout = floor_layout.lay_out(pack, width, height)
-    director = director_module.new_director(pack, layout)
+    director = director_module.new_director(pack, layout, options.random or math.random)
   end
   lay_out()
 
