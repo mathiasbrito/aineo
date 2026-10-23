@@ -52,6 +52,24 @@ function M.open_handles(child, kind)
   )
 end
 
+--- The number of timers open in the child that repeat: the frames' and the
+--- looks every so often. A timer that fires once, such as the one that looks
+--- at a watched path once after the watch starts, is not counted.
+---
+---@param child table
+---@return integer
+function M.open_repeating_timers(child)
+  return child.lua_get([[(function()
+    local count = 0
+    vim.uv.walk(function(handle)
+      if handle:get_type() == 'timer' and not handle:is_closing() and handle:get_repeat() > 0 then
+        count = count + 1
+      end
+    end)
+    return count
+  end)()]])
+end
+
 --- The character at `column` of the office's line `row`, both from 0, and the
 --- highlight group that draws the cell, which are read where every cell
 --- before it is a character of one cell.
