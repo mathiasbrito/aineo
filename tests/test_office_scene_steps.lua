@@ -252,27 +252,27 @@ T['an agent']['has its own desk, the one in its place among the agents, even whe
   eq(scene.agent_cell(stage.picture(), 5, 1, scene.SECOND_AGENT), '3,0')
 end
 
-T['an agent']['appears once the agent that had its spot is gone'] = function()
-  local pack = scene.people_pack('# plan\n \n a...s...\n', AISLE_LEGEND)
-  local stage = scene.stage_of(pack, 8, 1)
+T['an agent']['appears once the agent that had its spot is gone, when no floor cell was free'] = function()
+  local pack = scene.people_pack('# plan\n \n a\n', AISLE_LEGEND)
+  local stage = scene.stage_of(pack, 1, 1)
   stage.advance(scene.agents_in('standing', 'standing'), 0)
 
   stage.advance({ { id = 'agent2', state = 'standing' } }, 1)
   stage.advance({ { id = 'agent2', state = 'standing' } }, 2)
 
-  eq(scene.agent_cell(stage.picture(), 8, 1, scene.SECOND_AGENT), '0,0')
+  eq(scene.agent_cell(stage.picture(), 1, 1, scene.SECOND_AGENT), '0,0')
 end
 
-T['an agent']['appears once a spot it had none for is let go'] = function()
+T['an agent']['stands on a floor cell for want of a spot, and keeps it when a spot is let go'] = function()
   local pack = scene.people_pack('# plan\n \n a...s...\n', AISLE_LEGEND)
-  local stage = scene.stage_of(pack, 8, 1)
+  local stage = scene.stage_of(pack, 8, 1, { random = scene.always(0) })
   stage.advance(scene.agents_in('standing', 'standing'), 0)
   local before = scene.agent_cell(stage.picture(), 8, 1, scene.SECOND_AGENT)
 
   stage.advance(scene.agents_in('working', 'standing'), 1)
   stage.advance(scene.agents_in('working', 'standing'), 2)
 
-  eq({ before, scene.agent_cell(stage.picture(), 8, 1, scene.SECOND_AGENT) }, { 'nowhere', '0,0' })
+  eq({ before, scene.agent_cell(stage.picture(), 8, 1, scene.SECOND_AGENT) }, { '1,0', '1,0' })
 end
 
 T['a step']['counts its time from the agent’s arrival, not from when its walk began'] = function()
