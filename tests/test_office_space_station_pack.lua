@@ -232,6 +232,15 @@ T['the space station pack']['draws each pose of the starhare in the fur the pack
   eq(#fur_letters_of(piece) > 0, true)
 end
 
+T['the space station pack']['draws the puddle of the starhare as an oval: its top and bottom rows alike, its middle the widest'] = function()
+  local frame = default.load_pack(PACK).pieces.starhare_puddle.frames[1]
+
+  eq(#frame, 3)
+  eq(frame[1], frame[3])
+  eq(frame[2]:find('.', 1, true), nil)
+  eq(frame[1]:sub(1, 1), '.')
+end
+
 T['the space station pack']['draws the sky of every hour as drifting stars'] = MiniTest.new_set({
   parametrize = { { 'sky_dawn' }, { 'sky_day' }, { 'sky_dusk' }, { 'sky_night' } },
 })
