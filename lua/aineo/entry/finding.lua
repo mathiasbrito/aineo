@@ -7,15 +7,7 @@ local errors = require('aineo.entry.errors')
 
 local M = {}
 
---- aineo's configuration, resolved from `vim.g.aineo` and the options
---- `require('aineo').setup()` recorded (`aineo.config`'s `resolve_config()`).
---- Raises its error naming the setting that is wrong.
----
----@return table
-local function resolved_config()
-  local config = require('aineo.config')
-  return (config.resolve_config(vim.g.aineo, config.recorded_setup_options()))
-end
+local resolved_config = require('aineo.entry.settings').resolved
 
 --- The folder the tab's Claude Code works in: where it started, and before
 --- it has started, where the editor is.
