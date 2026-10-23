@@ -37,9 +37,8 @@ end
 ---@param character aineo.office_scene.Character
 ---@return table<string, string>
 local function art_colours(pack, character)
-  local own = pack[character.kind].colours
-  local base = own[(character.index - 1) % #own + 1]
-  return vim.tbl_extend('force', pack.colours, colours.agent_shades(base))
+  local own = colours.of_agent(pack[character.kind].colours, character.index)
+  return vim.tbl_extend('force', pack.colours, colours.agent_shades(own))
 end
 
 --- How many pixels the pose lifts `character` at `now`: the number of its
