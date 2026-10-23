@@ -85,7 +85,7 @@ local function inline(value, order_of)
   local parts = {}
   if vim.islist(value) and #value > 0 then
     for _, item in ipairs(value) do
-      local text = inline(item, order_of)
+      local text = inline(item, order_of and order_of.item)
       if not text then
         return nil
       end
