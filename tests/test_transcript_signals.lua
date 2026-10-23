@@ -241,6 +241,15 @@ T['signals_of_line()']["leaves the end of the main agent's turn to the line that
   eq(signals, {})
 end
 
+T['signals_of_line()']['reads the recorded notice of a finished background task as a background done'] = function()
+  local line = session_line('<task-notification')
+
+  local signals = transcript.signals_of_line(line, 'main')
+
+  eq(#signals, 1)
+  eq(signals[1].kind, 'background_done')
+end
+
 T['signals_of_line()']['reads the end of a turn'] = function()
   local line = recorded_line('"subtype": "turn_duration"')
 
@@ -433,8 +442,9 @@ T['the recordings'] = MiniTest.new_set({
       'session-2.1.308.jsonl',
       'main',
       {
+        background_done = 1,
         interrupted = 1,
-        prompt = 16,
+        prompt = 15,
         thinking = 10,
         tool_finished = 18,
         tool_started = 18,
