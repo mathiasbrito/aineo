@@ -3,6 +3,7 @@ local fake_transcript = dofile('tests/helpers/fake_transcript.lua')
 local fixture = dofile('tests/helpers/fixture.lua')
 local layout = dofile('tests/helpers/layout.lua')
 local office_cells = dofile('tests/helpers/office_cells.lua')
+local pack_files = dofile('tests/helpers/office_pack_files.lua')
 
 local eq = MiniTest.expect.equality
 
@@ -39,29 +40,31 @@ end
 ---
 ---@param path? string the transcript to follow
 ---@param pack_folders? string[] the folders the office's packs are searched in, those of 'runtimepath' by default
+---@param more_options? string the source of a table of options of the office, such as its settings, over the usual
 ---@return table buffers the layout's `claude`, `report` and `input` buffers
-local function open_office(path, pack_folders)
+local function open_office(path, pack_folders, more_options)
   local buffers = layout.open_with_stand_ins(child)
   child.lua(
     [[
+    local given = ...
     _G.told = {}
     vim.notify = function(message, level)
       table.insert(_G.told, { message = message, level = level })
     end
-    _G.office = require('aineo.office').new_office({
+    _G.office = require('aineo.office').new_office(vim.tbl_extend('force', {
       right_side = function()
         return require('aineo.layout').right_column_area()
       end,
-      pack_folders = (select(2, ...)) or vim.api.nvim_get_runtime_file('aineo-office', true),
+      pack_folders = given.folders or vim.api.nvim_get_runtime_file('aineo-office', true),
       clock = function()
         return vim.uv.hrtime() / 1e9
       end,
-    })
-    if (...) then
-      _G.office.follow_session((...))
+    }, loadstring('return ' .. (given.more_options or '{}'))()))
+    if given.path then
+      _G.office.follow_session(given.path)
     end
   ]],
-    { path, pack_folders }
+    { { path = path, folders = pack_folders, more_options = more_options } }
   )
   return buffers
 end
@@ -233,6 +236,168 @@ T['showing the office']['says why the pack cannot be loaded, and opens nothing']
       level = 4,
     },
   })
+end
+
+--- Writes the pack `name`, with the floor colour `floor` and `changes` over
+--- its fields, into the `aineo-office` folder of a directory of the test's
+--- own, along with a pack `default` of another floor colour, and returns the
+--- folder.
+---
+---@param name string
+---@param floor string `#rrggbb`
+---@param changes? table fields of the pack's pack.lua over the smallest pack's
+---@param files? table<string, string|false> the pack's files over the smallest pack's
+---@return string folder
+local function write_packs(name, floor, changes, files)
+  local root = fixture.directory('office_packs')
+  pack_files.write_pack(root, 'default', {
+    ['pack.lua'] = pack_files.pack_text({
+      name = 'default',
+      colours = { wall = '#292c3c', floor = '#404040', ink = '#1e1e2e', wood = '#b4875a' },
+    }),
+  })
+  local description = pack_files.pack_text(vim.tbl_extend('force', {
+    name = name,
+    colours = { wall = '#292c3c', floor = floor, ink = '#1e1e2e', wood = '#b4875a' },
+  }, changes or {}))
+  return pack_files.write_pack(
+    root,
+    name,
+    vim.tbl_extend('force', { ['pack.lua'] = description }, files or {})
+  )
+end
+
+--- The settings of the office that name the pack `name`, as the source of a
+--- table of options, and the art files `pieces` replace its pieces with.
+---
+---@param name string
+---@param pieces? table<string, string>
+---@return string
+local function settings_naming(name, pieces)
+  return ('{ settings = function() return { pack = %q, pieces = %s } end }'):format(
+    name,
+    vim.inspect(pieces or {}, { newline = ' ', indent = '' })
+  )
+end
+
+--- A pack's fields whose standing agent shows dots over its head.
+local STANDING_WITH_DOTS = {
+  characters = {
+    agent = {
+      colours = { '#a6e3a1' },
+      poses = {
+        standing = { art = { 'person' }, effect = 'busy_dots' },
+        walking = { art = { 'person' } },
+        sitting = { art = { 'person' }, sitting = true },
+        typing = { like = 'sitting', effect = 'busy_dots' },
+      },
+    },
+  },
+}
+
+T['the pack'] = MiniTest.new_set()
+
+T['the pack']['the office draws is the one the settings name'] = function()
+  local folder = write_packs('alt', '#ff0000')
+  open_office(nil, { folder }, settings_naming('alt'))
+
+  child.lua([[_G.office.show_now()]])
+
+  eq(office_cells.shows_colour(child, 'ff0000'), true)
+  eq(office_cells.shows_colour(child, '404040'), false)
+end
+
+T['the pack']['the office draws is the default pack when the settings name none'] = function()
+  local folder = write_packs('alt', '#ff0000')
+  open_office(nil, { folder })
+
+  child.lua([[_G.office.show_now()]])
+
+  eq(office_cells.shows_colour(child, '404040'), true)
+end
+
+T['the pack']['the office draws is picked from the names the settings list, by the random source'] = function()
+  local folder = write_packs('alt', '#ff0000')
+  open_office(
+    nil,
+    { folder },
+    [[{
+      settings = function() return { pack = { 'default', 'alt' }, pieces = {} } end,
+      random = function(count) return count end,
+    }]]
+  )
+
+  child.lua([[_G.office.show_now()]])
+
+  eq(office_cells.shows_colour(child, 'ff0000'), true)
+end
+
+T['the pack']['the office draws is picked again each time it shows'] = function()
+  local folder = write_packs('alt', '#ff0000')
+  open_office(
+    nil,
+    { folder },
+    [[{
+      settings = function() return { pack = { 'default', 'alt' }, pieces = {} } end,
+      random = function() _G.pick = (_G.pick or 0) % 2 + 1; return _G.pick end,
+    }]]
+  )
+
+  child.lua([[_G.office.show_now()]])
+  local first = office_cells.shows_colour(child, '404040')
+  child.lua([[_G.office.let_go()]])
+  child.lua([[_G.office.show_now()]])
+
+  eq({ first, office_cells.shows_colour(child, 'ff0000') }, { true, true })
+end
+
+T['the pack']['tells the user once, when it shows, what is wrong with its pieces, and shows it all the same'] = function()
+  local folder = write_packs('alt', '#ff0000', { based_on = 'default' }, {
+    ['art/person.txt'] = 'colours: A = agent\n---\nAA\nA\n',
+  })
+  open_office(nil, { folder }, settings_naming('alt'))
+
+  child.lua([[_G.office.show_now()]])
+
+  local told = child.lua_get([[_G.told]])
+  eq(#told, 1)
+  eq(told[1].level, 3)
+  eq(told[1].message:find('alt/art/person.txt:4: ', 1, true) ~= nil, true)
+  eq(told[1].message:find(':Aineo office check alt', 1, true) ~= nil, true)
+  eq(office_cells.shows_colour(child, 'ff0000'), true)
+end
+
+T['the pack']['takes the art files of the settings in place of its pieces'] = function()
+  local folder = write_packs('alt', '#ff0000', STANDING_WITH_DOTS)
+  local mine = vim.fs.joinpath(vim.fs.dirname(folder), 'mine.txt')
+  vim.fn.writefile({ 'colours: A = wood', '---', 'A', 'A' }, mine)
+  open_office(nil, { folder }, settings_naming('alt', { person = mine }))
+
+  child.lua([[_G.office.show_now()]])
+
+  eq(child.lua_get([[_G.told]]), {})
+  eq(office_cells.shows_colour(child, 'b4875a'), true)
+end
+
+T['the pack']['draws its text in the colours of the highlight groups it names, again after a colorscheme'] = function()
+  local folder = write_packs('alt', '#ff0000', STANDING_WITH_DOTS)
+  open_office(nil, { folder }, settings_naming('alt'))
+  child.cmd('highlight Normal guifg=#123456')
+
+  child.lua([[_G.office.show_now()]])
+  local before = wait_until(function()
+    return office_cells.shows_colour(child, '123456')
+  end)
+  child.cmd('highlight Normal guifg=#654321')
+  child.cmd('doautocmd ColorScheme')
+
+  eq(before, true)
+  eq(
+    wait_until(function()
+      return office_cells.shows_colour(child, '654321')
+    end),
+    true
+  )
 end
 
 T['showing the office']['opens no window, and says why, when the stage cannot be made'] = function()

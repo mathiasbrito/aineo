@@ -1,7 +1,7 @@
 --- The office of each tab, in the composition root: makes a tab's office the
 --- first time it is asked to show, hands it what it is not to reach for — the
---- layout's right side, the folders packs are in, the clock and the transcript
---- of the tab's session — and shows it.
+--- layout's right side, the folders packs are in, the clock, the settings and
+--- the transcript of the tab's session — and shows it.
 ---
 --- Loading it loads no other home: `aineo.office` is required when an office
 --- is first made.
@@ -45,6 +45,33 @@ local function transcript_of(session_id)
   return nil
 end
 
+--- The settings of the office: `office.pack` and `office.pieces` of aineo's
+--- configuration, resolved from `vim.g.aineo` and the options
+--- `require('aineo').setup()` recorded (`aineo.config`'s `resolve_config()`),
+--- each time the office is asked for. Raises its error naming the setting
+--- that is wrong.
+---
+---@return aineo.office.Settings
+function M.settings()
+  local config = require('aineo.config')
+  return (config.resolve_config(vim.g.aineo, config.recorded_setup_options())).office
+end
+
+--- The folders packs are in: the `aineo-office` folders of 'runtimepath'.
+---
+---@return string[]
+function M.pack_folders()
+  return vim.api.nvim_get_runtime_file('aineo-office', true)
+end
+
+--- A whole number from 1 to `count`, picked at random.
+---
+---@param count integer
+---@return integer
+local function random_pick(count)
+  return math.random(count)
+end
+
 --- The office of `tab`, made the first time.
 ---
 ---@param tab aineo.entry.Tab
@@ -53,10 +80,12 @@ local function office_of(tab)
   if not offices[tab] then
     offices[tab] = require('aineo.office').new_office({
       right_side = tab.homes.layout.right_column_area,
-      pack_folders = vim.api.nvim_get_runtime_file('aineo-office', true),
+      pack_folders = M.pack_folders(),
       clock = function()
         return vim.uv.hrtime() / 1e9
       end,
+      settings = M.settings,
+      random = random_pick,
     })
   end
   return offices[tab]

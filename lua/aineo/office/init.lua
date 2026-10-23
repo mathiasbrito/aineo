@@ -13,6 +13,7 @@
 --- watch follows the session's transcript; both stop when it closes. The
 --- office closes when the cursor enters any window in the cells it covers.
 
+local colours = require('aineo.office.colours')
 local float_module = require('aineo.office.float')
 local office_pack = require('aineo.office_pack')
 local office_scene = require('aineo.office_scene')
@@ -22,8 +23,11 @@ local transcript = require('aineo.transcript')
 
 local M = {}
 
---- The name of the pack the office draws.
-local PACK_NAME = 'default'
+--- What the office draws when it is given no settings: the default pack.
+local DEFAULT_SETTINGS = { pack = 'default', pieces = {} }
+
+--- The most problems of a pack a warning lists.
+local MOST_PROBLEMS_LISTED = 5
 
 --- Frames a second, as the milliseconds between two: 12 a second.
 local FRAME_MS = 83
@@ -36,6 +40,12 @@ local NO_RIGHT_SIDE = "aineo: the office has no right side of aineo's layout to 
 ---@field right_side fun(): aineo.layout.Area|nil the screen cells the layout's right side takes now, nil when it shows none
 ---@field pack_folders string[] the `aineo-office` folders the office's packs are searched in
 ---@field clock fun(): number the time in seconds, from any origin, that only grows
+---@field settings? fun(): aineo.office.Settings what the user set for the office, asked each time it shows; the default pack when not given
+---@field random? fun(count: integer): integer a whole number from 1 to `count`, which picks one of several packs the settings name; the first when not given
+
+---@class aineo.office.Settings
+---@field pack string|string[] the pack to draw, or packs to pick one from at random each time
+---@field pieces table<string, string> art files of the user's own, by the name of the piece each replaces
 
 ---@class aineo.office.Office
 ---@field follow_session fun(transcript_path: string|nil) follows the transcript of the session whose file is `transcript_path` while the office shows, or none
@@ -53,15 +63,40 @@ function M.new_office(options)
   vim.validate('options.right_side', options.right_side, 'function')
   vim.validate('options.pack_folders', options.pack_folders, 'table')
   vim.validate('options.clock', options.clock, 'function')
+  vim.validate('options.settings', options.settings, 'function', true)
+  vim.validate('options.random', options.random, 'function', true)
 
   ---@type string|nil
   local transcript_path = nil
 
   --- What exists while the office shows; nil while it is hidden.
-  ---@type { float: aineo.office.Float, timer: uv.uv_timer_t, group: integer, follower: aineo.transcript.Follower|nil, stage: aineo.office_scene.Stage, screen: aineo.office.Screen, area: aineo.layout.Area }|nil
+  ---@type { float: aineo.office.Float, timer: uv.uv_timer_t, group: integer, follower: aineo.transcript.Follower|nil, stage: aineo.office_scene.Stage, screen: aineo.office.Screen, area: aineo.layout.Area, refresh_colours: fun() }|nil
   local showing = nil
 
   local office = {}
+
+  --- The name of the pack to draw now: the pack the settings name, or one of
+  --- the packs they list, picked by `options.random`.
+  ---
+  ---@param settings aineo.office.Settings
+  ---@return string
+  local function pack_name_of(settings)
+    local names = type(settings.pack) == 'table' and settings.pack or { settings.pack }
+    local pick = options.random and options.random(#names) or 1
+    return names[pick]
+  end
+
+  --- Tells the user, in one warning, what is wrong with the pack `name`: the
+  --- first problem of each file that has one, and the command that lists them
+  --- all.
+  ---
+  ---@param name string
+  ---@param problems aineo.office_pack.Problem[]
+  local function warn_of(name, problems)
+    if #problems > 0 then
+      vim.notify(office_pack.warning_of(problems, name, MOST_PROBLEMS_LISTED), vim.log.levels.WARN)
+    end
+  end
 
   --- Closes the office if it shows: stops its frame timer and its follower,
   --- removes its autocommands and closes its window. Does nothing when it is
@@ -140,7 +175,7 @@ function M.new_office(options)
   --- closes it when its window closes; and makes its colours again after a
   --- colorscheme cleared them.
   ---
-  ---@param open { float: aineo.office.Float, group: integer, stage: aineo.office_scene.Stage, area: aineo.layout.Area, screen: aineo.office.Screen }
+  ---@param open { float: aineo.office.Float, group: integer, stage: aineo.office_scene.Stage, area: aineo.layout.Area, screen: aineo.office.Screen, refresh_colours: fun() }
   local function watch_the_screen(open)
     vim.api.nvim_create_autocmd('WinEnter', {
       group = open.group,
@@ -159,7 +194,10 @@ function M.new_office(options)
     })
     vim.api.nvim_create_autocmd('ColorScheme', {
       group = open.group,
-      callback = open.screen.forget_groups,
+      callback = function()
+        open.refresh_colours()
+        open.screen.forget_groups()
+      end,
     })
     vim.api.nvim_create_autocmd('WinClosed', {
       group = open.group,
@@ -224,12 +262,20 @@ function M.new_office(options)
       vim.notify(NO_RIGHT_SIDE, vim.log.levels.WARN)
       return
     end
-    local pack, problems = office_pack.load({ name = PACK_NAME, folders = options.pack_folders })
+    local settings = options.settings and options.settings() or DEFAULT_SETTINGS
+    local name = pack_name_of(settings)
+    local pack, problems = office_pack.load({
+      name = name,
+      folders = options.pack_folders,
+      replaced_pieces = settings.pieces,
+    })
     if not pack then
       local why = office_pack.describe_problem(problems[1])
       vim.notify(('aineo: the office cannot show: %s'):format(why), vim.log.levels.ERROR)
       return
     end
+    warn_of(name, problems)
+    local refresh_colours = colours.follow_highlights(pack)
     local made, stage =
       pcall(office_scene.new_stage, { pack = pack, width = area.width, height = area.height })
     if not made then
@@ -251,6 +297,7 @@ function M.new_office(options)
       stage = stage,
       screen = screen,
       area = area,
+      refresh_colours = refresh_colours,
     }
     watch_the_screen(open)
     showing = open

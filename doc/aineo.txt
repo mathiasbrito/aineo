@@ -2723,6 +2723,18 @@ moves you to that tab instead and claims nothing.
 			Terminal mode and in Insert mode, `<C-\>O` do the
 			same (|aineo-keys|).
 
+                                                         *:Aineo-office-check*
+:Aineo office check [name]
+			Checks an office pack and lists what is wrong with it
+			in the quickfix list, each problem at the file and
+			line it is on (|aineo-office-check|). The pack is the
+			one named, or, with no name, the one `office.pack`
+			names (the first of a list), with the art files of
+			`office.pieces` over its pieces. A pack with no
+			problem is told so, once, and no list opens. It needs
+			no aineo tab. With any other word it tells you, with
+			one error, what it takes.
+
 When an action fails — `claude.cmd` is not executable, say — aineo tells you
 once, with one error message starting with `aineo:`, and opens nothing.
 
@@ -3239,6 +3251,24 @@ find.picker		One of `'auto'`, `'snacks'`, `'fzf-lua'`,
 			each search, with one warning, that the picker is
 			missing. None of them is a dependency of aineo.
 
+                              *aineo-config-office* *aineo-config-office.pack*
+office.pack		A pack's name, or a list of names. Default:
+			`'default'`
+			The pack the office draws (|aineo-office-packs|). A
+			list is a choice made again each time the office
+			shows, at random among the names. A pack aineo does
+			not find, or cannot use, gives way to the default
+			pack, with a warning.
+
+                                                  *aineo-config-office.pieces*
+office.pieces		A table of piece names to art files. Default: `{}`
+			Art files of your own that replace pieces of the
+			pack, whatever it is: `{ desk = '~/art/desk.txt' }`
+			draws that file where the pack draws its piece
+			`desk`. A file is read and checked as the pack's own
+			(|aineo-office-art|), and left out, with a warning
+			naming it, when it has a problem.
+
                                                        *aineo-config-explain*
                                                  *aineo-config-explain.model*
 explain.model		A non-empty string. Default: `'sonnet'`
@@ -3703,6 +3733,205 @@ The art is a pack: a folder `aineo-office/<name>/` on 'runtimepath' with
 never runs, `floor.txt`, the floor plan drawn as text, and `art/*.txt`, the
 pieces of pixel art. aineo's own pack is `aineo-office/default/`, the one the
 office draws.
+
+`:Aineo office check` (|:Aineo-office-check|) lists what is wrong with a
+pack. How a pack is chosen, found and written is told next.
+
+                                                         *aineo-office-packs*
+Packs ~
+A pack is a folder `aineo-office/<name>/` on 'runtimepath': in a plugin, as
+lazy.nvim's `{ 'someone/aineo-office-harbour' }` brings one, or in your own
+configuration, `~/.config/nvim/aineo-office/<name>/`. Its name is its
+folder's, and `pack.lua` says it too. `office.pack`
+(|aineo-config-office.pack|) chooses the pack, and `office.pieces`
+(|aineo-config-office.pieces|) replaces single pieces of it.
+
+A pack is `based_on` another, the default pack when it says nothing: what it
+leaves out it takes from that pack, name by name. A pack of its own art, its
+floor and a few activities can leave the rest to the default.
+
+What is wrong with a pack is told with its file and line, all at once, by
+`:Aineo office check`, and once, when the office shows, in one warning that
+names the first problem of each file. A piece, an effect, a pose, an activity
+or a state with a problem is left out, so that the one of its name in the
+pack it is based on shows through. A pack that cannot be used at all - no
+`pack.lua` that is data, no floor, no agent that stands and walks, no activity
+for standing - gives way to the default pack. The checks: every value is what
+its field says; names are lowercase words joined by `_`; art rows are of one
+width and use the letters of their header, with colours the pack has; a
+floor's letters are in its legend; every spot can be walked to from the door;
+the text of an effect is one cell to a character on your screen; every
+name a field gives (a piece, a pose, an effect, an activity, a thing, a
+state) exists, in the pack or the pack it is based on; and an activity whose
+steps go to a spot the floor lacks is told never to play.
+
+                                                       *aineo-office-pack-lua*
+pack.lua ~
+`pack.lua` returns a table, written in the subset of Lua that aineo reads as
+data and never runs: `return`, tables with named fields (`name = 'tiny'`),
+keys in brackets (`['*'] = ...`) and lists, strings in quotes or in long
+brackets, numbers, `true`, `false` and comments. A call, an operator,
+`function` or a name in a value is a problem at its line, and nothing of the
+file runs. A list item wins over a key of its number, as in Lua. A file is
+read to 256 KiB.
+
+Field	Default	Means ~
+`format`	required	`1`, the version of the pack format
+`name`	required	the pack's name, its folder's
+`about`, `author`	`''`	one sentence, and who made it
+`based_on`	`'default'`	a pack's name; `false` for none
+`colours`	`{}`	`#rrggbb` by name, at most 64 names
+`text_colours`	highlight groups	by role: `name`, `status`,
+		`thought`, `warning`; each `#rrggbb` or a highlight
+		group's name (`Comment`, `Normal`, `Special`, `WarningMsg`)
+`characters`	the agent's	`agent`, `subagent` and `cat`
+`effects`	`{}`	text a character shows
+`floor`	required	the plan, its colours and its legend
+`activities`	`{}`	what characters do
+`things`	`{}`	what an activity leaves behind
+`states`	the parent's	the activity for each state
+`triggers`	`{}`	custom matches, before a state's activity
+
+                                                     *aineo-office-characters*
+Characters and poses ~
+`characters` holds `agent`, `subagent` and `cat`. A character has `colours`,
+a list of `#rrggbb` it takes in turn (one grey when it gives none), `poses`,
+by name, and `like`, another kind it takes the poses and colours of unless it
+gives its own. A subagent that is like nothing is like the agent; a pack that
+names no cat has none; `how_many` is the cat's number, `1` by default.
+
+The agent needs poses `standing` and `walking`: the engine uses them between
+steps. A pose has `art`, a list of pieces drawn bottom first, or `like`,
+another pose whose fields it takes unless it gives its own, up to 8 poses
+deep; and `sitting` (drawn seated, its feet hidden behind what stands in
+front), `effect`, `screen` (what the character's own monitor shows), `holding`
+(a prop at the art's `hand` area) and `rises` (pixels it rises by, one number
+for each frame).
+
+                                                        *aineo-office-effects*
+Effects ~
+An effect is text a character shows: `text`, a list of frames, each of
+characters one cell wide on your screen; `colour`, a role of `text_colours`, a
+`#rrggbb` or a highlight group, `'status'` by default; `place`: `above`,
+`above_left`, `above_right` or `beside`, `'above'` by default;
+`seconds_per_frame`, `0.25`; and `bold`, `false`.
+
+                                                            *aineo-office-art*
+Art files ~
+`art/<piece>.txt` holds one piece of pixel art, named by the file. A header of
+`field: value` lines, a line `---`, then the frames of the piece, separated by
+lines `---`. A row is one character to a pixel, `.` is transparent, and all
+rows are of one width; a cell of the picture is two pixels tall.
+>
+    about: A desk with a drawer.
+    colours: W = wood, D = dark_wood
+    anchor: 0, 3
+    area name: 1, 2, 10 x 2
+    ---
+    WWWWWWWWWWWW
+    DDDDDDDDDDDD
+    .D........D.
+    .D........D.
+<
+Header field	Means ~
+`about`	what the piece is
+`colours`	each letter and its colour: a name from `colours`, or
+		`agent`, `agent_light`, `agent_shade`, `agent_blush`, the
+		character's own; required for each letter used
+`anchor`	`column, row` of the pixel that stands on the cell the piece
+		is placed at, counted from 0; the bottom left by default
+`faces`	`right` (the default) or `left`: the way the art faces
+`stretch`	`columns 3-20`: columns, counted from 1, that repeat to
+		stretch the piece to the width the plan draws; none by
+		default
+`area <name>`	`column, row, width x height`, in pixels from 0, where aineo
+		draws: `screen`, `hand`, `name`, `plan`, `time`, `date`,
+		`sky`, `page` or `query`
+`seconds per frame`	how long each frame shows, `0.25` by default
+
+An art file is read to 256 KiB, 400 pixels wide, 200 tall and 64 frames; a
+pack holds at most 500 pieces.
+
+                                                          *aineo-office-floor*
+The floor plan ~
+`floor` in `pack.lua` has `plan`, the file (`'floor.txt'`), `floor_colour`
+and `wall_colour`, names from `colours`, and `legend`, what each letter of
+the plan is. `floor.txt` draws the plan, one character to a cell, a cell one
+pixel wide and two tall.
+>
+    # Comment lines start with # and come first.
+    # The next line marks with ~ the columns that repeat to fill the width.
+      ~~
+     ####
+     D..#
+    ~..s.
+<
+The first line after the comments marks with `~` one block of columns that
+repeat to fill the width; the first character of every row is the marker
+column and is not part of the plan: `~` there marks one block of rows that
+repeat to fill the height, a space a row that does not. A piece or a spot in
+a repeated block repeats with it, so one desk becomes a room of desks. `.` is
+floor to walk on, `#` wall, a space floor nobody walks on, and any other
+character a letter of the legend. A row shorter than the widest is read as
+ending in spaces. A plan is read to 400 cells wide and 200 rows.
+
+A legend entry has:
+`piece`	the piece standing there, its bottom left corner on the cell; a
+	run of the letter on one row stretches a piece that stretches to
+	the run
+`spot`	a place characters go to, by name; `door` is where they come in and
+	go out, `desk` each agent's own
+`sitting`	a character at the spot is seated (`false`)
+`facing`	`left` or `right` (`'right'`)
+`walk_over`	the piece lies on the floor and is walked over (`false`)
+`in_use`	the piece's art while a character is at the spot
+`decorations`	for a run of the letter: pieces placed left to right, as
+	many as fit, in this order of preference, each with a spot of
+	its own name on the first floor row below it
+`from_width`	the piece shows only when the office is at least so many
+	columns wide
+`shows`	live content aineo draws into the piece: `time`, `date`, `sky`,
+	`plan` or `printing`
+
+                                                     *aineo-office-activities*
+Activities, things and states ~
+`activities` says what characters do, by name. An activity has `steps`, in
+order, and `about`, `label`, `who` (`'agents'` or `'cat'`), `during` (the
+states, `always` among them, in which it may be picked at random), `chance`
+(a weight, `1`) and `players` (how many play it together, `1`). A step has
+`at` (the spot it is at), `pose` (`'standing'`), `for_seconds` (a number, or
+two for a random time between them), `facing`, `effect`, `even_if_taken`,
+`the_one_moved_plays` (an activity), `leave` and `remove` (a thing) and
+`follow`. Spots aineo knows without a legend: `anywhere`, `an_empty_desk`,
+`an_idle_agents_desk` and `next_to_an_agent`, and each thing's name.
+
+`things` says what an activity leaves behind: `piece`, and optionally
+`upsets_agents_within` (cells), `upset_agents_play` and `cleaned_up_by` (an
+activity each). `states` maps the name of a state to an activity; a state it
+leaves out takes its parent's.
+
+                                                       *aineo-office-triggers*
+Triggers ~
+`triggers` is a list, tried in order whenever a tool call starts, before the
+activity of the state. Each has `when`, the call it matches, and `play`, the
+activity it plays while the call runs. `when` holds `tool`, `agent` (`main` or
+`subagent`) and any of `command`, `description`, `file_path`, `url`, `query`,
+`subagent_type`, `pattern`, `path`, `status`, `summary` and `task`. A value of
+plain words matches a value that contains them as whole words, `'docker'`
+matches `sudo docker compose up` and not `dockerfile`; a value with `*` or `?`
+is a glob over the whole value; `{ lua_pattern = '^make%s+test' }` is a Lua
+pattern. A trigger costs a string match on a call already read.
+>lua
+    triggers = {
+      { when = { tool = 'Bash', command = 'docker' },
+        play = 'tend_the_rack' },
+    }
+<
+                                                         *aineo-office-check*
+Checking a pack ~
+`:Aineo office check [name]` (|:Aineo-office-check|) puts every problem of a
+pack in the quickfix list as `file:line: problem`, the file's whole path in
+the list, so `:cnext` goes to it.
 
 The office shows the main agent alone, standing or working, and shows when
 you ask for it, not by itself. It stays over the right column as the screen

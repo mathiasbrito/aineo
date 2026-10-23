@@ -101,6 +101,39 @@ local function is_find_picker(value)
   return vim.list_contains(FIND_PICKERS, value)
 end
 
+--- Whether `value` names a pack of the office, or lists names for one to be
+--- picked at random: a non-empty string, or a non-empty list of them.
+---
+---@param value any
+---@return boolean
+local function is_office_pack(value)
+  if type(value) == 'string' then
+    return value ~= ''
+  end
+  return vim.islist(value)
+    and #value > 0
+    and vim.iter(value):all(function(name)
+      return type(name) == 'string' and name ~= ''
+    end)
+end
+
+--- Whether `value` names art files for pieces of the office: a table of
+--- piece names to non-empty file names.
+---
+---@param value any
+---@return boolean
+local function is_office_pieces(value)
+  if type(value) ~= 'table' then
+    return false
+  end
+  for name, file in pairs(value) do
+    if type(name) ~= 'string' or type(file) ~= 'string' or file == '' then
+      return false
+    end
+  end
+  return true
+end
+
 --- aineo's settings, each named by its path in `vim.g.aineo`, with its
 --- default and the check its value must pass (`vim.validate`'s validator and,
 --- for a function, the words that describe what it expects).
@@ -155,6 +188,18 @@ local SETTINGS = {
     default = 'auto',
     validator = is_find_picker,
     expected = 'one of ' .. table.concat(FIND_PICKERS, ', '),
+  },
+  {
+    name = 'office.pack',
+    default = 'default',
+    validator = is_office_pack,
+    expected = 'a name, or a list of names',
+  },
+  {
+    name = 'office.pieces',
+    default = {},
+    validator = is_office_pieces,
+    expected = 'a table of piece names and art files',
   },
   {
     name = 'explain.model',
