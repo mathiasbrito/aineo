@@ -19,6 +19,7 @@ local DEFAULTS = {
     issues_prompt = 'Some issues were found in this code, can you check and propose a fix if the issue holds:',
   },
   office = {
+    idle_ms = 180000,
     pack = 'default',
     pieces = {},
     commands = {
@@ -612,6 +613,33 @@ end
 
 T['lua_pattern_problem()']['says what is wrong with a pattern that repeats twice'] = function()
   eq(type(config.lua_pattern_problem('.-.-x')), 'string')
+end
+
+T['resolve_config()']['takes the office’s idle time from either source, three minutes by default'] = function()
+  local from_global = config.resolve_config({ office = { idle_ms = 5000 } }, nil)
+  local from_setup =
+    config.resolve_config({ office = { idle_ms = 5000 } }, { office = { idle_ms = 90000 } })
+
+  eq(from_global.office.idle_ms, 5000)
+  eq(from_setup.office.idle_ms, 90000)
+  eq(config.resolve_config(nil, nil).office.idle_ms, 180000)
+end
+
+T['resolve_config()']['turns the office’s idle countdown off with false'] = function()
+  eq(config.resolve_config({ office = { idle_ms = false } }, nil).office.idle_ms, false)
+end
+
+T['resolve_config()']['refuses an office idle time that is no whole number of at least 1, and not false'] =
+  MiniTest.new_set({
+    parametrize = { { 0 }, { -5 }, { 1.5 }, { '3000' }, { true }, { math.huge }, { {} } },
+  })
+
+T['resolve_config()']['refuses an office idle time that is no whole number of at least 1, and not false']['as office.idle_ms'] = function(
+  idle_ms
+)
+  expect.error(function()
+    config.resolve_config({ office = { idle_ms = idle_ms } }, nil)
+  end, 'office%.idle_ms: expected a whole number of at least 1, or false')
 end
 
 T['resolve_config()']['takes the office’s pack from either source, the default pack by default'] = function()
