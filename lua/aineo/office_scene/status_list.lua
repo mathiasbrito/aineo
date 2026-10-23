@@ -3,6 +3,7 @@
 --- and what it is doing; the agents that do not fit are counted on the last
 --- line.
 
+local cell_text = require('aineo.office_scene.cell_text')
 local colours = require('aineo.office_scene.colours')
 local roles = require('aineo.office_scene.roles')
 
@@ -35,25 +36,6 @@ function M.rows_taken(height)
   return height >= SMALLEST_HEIGHT and ROWS or 0
 end
 
---- The first `cells` characters of `text`, with each character that is not
---- exactly one cell wide on the screen (a control character, a wide or a
---- combining one) replaced by `?`, so that a line is as many cells wide as it
---- has characters.
----
----@param text string
----@param cells integer
----@return string
-local function cut_to(text, cells)
-  local starts = vim.str_utf_pos(text)
-  local kept = {}
-  for index = 1, math.min(#starts, math.max(0, cells)) do
-    local character = text:sub(starts[index], (starts[index + 1] or #text + 1) - 1)
-    local is_one_cell = not character:find('%c') and vim.fn.strdisplaywidth(character) == 1
-    kept[index] = is_one_cell and character or '?'
-  end
-  return table.concat(kept)
-end
-
 --- What the agent is doing, in words: its activity's label, otherwise the
 --- words given for its state, otherwise its state's name.
 ---
@@ -81,13 +63,13 @@ local function write_line(canvas, drawing, row, index)
   canvas.write_text(
     NAME_COLUMN,
     row,
-    cut_to(agent.id, NAME_CELLS),
+    cell_text.cut_to(agent.id, NAME_CELLS),
     { foreground = pack.text_colours.name }
   )
   canvas.write_text(
     LABEL_COLUMN,
     row,
-    cut_to(label_of(drawing, agent), drawing.width - LABEL_COLUMN - 1),
+    cell_text.cut_to(label_of(drawing, agent), drawing.width - LABEL_COLUMN - 1),
     { foreground = pack.text_colours.status }
   )
 end
