@@ -105,6 +105,12 @@ T['the plan']['is left as the art draws it when the agent keeps no task'] = func
   eq(text_of(picture, 1, 10), '          ')
 end
 
+T['the plan']['is left as the art draws it when the main agent has no details'] = function()
+  local picture = board_with({ { id = 'main', state = 'standing' } })
+
+  eq(text_of(picture, 0, 10), '          ')
+end
+
 T['the plan']['cuts a task to the width of the area'] = function()
   local picture = board_with(main_with({ task('A task that is far too long', false) }))
 
