@@ -66,6 +66,48 @@ T['a step that goes anywhere']['goes to a floor cell the random source picks'] =
   )
 end
 
+T['a step whose spot the plan lacks'] = MiniTest.new_set()
+
+local BARE_FLOOR = '# plan\n \n ........\n'
+
+T['a step whose spot the plan lacks']['is played on a floor cell the random source picks by an agent not yet placed'] =
+  MiniTest.new_set({ parametrize = { { 0.5, '4,0' }, { 0.99, '7,0' } } })
+
+T['a step whose spot the plan lacks']['is played on a floor cell the random source picks by an agent not yet placed']['random value and cell'] = function(
+  random_value,
+  cell
+)
+  local stage = stage_of_a_visit(BARE_FLOOR, {}, 8, 'anywhere', random_value)
+
+  stage.advance(scene.agents_in('standing'), 0)
+
+  eq(where_the_two_are(stage, 8)[1], cell)
+end
+
+T['a step whose spot the plan lacks']['is played by two agents on different cells'] = function()
+  local stage = stage_of_a_visit(BARE_FLOOR, {}, 8, 'anywhere', 0)
+
+  stage.advance(scene.agents_in('standing', 'standing'), 0)
+
+  eq(where_the_two_are(stage, 8), { '0,0', '1,0' })
+end
+
+T['a step whose spot the plan lacks']['is played where an agent already placed stands'] = function()
+  local pack = scene.people_pack('# plan\n \n a.......\n', { a = { spot = 'aside' } }, {
+    activities = {
+      stand = { steps = { { at = 'aside', for_seconds = 1 }, { at = 'nowhere_at_all' } } },
+    },
+    states = { standing = 'stand' },
+  })
+  local stage = scene.stage_of(pack, 8, 1, { random = scene.always(0.99) })
+  local crew = scene.agents_in('standing')
+  stage.advance(crew, 0)
+
+  stage.advance(crew, 3)
+
+  eq(where_the_two_are(stage, 8)[1], '0,0')
+end
+
 T['a step that goes to an empty desk'] = MiniTest.new_set()
 
 local DESKS = '# plan\n \n a.d.d.d\n'

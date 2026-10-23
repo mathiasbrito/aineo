@@ -585,12 +585,14 @@ T['an agent']['takes the spots of its name in the order the plan reads them, one
   })
 end
 
-T['an agent']['is not drawn when its activity names a spot the plan lacks'] = function()
+T['an agent']['is drawn on a floor cell when its activity names a spot the plan lacks'] = function()
   local stage = stage_of(scene_pack('# plan\n \n ....\n', {}), 4, 1)
 
   stage.advance(agents_in('standing'), 0)
 
-  eq(row_groups(stage.picture(), 0, 4), { solid(FLOOR), solid(FLOOR), solid(FLOOR), solid(FLOOR) })
+  eq(#vim.tbl_filter(function(group)
+    return group == solid(AGENT)
+  end, row_groups(stage.picture(), 0, 4)), 1)
 end
 
 T['an agent']['is not drawn when there are more agents than spots'] = function()
