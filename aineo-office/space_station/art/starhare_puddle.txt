@@ -1,6 +1,7 @@
-about: What the starhare left on the floor: a glowing puddle.
+about: What the starhare left on the floor: a glowing puddle, round.
 colours: c = cyan_glow, d = cyan_dim
-anchor: 0, 1
+anchor: 0, 2
 ---
-.cccc.
-dddddd
+.dddd.
+dccccd
+.dddd.
