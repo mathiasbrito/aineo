@@ -68,6 +68,7 @@ local NO_RIGHT_SIDE = "aineo: the office has no right side of aineo's layout to 
 ---@field report_tool? string the name of aineo's report tool, as Claude Code calls it; none, and no call is a report
 ---@field settings? fun(): aineo.office.Settings what the user set for the office, asked each time it shows; the default pack when not given
 ---@field random? fun(count: integer): integer a whole number from 1 to `count`, which picks one of several packs the settings name; the first when not given
+---@field transcript? fun(): string|nil the path of the transcript of the session the office acts out, asked each time the office starts following it (each show, and each return to its tab page); none or nil, and it follows none
 ---@field schedule_after? fun(milliseconds: integer, callback: fun()): fun() calls `callback`, on the main loop, once `milliseconds` have passed, and returns what cancels the wait; the idle countdown waits through it; a timer of the editor's loop when not given
 
 ---@class aineo.office.Settings
@@ -77,7 +78,6 @@ local NO_RIGHT_SIDE = "aineo: the office has no right side of aineo's layout to 
 ---@field idle_ms? integer|false how long the cursor stays out of the right side before the office shows by itself, in milliseconds; none or `false`, and it shows only when asked to
 
 ---@class aineo.office.Office
----@field follow_session fun(transcript_path: string|nil) follows the transcript of the session whose file is `transcript_path` while the office shows, or none
 ---@field permission_wait fun(agent: string) tells the office the agent, `main` or a subagent's id, waits for the user to answer a permission prompt, until its next line in the transcript; while the office is hidden, nothing is kept
 ---@field report_arrived fun(report: aineo.office.Report) keeps the report as a card the office draws in its bottom right corner until the cursor enters the right side, and starts the idle countdown again; keeps nothing when the cursor is in the right side and the office is hidden, where the Report shows it
 ---@field show_now fun() shows the office over the right side at once, and does nothing when it shows
@@ -98,10 +98,8 @@ function M.new_office(options)
   vim.validate('options.settings', options.settings, 'function', true)
   vim.validate('options.random', options.random, 'function', true)
   vim.validate('options.schedule_after', options.schedule_after, 'function', true)
+  vim.validate('options.transcript', options.transcript, 'function', true)
   offices_made = offices_made + 1
-
-  ---@type string|nil
-  local transcript_path = nil
 
   --- Whether the idle time has passed without the office showing, because it
   --- could not.
@@ -211,8 +209,8 @@ function M.new_office(options)
   end
 
   --- A tracker of the agents' states, and the follower that feeds it from the
-  --- transcript the office was told to follow; none when it was told of none,
-  --- or the file cannot be followed.
+  --- transcript `options.transcript` names; none when it names none, or the
+  --- file cannot be followed.
   ---
   ---@param open { pack: aineo.office_pack.Pack, commands: aineo.office_states.CommandClasses|nil } the pack whose triggers the tracker tries, and the classes of commands it tells apart
   ---
@@ -230,11 +228,12 @@ function M.new_office(options)
         vim.notify(SLOW_TRIGGERS, vim.log.levels.WARN)
       end,
     })
-    if not transcript_path then
+    local path = options.transcript and options.transcript()
+    if not path then
       return tracker, nil
     end
     local follower = require('aineo.transcript').follow({
-      path = transcript_path,
+      path = path,
       on_signal = function(signal)
         tracker.take(signal, options.clock())
       end,
@@ -367,14 +366,6 @@ function M.new_office(options)
   function start_running(open)
     open.tracker, open.follower = follow_transcript(open)
     open.timer = start_frames(open.draw)
-  end
-
-  --- Records the transcript to follow from the next `show_now()`; one that
-  --- shows already goes on following the file it began with.
-  ---
-  ---@param path string|nil
-  function office.follow_session(path)
-    transcript_path = path
   end
 
   --- Shows the office over `area`. With a pack that cannot be loaded or a
@@ -563,12 +554,11 @@ function M.new_office(options)
     start_counting_again()
   end
 
-  --- Closes the office, stops its countdown and forgets the transcript.
+  --- Closes the office and stops its countdown.
   function office.let_go()
     countdown.stop()
     pcall(vim.api.nvim_del_augroup_by_id, life_group)
     close()
-    transcript_path = nil
   end
 
   return office

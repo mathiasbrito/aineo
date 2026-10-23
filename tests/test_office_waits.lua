@@ -34,7 +34,7 @@ local function open_office(path)
   child.lua(KEEP_THE_TRACKER)
   office_child.make_office(child)
   if path then
-    child.lua([[_G.office.follow_session(...)]], { path })
+    office_child.follow_transcript(child, path)
   end
 end
 
