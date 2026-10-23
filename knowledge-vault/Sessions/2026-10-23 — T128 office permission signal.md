@@ -29,7 +29,11 @@ A regular packet of the office screensaver (T123; D26 applies). Claude Code is a
 
 - **OF15 stays unpinned.** The recording holds no input from a subagent: none of the five `PermissionRequest` inputs has an `agent_id`, so how `agent_id` matches `agent-<id>.jsonl` (the `agentId` of its lines) was not measured. The relay and the entry pass an `agent_id` through as the documentation describes it, and the test for a subagent's input is built on a recorded one with `agent_id` added, said so in the test. A fixture from a permission asked inside a subagent is needed to pin it (T126 or T132 will want it).
 - **`aineo.office` has no `permission_wait()`.** The plan's interface lists it; no packet before T132 adds it, and T128's homes exclude `aineo.office`. The entry hands a wait only to an office that has the method, so an office without it raises nothing on each prompt; T132 adds the method and the guard becomes dead code to remove.
-- **`PermissionRequest`'s Claude Code version floor** is not measured: the hook was recorded on 2.1.308. The health check does not compare versions (the integrator charter: feature-detect, never compare), and none is stated.
+- **`PermissionRequest`'s Claude Code version floor** is not measured: the hook was recorded on 2.1.308. The health check does not compare versions (the integrator charter: feature-detect, never compare); the help says it was recorded on 2.1.308 and names no floor.
+
+## The review round (A581)
+
+The review of the pull request found nine items; each was built test first. The relay stops its own server socket before arming its 6 s lifetime, so a relay ended by it leaves none in the temporary directory (the relay tests run it with a `TMPDIR` of their own); it reads stdin through a bounded pipe of the event loop, for the session hooks too; and it tells nothing in `dontAsk` mode, where Claude Code runs the hook without a prompt. A transcript path counts only when it starts with `/`. Four mutants that had survived are pinned: a user's non-list `PermissionRequest` refused (MG), the hook-named path ahead of a same-session file under `projects/` (MB), the lifetime held between 5.9 and 7 s (MA), `on_transcript` never told for a hook the home ignores (MC). The fixture is scrubber v3's. T132 clears an agent's wait on its next transcript line (carried to its row).
 
 ## Open threads
 
