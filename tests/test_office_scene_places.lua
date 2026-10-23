@@ -143,12 +143,12 @@ end
 
 T['an agent']['draws random times only once it has a place, however many frames it waited for one'] = function()
   local draws = 0
-  local pack = scene.people_pack('# plan\n \n a...\n', { a = { spot = 'aside' } }, {
+  local pack = scene.people_pack('# plan\n \n a\n', { a = { spot = 'aside' } }, {
     activities = {
       stand = { steps = { { at = 'aside', for_seconds = { 1, 2 } }, { at = 'aside' } } },
     },
   })
-  local stage = scene.stage_of(pack, 4, 1, {
+  local stage = scene.stage_of(pack, 1, 1, {
     random = function()
       draws = draws + 1
       return 0.5

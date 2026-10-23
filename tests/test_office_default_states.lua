@@ -167,6 +167,34 @@ T['an agent']['is drawn in every state, in 60 columns by 24 rows and in 100 by 4
   eq(spot_of_agent_after(size, state, 0) ~= 'nowhere', true)
 end
 
+T['subagents'] = MiniTest.new_set()
+
+T['subagents']['arriving together are all drawn, in 60 columns by 24 rows and in 100 by 40'] =
+  MiniTest.new_set({ parametrize = { { SMALL }, { MEDIUM } } })
+
+T['subagents']['arriving together are all drawn, in 60 columns by 24 rows and in 100 by 40']['size'] = function(
+  size
+)
+  local stage = default.stage(default.load_pack(), size[1], size[2])
+  local agents = {
+    { id = 'main', state = 'waiting_for_subagents' },
+    { id = 'sub2', state = 'arriving' },
+    { id = 'sub3', state = 'arriving' },
+  }
+
+  for time = 0, 1, 0.25 do
+    stage.advance(agents, time)
+  end
+
+  local pixels = default.pixels(stage.picture(), size[1])
+  eq(
+    vim.tbl_map(function(colour)
+      return default.where_is(pixels, colour) ~= nil
+    end, vim.list_slice(default.AGENT_COLOURS, 1, 3)),
+    { true, true, true }
+  )
+end
+
 T['an agent']['is put at the spot its state starts at'] = MiniTest.new_set({
   parametrize = in_each_size({ MEDIUM, LARGE }, FIRST_SPOT),
 })
@@ -213,7 +241,7 @@ T['an agent']["stays at the spot its state's activity ends at"]['size, state and
   eq(spot_of_agent_after(size, state, 30), spot)
 end
 
-T['an agent']['reaches every state in turn on a pass through the 24, at the spot each ends at'] = function()
+T['an agent']['reaches 22 of the 24 states in turn on a pass, at the spot each ends at; idle and waiting_for_subagents go on with a random life'] = function()
   local pack = default.load_pack()
   local size = LARGE
   local spots = default.spots(pack, size[1], size[2] - LIST_ROWS)
