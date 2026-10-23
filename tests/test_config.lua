@@ -535,7 +535,9 @@ local ACCEPTED_PATTERNS = {
   { '(a)%1' },
   { '%b()' },
   { '%f[%w]make' },
-  { 'a?b?c?' },
+  { 'a?' },
+  { '%a?x' },
+  { '[%w_]?x' },
   { '[%w%-]*' },
   { '$a' },
   { 'a$b' },
@@ -574,6 +576,31 @@ T['resolve_config()']['says what is wrong with a Lua pattern of the commands'] =
 end
 
 T['lua_pattern_problem()'] = MiniTest.new_set()
+
+--- Lua patterns with more than one repetition item (`*`, `+`, `-` and `?`),
+--- the second of which makes the cost grow with the text, or exponentially.
+local PATTERNS_THAT_REPEAT_TWICE = {
+  { '.-.-x' },
+  { 'a?b?' },
+  { 'a?b?c?d?' },
+  { '.?.?x' },
+  { '%s+%d+' },
+  { '%a*%a*%a*' },
+  { '[%w_]+[%w_]?' },
+  { 'x*(y+)' },
+  { ('.?'):rep(24) .. 'x' },
+}
+
+T['lua_pattern_problem()']['says what is wrong with a pattern that repeats twice, whichever the items'] =
+  MiniTest.new_set({
+    parametrize = PATTERNS_THAT_REPEAT_TWICE,
+  })
+
+T['lua_pattern_problem()']['says what is wrong with a pattern that repeats twice, whichever the items']['pattern'] = function(
+  pattern
+)
+  eq(type(config.lua_pattern_problem(pattern)), 'string')
+end
 
 T['lua_pattern_problem()']['says nothing of a pattern Lua reads whole that repeats once at most'] = function()
   eq(config.lua_pattern_problem('^make%s+test'), nil)

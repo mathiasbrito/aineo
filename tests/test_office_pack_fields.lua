@@ -454,19 +454,33 @@ local WRONG_FIELDS = {
     'a trigger with a Lua pattern that is none',
     { triggers = { { when = { command = { lua_pattern = '[' } }, play = 'work' } } },
     'triggers',
-    'triggers[1].when.command.lua_pattern must be a Lua pattern with at most one repetition (*, + or -)',
+    'triggers[1].when.command.lua_pattern must be a Lua pattern Lua reads whole that repeats once at most: a set is never closed',
   },
   {
     'a trigger with a Lua pattern of two repetitions',
     { triggers = { { when = { command = { lua_pattern = '^a*b+' } }, play = 'work' } } },
     'triggers',
-    'triggers[1].when.command.lua_pattern must be a Lua pattern with at most one repetition (*, + or -)',
+    'triggers[1].when.command.lua_pattern must be a Lua pattern Lua reads whole that repeats once at most: it repeats 2 times (*, +, - or ?); at most one is taken',
   },
   {
     'a trigger with a Lua pattern of two lazy repetitions',
     { triggers = { { when = { command = { lua_pattern = 'a-b-' } }, play = 'work' } } },
     'triggers',
-    'triggers[1].when.command.lua_pattern must be a Lua pattern with at most one repetition (*, + or -)',
+    'triggers[1].when.command.lua_pattern must be a Lua pattern Lua reads whole that repeats once at most: it repeats 2 times (*, +, - or ?); at most one is taken',
+  },
+  {
+    'a trigger with a Lua pattern of two optional items',
+    {
+      triggers = { { when = { command = { lua_pattern = ('.?'):rep(24) .. 'x' } }, play = 'work' } },
+    },
+    'triggers',
+    'triggers[1].when.command.lua_pattern must be a Lua pattern Lua reads whole that repeats once at most: it repeats 24 times (*, +, - or ?); at most one is taken',
+  },
+  {
+    'a trigger with a Lua pattern of two repeated classes',
+    { triggers = { { when = { command = { lua_pattern = '%s+%d+' } }, play = 'work' } } },
+    'triggers',
+    'triggers[1].when.command.lua_pattern must be a Lua pattern Lua reads whole that repeats once at most: it repeats 2 times (*, +, - or ?); at most one is taken',
   },
   {
     'a trigger that matches by a number',
@@ -499,7 +513,7 @@ end
 local ACCEPTED_PATTERNS = {
   { '^make%s+test' },
   { '%.md$' },
-  { 'a?b?c?d?' },
+  { 'a?' },
   { '[*+-]x[*+-]' },
   { '%*x%+y%-z' },
   { '%bxy.*' },
