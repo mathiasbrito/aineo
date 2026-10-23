@@ -1043,13 +1043,13 @@ M.activities = {
 M.things = {
   mess = {
     piece = 'cat_mess',
-    upsets_agents_within = 16,
+    upsets_agents_within = 40,
     upset_agents_play = 'grumble',
     cleaned_up_by = 'clean_up_the_mess',
   },
   puddle = {
     piece = 'cat_puddle',
-    upsets_agents_within = 16,
+    upsets_agents_within = 40,
     upset_agents_play = 'grumble',
     cleaned_up_by = 'mop_up_the_puddle',
   },
