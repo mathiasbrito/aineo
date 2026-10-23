@@ -15,6 +15,7 @@ local KNOWN_SPOTS = {
   an_empty_desk = true,
   an_idle_agents_desk = true,
   next_to_an_agent = true,
+  next_to_the_cat = true,
 }
 
 --- The steps from one cell to the next.
