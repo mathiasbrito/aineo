@@ -1,0 +1,11 @@
+about: A waste bin.
+colours: A = pewter, F = iron, T = steel
+anchor: 0, 4
+---
+AAAAAA
+ATTTTA
+.TTTT.
+.TFTT.
+.TTTT.
+.TTFT.
+.TTTT.

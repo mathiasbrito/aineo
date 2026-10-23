@@ -1,0 +1,10 @@
+about: The legs of an agent tapping a foot.
+colours: S = agent_shade
+anchor: 3, 1
+seconds per frame: 0.25
+---
+SS...SS
+SS...SS
+---
+SS...SS
+SS.....

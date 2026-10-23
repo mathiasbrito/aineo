@@ -1,0 +1,6 @@
+about: What the cat left on the floor.
+colours: O = door_frame
+anchor: 0, 1
+---
+.OO.
+OOOO

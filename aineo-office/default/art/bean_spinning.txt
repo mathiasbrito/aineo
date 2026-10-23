@@ -1,0 +1,56 @@
+about: An agent turning round in its chair: the front, the side, the back, the other side.
+colours: B = agent, L = agent_light, S = agent_shade, k = ink, p = agent_blush, w = shine
+anchor: 5, 11
+seconds per frame: 0.25
+---
+...LLBBB...
+.LLLBBBBBS.
+LLBBBBBBBBS
+LBwkBBBwkBS
+BBkkBBBkkBS
+BBkkBBBkkBS
+BppBBBBBppS
+BBBkBBBkBBS
+SBBBkkkBBSS
+...........
+...........
+...........
+---
+...LLBBB...
+.LLLBBBBBS.
+LLBBBBBBBBS
+LBBwkBBBwkS
+BBBkkBBBkkS
+BBBkkBBBkkS
+BBppBBBBppS
+BBBBkBBBkBS
+SBBBBkkkBSS
+...........
+...........
+...........
+---
+...LLBBB...
+.LLLBBBBBS.
+LLBBBBBBBBS
+LBBBBBBBBBS
+BBBBBBBBBBS
+BBBBBBBBBBS
+BBBBBBBBBBS
+BBBBBBBBBBS
+SBBBBBBBBSS
+...........
+...........
+...........
+---
+...BBBLL...
+.SBBBBBLLL.
+SBBBBBBBBLL
+SkwBBBkwBBL
+SkkBBBkkBBB
+SkkBBBkkBBB
+SppBBBBppBB
+SBkBBBkBBBB
+SSBkkkBBBBS
+...........
+...........
+...........

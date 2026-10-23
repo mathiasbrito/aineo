@@ -1,0 +1,17 @@
+about: The body of an agent that jumps; its pose lifts it a tick at a time.
+colours: B = agent, L = agent_light, S = agent_shade
+anchor: 5, 11
+seconds per frame: 0.08333
+---
+...LLBBB...
+.LLLBBBBBS.
+LLBBBBBBBBS
+LBBBBBBBBBS
+BBBBBBBBBBS
+BBBBBBBBBBS
+BBBBBBBBBBS
+BBBBBBBBBBS
+SBBBBBBBBSS
+.SSSSSSSSS.
+...........
+...........
