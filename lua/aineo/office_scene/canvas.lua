@@ -38,6 +38,7 @@ local NO_COLOUR = 'none'
 ---@class aineo.office_scene.Picture
 ---@field rows aineo.office_scene.PictureRow[] from the top
 ---@field looks table<string, aineo.office_scene.Look> every group a run uses
+---@field status_list_height? integer the rows the status list takes at the bottom of the picture, 0 when there is none; set by the painter, not by the canvas
 
 ---@class aineo.office_scene.TextStyle
 ---@field foreground string `#rrggbb`

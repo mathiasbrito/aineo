@@ -47,7 +47,9 @@ function M.paint(drawing)
   if drawing.plan_height < drawing.height then
     status_list.paint(canvas, drawing)
   end
-  return canvas.picture()
+  local picture = canvas.picture()
+  picture.status_list_height = drawing.height - drawing.plan_height
+  return picture
 end
 
 return M
