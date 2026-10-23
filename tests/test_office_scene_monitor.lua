@@ -31,6 +31,23 @@ local function monitors_with(agents)
   return stage.picture()
 end
 
+--- A stage of two monitors, ten cells apart, and one `desk` spot under the
+--- first, advanced to the time 100 with `agents`.
+---
+---@param agents aineo.office_states.Agent[]
+---@return aineo.office_scene.Picture
+local function monitors_over_one_desk_with(agents)
+  local pack = scene.people_pack(
+    '# plan\n \n m.........m.........\n s...................\n',
+    { m = { piece = 'monitor' }, s = { spot = 'desk' } },
+    { text_colours = { status = STATUS_COLOUR } },
+    MONITOR_ART
+  )
+  local stage = scene.stage_of(pack, 20, 2)
+  stage.advance(agents, 100)
+  return stage.picture()
+end
+
 --- An agent in `state` with `details`.
 ---
 ---@param id string
@@ -156,6 +173,15 @@ T['a monitor']['shows the clue of its own agent, not the other’s'] = function(
 
   eq(top_text(picture, 2, 6), '      ')
   eq(top_text(picture, 12, 6), 'docs.e')
+end
+
+T['a monitor']['is the agent’s of the desk spot nearest to it, and a second monitor by one desk has no agent'] = function()
+  local picture = monitors_over_one_desk_with({
+    agent('main', 'on_the_web', { web_clue = 'docs.example.com' }),
+  })
+
+  eq(top_text(picture, 2, 6), 'docs.e')
+  eq(top_text(picture, 12, 6), '      ')
 end
 
 --- The colour of the text in the cell `column` of the top row of the
