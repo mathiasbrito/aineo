@@ -3,6 +3,7 @@ local fake_transcript = dofile('tests/helpers/fake_transcript.lua')
 local fixture = dofile('tests/helpers/fixture.lua')
 local layout = dofile('tests/helpers/layout.lua')
 local office_cells = dofile('tests/helpers/office_cells.lua')
+local office_child = dofile('tests/helpers/office_child.lua')
 local pack_files = dofile('tests/helpers/office_pack_files.lua')
 
 local eq = MiniTest.expect.equality
@@ -45,6 +46,8 @@ end
 ---@return table buffers the layout's `claude`, `report` and `input` buffers
 local function open_office(path, pack_folders, more_options)
   local buffers = layout.open_with_stand_ins(child)
+  child.o.columns = office_child.COLUMNS
+  child.o.lines = office_child.LINES
   child.o.termguicolors = true
   child.lua(
     [[
