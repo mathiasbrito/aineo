@@ -6,6 +6,17 @@ local M = {}
 --- The id of the main agent; every other agent is a subagent.
 local MAIN_AGENT = 'main'
 
+--- The state of an agent that has nothing to do.
+local IDLE_STATE = 'idle'
+
+--- Whether `agent` has nothing to do: it is in the state `idle`.
+---
+---@param agent { state: string }
+---@return boolean
+function M.is_idle(agent)
+  return agent.state == IDLE_STATE
+end
+
 --- The kind of character `agent` is drawn as: the agent for the main agent,
 --- the subagent for the others.
 ---
