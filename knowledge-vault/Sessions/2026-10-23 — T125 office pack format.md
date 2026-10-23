@@ -42,18 +42,11 @@ A regular packet of the office screensaver (T123; D26 applies). T124's skeleton 
 
 ## Tests
 
-| Test file | Cases | Reds seen |
-|---|---|---|
-| `test_office_pack_literal` | 106 | 8 of the new (block comments, long strings, positional wins, finite numbers, lines); the corpus and the fuzz were green at once (pinned by mutants M1a–c) |
-| `test_office_pack_art` | 33 | 30 of 31 against the tree before the art reader (the rest written after) |
-| `test_office_pack_floor` | 16 | 11 of 16 before the floor reader |
-| `test_office_pack_fields` | 67 | 65 of 66 before the schema |
-| `test_office_pack_based_on` | 25 | none: written after the loader's code (stated in its commit) |
-| `test_office_pack_checks` | 9 | 4 of 9 before the checks (the tiny pack's tests passed) |
-| `test_office_pack` | 35 | moved to the new shape; `find()`: 3 red |
-| `test_office_scene` | 49 | 9 of 18 new before the layout |
-| `test_office` | 47 | 6 of 7 new before the wiring |
-| `test_entry_office`, `test_entry_office_check`, `test_config` | 18, 7, 105 | 2, 7 and 19 before the wiring |
+Counts as of the review round (cases per file): `test_office_pack_literal` 112, `_art` 38, `_floor` 20, `_fields` 84, `_based_on` 28, `_checks` 9, `test_office_pack` 37, `_bounds` 12, `_paths` 15, `_cache` 7, `test_office_scene` 49, `test_office` 48, `test_entry_office` 22, `test_entry_office_check` 8, `test_config` 180, `test_office_states_triggers` 20.
+
+Reds seen, first round: art 30 of 31 before the reader; floor 11 of 16; fields 65 of 66 before the schema; checks 4 of 9; literal 8 of the new; scene 9 of 18; `test_office` 6 of 7; entry office 2; entry check 7; config 19; `find()` 3. `test_office_pack_based_on` was written after the loader code (stated in its commit); the later pins in the first round's last commits were written after their code.
+
+Review round (A585): every item was test-first and seen failing: the `?` walker 5 + 2 cases; control characters 4 + 5 + 4 + 1; the bounded tests (NUL plan, every byte, 200 000-space headers, 100 000 rows, a seeded fuzz through `load`, `check`, `new_stage` and the quickfix items, a stretched picture) 5 + 1, two of them by the limit; paths 14 of 15; budget 2; cache 1; triggers 3. A bounded test runs the code in a Neovim killed past a limit (`tests/helpers/bounded.lua`, itself tested with an endless loop), so a hang fails by an assertion. The fuzz of the first round stopped at the reader; this one reaches `load` and `new_stage`.
 
 ## Mutants
 
@@ -76,6 +69,12 @@ Each run alone on the test files that exercise the code, from a pristine file, r
 | M13, M14, M16, M25 | the office never warns; ignores the random source; colours not made again on a colorscheme; text role without its fallback | `test_office`, 1, 2, 1, 1 |
 | M15 | an empty list of packs accepted | `test_config`, 1 |
 | M17–M24 | unreachable spot, never-playing activity, unknown field, art letters, art row width, `based_on` loop, plan letter, plan caps not told | `test_office_pack_checks` 2 and 2, `_fields` 7, `_art` 2 and 3, `_based_on` 1, `_floor` 2 and 1 |
+
+## The review round (A585)
+
+Findings of the review of #328 and what answered them: one NUL in a plan hung the editor (the layout counts a run by bytes now; control characters are refused in plans, art and every text a pack gives); an art header of spaces took minutes (split at the first colon, trimmed in one pass); `?` counts as a repetition item and the walker is `aineo.config`'s `lua_pattern_problem()`, one for the setting, the matching and the packs (`office_pack` now requires `aineo.config`, an edge the modularity table lacks: for an `ai/` change); a row of another width is told once per file; a load reads 2 MiB of files at most, a chain together, and is kept while no file changed; a pack and its bases hold 64 triggers at most and trying one call's triggers stops after 20 ms (the office hands the tracker the pack's triggers and a clock); stretched pieces are memoized; `~` is expanded in `office.pieces`; pack names are plain names and a pack's files must lie in its folder; links to regular files are followed, a FIFO is told and never opened, a linked pack folder is found. The placement budget of a piece in every cell belongs to T129 (OR3).
+
+Mutants of the review round, all killed by an assertion: N1–N17 (budget not counted, kept load never stale or always stale, caller reaching the kept pack, triggers not capped, trigger time not limited, slow triggers told every time, pack names not plain, files not kept in the folder, FIFO opened, width told for every row, NUL kept in quickfix text, control characters accepted in a plan and in art, pieces over 500 not left out, `~` not expanded, linked folder not listed), and the reviewer's survivors: M1b (four refused inputs, 5 cases), MR4 (negative infinity, 1), MR1 (a class escape followed by a repetition, now the walker's, 3), `?` not counted (5 and 1), stretch not memoized (1), the layout counting by pattern again (2), control characters not refused (4 and 1).
 
 ## Open threads
 
