@@ -57,7 +57,9 @@ function M.make_office(child, settings_source, more_options_source)
       right_side = function()
         return require('aineo.layout').right_column_area()
       end,
-      pack_folders = vim.api.nvim_get_runtime_file('aineo-office', true),
+      pack_folders = function()
+        return vim.api.nvim_get_runtime_file('aineo-office', true)
+      end,
       clock = function()
         return vim.uv.hrtime() / 1e9
       end,
