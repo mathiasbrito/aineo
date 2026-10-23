@@ -2,7 +2,11 @@
 --- state: it keeps the options `require('aineo').setup()` records, and
 --- resolves the configuration from the sources it is handed.
 
+local lua_pattern = require('aineo.config.lua_pattern')
+
 local M = {}
+
+M.lua_pattern_problem = lua_pattern.problem
 
 local recorded_setup_options = {}
 
@@ -105,16 +109,8 @@ end
 --- tried.
 local COMMAND_CLASSES = { 'tests', 'committing', 'searching', 'reading' }
 
---- Whether `value` is a Lua pattern Lua can read.
----
----@param value any
----@return boolean
-local function is_lua_pattern(value)
-  return type(value) == 'string' and (pcall(string.find, '', value))
-end
-
 --- Whether `value` is one match of a class of commands: plain words or a glob,
---- a non-empty string; or `{ lua_pattern = '<pattern>' }` and nothing else.
+--- a non-empty string; or a table of a `lua_pattern` string and nothing else.
 ---
 ---@param value any
 ---@return boolean
@@ -122,14 +118,20 @@ local function is_command_match(value)
   if type(value) == 'string' then
     return value ~= ''
   end
-  return type(value) == 'table' and is_lua_pattern(value.lua_pattern) and vim.tbl_count(value) == 1
+  return type(value) == 'table'
+    and type(value.lua_pattern) == 'string'
+    and vim.tbl_count(value) == 1
 end
 
 --- Whether `value` is the classes of shell commands: a table of at most the
---- four classes, each a list of matches.
+--- four classes, each a list of matches, the Lua patterns among them read
+--- whole by Lua and repeating once at most (`lua_pattern.problem()`).
+---
+--- When a Lua pattern is what is wrong, the second result says how.
 ---
 ---@param value any
 ---@return boolean
+---@return string|nil problem
 local function is_command_classes(value)
   if type(value) ~= 'table' then
     return false
@@ -141,6 +143,12 @@ local function is_command_classes(value)
       or not vim.iter(matches):all(is_command_match)
     then
       return false
+    end
+    for _, match in ipairs(matches) do
+      local problem = type(match) == 'table' and lua_pattern.problem(match.lua_pattern)
+      if problem then
+        return false, ("the Lua pattern '%s': %s"):format(match.lua_pattern, problem)
+      end
     end
   end
   return true
