@@ -1,6 +1,8 @@
 --- Finding the packs on the folders a pack may be in: a pack is a folder with
 --- a `pack.lua`, named by its folder's name.
 
+local pack_names = require('aineo.office_pack.names')
+
 local M = {}
 
 ---@class aineo.office_pack.FoundPack
@@ -9,7 +11,8 @@ local M = {}
 
 --- The packs in `folders`, each folder one that holds packs in folders of
 --- their names. A name two folders hold is the first folder's. A folder that
---- is missing, and a folder of a pack without a `pack.lua`, hold none.
+--- is missing, a folder of a pack without a `pack.lua` and a name that is no
+--- pack's name hold none; a link to a folder is a folder.
 ---
 ---@param folders string[]
 ---@return aineo.office_pack.FoundPack[] packs sorted by name
@@ -18,8 +21,11 @@ function M.find(folders)
   for _, folder in ipairs(folders) do
     for name, type in vim.fs.dir(folder) do
       local directory = vim.fs.joinpath(folder, name)
+      local is_folder = type == 'directory'
+        or (type == 'link' and (vim.uv.fs_stat(directory) or {}).type == 'directory')
       if
-        type == 'directory'
+        is_folder
+        and pack_names.is_plain(name)
         and not seen[name]
         and vim.uv.fs_stat(vim.fs.joinpath(directory, 'pack.lua'))
       then
