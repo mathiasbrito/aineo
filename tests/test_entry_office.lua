@@ -211,6 +211,28 @@ T['what the office is told']['gives its tracker the classes of commands of offic
   eq(child.lua_get([[_G.tracker_options.commands]]), { tests = { 'just check' } })
 end
 
+T['what the office is told']['gives its tracker the default classes of commands when none is set'] = function()
+  open_layout('office-default-commands')
+  child.lua(NOTE_THE_TRACKER_OPTIONS)
+
+  entry.command(child, 'Aineo office')
+
+  eq(
+    child.lua_get([[(_G.tracker_options.commands or {}).committing]]),
+    { 'git commit', 'git push', 'gh pr create' }
+  )
+end
+
+T['what the office is told']['gives its tracker the classes of commands that setup() was given'] = function()
+  open_layout('office-setup-commands')
+  child.lua([[require('aineo').setup({ office = { commands = { tests = { 'just check' } } } })]])
+  child.lua(NOTE_THE_TRACKER_OPTIONS)
+
+  entry.command(child, 'Aineo office')
+
+  eq(child.lua_get([[_G.tracker_options.commands]]), { tests = { 'just check' } })
+end
+
 T['what the office is told']["gives its tracker the name of aineo's report tool"] = function()
   open_layout('office-report-tool')
   child.lua(NOTE_THE_TRACKER_OPTIONS)
