@@ -320,6 +320,20 @@ T['a folder of more subagents than the office follows']['gets the first sixty-fo
   eq(arrivals[64].agent, ('a%016d'):format(64))
 end
 
+T["a folder with entries that are not subagents' transcripts"] = MiniTest.new_set()
+
+T["a folder with entries that are not subagents' transcripts"]['hears nothing of a folder or a link named like one'] = function()
+  local session = new_session()
+  vim.fn.mkdir(agent_file(session, SUBAGENT), 'p')
+  fake_transcript.append(session.folder .. '/real-file', RECORDED_SUBAGENT)
+  assert(vim.uv.fs_symlink(session.folder .. '/real-file', agent_file(session, OTHER_SUBAGENT)))
+
+  follow(session)
+  vim.wait(QUIET_MS)
+
+  eq(session.signals, {})
+end
+
 T['two subagents'] = MiniTest.new_set()
 
 T['two subagents']['are followed apart, each signal naming its own'] = function()
