@@ -6,20 +6,13 @@
 --- Loading it loads no other home: `aineo.office` is required when an office
 --- is first made.
 
+local settings = require('aineo.entry.settings')
+
 local M = {}
 
 --- The office of each tab that has asked for one, by the tab.
 ---@type table<aineo.entry.Tab, aineo.office.Office>
 local offices = setmetatable({}, { __mode = 'k' })
-
---- The configuration, resolved from `vim.g.aineo` and the options
---- `require('aineo').setup()` recorded (`aineo.config`'s `resolve_config()`).
----
----@return table
-local function resolved_config()
-  local config = require('aineo.config')
-  return (config.resolve_config(vim.g.aineo, config.recorded_setup_options()))
-end
 
 --- Claude Code's configuration directory: `$CLAUDE_CONFIG_DIR`, else `.claude`
 --- in the user's home.
@@ -66,7 +59,7 @@ local function office_of(tab)
       clock = function()
         return vim.uv.hrtime() / 1e9
       end,
-      commands = resolved_config().office.commands,
+      commands = settings.resolved().office.commands,
       report_tool = require('aineo.mcp').report_tool_name(),
     })
   end
