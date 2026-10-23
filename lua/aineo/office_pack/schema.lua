@@ -69,6 +69,9 @@ M.text_colour = {
 }
 M.cells = { kind = 'cells', expected = 'text of characters one cell wide' }
 
+--- A Lua pattern: text `string.find()` accepts as one.
+M.pattern = { kind = 'pattern', expected = 'a Lua pattern' }
+
 --- A key that is a name: lowercase words joined by `_`.
 M.name = { kind = 'name', expected = 'a name of lowercase words joined by _' }
 
@@ -263,6 +266,9 @@ local SCALAR_CHECKS = {
   colour = is_hex_colour,
   text_colour = is_text_colour,
   cells = is_single_cell_text,
+  pattern = function(value)
+    return type(value) == 'string' and (pcall(string.find, '', value))
+  end,
   name = function(value)
     return type(value) == 'string' and value:match(NAME_PATTERN) ~= nil
   end,

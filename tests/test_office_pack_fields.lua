@@ -451,6 +451,12 @@ local WRONG_FIELDS = {
     'triggers[1].when.tool must be text',
   },
   {
+    'a trigger with a Lua pattern that is none',
+    { triggers = { { when = { command = { lua_pattern = '[' } }, play = 'work' } } },
+    'triggers',
+    'triggers[1].when.command must be text, or a table with lua_pattern',
+  },
+  {
     'a trigger that matches by something that is not a pattern',
     { triggers = { { when = { command = { regex = 'x' } }, play = 'work' } } },
     'triggers',
