@@ -125,6 +125,38 @@ T['an agent whose activity is over']['never picks an activity whose spot the pla
   eq(watched.cell_at(IDLE, 3), '7,0')
 end
 
+--- What the first agent's line of the status list says of what it is doing,
+--- in a stage 40 cells wide and 24 rows tall.
+---
+---@param stage aineo.office_scene.Stage
+---@return string
+local function listed_line_of(stage)
+  local line = stage.picture().rows[21].text:gsub('▀', ' ')
+  return vim.trim(line:sub(line:find('main', 1, true) + #'main'):gsub('%s+', ' '))
+end
+
+T['an agent whose activity is over']['is listed with the label of the activity it picked'] = function()
+  local pack = scene.people_pack(AISLE, AISLE_LEGEND, {
+    activities = {
+      stand = { steps = { { at = 'aside', for_seconds = 1 } } },
+      sit_down = {
+        during = { 'idle' },
+        label = 'sits down',
+        steps = { { at = 'seat', pose = 'sitting' } },
+      },
+    },
+    states = { standing = 'stand', idle = 'stand' },
+  })
+  local stage =
+    scene.stage_of(pack, 40, 24, { random = scene.always(0), state_labels = { idle = 'is idle' } })
+  stage.advance(IDLE, 0)
+  local before = listed_line_of(stage)
+
+  stage.advance(IDLE, 3)
+
+  eq({ before, listed_line_of(stage) }, { 'is idle', 'sits down' })
+end
+
 T['two players'] = MiniTest.new_set()
 
 --- Two cells for the agents to stand in, and the two ends of a table.
