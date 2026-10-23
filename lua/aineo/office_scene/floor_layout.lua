@@ -161,6 +161,22 @@ local function decorate(layout, names, column, row, length)
   end
 end
 
+--- How many cells, from `first` of `text`, hold the same character as the one
+--- at `first`: compared byte by byte, since a pattern built from the byte
+--- cannot hold a NUL.
+---
+---@param text string
+---@param first integer from 1
+---@return integer
+local function run_length(text, first)
+  local character = text:sub(first, first)
+  local length = 1
+  while text:sub(first + length, first + length) == character do
+    length = length + 1
+  end
+  return length
+end
+
 --- Whether the piece of `entry` shows in an office `width` cells wide.
 ---
 ---@param entry table a legend entry
@@ -241,7 +257,7 @@ function M.lay_out(pack, width, height)
     while column < width do
       walls[row][column] = is_wall_cell(text, column + 1)
       local letter = text:sub(column + 1, column + 1)
-      local length = #text:match('^' .. vim.pesc(letter) .. '+', column + 1)
+      local length = run_length(text, column + 1)
       local entry = floor.legend[letter]
       if entry then
         place_run(layout, entry, column, row, length)
