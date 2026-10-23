@@ -167,6 +167,56 @@ T['a pose']['rises by the pixels of its frame, counted from when the agent took 
   eq(cells_while_rising({ 0, 2 }, { 10.25, 10.5, 10.75 }), { '4,1', '4,0', '4,1' })
 end
 
+T['a pose']['holds its prop on the same side whichever way the body’s art faces'] = function()
+  local art = {
+    ['art/body_left.txt'] = 'colours: A = agent\nanchor: 1, 1\nfaces: left\narea hand: 0, 0, 1 x 1\n---\nAA\nAA\n',
+    ['art/body_right.txt'] = 'colours: A = agent\nanchor: 0, 1\narea hand: 1, 0, 1 x 1\n---\nAA\nAA\n',
+    ['art/cup.txt'] = 'colours: R = red\nanchor: 0, 0\n---\nR\n',
+  }
+  local function sketch_of(body, facing)
+    local pack = scene.people_pack(
+      '# plan\n \n ....a....\n',
+      { a = { spot = 'aside', facing = facing } },
+      {
+        characters = people_with({ standing = { art = { body }, holding = 'cup' } }),
+      },
+      art
+    )
+    local stage = scene.stage_of(pack, 9, 1)
+    stage.advance(scene.agents_in('standing'), 0)
+    return scene.sketch(stage.picture(), 9, { [scene.FLOOR] = '.', [scene.AGENT] = 'A' })[1]
+  end
+
+  eq(sketch_of('body_left', 'left'), sketch_of('body_right', 'left'))
+  eq(sketch_of('body_left', 'right'), sketch_of('body_right', 'right'))
+end
+
+T['a pose']['holds a prop that faces left mirrored only when the agent faces right'] = function()
+  local art = {
+    ['art/body.txt'] = 'colours: A = agent\nanchor: 0, 1\narea hand: 1, 0, 1 x 1\n---\nAA\nAA\n',
+    ['art/flag.txt'] = 'colours: R = red, B = blue\nanchor: 0, 0\nfaces: left\n---\nRB\n',
+  }
+  local function groups_around_the_hand(facing)
+    local pack = scene.people_pack(
+      '# plan\n \n ....a....\n',
+      { a = { spot = 'aside', facing = facing } },
+      { characters = people_with({ standing = { art = { 'body' }, holding = 'flag' } }) },
+      art
+    )
+    local stage = scene.stage_of(pack, 9, 1)
+    stage.advance(scene.agents_in('standing'), 0)
+    return scene.row_groups(stage.picture(), 0, 9)
+  end
+  local red_on_agent, blue_on_agent =
+    'AineoOfficePixel_ff0000_ff00ff', 'AineoOfficePixel_0000ff_ff00ff'
+
+  local facing_right = groups_around_the_hand('right')
+  local facing_left = groups_around_the_hand('left')
+
+  eq({ facing_right[5], facing_right[6] }, { blue_on_agent, red_on_agent })
+  eq({ facing_left[4], facing_left[5] }, { red_on_agent, blue_on_agent })
+end
+
 T['a pose']['rises by the frames of its first layer, a second each when that layer says so'] = function()
   local pack = scene.people_pack(
     '# plan\n \n ........\n a...s...\n',
