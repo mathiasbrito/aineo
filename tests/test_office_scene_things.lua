@@ -380,4 +380,69 @@ T['a thing that lies on the floor']['is dropped when the plan is laid out again 
   eq(group_at(stage, 6), scene.solid(scene.FLOOR))
 end
 
+--- A random source that gives a different number each time, spread over
+--- the range, as many as `count` times.
+---
+---@param count integer
+---@return fun(): number
+local function spread_over(count)
+  local drawn = 0
+  return function()
+    drawn = drawn + 1
+    return ((drawn - 1) % count) / count
+  end
+end
+
+--- The steps of an agent who goes to `count` cells in turn and leaves a mess
+--- on each.
+---
+---@param count integer
+---@return table[]
+local function steps_that_litter(count)
+  local steps = {}
+  for _ = 1, count do
+    steps[#steps + 1] = { at = 'anywhere', for_seconds = 0.01, leave = 'mess' }
+  end
+  return steps
+end
+
+--- Advances `stage` every second from 0 to `seconds`, the agents standing.
+---
+---@param stage aineo.office_scene.Stage
+---@param seconds integer
+local function advance_every_second(stage, seconds)
+  local standing = scene.agents_in('standing')
+  for second = 0, seconds do
+    stage.advance(standing, second)
+  end
+end
+
+--- How many cells of a row of `width` cells lie in the red of a mess.
+---
+---@param stage aineo.office_scene.Stage
+---@param width integer
+---@return integer
+local function cells_of_mess(stage, width)
+  local count = 0
+  for column = 0, width - 1 do
+    if group_at(stage, column) == scene.solid(RED) then
+      count = count + 1
+    end
+  end
+  return count
+end
+
+T['a thing that lies on the floor']['is left only while fewer than 64 lie'] = function()
+  local pack = scene.people_pack('# plan\n \n ' .. ('.'):rep(100) .. '\n', {}, {
+    activities = { litter = { steps = steps_that_litter(70) } },
+    things = { mess = { piece = 'left' } },
+    states = { standing = 'litter' },
+  })
+  local stage = scene.stage_of(pack, 100, 1, { random = spread_over(70) })
+
+  advance_every_second(stage, 40)
+
+  eq(cells_of_mess(stage, 100), 64)
+end
+
 return T

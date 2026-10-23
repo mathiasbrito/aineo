@@ -80,6 +80,7 @@ function M.new_stage(options)
       plan_height = plan_height,
       agents = agents_shown,
       places = director.places(),
+      activities_played = director.activities_played(),
       state_labels = options.state_labels or {},
       wall_time = options.clock and options.clock(),
       now = now,
