@@ -155,6 +155,18 @@ end
 
 T['an agent'] = MiniTest.new_set()
 
+T['an agent']['is drawn in every state, in 60 columns by 24 rows and in 100 by 40'] =
+  MiniTest.new_set({
+    parametrize = in_each_size({ SMALL, MEDIUM }, FIRST_SPOT),
+  })
+
+T['an agent']['is drawn in every state, in 60 columns by 24 rows and in 100 by 40']['size, state and spot'] = function(
+  size,
+  state
+)
+  eq(spot_of_agent_after(size, state, 0) ~= 'nowhere', true)
+end
+
 T['an agent']['is put at the spot its state starts at'] = MiniTest.new_set({
   parametrize = in_each_size({ MEDIUM, LARGE }, FIRST_SPOT),
 })

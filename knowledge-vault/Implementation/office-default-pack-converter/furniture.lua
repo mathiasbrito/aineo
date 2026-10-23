@@ -193,10 +193,10 @@ function M.pieces(sprites)
     anchor = { 0, 0 },
   }
 
-  pieces.desk = placed_on_row(
-    from_mock('A desk; the agent sits behind it.', sprites.desk26, sprites.FURNITURE, 39),
-    20
-  )
+  local desk =
+    from_mock('A desk; the agent sits behind it.', sprites.desk26, sprites.FURNITURE, 39)
+  desk.areas = { name = { 3, 42, 20, 2 } }
+  pieces.desk = placed_on_row(desk, 20)
 
   local monitor = from_mock(
     'A monitor on a desk. Its owner\'s pose gives its screen; a web search writes its clue in the query area.',
@@ -290,6 +290,10 @@ local function as_decoration(piece)
   return placed_on_row(piece, 8, first.left + math.floor(width / 2))
 end
 
+--- The window's width: its frame has no padding, so that the window stands
+--- where the wall's fixed window did, and its anchor is at its middle.
+local WINDOW_WIDTH = 24
+
 --- The decorations of the wall, by name.
 ---
 ---@param sprites table
@@ -297,12 +301,12 @@ end
 function M.decorations(sprites)
   local pieces = {}
 
-  -- The window's frame, 24 wide; the sky it shows is the pack's own pieces,
-  -- painted into the glass.
-  local frame = art.new_canvas(0, 5, 23, 16)
+  -- The window's frame, 24 wide, the first of the decorations; the sky it
+  -- shows is the pack's own pieces, painted into the glass.
+  local frame = art.new_canvas(0, 5, WINDOW_WIDTH - 1, 16)
   for y = 5, 16 do
-    for x = 0, 23 do
-      if y == 5 or y == 16 or x == 0 or x == 23 then
+    for x = 0, WINDOW_WIDTH - 1 do
+      if y == 5 or y == 16 or x == 0 or x == WINDOW_WIDTH - 1 then
         frame:set(x, y, 'slate')
       else
         frame:set(x, y, 'night_low')
@@ -315,7 +319,7 @@ function M.decorations(sprites)
     about = 'A window; the sky outside follows the time of day (sky_night, sky_dawn, sky_day, sky_dusk).',
     frames = { frame },
     areas = { sky = { 1, 6, 22, 10 } },
-  }, 8)
+  }, 8, math.floor(WINDOW_WIDTH / 2))
 
   pieces.poster = as_decoration(
     from_mock('A framed picture of mountains under a sun.', sprites.poster, sprites.POSTER_PAL, 5)
@@ -394,6 +398,6 @@ function M.sky(sprites, hour)
 end
 
 --- The names a plan's decorations take, in the order of preference.
-M.PREFERENCE = { 'water_cooler', 'snake_plant', 'bookshelf', 'poster', 'fish_tank' }
+M.PREFERENCE = { 'window', 'water_cooler', 'snake_plant', 'bookshelf', 'poster', 'fish_tank' }
 
 return M
