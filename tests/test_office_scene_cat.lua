@@ -234,7 +234,54 @@ T['the cat']['follows an agent who is on the move, and goes back to its life whe
 
   local cat_cells = cat_cells_every_tenth_second(stage, scene.agents_in('working'), 21, 3)
 
-  eq({ cat_cells[5], cat_cells[22], cat_cells[25] }, { '2,0', '10,0', '15,0' })
+  eq(
+    { cat_cells[5], cat_cells[22], cat_cells[25], cat_cells[31] },
+    { '2,0', '10,0', '15,0', '6,0' }
+  )
+end
+
+--- The cell the cat is drawn in at each tenth of a second from 0 to
+--- `seconds`, the agents being there until `leaves_at` seconds and gone after.
+---
+---@param stage aineo.office_scene.Stage
+---@param agents aineo.office_states.Agent[]
+---@param width integer
+---@param leaves_at number
+---@param seconds number
+---@return string[]
+local function cat_cells_while_the_agents_leave(stage, agents, width, leaves_at, seconds)
+  local cells = {}
+  for tick = 0, seconds * 10 do
+    stage.advance(tick / 10 < leaves_at and agents or {}, tick / 10)
+    cells[#cells + 1] = where_the_cat_is(stage, width)
+  end
+  return cells
+end
+
+T['the cat']['stops following an agent who has left'] = function()
+  local stage = stage_with_a_cat(
+    '# plan\n \n a.c.................f\n',
+    { a = { spot = 'aside' }, c = { spot = 'corner' }, f = { spot = 'far' } },
+    21,
+    {
+      work = { steps = { { at = 'aside', for_seconds = 1 }, { at = 'far' } } },
+      lie_about = {
+        who = 'cat',
+        during = { 'always' },
+        steps = { { at = 'corner', for_seconds = 0.5 } },
+      },
+      tag_along = {
+        who = 'cat',
+        during = { 'always' },
+        steps = { { follow = 'someone_walking', for_seconds = 5 } },
+      },
+    }
+  )
+
+  local cat_cells =
+    cat_cells_while_the_agents_leave(stage, scene.agents_in('working'), 21, 1.8, 2.4)
+
+  eq(cat_cells[25], '2,0')
 end
 
 T['the cat']['follows no one by a name other than someone_walking'] = function()
@@ -313,6 +360,67 @@ T['the cat']['leaves a mess that angers the agents near it and that an idle agen
     scene.agent_cell(picture, 13, 1, YELLOW),
     scene.group_at(picture, 6, 0),
   }, { { '6,0', '12,0' }, '2,0', '4,0', scene.solid(scene.FLOOR) })
+end
+
+--- How many cells of the picture's only row are drawn in `colour`.
+---
+---@param picture aineo.office_scene.Picture
+---@param width integer
+---@param colour string `#rrggbb`
+---@return integer
+local function cells_in(picture, width, colour)
+  local count = 0
+  for column = 0, width - 1 do
+    if scene.group_at(picture, column, 0) == scene.solid(colour) then
+      count = count + 1
+    end
+  end
+  return count
+end
+
+--- A stage of a row of `nests` nesting places where `cats` cats, one cell
+--- wide and in `colours`, each take a nest.
+---
+---@param cats integer
+---@param colours string[]
+---@param nests integer
+---@return aineo.office_scene.Stage
+local function stage_of_cats_in_nests(cats, colours, nests)
+  local pack = scene.people_pack(
+    '# plan\n \n ' .. ('n'):rep(nests) .. '\n',
+    { n = { spot = 'nest' } },
+    {
+      characters = {
+        agent = PEOPLE.agent,
+        cat = {
+          how_many = cats,
+          colours = colours,
+          poses = { standing = { art = { 'person' } }, walking = { art = { 'person' } } },
+        },
+      },
+      activities = {
+        stand = { steps = { { at = 'nest' } } },
+        curl_up = { who = 'cat', during = { 'always' }, steps = { { at = 'nest' } } },
+      },
+      states = { standing = 'stand' },
+    }
+  )
+  return scene.stage_of(pack, nests, 1, { random = scene.always(0) })
+end
+
+T['the cat']['is drawn in a colour of its own for each cat, and there are four cats at most'] = function()
+  local colours = { '#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff' }
+  local stage = stage_of_cats_in_nests(10, colours, 12)
+
+  stage.advance({}, 0)
+
+  local picture = stage.picture()
+  eq(
+    vim.tbl_map(function(colour)
+      return cells_in(picture, 12, colour)
+    end, colours),
+    { 1, 1, 1, 1, 0, 0 }
+  )
 end
 
 return T

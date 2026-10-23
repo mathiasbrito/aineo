@@ -54,14 +54,16 @@ local function cut_to(text, cells)
   return table.concat(kept)
 end
 
---- What the agent is doing, in words: its activity's label, otherwise the
---- words given for its state, otherwise its state's name.
+--- What the agent is doing, in words: the label of the activity it plays (the
+--- one its state asks for until it picks another), otherwise the words given
+--- for its state, otherwise its state's name.
 ---
 ---@param drawing aineo.office_scene.Drawing
 ---@param agent aineo.office_states.Agent
 ---@return string
 local function label_of(drawing, agent)
-  local _, activity = roles.activity_of(drawing.pack, agent)
+  local _, asked_for = roles.activity_of(drawing.pack, agent)
+  local activity = drawing.activities_played[agent.id] or asked_for
   return (activity and activity.label)
     or drawing.state_labels[agent.state]
     or (agent.state:gsub('_', ' '))

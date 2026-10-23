@@ -55,6 +55,7 @@ local WANTED, RANDOM, INTERLUDE = performers.WANTED, performers.RANDOM, performe
 ---@field update fun(agents: aineo.office_states.Agent[], now: number) brings the agents up to `now`, in the states they are in
 ---@field characters fun(): aineo.office_scene.Character[] the agents with a place on the plan, in the order they were given
 ---@field things fun(): aineo.office_scene.LyingThing[] what lies on the floor, the oldest first
+---@field activities_played fun(): table<string, table> the activity each agent plays now, by its id
 ---@field places fun(): table<string, integer> the place of every agent the director knows, by its id
 ---@field use_layout fun(layout: aineo.office_scene.FloorLayout) goes on in a new layout of the same plan: each agent keeps its activity and its step, at the spot of the same name and number
 
@@ -495,6 +496,14 @@ function M.new_director(pack, layout, random)
 
   function director.things()
     return context.things.all()
+  end
+
+  function director.activities_played()
+    local played = {}
+    for id, performer in pairs(known) do
+      played[id] = performer.activity
+    end
+    return played
   end
 
   function director.places()
