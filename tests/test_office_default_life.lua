@@ -32,14 +32,16 @@ end
 ---@param pack aineo.office_pack.Pack
 ---@param agents aineo.office_states.Agent[]
 ---@param seconds number
+---@param size? integer[] the room, `ROOM` by default
 ---@return string listed
-local function listed_over(pack, agents, seconds)
-  local stage = default.stage(pack, ROOM[1], ROOM[2])
+local function listed_over(pack, agents, seconds, size)
+  size = size or ROOM
+  local stage = default.stage(pack, size[1], size[2])
   local said = {}
   for step = 0, seconds * 4 do
     stage.advance(agents, step / 4)
     if step % 2 == 0 then
-      vim.list_extend(said, default.text_rows(stage.picture(), ROOM[2] - LIST_ROWS + 2))
+      vim.list_extend(said, default.text_rows(stage.picture(), size[2] - LIST_ROWS + 2))
     end
   end
   return table.concat(said, '\n')
@@ -472,6 +474,20 @@ T['the cat']['leaves a mess or a puddle that upsets an agent standing eight cell
   pack.activities[name].steps[1].at = 'right_of_desk'
 
   local listed = listed_over(pack, { { id = 'main', state = 'delegating' } }, 10)
+
+  eq(listed:find('is upset by what the cat left', 1, true) ~= nil, true)
+end
+
+T['the cat']['leaves a mess or a puddle that upsets an idle agent across the room'] =
+  MiniTest.new_set({ parametrize = { { 'leave_a_mess' }, { 'leave_a_puddle' } } })
+
+T['the cat']['leaves a mess or a puddle that upsets an idle agent across the room']['activity'] = function(
+  name
+)
+  local pack = pack_with_life({ name })
+  pack.activities[name].steps[1].at = 'right_of_desk'
+
+  local listed = listed_over(pack, default.agents(2, 'idle'), 10, { 157, 78 })
 
   eq(listed:find('is upset by what the cat left', 1, true) ~= nil, true)
 end
