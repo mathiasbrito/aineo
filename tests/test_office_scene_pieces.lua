@@ -73,6 +73,28 @@ T['a piece in use']['shows its in_use art while an agent walks over the spot'] =
   eq(scene.group_at(stage.picture(), 1, 0), scene.solid(BLUE))
 end
 
+T['a piece larger than the stage'] = MiniTest.new_set()
+
+T['a piece larger than the stage']['is read only where it lies on the stage'] = function()
+  local huge = ('R'):rep(30) .. '\n'
+  local pack = scene.people_pack('# plan\n \n H\n', { H = { piece = 'huge' } }, nil, {
+    ['art/huge.txt'] = 'colours: R = red\nanchor: 0, 29\n---\n' .. huge:rep(30),
+  })
+  local reads = 0
+  pack.pieces.huge.colours = setmetatable({}, {
+    __index = function()
+      reads = reads + 1
+      return 'red'
+    end,
+  })
+  local stage = scene.stage_of(pack, 1, 1)
+
+  stage.advance({}, 0)
+  stage.picture()
+
+  eq(reads, 2)
+end
+
 T['a piece laid on the floor'] = MiniTest.new_set()
 
 --- Three rows of one column: the standing spot `a` on top, a rug `r` below
