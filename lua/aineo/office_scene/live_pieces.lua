@@ -1,11 +1,12 @@
 --- What a piece that `shows` live content draws into its areas: the time and
 --- the date of the wall clock, the sky outside the window, the tasks on the
---- whiteboard, the page a printer prints. Each paints into the area of the
+--- whiteboard, the page a printer prints, the name on a desk's plate. Each paints into the area of the
 --- piece named for the content, and nowhere else.
 
 local areas = require('aineo.office_scene.areas')
 local items = require('aineo.office_scene.items')
 local live_text = require('aineo.office_scene.live_text')
+local name_plate = require('aineo.office_scene.name_plate')
 local printing = require('aineo.office_scene.printing')
 local sky = require('aineo.office_scene.sky')
 local whiteboard = require('aineo.office_scene.whiteboard')
@@ -62,6 +63,7 @@ local PAINTERS = {
   date = write_wall_text,
   sky = paint_sky,
   plan = whiteboard.paint,
+  name = name_plate.paint,
   printing = printing.paint,
 }
 

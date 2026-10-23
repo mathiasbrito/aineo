@@ -34,7 +34,7 @@ local STATE_REFERENCE = { noun = 'state', owner = 'vocabulary' }
 
 local PLACES = { 'above', 'above_left', 'above_right', 'beside' }
 local FACINGS = { 'left', 'right' }
-local SHOWN = { 'time', 'date', 'sky', 'plan', 'printing' }
+local SHOWN = { 'time', 'date', 'sky', 'plan', 'printing', 'name' }
 
 --- A match: plain words, a glob, or `{ lua_pattern = … }`.
 local MATCH = schema.text_or_table(

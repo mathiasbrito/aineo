@@ -298,7 +298,7 @@ local WRONG_FIELDS = {
     'a legend show that is none',
     { floor = { legend = { D = { piece = 'person', shows = 'moon' }, s = { spot = 'desk' } } } },
     'floor',
-    'floor.legend.D.shows must be one of time, date, sky, plan, printing',
+    'floor.legend.D.shows must be one of time, date, sky, plan, printing, name',
   },
   {
     'a legend decoration the pack lacks',
