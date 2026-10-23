@@ -95,7 +95,7 @@ T['a tracker'] = MiniTest.new_set()
 T['a tracker']['has the main agent standing before it has taken a signal'] = function()
   local tracker = office_states.new_tracker()
 
-  eq(tracker.agents(0), { { id = 'main', state = 'standing' } })
+  eq(tracker.agents(0), { { id = 'main', state = 'standing', details = { tasks = {} } } })
 end
 
 T['a tracker']['has an agent working while a call of a tool it does not class runs'] = function()
