@@ -1,4 +1,6 @@
 local MiniTest = require('mini.test')
+local fake_transcript = dofile('tests/helpers/fake_transcript.lua')
+local fixture = dofile('tests/helpers/fixture.lua')
 local office_cells = dofile('tests/helpers/office_cells.lua')
 local office_child = dofile('tests/helpers/office_child.lua')
 
@@ -12,6 +14,12 @@ local T = MiniTest.new_set({ hooks = { post_once = child.stop } })
 --- true colours.
 local NEEDS_TRUE_COLOUR =
   "aineo: the office needs 'termguicolors' to draw its pixels, and it is off, so it does not show"
+
+--- How long a wait for something that should happen may last, in milliseconds.
+local PATIENCE_MS = 4000
+
+--- The recorded turn: a prompt, a call, its result and the turn's end.
+local RECORDED_TURN = fake_transcript.lines_of('turn-with-a-command-2.1.308.jsonl')
 
 --- Whether the office shows.
 ---
@@ -59,6 +67,78 @@ T['without true colours']['the office shows when it is asked to once the option 
   child.lua([[_G.office.show_now()]])
 
   eq(shows(), true)
+end
+
+--- The text of a transcript, in a directory of the case's own.
+---
+---@return string path
+local function transcript_path()
+  return vim.fs.joinpath(fixture.directory('office_life'), 'session.jsonl')
+end
+
+--- The repeating timers and the file watches open in the child.
+---
+---@return { timers: integer, watches: integer }
+local function handles()
+  return {
+    timers = office_cells.open_repeating_timers(child),
+    watches = office_cells.open_handles(child, 'fs_event'),
+  }
+end
+
+T['a tab page left'] = MiniTest.new_set()
+
+T['a tab page left']['pauses the frame timer and the watch of its office, which entering it again starts'] = function()
+  local path = transcript_path()
+  fake_transcript.append(path, vim.list_slice(RECORDED_TURN, 1, 5))
+  office_child.open_layout(child)
+  office_child.make_office(child)
+  child.lua([[_G.office.follow_session(...)]], { path })
+  local hidden = handles()
+  child.lua([[_G.office.show_now()]])
+  local shown = handles()
+
+  child.cmd('tabnew')
+  local away = handles()
+  child.cmd('tabprevious')
+
+  eq(away, hidden)
+  eq(handles(), shown)
+  eq(shown.timers > hidden.timers and shown.watches > hidden.watches, true)
+end
+
+T['a tab page left']['keeps the office on screen for when the tab page is entered again'] = function()
+  office_child.open_layout(child)
+  office_child.make_office(child)
+  child.lua([[_G.office.show_now()]])
+
+  child.cmd('tabnew')
+  child.cmd('tabprevious')
+
+  eq(shows(), true)
+end
+
+T['a tab page left']['has the office catch up with what the session did while it was away'] = function()
+  local path = transcript_path()
+  fake_transcript.append(path, vim.list_slice(RECORDED_TURN, 1, 5))
+  office_child.open_layout(child)
+  office_child.make_office(child)
+  child.lua([[_G.office.follow_session(...)]], { path })
+  child.lua([[_G.office.show_now()]])
+  vim.wait(PATIENCE_MS, function()
+    return office_cells.is_typing(child)
+  end, 10)
+
+  child.cmd('tabnew')
+  fake_transcript.append(path, vim.list_slice(RECORDED_TURN, 6, 10))
+  child.cmd('tabprevious')
+
+  eq(
+    vim.wait(PATIENCE_MS, function()
+      return office_cells.is_standing(child)
+    end, 10),
+    true
+  )
 end
 
 return T
