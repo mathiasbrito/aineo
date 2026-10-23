@@ -135,6 +135,43 @@ T['the cat']['is visited by an agent that goes next to the cat, on the cell besi
   eq(scene.agent_cell(stage.picture(), 8, 1), '3,0')
 end
 
+--- A stage where the cat lies at the corner for a second and then strolls off
+--- to the far end, and an idle agent that goes next to it for three seconds.
+---
+---@return aineo.office_scene.Stage
+local function stage_of_a_visit_the_cat_would_leave()
+  return stage_with_a_cat(
+    '# plan\n \n a.c.................f\n',
+    { a = { spot = 'aside' }, c = { spot = 'corner' }, f = { spot = 'far' } },
+    21,
+    {
+      stand = { steps = { { at = 'aside', for_seconds = 0.3 } } },
+      visit = {
+        during = { 'idle' },
+        steps = { { at = 'next_to_the_cat', for_seconds = 3 } },
+      },
+      stroll = {
+        who = 'cat',
+        during = { 'always' },
+        steps = { { at = 'corner', for_seconds = 1 }, { at = 'far' } },
+      },
+    }
+  )
+end
+
+T['the cat']['stays where it is while an agent is next to it, and strolls off once the agent leaves'] = function()
+  local stage = stage_of_a_visit_the_cat_would_leave()
+  local crew = scene.agents_in('idle')
+  stage.advance(crew, 0)
+  stage.advance(crew, 2.5)
+  local while_visited = where_the_cat_is(stage, 21)
+
+  stage.advance(crew, 3.6)
+  stage.advance(crew, 12)
+
+  eq({ while_visited, where_the_cat_is(stage, 21) }, { '2,0', '20,0' })
+end
+
 T['the cat']['is not visited when the office has no cat'] = function()
   local stage = stage_of_a_visit_to_the_cat('next_to_the_cat', false)
   local crew = scene.agents_in('idle')
