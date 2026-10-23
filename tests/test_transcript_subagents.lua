@@ -378,6 +378,75 @@ T["a folder with entries that are not subagents' transcripts"]['hears nothing of
   eq(session.signals, {})
 end
 
+T['a callback that raises while a subagent is replayed'] = MiniTest.new_set()
+
+T['a callback that raises while a subagent is replayed']['leaves follow() returning a follower that stops'] = function()
+  local session = new_session()
+  write_subagent(session, SUBAGENT, 'running')
+  local watches_before = open_handles('fs_event')
+
+  local started, follower = pcall(transcript.follow, {
+    path = session.transcript,
+    on_signal = function(signal)
+      if signal.kind == 'prompt' then
+        error('the consumer failed')
+      end
+    end,
+  })
+  table.insert(started_followers, started and follower or nil)
+
+  eq(started, true)
+  follower.stop()
+  eq(open_handles('fs_event'), watches_before)
+end
+
+T['a subagent past the cap'] = MiniTest.new_set()
+
+T['a subagent past the cap']['replays its past when a slot frees, as it was there at the start'] = function()
+  local session = new_session()
+  for number = 1, 65 do
+    fake_transcript.append(agent_file(session, ('a%016d'):format(number)), { RECORDED_SUBAGENT[2] })
+  end
+  follow(session)
+
+  fake_transcript.write_subagent_meta(meta_file(session, ('a%016d'):format(1)), 'finished')
+  wait_for_signals(session, ('a%016d'):format(65), 1)
+
+  local arrival = signals_of_agent(session.signals, ('a%016d'):format(65))[1]
+  eq(arrival.kind, 'subagent_started')
+  eq(arrival.replayed, true)
+end
+
+T['a callback that stops the follower while a subagent leaves'] = MiniTest.new_set({
+  parametrize = { { 1 }, { 2 }, { 3 } },
+})
+
+T['a callback that stops the follower while a subagent leaves']['hears nothing after it'] = function()
+  local session = new_session()
+  write_subagent(session, SUBAGENT, 'running')
+  local stopped_at = nil
+  session.follower = assert(transcript.follow({
+    path = session.transcript,
+    on_signal = function(signal)
+      table.insert(session.signals, signal)
+      if signal.kind == 'turn_ended' and not signal.replayed then
+        session.follower.stop()
+        stopped_at = #session.signals
+      end
+    end,
+  }))
+  table.insert(started_followers, session.follower)
+
+  fake_transcript.append(agent_file(session, SUBAGENT), { RECORDED_SUBAGENT[#RECORDED_SUBAGENT] })
+  fake_transcript.write_subagent_meta(meta_file(session, SUBAGENT), 'finished')
+  vim.wait(PATIENCE_MS, function()
+    return stopped_at ~= nil
+  end, 10)
+  vim.wait(QUIET_MS)
+
+  eq(#session.signals, stopped_at)
+end
+
 T['two subagents'] = MiniTest.new_set()
 
 T['two subagents']['are followed apart, each signal naming its own'] = function()
