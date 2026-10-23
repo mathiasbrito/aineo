@@ -41,6 +41,16 @@ local function mixed(base, other, share)
   return ('#%02x%02x%02x'):format(unpack(mixed_channels))
 end
 
+--- The colour of the agent at `index` among the agents: the colours its kind
+--- takes, one for each agent in turn.
+---
+---@param kind_colours string[] `#rrggbb`, at least one
+---@param index integer from 1
+---@return string
+function M.of_agent(kind_colours, index)
+  return kind_colours[(index - 1) % #kind_colours + 1]
+end
+
 --- The colours a pack's art names for an agent whose own colour is `base`:
 --- `agent` itself, `agent_light`, `agent_shade` and `agent_blush`.
 ---

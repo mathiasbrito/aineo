@@ -6,6 +6,7 @@ local canvas_module = require('aineo.office_scene.canvas')
 local figures = require('aineo.office_scene.figures')
 local furniture = require('aineo.office_scene.furniture')
 local items = require('aineo.office_scene.items')
+local status_list = require('aineo.office_scene.status_list')
 
 local M = {}
 
@@ -43,6 +44,9 @@ function M.paint(drawing)
   vim.list_extend(to_paint, figures.items(canvas, drawing))
   items.paint_in_depth_order(to_paint)
   figures.write_effects(canvas, drawing)
+  if drawing.plan_height < drawing.height then
+    status_list.paint(canvas, drawing)
+  end
   return canvas.picture()
 end
 

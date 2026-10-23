@@ -175,6 +175,22 @@ T['showing the office']['shows the main agent standing beside its desk when no s
   eq(is_typing(), false)
 end
 
+T['showing the office']['gives the scene the words of the vocabulary for its status list'] = function()
+  open_office()
+  child.lua([[
+    local office_scene = require('aineo.office_scene')
+    local new_stage = office_scene.new_stage
+    office_scene.new_stage = function(options)
+      _G.state_labels = options.state_labels
+      return new_stage(options)
+    end
+  ]])
+
+  child.lua([[_G.office.show_now()]])
+
+  eq(child.lua_get([[_G.state_labels.error]]), 'hit an error')
+end
+
 T['showing the office']['is a scratch buffer of its own that no one edits, wiped with the window'] = function()
   open_office()
   child.lua([[_G.office.show_now()]])
