@@ -17,8 +17,9 @@ local M = {}
 M.COLUMNS = 160
 M.LINES = 40
 
---- Starts `child` at `M.COLUMNS` by `M.LINES` with aineo's layout open around
---- the stand-ins, the cursor in the layout's Claude window.
+--- Starts `child` at `M.COLUMNS` by `M.LINES`, with true colours as a terminal
+--- gives them, and aineo's layout open around the stand-ins, the cursor in the
+--- layout's Claude window.
 ---
 ---@param child table
 ---@return { claude: integer, report: integer, input: integer } buffers
@@ -26,6 +27,7 @@ function M.open_layout(child)
   layout.start(child)
   child.o.columns = M.COLUMNS
   child.o.lines = M.LINES
+  child.o.termguicolors = true
   local buffers = layout.stand_ins(child)
   layout.open(child, layout.arrangement(buffers))
   buffers.input = layout.input_buffer(child)
