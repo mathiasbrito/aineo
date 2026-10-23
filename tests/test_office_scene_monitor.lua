@@ -107,6 +107,15 @@ T['a monitor']['of an agent who is not there shows nothing and is no error'] = f
   eq(top_text(monitors_with({}), 2, 6), '      ')
 end
 
+T['a monitor']['shows a NUL in the clue as ? and is no error'] = function()
+  local picture
+  MiniTest.expect.no_error(function()
+    picture = monitors_with({ agent('main', 'on_the_web', { web_clue = 'a\0b' }) })
+  end)
+
+  eq(top_text(picture, 2, 6), 'a?b   ')
+end
+
 local COMBINING_ACUTE = vim.fn.nr2char(0x301)
 local VARIATION_SELECTOR = vim.fn.nr2char(0xFE0F)
 
