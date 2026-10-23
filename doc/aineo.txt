@@ -4321,6 +4321,13 @@ It follows the transcript Claude Code's `SessionStart` hook names; when no
 hook ran, it looks for the session's transcript in `projects/` under Claude
 Code's configuration directory, and when none is there, it waits for the file
 Claude Code makes in the folder named after the directory Neovim started in.
+When the tab's Claude Code switches session (a `/resume`, a `/clear`, a
+fork), the agents of the old session leave and the office follows the new
+session's transcript at once, or when it next shows. When a transcript holds
+a `continued-in` line, which Claude Code writes when it goes on with a
+session in another, the office follows the file of that session instead,
+looking for the line in the last 8 MiB of the file when it starts to follow
+and reading it as it is written afterwards.
 
                                                           *aineo-office-hooks*
 Two of the hooks aineo gives the Claude Code it starts in `--settings`
