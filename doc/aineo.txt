@@ -3848,6 +3848,15 @@ AineoOfficeCardProblem  a `blocked` or `failed` card, linked to
                                                     *hl-AineoOfficeCardMore*
 AineoOfficeCardMore     the line `+N more`, linked to `Comment`
 
+From 24 rows tall, the last five rows of the office are its status list: a
+rule, then a line for each agent, up to four, with a dot in the agent's
+colour, its name cut to nine cells and what it is doing (the activity's
+`label`, or the state's own words); when there are more agents than lines,
+the last line counts the rest. The floor plan takes the rows above. A plan
+places at most 2000 pieces, the first it reads from the top and the left,
+and a frame paints only what lies on the screen, so that a pack cannot make
+a frame costly.
+
 The art is a pack: a folder `aineo-office/<name>/` on 'runtimepath' with
 `pack.lua`, a description in the subset of a Lua table that aineo reads and
 never runs, `floor.txt`, the floor plan drawn as text, and `art/*.txt`, the
@@ -4014,14 +4023,16 @@ A legend entry has:
 `sitting`	a character at the spot is seated (`false`)
 `facing`	`left` or `right` (`'right'`)
 `walk_over`	the piece lies on the floor and is walked over (`false`)
-`in_use`	the piece's art while a character is at the spot
+`in_use`	the art the piece shows in its place while a character stands
+	on the spot nearest to the piece or walks over it
 `decorations`	for a run of the letter: pieces placed left to right, as
 	many as fit, in this order of preference, each with a spot of
 	its own name on the first floor row below it
 `from_width`	the piece shows only when the office is at least so many
 	columns wide
-`shows`	live content aineo draws into the piece: `time`, `date`, `sky`,
-	`plan` or `printing`
+`shows`	live content aineo draws into the piece's area of that name:
+	`time` (`07:05`) and `date` (`Oct 03`) are written, as far as the
+	area holds; `sky`, `plan` and `printing` are not drawn yet
 
                                                      *aineo-office-activities*
 Activities, things and states ~
@@ -4034,6 +4045,26 @@ two for a random time between them), `facing`, `effect`, `even_if_taken`,
 `the_one_moved_plays` (an activity), `leave` and `remove` (a thing) and
 `follow`. Spots aineo knows without a legend: `anywhere`, `an_empty_desk`,
 `an_idle_agents_desk` and `next_to_an_agent`, and each thing's name.
+
+How an agent plays an activity: it takes the steps in order. For a step it
+goes to the nearest spot called `at` that no other agent has taken, walking
+the shortest way over floor (`.`), spots and pieces with `walk_over`, never
+over a wall, a space or a piece that stands on the floor, and takes the
+step's `pose`, facing the spot's way or the step's `facing`. A spot called
+`desk` is the agent's own: the first agent has the first desk of the plan,
+the second the second. After `for_seconds` from its arrival (a random time
+between the two numbers when it has two) the next step begins; the last step
+lasts until the agent's activity changes, and an agent whose activity has no
+free spot is not drawn until one is free. A spot that cannot be walked to
+leaves the agent where it is. An agent first appears at the first spot of its
+first step without walking there, or at the spot `door` when the step has no
+`at`. A step's `effect` shows over the pose's.
+
+A pose whose art has frames, or whose `rises` lifts it, begins at its first
+frame when the agent takes the pose. A pose with `screen` shows that piece in
+the `screen` area of the agent's own monitor, the n-th piece of the plan with
+a `screen` area for the n-th agent. `holding` draws a piece at the `hand`
+area of the first layer that has one.
 
 `things` says what an activity leaves behind: `piece`, and optionally
 `upsets_agents_within` (cells), `upset_agents_play` and `cleaned_up_by` (an
@@ -4069,9 +4100,8 @@ Checking a pack ~
 pack in the quickfix list as `file:line: problem`, the file's whole path in
 the list, so `:cnext` goes to it.
 
-The office shows the main agent alone, standing or working (the subagents
-are followed, and not drawn yet), and shows when you ask for it, not by
-itself. It stays over the right column as the screen
+The office shows the main agent and its subagents, and shows when you ask
+for it, not by itself. It stays over the right column as the screen
 or a window is resized, and closes when the layout shows no right column, as
 under `\Z`; it makes its colours again after a colorscheme. It does not
 pause for a tab page you leave or return to.
