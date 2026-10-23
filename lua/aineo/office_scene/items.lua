@@ -12,6 +12,7 @@ M.RANK = { on_the_floor = 0, seated = 1, piece = 2, standing = 3 }
 ---@field pack aineo.office_pack.Pack
 ---@field layout aineo.office_scene.FloorLayout
 ---@field characters aineo.office_scene.Character[]
+---@field things aineo.office_scene.LyingThing[] what lies on the floor
 ---@field agents aineo.office_states.Agent[] every agent, whether it has a position on the plan or not
 ---@field places table<string, integer> the place of every agent, by its id
 ---@field state_labels table<string, string> what the status list says of each state, in words

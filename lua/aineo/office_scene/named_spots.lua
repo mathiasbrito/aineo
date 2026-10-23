@@ -5,8 +5,9 @@
 --- has the first desk of the plan, the agent with the second place the second.
 --- `anywhere` is a floor cell at random; `an_empty_desk` a desk no agent has;
 --- `an_idle_agents_desk` the desk of another agent in the state `idle`;
---- `next_to_an_agent` a cell beside another agent who stands still. Any other
---- name is every spot of the name, and the character may go to the ones no
+--- `next_to_an_agent` a cell beside another agent who stands still. A thing
+--- that lies on the floor is a spot of its own name. Any other name is every
+--- spot of the name, and the character may go to the ones no
 --- other character has taken.
 
 local roles = require('aineo.office_scene.roles')
@@ -35,6 +36,7 @@ local NEXT_TO_AN_AGENT = 'next_to_an_agent'
 ---@field taken table<aineo.office_scene.Spot, string> the id of the character that has each spot taken
 ---@field random fun(): number a number from 0 up to, not including, 1
 ---@field places_taken table<integer, true> the places the agents have
+---@field things aineo.office_scene.Things what lies on the floor
 ---@field agents { id: string, place: integer, state: string, column?: number, row?: number, path: aineo.office_scene.Cell[] }[] the agents
 
 ---@type table<aineo.office_scene.FloorLayout, integer[]>
@@ -132,7 +134,8 @@ local KNOWN_SPOTS = {
   next_to_an_agent = cells_beside_agents,
 }
 
---- The spots named `name`, whoever has them.
+--- The spots named `name`, whoever has them: those of the plan, and the
+--- spots of the things of that name that lie on the floor.
 ---
 ---@param world aineo.office_scene.SpotWorld
 ---@param name string
@@ -140,7 +143,14 @@ local KNOWN_SPOTS = {
 ---@return aineo.office_scene.Spot[]
 local function spots_called(world, name, character)
   local known = KNOWN_SPOTS[name]
-  return known and known(world, character) or world.layout.spots[name] or {}
+  if known then
+    return known(world, character)
+  end
+  if character.cleaning and character.cleaning.name == name then
+    return { character.cleaning.spot }
+  end
+  local called = vim.list_slice(world.layout.spots[name] or {})
+  return vim.list_extend(called, world.things.spots_named(name))
 end
 
 --- Whether `character` may go to `spot`.
