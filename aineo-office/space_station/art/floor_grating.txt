@@ -1,0 +1,11 @@
+about: A deck grating under the crew bench, walked over.
+colours: A = grating_light, B = grating, C = hole
+anchor: 0, 5
+stretch: columns 5-8
+---
+.AAAAAAAAAAAAAAAAAAAAAAAAAAAAA.
+ABBBBBBBBBBBBBBBBBBBBBBBBBBBBBA
+ABCBBBCBBBCBBBCBBBCBBBCBBBCBBBA
+ABBBBBBBBBBBBBBBBBBBBBBBBBBBBBA
+.AAAAAAAAAAAAAAAAAAAAAAAAAAAAA.
+...............................

@@ -1,0 +1,13 @@
+about: A holo-game table for two: a projector eye in the middle of a glowing top.
+colours: A = alloy_light, P = panel_light, c = cyan_glow, F = steel_blue, e = cyan_dim, p = violet_glow, o = amber_glow
+anchor: 0, 8
+---
+..........................
+..........................
+............pp............
+AAAAAAAAAAAeeeeAAAAAAAAAAA
+PPccccccccccccccccccccccPP
+PPPPPPPPPPPPPPPPPPPPPPPPPP
+FFFFFFFFFFFFFFFFFFFFFFFFFF
+.FF....................FF.
+.FF....................FF.

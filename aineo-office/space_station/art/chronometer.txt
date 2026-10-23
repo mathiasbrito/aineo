@@ -1,0 +1,12 @@
+about: A ship's chronometer; the time is written in its time area.
+colours: F = steel_blue, k = glass, a = amber_glow
+anchor: 0, 6
+area time: 1, 2, 5 x 2
+---
+.FFaFF.
+FkkkkkF
+FkkkkkF
+akkkkka
+FkkkkkF
+FkkkkkF
+.FFaFF.

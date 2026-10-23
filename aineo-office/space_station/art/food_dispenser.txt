@@ -1,0 +1,26 @@
+about: A food dispenser: a display, a nozzle and a ration tray.
+colours: F = steel_blue, P = panel_light, c = cyan_glow, u = panel, k = glass, a = amber_glow, w = white_glow, g = green_glow, r = red_glow, N = alloy, v = visor, A = alloy, o = amber_dim
+anchor: 3, 19
+---
+...FFFFFFFFFF
+...FccccccccF
+...uPPPPPPPPu
+...uPkkkkkkPu
+...uPkaaaakPu
+...uPkkkkkkPu
+...uPPPPPPPPu
+...uPgPrPcPPu
+...uPPPPPPPPu
+...uPPNNNNPPu
+...uPPNNNNPPu
+...uPPPNNPPPu
+...uPPPPPPPPu
+...uPvvvvvvPu
+...uPvvvvvvPu
+...uPvvvvvvPu
+...uPvvvvvvPu
+...uPAAAAAAPu
+...uPPPPPPPPu
+...FFFFFFFFFF
+...FFFFFFFFFF
+...FFFFFFFFFF

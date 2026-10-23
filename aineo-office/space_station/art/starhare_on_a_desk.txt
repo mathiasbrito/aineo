@@ -1,0 +1,16 @@
+about: The starhare sitting on a console, its feet three pixels above where it is placed.
+colours: B = agent, L = agent_light, e = cyan_glow, v = violet_glow, k = visor
+anchor: 5, 10
+seconds per frame: 1
+---
+......B.B..
+......B.B..
+......B.B..
+......BBB..
+......eBe..
+......BLB..
+....BBBBB..
+vBBBBBBBB..
+...........
+...........
+...........

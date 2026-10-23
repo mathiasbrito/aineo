@@ -1,0 +1,12 @@
+about: A recycler chute in the bulkhead: a dark mouth over a green light.
+colours: F = steel_blue, k = visor, g = green_glow
+anchor: 0, 5
+---
+..FFF..
+.FFFFF.
+FFkkkFF
+FFkkkFF
+FFFFFFF
+.FFgFF.
+..F.F..
+.......

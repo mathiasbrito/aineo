@@ -1,0 +1,17 @@
+about: The body of a service bot that jumps; its pose lifts it a tick at a time.
+colours: B = agent, L = agent_light, S = agent_shade, A = alloy, a = amber_glow, i = green_glow, k = visor
+anchor: 5, 11
+seconds per frame: 0.08333
+---
+.....a.....
+.....A.....
+.LLLLLLLLS.
+.LBBBBBBiS.
+.LBBBBBBBS.
+.LBBBBBBBS.
+.LABBBBBAS.
+.LBBBBBBBS.
+.LBSSSSSBS.
+.SSSSSSSSS.
+...........
+...........

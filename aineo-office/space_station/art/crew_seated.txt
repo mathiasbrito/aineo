@@ -1,0 +1,16 @@
+about: The body of a crew member at a console: only what the console leaves showing.
+colours: B = agent, L = agent_light, S = agent_shade, A = alloy, c = cyan_glow, a = amber_glow
+anchor: 5, 11
+---
+...LLBBB...
+..LLBBBBBS.
+.LLBBBBBBBS
+cLBBBBBBBBS
+LBBBBBBBBBS
+LBBBBBBBBBS
+LBBBBBBBBBS
+.AAAAAAAAA.
+LBBcBBBaBBS
+...........
+...........
+...........

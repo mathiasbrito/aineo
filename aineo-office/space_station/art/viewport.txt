@@ -1,0 +1,22 @@
+about: A viewport onto the stars; what drifts by is painted into its glass.
+colours: F = steel_blue, P = panel_light, k = space_black, r = rivet, a = amber_glow
+anchor: 0, 16
+area sky: 2, 2, 20 x 11
+---
+rFFFFFFFFFFFFFFFFFFFFFFr
+FPPPPPPPPPPPPPPPPPPPPPPF
+FPkkkkkkkkkkkkkkkkkkkkPF
+FPkkkkkkkkkkkkkkkkkkkkPF
+FPkkkkkkkkkkkkkkkkkkkkPF
+FPkkkkkkkkkkkkkkkkkkkkPF
+FPkkkkkkkkkkkkkkkkkkkkPF
+FPkkkkkkkkkkkkkkkkkkkkPF
+FPkkkkkkkkkkkkkkkkkkkkPF
+FPkkkkkkkkkkkkkkkkkkkkPF
+FPkkkkkkkkkkkkkkkkkkkkPF
+FPkkkkkkkkkkkkkkkkkkkkPF
+FPkkkkkkkkkkkkkkkkkkkkPF
+FPPPPPPPPPPPPPPPPPPPPPPF
+rFFFFFFFFFaaaaFFFFFFFFFr
+........................
+........................

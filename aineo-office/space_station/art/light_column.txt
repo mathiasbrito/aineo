@@ -1,0 +1,25 @@
+about: A standing column of light.
+colours: T = steel_blue, c = cyan_dim, w = white_glow
+anchor: 0, 20
+---
+.TTT.
+.cwc.
+.cwc.
+.cwc.
+.cwc.
+.cwc.
+.cwc.
+.cwc.
+.cwc.
+.cwc.
+.cwc.
+.cwc.
+.cwc.
+..T..
+..T..
+..T..
+..T..
+..T..
+.TTT.
+TTTTT
+.....

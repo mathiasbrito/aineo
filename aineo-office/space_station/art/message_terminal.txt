@@ -1,0 +1,19 @@
+about: A message terminal: a screen over a slot where a data slip comes out.
+colours: F = steel_blue, a = amber_glow, k = glass, c = cyan_glow, d = cyan_dim, v = visor
+anchor: 0, 11
+area page: 1, 8, 9 x 4
+---
+.FFFFaFFFF.
+FFFFFFFFFFF
+FkkkkkkkkkF
+FkcccccckkF
+FkkkkkkkkkF
+FkccckkkakF
+FkkkkkkkkkF
+FdddddddddF
+FvvvvvvvvvF
+FvvvvvvvvvF
+FvvvvvvvvvF
+FvvvvvvvvvF
+FFFFFFFFFFF
+FFFFFFFFFFF

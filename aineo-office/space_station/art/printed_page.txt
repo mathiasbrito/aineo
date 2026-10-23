@@ -1,0 +1,8 @@
+about: The data slip the message terminal prints, drawn from the top of its slip area.
+colours: W = alloy_light, c = cyan_dim
+anchor: 0, 0
+---
+WWWWWWWWW
+WcccccccW
+WWWWWWWWW
+WccccWWWW

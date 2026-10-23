@@ -1,0 +1,13 @@
+about: The starhare sitting: long ears, two glowing eyes, a tail with a violet tip.
+colours: B = agent, L = agent_light, e = cyan_glow, v = violet_glow, k = visor
+anchor: 5, 7
+seconds per frame: 1
+---
+......B.B..
+......B.B..
+......B.B..
+......BBB..
+......eBe..
+......BLB..
+....BBBBB..
+vBBBBBBBB..

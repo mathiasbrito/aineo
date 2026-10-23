@@ -1,0 +1,16 @@
+about: The body of a service bot: a box on two legs with one antenna, in the agent's own colours.
+colours: B = agent, L = agent_light, S = agent_shade, A = alloy, a = amber_glow, i = green_glow, k = visor
+anchor: 5, 11
+---
+.....a.....
+.....A.....
+.LLLLLLLLS.
+.LBBBBBBiS.
+.LBBBBBBBS.
+.LBBBBBBBS.
+.LABBBBBAS.
+.LBBBBBBBS.
+.LBSSSSSBS.
+.SSSSSSSSS.
+...........
+...........
