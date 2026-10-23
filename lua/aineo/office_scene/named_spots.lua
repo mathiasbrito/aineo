@@ -172,6 +172,7 @@ local function cells_beside(world, character, beside, name)
         if layout.is_walkable(column + across, row) then
           local spot = spot_on_cell(name, row * layout.width + column + across, layout.width)
           spot.facing = across < 0 and 'right' or 'left'
+          spot.beside = other.id
           table.insert(found, spot)
         end
       end
