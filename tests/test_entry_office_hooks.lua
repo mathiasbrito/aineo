@@ -259,53 +259,135 @@ T['a switch of the tab’s session'] = MiniTest.new_set()
 T['a switch of the tab’s session']['is told to the office of the tab'] = function()
   local new_session = new_session_numbered(1)
   open_layout_with_stand_in_offices('office-switch')
+  local at_start = stand_in.told(child).session_changed
 
   tell_switch_to(new_session)
 
   eq(tab_session(), new_session)
-  eq(stand_in.told(child).session_changed, 1)
+  eq(stand_in.told(child).session_changed - at_start, 1)
 end
 
 T['a switch of the tab’s session']['is not told to the office by a hook of the session the tab runs, which names no transcript'] = function()
   open_layout_with_stand_in_offices('office-switch-same')
+  local at_start = stand_in.told(child).session_changed
 
   run_and_settle([[
     local claude = require('aineo.claude')
     claude.receive_session_event('SessionStart', claude.session_id(), 'compact', claude.start_token(), nil, nil, nil)
   ]])
 
-  eq(stand_in.told(child).session_changed, 0)
+  eq(stand_in.told(child).session_changed - at_start, 0)
 end
 
 T['a switch of the tab’s session']['is told again when a hook then names another transcript for the session the tab runs now'] = function()
   local new_session = new_session_numbered(3)
   open_layout_with_stand_in_offices('office-switch-path')
+  local at_start = stand_in.told(child).session_changed
   tell_switch_to(new_session)
 
   tell_transcript(new_session, '/named/by/the/hook.jsonl')
 
-  eq(stand_in.told(child).session_changed, 2)
+  eq(stand_in.told(child).session_changed - at_start, 2)
 end
 
 T['a switch of the tab’s session']['is not told again when a hook names a transcript for a session the tab does not run'] = function()
   local new_session = new_session_numbered(4)
   open_layout_with_stand_in_offices('office-switch-path-other')
+  local at_start = stand_in.told(child).session_changed
   tell_switch_to(new_session)
 
   tell_transcript(OTHER_SESSION, '/named/by/the/hook.jsonl')
 
-  eq(stand_in.told(child).session_changed, 1)
+  eq(stand_in.told(child).session_changed - at_start, 1)
 end
 
 T['a switch of the tab’s session']['is not told again when a hook names the transcript the office follows already'] = function()
   local new_session = new_session_numbered(5)
   open_layout_with_stand_in_offices('office-switch-path-twice')
+  local at_start = stand_in.told(child).session_changed
   tell_switch_to(new_session)
   tell_transcript(new_session, '/named/by/the/hook.jsonl')
 
   tell_transcript(new_session, '/named/by/the/hook.jsonl')
 
-  eq(stand_in.told(child).session_changed, 2)
+  eq(stand_in.told(child).session_changed - at_start, 2)
+end
+
+--- Has the tracker of every office the child makes keep the kinds of the
+--- signals it takes in `_G.taken`.
+local KEEP_THE_SIGNALS_TAKEN = [[
+  local office_states = require('aineo.office_states')
+  local new_tracker = office_states.new_tracker
+  _G.taken = {}
+  office_states.new_tracker = function(options)
+    local tracker = new_tracker(options)
+    local take = tracker.take
+    tracker.take = function(signal, now)
+      table.insert(_G.taken, signal.kind)
+      return take(signal, now)
+    end
+    return tracker
+  end
+]]
+
+--- A session of the form Claude Code gives that a case's tab claims, one for
+--- each case: the session a claim leaves is kept for the folder.
+---
+---@param number integer the case's own number
+---@return string
+local function claimed_session_numbered(number)
+  return ('5c1a1ed0-7a3d-4d52-8f0b-6d2e9a7c%04d'):format(number)
+end
+
+--- Writes `lines` as the transcript of `session` where Claude Code keeps it.
+---
+---@param session string
+---@param lines string[]
+local function write_transcript_of(session, lines)
+  local directory =
+    vim.fs.joinpath(child.lua_get([[vim.env.CLAUDE_CONFIG_DIR]]), 'projects', 'other')
+  vim.fn.mkdir(directory, 'p')
+  fake_transcript.append(vim.fs.joinpath(directory, session .. '.jsonl'), lines)
+end
+
+T['a claimed session'] = MiniTest.new_set()
+
+T['a claimed session']['is the one the office acts out, in place of the session of the tab’s own Claude Code'] = function()
+  local claimed = claimed_session_numbered(1)
+  open_layout('office-claim')
+  child.lua(KEEP_THE_SIGNALS_TAKEN)
+  write_transcript_of(claimed, vim.list_slice(RECORDED_TURN, 1, 5))
+  write_transcript_of(tab_session(), RECORDED_TURN)
+  child.cmd('Aineo claim ' .. claimed)
+
+  entry.command(child, 'Aineo office')
+
+  eq(child.lua_get('_G.taken'), { 'prompt', 'tool_started' })
+end
+
+T['a claimed session']['is acted out from the moment it is claimed, by an office that shows'] = function()
+  local claimed = claimed_session_numbered(2)
+  open_layout('office-claim-shown')
+  child.lua(KEEP_THE_SIGNALS_TAKEN)
+  write_transcript_of(claimed, vim.list_slice(RECORDED_TURN, 1, 5))
+  write_transcript_of(tab_session(), RECORDED_TURN)
+  entry.command(child, 'Aineo office')
+  child.lua('_G.taken = {}')
+
+  child.cmd('Aineo claim ' .. claimed)
+
+  eq(child.lua_get('_G.taken'), { 'prompt', 'tool_started' })
+end
+
+T['a claimed session']['is told to the office once, not again by a claim of the session the panes follow already'] = function()
+  local claimed = claimed_session_numbered(3)
+  open_layout_with_stand_in_offices('office-claim-twice')
+  local at_start = stand_in.told(child).session_changed
+
+  child.cmd('Aineo claim ' .. claimed)
+  child.cmd('Aineo claim ' .. claimed)
+
+  eq(stand_in.told(child).session_changed - at_start, 1)
 end
 
 T['a permission wait'] = MiniTest.new_set()
