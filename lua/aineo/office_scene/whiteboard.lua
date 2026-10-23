@@ -52,9 +52,10 @@ end
 ---@param place { column: integer, row: integer, cells: integer }
 local function write_task(canvas, drawing, task, place)
   local text_colours = drawing.pack.text_colours
-  canvas.write_text(
-    place.column,
-    place.row,
+  areas.write_text_above_the_list(
+    canvas,
+    drawing,
+    place,
     cell_text.cut_to((task.done and TICK or BULLET) .. task.subject, place.cells),
     { foreground = task.done and text_colours.name or text_colours.status }
   )
