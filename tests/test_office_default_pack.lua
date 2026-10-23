@@ -48,6 +48,18 @@ local T = MiniTest.new_set()
 
 T['the default pack'] = MiniTest.new_set()
 
+T['the default pack']['gives every state of the vocabulary, and nothing else, an activity'] = function()
+  local names = vim.tbl_map(function(state)
+    return state.name
+  end, require('aineo.office_states').vocabulary())
+  local keys = vim.tbl_keys(default_pack().state_activity)
+
+  table.sort(names)
+  table.sort(keys)
+
+  eq(keys, names)
+end
+
 T['the default pack']['loads from the aineo-office folder of the checkout'] = function()
   local pack = default_pack()
 
