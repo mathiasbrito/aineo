@@ -26,7 +26,7 @@ end
 
 --- Opens the layout and makes an office of the idle time `idle_ms`, waiting
 --- through the stand-in that keeps its waits; the cursor is in the layout's
---- Claude window, in the right side.
+--- Claude window, out of the right side.
 ---
 ---@param idle_ms string the source of a number or `false`
 ---@return table buffers
@@ -111,6 +111,25 @@ T['the idle countdown']['does not show the office when the cursor entered the ri
   office_child.let_time_pass(child)
 
   eq(shows(), false)
+end
+
+T['the idle countdown']['starts again from the start when a report comes in'] = function()
+  open_office_waiting('1000')
+  office_child.enter_the_left_window(child)
+
+  child.lua([[_G.office.report_arrived({ status = 'done', summary = 'tagged' })]])
+
+  eq(office_child.waits_pending(child), 1)
+  eq(office_child.wait_lengths(child), { 1000, 1000 })
+end
+
+T['the idle countdown']['is not run for a report that comes in while the cursor is in the right side'] = function()
+  local buffers = open_office_waiting('1000')
+  layout.enter_window_showing(child, buffers.report)
+
+  child.lua([[_G.office.report_arrived({ status = 'done', summary = 'tagged' })]])
+
+  eq(office_child.waits_pending(child), 0)
 end
 
 T['the idle countdown']['is off when office.idle_ms is false'] = function()
