@@ -171,6 +171,15 @@ function M.show(tab)
   office.show_now()
 end
 
+--- Previews the pack `name`, or the one the settings name, in the office of
+--- `tab`, over the right side of its layout.
+---
+---@param tab aineo.entry.Tab
+---@param name? string
+function M.preview(tab, name)
+  office_of(tab).preview(name)
+end
+
 --- Tells the office `tab` has, if it has one, that the agent `agent_id` of
 --- the session `session_id` waits for the user to answer a permission
 --- prompt: the subagent of that id, or `'main'` when `agent_id` is nil. A wait
