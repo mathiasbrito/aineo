@@ -6,26 +6,27 @@ local M = {}
 local MOST_BYTES_A_CHARACTER = 4
 
 --- Whether `character` is exactly one cell wide on the screen after another
---- character: a control character, a wide one and a combining mark (which
---- takes none after its base) are not.
+--- character: a control character (which the screen shows as two cells, `^X`),
+--- a wide one and a combining mark (which takes none after its base) are not.
 ---
 ---@param character string
 ---@return boolean
 local function is_one_cell(character)
-  return not character:find('%c') and vim.fn.strdisplaywidth('a' .. character) == 2
+  return vim.fn.strdisplaywidth('a' .. character) == 2
 end
 
 --- The first `cells` characters of `text`, with each character that is not
 --- exactly one cell wide on the screen (a control character, a wide or a
 --- combining one) replaced by `?`, so that a line is as many cells wide as it
 --- has characters. Only the bytes the cells can hold are read, so the cost
---- does not grow with the length of `text`.
+--- does not grow with the length of `text`. A NUL byte, which ends a string
+--- for the functions that measure it, is replaced by `?` first.
 ---
 ---@param text string
 ---@param cells integer
 ---@return string
 function M.cut_to(text, cells)
-  text = text:sub(1, MOST_BYTES_A_CHARACTER * math.max(0, cells))
+  text = text:sub(1, MOST_BYTES_A_CHARACTER * math.max(0, cells)):gsub('%z', '?')
   local starts = vim.str_utf_pos(text)
   local kept = {}
   for index = 1, math.min(#starts, math.max(0, cells)) do
