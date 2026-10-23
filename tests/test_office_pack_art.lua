@@ -268,4 +268,31 @@ T['art files']['are refused over 64 frames'] = function()
   })
 end
 
+T['a pack'] = MiniTest.new_set()
+
+T['a pack']['may have 500 art files'] = function()
+  local extra = {}
+  for index = 1, 499 do
+    extra[('art/zz%03d.txt'):format(index)] = 'colours: A = ink\n---\nA\n'
+  end
+  local folder = files.write_pack(pack_root(), 'small', extra)
+
+  eq(office_pack.check({ name = 'small', folders = { folder } }), {})
+end
+
+T['a pack']['is told to have more than 500 art files, and the ones over are left out'] = function()
+  local extra = {}
+  for index = 1, 500 do
+    extra[('art/zz%03d.txt'):format(index)] = 'colours: A = ink\n---\nA\n'
+  end
+  local folder = files.write_pack(pack_root(), 'small', extra)
+
+  local pack, problems = office_pack.load({ name = 'small', folders = { folder } })
+
+  eq(#problems, 1)
+  eq(problems[1].message, 'the pack has more than 500 art files')
+  eq(vim.tbl_count(pack.pieces), 500)
+  eq(pack.pieces.person ~= nil, true)
+end
+
 return T

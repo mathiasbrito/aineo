@@ -48,6 +48,15 @@ local T = MiniTest.new_set()
 
 T['the default pack'] = MiniTest.new_set()
 
+T['the default pack']['has no problem when it is checked'] = function()
+  local problems = office_pack.check({
+    name = 'default',
+    folders = vim.api.nvim_get_runtime_file('aineo-office', true),
+  })
+
+  eq(problems, {})
+end
+
 T['the default pack']['loads from the aineo-office folder of the checkout'] = function()
   local pack = default_pack()
 
