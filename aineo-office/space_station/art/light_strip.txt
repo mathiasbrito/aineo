@@ -1,0 +1,8 @@
+about: A light bar hung from the ceiling of the bridge.
+colours: T = steel_blue, w = white_glow
+anchor: 0, 3
+---
+..T..
+TTTTT
+.www.
+.....

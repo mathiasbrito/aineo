@@ -1,0 +1,11 @@
+about: The starhare curled up asleep.
+colours: B = agent, L = agent_light, e = cyan_glow, v = violet_glow, k = visor
+anchor: 5, 5
+seconds per frame: 1
+---
+...........
+...........
+......BB.B.
+..BBBBBBBB.
+.BBBBBBBBBL
+vBBBBBBBBB.

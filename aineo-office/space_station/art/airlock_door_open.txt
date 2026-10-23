@@ -1,0 +1,50 @@
+about: The airlock door while someone is at it: the leaves slid apart, the corridor lit.
+colours: F = steel_blue, P = panel_light, v = visor, g = cyan_dim, u = blue_dim, o = green_glow
+anchor: 0, 19
+seconds per frame: 0.5
+---
+FFFFFFFFF
+FFFFoFFFF
+FPvvvvvPF
+FPvvvvvPF
+FPvvvvvPF
+FPvvvvvPF
+FPvgggvPF
+FPvgggvPF
+FPvvvvvPF
+FPvvvvvPF
+FPvvvvvPF
+FPvvvvvPF
+FPvvvvvPF
+FPvvvvvPF
+FPvvvvvPF
+FPvvvvvPF
+FPvvvvvPF
+FPuuuuuPF
+FPuuuuuPF
+FPuggguPF
+FFFFFFFFF
+FFFFFFFFF
+---
+FFFFFFFFF
+FFFFFFFFF
+FPvvvvvPF
+FPvvvvvPF
+FPvvvvvPF
+FPvvvvvPF
+FPvgggvPF
+FPvgggvPF
+FPvvvvvPF
+FPvvvvvPF
+FPvvvvvPF
+FPvvvvvPF
+FPvvvvvPF
+FPvvvvvPF
+FPvvvvvPF
+FPvvvvvPF
+FPvvvvvPF
+FPuuuuuPF
+FPuuuuuPF
+FPuggguPF
+FFFFFFFFF
+FFFFFFFFF

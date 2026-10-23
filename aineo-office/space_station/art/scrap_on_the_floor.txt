@@ -1,0 +1,6 @@
+about: A crumpled ration wrapper that missed the chute, on the floor.
+colours: W = alloy_light
+anchor: 0, 1
+---
+................WW
+................WW

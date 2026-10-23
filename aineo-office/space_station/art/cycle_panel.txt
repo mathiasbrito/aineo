@@ -1,0 +1,13 @@
+about: A cycle-day panel; the date is written in its date area.
+colours: F = steel_blue, k = glass, c = cyan_glow, a = amber_glow, g = green_glow, d = cyan_dim
+anchor: 0, 7
+area date: 1, 3, 6 x 2
+---
+FFFFFFFF
+FcFaFFgF
+FkkkkkkF
+FkkkkkkF
+FkkkkkkF
+FkdkdkkF
+FddddddF
+FFFFFFFF

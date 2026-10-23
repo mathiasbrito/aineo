@@ -1,0 +1,11 @@
+about: A crew console: a glowing edge over a dark front where the crew member's name is shown.
+colours: A = alloy, B = steel_blue, c = cyan_dim, k = glass, P = panel
+anchor: 0, 2
+area name: 3, 3, 20 x 2
+---
+AAAAAAAAAAAAAAAAAAAAAAAAAA
+BBBBccccccccccccccccccBBBB
+BPPPPPPPPPPPPPPPPPPPPPPPPB
+BkkkkkkkkkkkkkkkkkkkkkkkkB
+BkkkkkkkkkkkkkkkkkkkkkkkkB
+BkkkkkkkkkkkkkkkkkkkkkkkkB
