@@ -103,6 +103,21 @@ T['Aineo office states']['says there is no such pack, and opens no window'] = fu
   eq(#child.api.nvim_list_wins(), windows_before)
 end
 
+T['Aineo office states']['lists a pack whose about is not text, and leaves no buffer behind'] = function()
+  local root = fixture.directory('office_authors')
+  pack_files.write_pack(root, 'odd', {
+    ['pack.lua'] = pack_files.pack_text({ name = 'odd', about = 5 }),
+  })
+  child.lua([[vim.opt.runtimepath:append(...)]], { root })
+  local buffers_before = #child.api.nvim_list_bufs()
+
+  entry.command(child, 'Aineo office states odd')
+
+  eq(entry.messages(child), {})
+  eq(current_lines()[1], 'Office pack “odd” by the tests')
+  eq(#child.api.nvim_list_bufs(), buffers_before + 1)
+end
+
 T['Aineo office new'] = MiniTest.new_set()
 
 T['Aineo office new']['copies the default pack into aineo-office in the configuration directory'] = function()
