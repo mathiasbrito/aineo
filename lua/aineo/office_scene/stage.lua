@@ -13,6 +13,7 @@ local M = {}
 ---@field width integer cells
 ---@field height integer cells
 ---@field random? fun(): number the source of the random times of steps: a number from 0 up to, not including, 1; `math.random` when not given
+---@field on_left_out? fun(count: integer) called with how many of the plan's pieces were left out, each time a layout leaves some out because a frame could not afford them
 ---@field clock? fun(): aineo.office_scene.WallTime the time on the wall outside the office, asked for each picture; none, and the pieces that show it show their art alone
 ---@field state_labels? table<string, string> what the status list says of each state, in words; the state's name where not given
 
@@ -33,6 +34,7 @@ function M.new_stage(options)
   vim.validate('options.random', options.random, 'function', true)
   vim.validate('options.state_labels', options.state_labels, 'table', true)
   vim.validate('options.clock', options.clock, 'function', true)
+  vim.validate('options.on_left_out', options.on_left_out, 'function', true)
 
   local pack = options.pack
   local width, height = options.width, options.height
@@ -43,6 +45,9 @@ function M.new_stage(options)
   local function lay_out()
     plan_height = height - status_list.rows_taken(height)
     layout = floor_layout.lay_out(pack, width, plan_height)
+    if layout.left_out > 0 and options.on_left_out then
+      options.on_left_out(layout.left_out)
+    end
     director = director_module.new_director(pack, layout, options.random or math.random)
   end
   lay_out()
