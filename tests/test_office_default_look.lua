@@ -35,14 +35,11 @@ T['the wall'] = MiniTest.new_set()
 T['the wall']['has a door of wood with a brass knob'] = function()
   local pixels = office_at(NOBODY, 0)
 
-  eq(
-    {
-      default.pixel_at(pixels, 0, 4),
-      default.pixel_at(pixels, 3, 5),
-      default.pixel_at(pixels, 7, 16),
-    },
-    { '6b4f3f', '8b6a4f', 'f9e2af' }
-  )
+  eq({
+    default.pixel_at(pixels, 0, 4),
+    default.pixel_at(pixels, 3, 5),
+    default.pixel_at(pixels, 7, 16),
+  }, { '6b4f3f', '8b6a4f', 'f9e2af' })
 end
 
 T['the wall']['has a whiteboard, white in a silver frame'] = function()
@@ -189,7 +186,7 @@ end
 T['a desk']["shows its agent's code on the monitor while the agent writes it"] = function()
   local pixels = office_at({ { id = 'main', state = 'writing_code' } }, 1)
 
-  eq(default.pixel_at(pixels, 30, 32), '89dceb')
+  eq({ default.pixel_at(pixels, 30, 32), default.pixel_at(pixels, 36, 32) }, { '89dceb', 'a6e3a1' })
 end
 
 T['the lounge'] = MiniTest.new_set()
