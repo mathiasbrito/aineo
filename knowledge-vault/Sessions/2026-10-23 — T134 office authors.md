@@ -63,6 +63,26 @@ Each a literal edit on a pristine copy of the file named, run on the test files 
 | H1 health not counting a broken pack | `health.lua`: `report_office_pack(name, directories[name], is_chosen, #own)` → `…, 0)` | `test_health` | equality, two cases |
 | P2 `preview` following the transcript | `office/init.lua`, `start_running`: `if open.preview then` → `if false then` (`function start_running(open)` and the line after it, the only place that string occurs) | `test_office_preview` | 1 assertion, "follows no transcript and watches no file" |
 
+## Fix round (A603, review346)
+
+Each unit test first, seen failing before the change (the cases marked *pin* arrived green and are killed by the mutant named).
+
+1. **Case** — `start_from_default` compares names ignoring case and names the pack found (`Default` is refused where the disk ignores case). Red: `refuses a name that differs from a pack's only in case`.
+2. **A failed copy** — the copy runs under `pcall`; a returned failure or a raised error removes the folder and the refusal says why (`cannot make the copy: …`); copied files get mode 0644; a link in the default pack (art or `pack.lua`) is refused with `cannot copy <file>: it is a link, and a pack is made of files`. Red (a raised E482/E484/E17 and a half-made folder): the read-only source, the linked art file, the linked `pack.lua`, the raising `pack.lua`. The docstring says what the code does.
+3. **`about` and `author`** — the loader keeps each only when it is text with no control character (`head_text`), else `''`. Red: a number, a line break, a list; the command with a number lists the pack and leaves one buffer, no more. *Pin* (arrived green): plain text is kept.
+4. **Preview before closing** — `show_over` takes a `before_opening` step that the preview uses to close the office that shows; a pack that is not found leaves it as it is. Red: `leaves the office that shows as it is when the pack to preview is not found`.
+5. **M3 and M5 pinned** — the `office.pieces` health case asserts the default pack's OK line; `counts the idle time again after a preview that could not show` (*pin*, arrived green).
+6. **Health once** — each pack is listed and checked once when `office.pack` names it twice. Red: two lines.
+7. **Help** — the copy's writable files, the refusals, the removal, the restart for a configuration directory made after startup, and that a failed preview leaves the office that shows.
+
+Finding 7 of the review (a configuration directory that did not exist at startup) is documented, not fixed (A603).
+
+| Mutant | Literal edit | File run | Killed by |
+|---|---|---|---|
+| M3 | `health.lua`: `is_chosen, #own)` → `is_chosen, #problems)` | `test_health` | 1 assertion, the `office.pieces` case |
+| M4 | `starter.lua`: `    vim.fn.delete(directory, 'rf')` → `    local _ = directory` | `test_office_pack_start` | 3 assertions (linked art, linked `pack.lua`, raising copy: a folder remains) |
+| M5 | `office/init.lua`: in `office.preview`, `settle()` → `local _ = settle` | `test_office_preview` | 1 assertion (0 waits pending, 1 wanted) |
+
 ## Open threads
 
 - The permission hook and Claude Code version lines of the plan's Health paragraph (above).
