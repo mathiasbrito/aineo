@@ -171,6 +171,40 @@ T['the transcript a SessionStart hook named']['wins over one Claude Code’s fol
   )
 end
 
+T['the transcript a SessionStart hook named']['is followed to the session it says Claude Code went on in'] = function()
+  open_layout('office-hook-continued')
+  child.lua([[
+    local office_states = require('aineo.office_states')
+    local new_tracker = office_states.new_tracker
+    _G.taken = {}
+    office_states.new_tracker = function(options)
+      local tracker = new_tracker(options)
+      local take = tracker.take
+      tracker.take = function(signal, now)
+        table.insert(_G.taken, signal.kind)
+        return take(signal, now)
+      end
+      return tracker
+    end
+  ]])
+  local session = tab_session()
+  local continued_in = '22222222-2222-4222-8222-222222222222'
+  local named = write_transcript_elsewhere(session, {
+    vim.json.encode({
+      type = 'continued-in',
+      timestamp = '2026-01-01T00:00:03.000Z',
+      sessionId = session,
+      continuedInSessionId = continued_in,
+    }),
+  })
+  write_transcript_elsewhere(continued_in, vim.list_slice(RECORDED_TURN, 1, 5))
+  tell_transcript(session, named)
+
+  entry.command(child, 'Aineo office')
+
+  eq(child.lua_get('_G.taken'), { 'prompt', 'tool_started' })
+end
+
 T['the transcript a SessionStart hook named']['is not followed for a session the tab does not run'] = function()
   open_layout('office-hook-other')
   tell_transcript(
