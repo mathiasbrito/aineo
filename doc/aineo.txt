@@ -2273,7 +2273,10 @@ from another tab, `\o` moves you to it.
 			after `tab` `new` and the number of each tab page
 			(|:Aineo-tab|), and `close` after `diff`
 			(|:Aineo-diff|), and `tools` and `clear` after
-			`explain` (|:Aineo-explain|). Without one of them, or
+			`explain` (|:Aineo-explain|), and `check`, `states`,
+			`preview` and `new` after `office`, the names of the
+			office packs found after the first three
+			(|:Aineo-office|). Without one of them, or
 			with anything else, it tells you, with one error,
 			which ones it takes. Only `explain` takes a range;
 			given one for another subcommand, it tells you so.
@@ -2737,6 +2740,58 @@ moves you to that tab instead and claims nothing.
 			problem is told so, once, and no list opens. It needs
 			no aineo tab. With any other word it tells you, with
 			one error, what it takes.
+
+                                                        *:Aineo-office-states*
+:Aineo office states [name]
+			Lists what an office pack draws, in a window under
+			the others that cannot be changed: a line for each
+			of the four parents (`standing`, `working`,
+			`waiting`, `resting`) and of the 24 states,
+			numbered, with the activity the pack maps to it and
+			what it looks like, or the state it falls back to and
+			what that draws; then the pack's custom triggers, in
+			the order they are tried (|aineo-office-packs|). The
+			pack is the one named, or, with no name, the one
+			`office.pack` names (the first of a list). A pack
+			that is not found is told, with one error, and no
+			window opens. It needs no aineo tab.
+
+                                                       *:Aineo-office-preview*
+:Aineo office preview [name]
+			Shows the office over the right side of the layout
+			with every state of the vocabulary acted out in turn,
+			nine seconds each, the state and its number named on
+			the first row, over scripted agents: the main agent,
+			and the others a state needs to be seen, such as a
+			subagent arriving as it delegates, subagents at work
+			as it waits, and everyone idle for the random life.
+			The pack is the one named, or, with no name, the one
+			`office.pack` names (the first of a list); one that is
+			not found is told, with one error, and not replaced by
+			the default pack. The preview follows no transcript
+			and watches no file, calls no Claude and spends no
+			token; it takes the place of the office that shows and
+			closes as the office does, when the cursor enters the
+			right side (|aineo-office|). Like `:Aineo office`, it
+			acts on the aineo tab of the current tab page and
+			makes none, and it shows nothing, and tells you why,
+			with 'termguicolors' off or 'ambiwidth' `double`.
+
+                                                           *:Aineo-office-new*
+:Aineo office new {name}
+			Makes the office pack {name} as a copy of the default
+			pack, in `aineo-office/{name}/` of Neovim's
+			configuration directory (|stdpath()|), with {name} as
+			the pack's name, and tells you where it is. Set
+			`office.pack` to {name} to draw it, and use
+			`:Aineo office check` and
+			`:Aineo office preview` while you change it
+			(|aineo-office-packs|). It refuses, with one error,
+			a folder of that name that exists, which it leaves
+			as it is, a name that any pack found has (`default`
+			among them, which every pack falls back to), and one
+			that is not letters, digits, `_` and `-`. It needs
+			no aineo tab.
 
 When an action fails — `claude.cmd` is not executable, say — aineo tells you
 once, with one error message starting with `aineo:`, and opens nothing.
@@ -3875,7 +3930,11 @@ the office draws, and `aineo-office/space_station/`, a starship bridge based
 on it that `office.pack` (|aineo-config-office.pack|) can name in its place.
 
 `:Aineo office check` (|:Aineo-office-check|) lists what is wrong with a
-pack. How a pack is chosen, found and written is told next.
+pack, `:Aineo office states` (|:Aineo-office-states|) lists what it draws for
+each state, `:Aineo office preview` (|:Aineo-office-preview|) plays every
+state over scripted agents, and `:Aineo office new` (|:Aineo-office-new|)
+starts a pack of your own from the default. How a pack is chosen, found and
+written is told next.
 
                                                          *aineo-office-packs*
 Packs ~
@@ -4400,6 +4459,20 @@ Explain code ~
   `explain.issues_prompt` (|aineo-config-explain.issues_prompt|), and that
   `]v` and `[v` jump between explanations and issues (|aineo-explain-jump|).
   Nothing while the configuration is wrong.
+
+Office ~
+  That 'termguicolors' is on and 'ambiwidth' is not `double`, an error for
+  each that is not, since the office does not show then, and when the office
+  shows by itself (`office.idle_ms`, |aineo-config-office.idle_ms|). The
+  office packs found on 'runtimepath', each with its folder and the number of
+  its problems, the packs `office.pack` names first
+  (|aineo-config-office.pack|): an OK for a pack with none, and, for one
+  with some, a warning with the command that lists them
+  (`:Aineo office check`, |:Aineo-office-check|). A warning for a pack
+  `office.pack` names that is not found, since the office draws the default
+  pack in its place, and for each art file of `office.pieces` that cannot
+  be used, with its line (|aineo-config-office.pieces|). Nothing about the
+  packs while the configuration is wrong.
 
 Autostart ~
   Whether the autostart opened the layout at startup, or which reason kept
