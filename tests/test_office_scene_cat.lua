@@ -466,4 +466,58 @@ T['the cat']['has no desk of its own, the spot desk being the agents’'] = func
   eq(where_the_cat_is(stage, 8), 'nowhere')
 end
 
+--- A stage of two cats, one nest, and an agent that stands for a second and
+--- then walks away; the cats' activities are `cat_activities`.
+---
+---@param cat_activities table
+---@param agent_pause table the first step's `for_seconds` of the agent that works
+---@return aineo.office_scene.Stage
+local function stage_of_two_cats_and_a_walker(cat_activities, agent_pause)
+  local pack = scene.people_pack(
+    '# plan\n \n a.n.........f\n',
+    { a = { spot = 'aside' }, n = { spot = 'nest' }, f = { spot = 'far' } },
+    {
+      characters = {
+        agent = PEOPLE.agent,
+        cat = {
+          how_many = 2,
+          poses = { standing = { art = { 'first' } }, walking = { art = { 'first' } } },
+        },
+      },
+      activities = vim.tbl_extend('force', {
+        stand = { steps = { { at = 'aside' } } },
+        work = { steps = { { at = 'aside', for_seconds = agent_pause }, { at = 'far' } } },
+      }, cat_activities),
+      states = { standing = 'stand', working = 'work' },
+    }
+  )
+  return scene.stage_of(pack, 13, 1, { random = scene.always(0) })
+end
+
+local TAG_ALONG = {
+  who = 'cat',
+  during = { 'always' },
+  steps = { { follow = 'someone_walking', for_seconds = 5 } },
+}
+
+T['the cat']['without a place yet weighs an activity that follows someone with no error'] = function()
+  local stage = stage_of_two_cats_and_a_walker({
+    curl_up = { who = 'cat', during = { 'always' }, steps = { { at = 'nest' } } },
+    tag_along = TAG_ALONG,
+  }, 1)
+
+  MiniTest.expect.no_error(function()
+    cat_cells_every_tenth_second(stage, scene.agents_in('working'), 13, 3)
+  end)
+end
+
+T['the cat']['whose only activity follows someone is never placed, and no error comes of it'] = function()
+  local stage = stage_of_two_cats_and_a_walker({ tag_along = TAG_ALONG }, { 0, 1 })
+
+  MiniTest.expect.no_error(function()
+    stage.advance(scene.agents_in('working'), 0)
+  end)
+  eq(where_the_cat_is(stage, 13), 'nowhere')
+end
+
 return T

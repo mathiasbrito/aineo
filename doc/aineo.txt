@@ -4160,6 +4160,8 @@ It takes no place among the agents, so it has no desk, no monitor and no row
 in the status list, and its colour goes by its number among the cats. A cat's
 step may `follow = 'someone_walking'`, the only name there is: the cat trails
 the nearest character on the move for `for_seconds` or until it stops. A cat
+needs at least one activity with a spot to come into the office: it is placed
+by that, and a cat whose every activity follows someone is never placed. A cat
 that takes a seat an agent is on, with `even_if_taken`, angers the agent and
 the agent leaves, if the pack says so by `the_one_moved_plays`.
 
