@@ -142,6 +142,24 @@ T['a pose']['rises by the pixels of its frame, counted from when the agent took 
   eq(cells_while_rising({ 0, 2 }, { 10.25, 10.5, 10.75 }), { '4,1', '4,0', '4,1' })
 end
 
+T['a pose']['begins its effect at the first frame when the agent takes the pose'] = function()
+  local pack = scene.people_pack(
+    '# plan\n \n ........\n a...s...\n',
+    { a = { spot = 'aside' }, s = { spot = 'seat' } },
+    {
+      characters = people_with({ typing = { art = { 'person' }, effect = 'dots' } }),
+      effects = { dots = { text = { '.', '..' }, seconds_per_frame = 1 } },
+      activities = { play = { steps = { { at = 'seat', pose = 'typing' } } } },
+      states = { standing = 'play', working = 'play' },
+    }
+  )
+  local stage = scene.stage_of(pack, 8, 2)
+
+  stage.advance(scene.agents_in('working'), 11)
+
+  eq(vim.fn.strcharpart(stage.picture().rows[1].text, 4, 2), '.▀')
+end
+
 T['a pose']['takes the effect it shows up with the agent'] = function()
   local pack = scene.people_pack(
     '# plan\n \n ........\n ........\n a...s...\n',
