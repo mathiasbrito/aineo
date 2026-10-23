@@ -401,6 +401,29 @@ T['the pack']['draws its text in the colours of the highlight groups it names, a
   )
 end
 
+T['the pack']['gives the tracker its triggers, and tells once when matching them took too long'] = function()
+  local triggers = { { when = { tool = 'Bash', command = 'docker' }, play = 'work' } }
+  local folder = write_packs('alt', '#ff0000', { triggers = triggers })
+  open_office(nil, { folder }, settings_naming('alt'))
+  child.lua([[
+    local office_states = require('aineo.office_states')
+    local new_tracker = office_states.new_tracker
+    office_states.new_tracker = function(options)
+      _G.tracker_options = options
+      return new_tracker(options)
+    end
+  ]])
+
+  child.lua([[_G.office.show_now()]])
+  child.lua([[_G.tracker_options.on_slow_triggers(); _G.tracker_options.on_slow_triggers()]])
+
+  eq(child.lua_get([[_G.tracker_options.triggers]]), triggers)
+  eq(child.lua_get([[type(_G.tracker_options.clock())]]), 'number')
+  local told = child.lua_get([[_G.told]])
+  eq(#told, 2)
+  eq(told[1].level, 3)
+end
+
 T['the pack']['draws its text in the colour of its role when the group it names has none'] = function()
   local folder = write_packs('alt', '#ff0000', STANDING_WITH_DOTS)
   open_office(nil, { folder }, settings_naming('alt'))
