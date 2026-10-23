@@ -4167,10 +4167,14 @@ character's feet as the step ends, and a step with `remove` takes away the
 thing of that name on the cell the character stands on as it ends; a step
 that never ends leaves and removes nothing. A thing is drawn under what stands
 on its cell. When one is left, the agents at most `upsets_agents_within` cells
-from it, in a straight line, play `upset_agents_play`, and the idle agent (the
-state `idle`) nearest to it plays `cleaned_up_by` instead; with no idle agent
-the thing waits until one is. Both are interludes: when they are over, or when
-the agent's state changes, the agent goes back to what its state asks for. At
+from it, in a straight line, play `upset_agents_play`. The idle agent (the
+state `idle`) nearest to it that can walk to it goes to clean it up; with no
+idle agent that can, the nearest other agent that is in the office (not
+arriving, not leaving, not in an interlude) goes. That agent plays
+`upset_agents_play` first, then `cleaned_up_by`, and a thing no agent can walk
+to waits where it lies. Both are interludes: when they are over, or when the
+agent's state changes, the agent goes back to what its state asks for, a
+working agent to its work. At
 most 64 things lie at a time, and a resize drops those on cells the new plan
 cannot be walked on.
 

@@ -734,7 +734,7 @@ return {
       steps = { { pose = 'grumbling', for_seconds = 2.5 } },
     },
     clean_up_the_mess = {
-      about = 'The idle agent nearest to the mess goes to it, cleans it up, and goes to the bin.',
+      about = 'The agent nearest to the mess, an idle one if any can, grumbles, goes to it, cleans it up, and goes to the bin.',
       label = 'cleans up the mess',
       steps = {
         { at = 'mess', pose = 'cleaning', for_seconds = { 2, 3 }, remove = 'mess' },
@@ -742,7 +742,7 @@ return {
       },
     },
     mop_up_the_puddle = {
-      about = 'The idle agent nearest to the puddle goes to it, mops it up, and goes to the bin.',
+      about = 'The agent nearest to the puddle, an idle one if any can, grumbles, goes to it, mops it up, and goes to the bin.',
       label = 'mops up the puddle',
       steps = {
         { at = 'puddle', pose = 'cleaning', for_seconds = { 2, 3 }, remove = 'puddle' },
