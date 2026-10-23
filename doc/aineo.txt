@@ -4097,6 +4097,10 @@ Two of the hooks aineo gives the Claude Code it starts in `--settings`
   whatever the editor does, one held at a prompt say. In the permission
   mode `dontAsk`, where Claude Code denies a call without a prompt, it
   tells nothing.
+A wait the office is told while it is hidden, or while its tab page is left,
+is kept: the agent raises its hand when the office shows, or the tab page is
+entered, unless the transcript shows the agent has gone on since, as when you
+answered in Claude's terminal. It is kept for 64 agents at most.
 The hook was recorded on Claude Code 2.1.308; aineo knows no lowest version
 that runs it. Claude Code runs no `PermissionRequest` hook for a sandboxed
 command's network request, so the office shows no wait for that prompt.
