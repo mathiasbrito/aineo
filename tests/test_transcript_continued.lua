@@ -20,6 +20,23 @@ local FIRST = '11111111-1111-4111-8111-111111111111'
 local SECOND = '22222222-2222-4222-8222-222222222222'
 local THIRD = '33333333-3333-4333-8333-333333333333'
 
+--- The id of the session numbered `number`, of the form Claude Code gives.
+---
+---@param number integer
+---@return string
+local function session_numbered(number)
+  return ('aaaaaaaa-aaaa-4aaa-8aaa-%012d'):format(number)
+end
+
+--- The moment the tab began following the session, as the cases hand the
+--- follower it: 2026-01-01T00:00:00Z, in seconds since 1970.
+local ANCHOR = 1767225600
+
+--- Stamps of `continued-in` lines: three seconds after the anchor, and a
+--- minute before it.
+local AFTER_THE_ANCHOR = '2026-01-01T00:00:03.000Z'
+local BEFORE_THE_ANCHOR = '2025-12-31T23:59:00.000Z'
+
 --- The followers the case started, which its end stops.
 ---@type aineo.transcript.Follower[]
 local started_followers = {}
@@ -61,15 +78,17 @@ local function transcript_of(session)
   return vim.fs.joinpath(directory, session .. '.jsonl')
 end
 
---- A `continued-in` line of the session `from` that names `to`.
+--- A `continued-in` line of the session `from` that names `to`, stamped
+--- `timestamp`, three seconds after the anchor unless told.
 ---
 ---@param from string
 ---@param to string
+---@param timestamp? string
 ---@return string
-local function continued_in_line(from, to)
+local function continued_in_line(from, to, timestamp)
   return vim.json.encode({
     type = 'continued-in',
-    timestamp = '2026-01-01T00:00:03.000Z',
+    timestamp = timestamp or AFTER_THE_ANCHOR,
     sessionId = from,
     continuedInSessionId = to,
   })
@@ -78,17 +97,30 @@ end
 --- Follows the transcript file `path`, with the signals it delivered so far.
 ---
 ---@param path string
+---@param since? number|false when the tab began following the session; the anchor of the cases unless `false`, which hands the follower none
 ---@return { signals: aineo.transcript.Signal[], follower: aineo.transcript.Follower }
-local function follow_path(path)
+local function follow_path(path, since)
   local following = { signals = {} }
   following.follower = transcript.follow({
     path = path,
+    since = since == nil and ANCHOR or since or nil,
     on_signal = function(signal)
       table.insert(following.signals, signal)
     end,
   })
   table.insert(started_followers, following.follower)
   return following
+end
+
+--- The signals of `signals` of the kind `kind`.
+---
+---@param signals aineo.transcript.Signal[]
+---@param kind string
+---@return aineo.transcript.Signal[]
+local function of_kind(signals, kind)
+  return vim.tbl_filter(function(signal)
+    return signal.kind == kind
+  end, signals)
 end
 
 --- The kinds of `signals`, in order.
@@ -195,17 +227,81 @@ T['follow()']['follows the transcript itself when it says nothing of a continuat
   eq(kinds_of(following.signals), KINDS_OF_THE_RECORDED_TURN)
 end
 
-T['follow()']['follows the session of the last continued-in line the transcript holds'] = function()
+T['follow()']['follows the target of the first continued-in line stamped after the anchor, not the last'] = function()
   fake_transcript.append(transcript_of(FIRST), {
     continued_in_line(FIRST, SECOND),
     continued_in_line(FIRST, THIRD),
   })
-  fake_transcript.append(transcript_of(SECOND), vim.list_slice(RECORDED_TURN, 1, 2))
-  fake_transcript.append(transcript_of(THIRD), RECORDED_TURN)
+  fake_transcript.append(transcript_of(SECOND), RECORDED_TURN)
+  fake_transcript.append(transcript_of(THIRD), vim.list_slice(RECORDED_TURN, 1, 2))
 
   local following = follow_path(transcript_of(FIRST))
 
   eq(kinds_of(following.signals), KINDS_OF_THE_RECORDED_TURN)
+end
+
+T['follow()']['skips the continued-in lines stamped before the anchor, as the lines of earlier resumes are'] = function()
+  local lines = {}
+  for number = 1, 12 do
+    table.insert(lines, continued_in_line(FIRST, session_numbered(number), BEFORE_THE_ANCHOR))
+  end
+  table.insert(lines, continued_in_line(FIRST, session_numbered(13)))
+  table.insert(lines, continued_in_line(FIRST, session_numbered(14)))
+  fake_transcript.append(transcript_of(FIRST), lines)
+  fake_transcript.append(transcript_of(session_numbered(13)), RECORDED_TURN)
+  fake_transcript.append(transcript_of(session_numbered(14)), vim.list_slice(RECORDED_TURN, 1, 2))
+  fake_transcript.append(transcript_of(session_numbered(5)), vim.list_slice(RECORDED_TURN, 1, 2))
+
+  local following = follow_path(transcript_of(FIRST))
+
+  eq(kinds_of(following.signals), KINDS_OF_THE_RECORDED_TURN)
+end
+
+T['follow()']['keeps following the transcript when no continued-in line is stamped after the anchor'] = function()
+  fake_transcript.append(transcript_of(FIRST), {
+    RECORDED_TURN[3],
+    continued_in_line(FIRST, SECOND, BEFORE_THE_ANCHOR),
+  })
+  fake_transcript.append(transcript_of(SECOND), RECORDED_TURN)
+
+  local following = follow_path(transcript_of(FIRST))
+
+  eq(kinds_of(following.signals), { 'prompt', 'session_continued' })
+end
+
+T['follow()']['keeps following the transcript when it is given no anchor'] = function()
+  fake_transcript.append(transcript_of(FIRST), {
+    RECORDED_TURN[3],
+    continued_in_line(FIRST, SECOND),
+  })
+  fake_transcript.append(transcript_of(SECOND), RECORDED_TURN)
+
+  local following = follow_path(transcript_of(FIRST), false)
+
+  eq(kinds_of(following.signals), { 'prompt', 'session_continued' })
+end
+
+T['follow()']['follows a continued-in line stamped up to 10 seconds before the anchor, the resume having written it as it began'] = function()
+  fake_transcript.append(transcript_of(FIRST), {
+    continued_in_line(FIRST, SECOND, '2025-12-31T23:59:51.000Z'),
+  })
+  fake_transcript.append(transcript_of(SECOND), RECORDED_TURN)
+
+  local following = follow_path(transcript_of(FIRST))
+
+  eq(kinds_of(following.signals), KINDS_OF_THE_RECORDED_TURN)
+end
+
+T['follow()']['does not follow a continued-in line stamped more than 10 seconds before the anchor'] = function()
+  fake_transcript.append(transcript_of(FIRST), {
+    RECORDED_TURN[3],
+    continued_in_line(FIRST, SECOND, '2025-12-31T23:59:49.000Z'),
+  })
+  fake_transcript.append(transcript_of(SECOND), RECORDED_TURN)
+
+  local following = follow_path(transcript_of(FIRST))
+
+  eq(kinds_of(following.signals), { 'prompt', 'session_continued' })
 end
 
 T['follow()']['follows a continuation of a continuation to the end of the chain'] = function()
@@ -296,7 +392,7 @@ T['follow()']['does not look for a continued-in line further back than 8 MiB fro
   eq(kinds_of(following.signals), {})
 end
 
-T['follow()']['reads no more than the tail and 8 MiB of a long file that holds no continued-in line, 1 MiB at a time'] = function()
+T['follow()']['reads no more than the tail and 8 MiB twice of a long file that holds no continued-in line, 1 MiB at a time'] = function()
   local lines = {}
   for _ = 1, 12 * 1048576 / (#FILLER_LINE + 1) do
     table.insert(lines, FILLER_LINE)
@@ -315,7 +411,7 @@ T['follow()']['reads no more than the tail and 8 MiB of a long file that holds n
   vim.uv.fs_read = read
 
   assert(followed, failure)
-  eq(bytes <= 256 * 1024 + 8 * 1048576 + 8 * 4096 + 1, true)
+  eq(bytes <= 256 * 1024 + 2 * (8 * 1048576 + 8 * 4096) + 1, true)
   eq(largest <= 1048576 + 4096, true)
 end
 
@@ -389,6 +485,119 @@ T['follow()']['delivers a continued-in line appended later as news, for the foll
     kind = 'session_continued',
     session = SECOND,
     at = 1767225603,
+  })
+end
+
+T['follow()']['skips a line that holds the field of a continued-in line but is none, and reads the lines after it'] = function()
+  local tool_call_holding_the_field = vim.json.encode({
+    type = 'assistant',
+    message = {
+      content = {
+        {
+          type = 'tool_use',
+          id = 'toolu_x',
+          name = 'Bash',
+          input = { continuedInSessionId = THIRD },
+        },
+      },
+    },
+  })
+  fake_transcript.append(transcript_of(FIRST), {
+    continued_in_line(FIRST, SECOND),
+    tool_call_holding_the_field,
+  })
+  fake_transcript.append(transcript_of(SECOND), RECORDED_TURN)
+
+  local following = follow_path(transcript_of(FIRST))
+
+  eq(kinds_of(following.signals), KINDS_OF_THE_RECORDED_TURN)
+end
+
+T['follow()']['follows eight continuations in a row and no more'] = function()
+  for number = 0, 10 do
+    local lines = { continued_in_line(session_numbered(number), session_numbered(number + 1)) }
+    if number == 8 then
+      lines = RECORDED_TURN
+    end
+    fake_transcript.append(transcript_of(session_numbered(number)), lines)
+  end
+
+  local following = follow_path(transcript_of(session_numbered(0)))
+
+  eq(kinds_of(following.signals), KINDS_OF_THE_RECORDED_TURN)
+end
+
+T['follow()']['finds the continued-in line in a time that does not grow with the lines that hold the field'] = function()
+  local tool_call_holding_the_field = vim.json.encode({
+    type = 'assistant',
+    message = {
+      content = {
+        {
+          type = 'tool_use',
+          id = 'toolu_x',
+          name = 'Bash',
+          input = { continuedInSessionId = 'x' },
+        },
+      },
+    },
+  })
+  local lines = { continued_in_line(FIRST, SECOND) }
+  for _ = 1, 7000 do
+    table.insert(lines, tool_call_holding_the_field)
+  end
+  fake_transcript.append(transcript_of(FIRST), lines)
+  fake_transcript.append(transcript_of(SECOND), RECORDED_TURN)
+
+  local started = vim.uv.hrtime()
+  local following = follow_path(transcript_of(FIRST))
+  local milliseconds = (vim.uv.hrtime() - started) / 1e6
+
+  eq(kinds_of(following.signals), KINDS_OF_THE_RECORDED_TURN)
+  eq(milliseconds < 1000, true)
+end
+
+T['follow()']['finds the continued-in line in a time that does not grow with the fields in one line'] = function()
+  local one_line = '{"type":"assistant","x":"' .. ('"continuedInSessionId" '):rep(4000) .. '"}'
+  fake_transcript.append(transcript_of(FIRST), { continued_in_line(FIRST, SECOND), one_line })
+  fake_transcript.append(transcript_of(SECOND), RECORDED_TURN)
+
+  local started = vim.uv.hrtime()
+  local following = follow_path(transcript_of(FIRST))
+  local milliseconds = (vim.uv.hrtime() - started) / 1e6
+
+  eq(kinds_of(following.signals), KINDS_OF_THE_RECORDED_TURN)
+  eq(milliseconds < 1000, true)
+end
+
+T['follow()']['tells of a continued-in line written between the search and the replay of the tail, as news'] = function()
+  fake_transcript.append(transcript_of(FIRST), { RECORDED_TURN[3] })
+  fake_transcript.append(transcript_of(SECOND), RECORDED_TURN)
+  local continuation = require('aineo.transcript.continuation')
+  local resolve = continuation.resolve
+  local searches = 0
+  continuation.resolve = function(...)
+    local resolved = resolve(...)
+    searches = searches + 1
+    if searches == 1 then
+      fake_transcript.append(transcript_of(FIRST), { continued_in_line(FIRST, SECOND) })
+    end
+    return resolved
+  end
+
+  local followed, following = pcall(follow_path, transcript_of(FIRST))
+  continuation.resolve = resolve
+
+  assert(followed, following)
+  eq(searches, 2)
+  eq(of_kind(following.signals, 'session_continued'), {
+    {
+      agent = 'main',
+      kind = 'session_continued',
+      session = SECOND,
+      replayed = true,
+      at = 1767225603,
+    },
+    { agent = 'main', kind = 'session_continued', session = SECOND },
   })
 end
 
