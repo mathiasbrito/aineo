@@ -439,7 +439,7 @@ end
 
 T['a fork of the tab’s Claude Code'] = MiniTest.new_set()
 
-T['a fork of the tab’s Claude Code']['is the session the office acts out once its SessionStart hook, with the tab’s token, names it'] = function()
+T['a fork of the tab’s Claude Code']['is the session the office acts out, as the tab’s claim, once its SessionStart hook, with the tab’s token, names it'] = function()
   local forked = new_session_numbered(30)
   open_layout('office-fork')
   child.lua(KEEP_THE_SIGNALS_TAKEN)
@@ -456,7 +456,13 @@ T['a fork of the tab’s Claude Code']['is the session the office acts out once 
 
   entry.command(child, 'Aineo office')
 
-  eq(tab_session(), forked)
+  eq(
+    child.lua_get(
+      "require('aineo.mcp').session_claimant(vim.fn.stdpath('state'), ...) == vim.v.servername",
+      { forked }
+    ),
+    true
+  )
   eq(child.lua_get('_G.taken'), { 'prompt', 'tool_started' })
 end
 

@@ -534,6 +534,23 @@ local function make_tab(homes, key, callbacks)
     end
   end
 
+  --- Makes the panes follow `id` as a claim of it, and claims it
+  --- (`follow_claimed_session()`, `claim()`): a session another Claude Code
+  --- process started under the tab's start token (`aineo.claude`'s
+  --- `on_session_elsewhere`), as Claude Code's background service runs a
+  --- conversation of the tab's in a process of its own. The tab's own
+  --- Claude terminal runs on its own session meanwhile, and a confirmation
+  --- of its start that comes later leaves the panes on the claim
+  --- (`follow_confirmed_start()`). Notes that the tab's office begins
+  --- following then (`aineo.entry.office`'s `began_following()`).
+  ---
+  ---@param id string
+  local function follow_session_elsewhere(id)
+    offices.began_following(tab)
+    follow_claimed_session(id)
+    claim(id)
+  end
+
   --- Hands what aineo keeps for the Claude session `dead`, whose resume
   --- Claude Code found no conversation for, over to `fresh`, the session
   --- that took its place: the Report's records, then Input's draft, then the
@@ -698,11 +715,11 @@ local function make_tab(homes, key, callbacks)
   --- (`aineo.mcp`), the state directory of `kept_places()`, the editor's
   --- address and program for the session hooks, and the callbacks that make
   --- the panes follow the session (`replacement_callbacks()`,
-  --- `follow_confirmed_start()`), and those that tell the tab's office where
-  --- its session's transcript is written and that an agent waits for the
-  --- user (`aineo.entry.office`'s `note_transcript()` and
-  --- `take_permission_wait()`). With `new_session` the start is on a new
-  --- session id.
+  --- `follow_confirmed_start()`, `follow_session_elsewhere()`), and those
+  --- that tell the tab's office where its session's transcript is written
+  --- and that an agent waits for the user (`aineo.entry.office`'s
+  --- `note_transcript()` and `take_permission_wait()`). With `new_session`
+  --- the start is on a new session id.
   ---
   ---@param config table the resolved configuration
   ---@param working_directory string
@@ -732,6 +749,7 @@ local function make_tab(homes, key, callbacks)
       on_terminal_replaced = replacement.on_terminal_replaced,
       on_session_ready = follow_confirmed_start,
       on_session_switched = replacement.on_session_switched,
+      on_session_elsewhere = follow_session_elsewhere,
       on_transcript = function(session_id, path)
         offices.note_transcript(tab, session_id, path)
       end,
