@@ -41,18 +41,10 @@ end
 ---@param spots aineo.office_scene.Spot[]
 ---@return aineo.office_scene.Route|nil route nil when none of the spots can be walked to
 local function nearest_route(layout, character, spots)
-  local reach = paths.reach_from(layout, {
+  return paths.nearest(layout, {
     column = math.floor(character.column + 0.5),
     row = math.floor(character.row + 0.5),
-  })
-  local nearest, fewest_steps = nil, math.huge
-  for _, spot in ipairs(spots) do
-    local steps = reach.distance(spot.column, spot.row)
-    if steps and steps < fewest_steps then
-      nearest, fewest_steps = spot, steps
-    end
-  end
-  return nearest and { spot = nearest, path = reach.path_to(nearest.column, nearest.row) }
+  }, spots)
 end
 
 --- Where the character goes for a step that names the spot `name`: the spot
