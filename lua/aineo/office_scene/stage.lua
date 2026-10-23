@@ -20,7 +20,7 @@ local M = {}
 ---@class aineo.office_scene.Stage
 ---@field advance fun(agents: aineo.office_states.Agent[], now: number) puts the agents where their states and the time put them; `now` is in seconds, from any origin
 ---@field picture fun(): aineo.office_scene.Picture what the stage shows as of the last `advance()`
----@field resize fun(width: integer, height: integer) lays the plan out again for a new size; the agents are placed again by the next `advance()`
+---@field resize fun(width: integer, height: integer) lays the plan out again for a new size; each agent keeps its activity and its step, at the spot of the same name and number
 
 --- A stage for the office of `options.pack`, `options.width` by
 --- `options.height` cells, with no agent on it.
@@ -48,7 +48,11 @@ function M.new_stage(options)
     if layout.left_out > 0 and options.on_left_out then
       options.on_left_out(layout.left_out)
     end
-    director = director_module.new_director(pack, layout, options.random or math.random)
+    if director then
+      director.use_layout(layout)
+    else
+      director = director_module.new_director(pack, layout, options.random or math.random)
+    end
   end
   lay_out()
 
@@ -74,6 +78,7 @@ function M.new_stage(options)
       height = height,
       plan_height = plan_height,
       agents = agents_shown,
+      places = director.places(),
       state_labels = options.state_labels or {},
       wall_time = options.clock and options.clock(),
       now = now,
