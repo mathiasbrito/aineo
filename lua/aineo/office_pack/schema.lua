@@ -199,10 +199,11 @@ end
 ---@param key string|integer
 ---@return string
 local function child(path, key)
+  local name = tostring(key):gsub('%c', '?')
   if path == '' then
-    return tostring(key)
+    return name
   end
-  return ('%s.%s'):format(path, key)
+  return ('%s.%s'):format(path, name)
 end
 
 --- Tells `message` for the entry at `path`, on `line`.
@@ -523,6 +524,10 @@ end
 ---@param line integer|nil the line `value` starts on
 ---@return boolean ok whether nothing was told
 function check_node(value, node, context, path, line)
+  if type(value) == 'string' and value:find('%c') then
+    tell(context, line, path, 'holds a control character')
+    return false
+  end
   if node.kind == 'fields' then
     return check_fields(value, node, context, path, line)
   elseif node.kind == 'map' then

@@ -143,9 +143,33 @@ local function widest_of(rows)
   return widest
 end
 
+--- Tells each line of the plan, the marker line and the rows, that holds a
+--- control character: a plan is drawn in characters a screen shows.
+---
+---@param marker_line string
+---@param rows string[]
+---@param marker_line_number integer
+---@param report aineo.office_pack.Report
+---@return boolean ok
+local function check_controls(marker_line, rows, marker_line_number, report)
+  local ok = true
+  if marker_line:find('%c') then
+    report(marker_line_number, 'the marker line holds a control character')
+    ok = false
+  end
+  for index, row in ipairs(rows) do
+    if row:find('%c') then
+      report(marker_line_number + index, 'this row holds a control character')
+      ok = false
+    end
+  end
+  return ok
+end
+
 --- Reads the plan `text`, telling every problem to `report` with its line.
 ---
---- `nil` when the text holds no marker line or no row, or the plan is over
+--- `nil` when the text holds no marker line or no row, a control character, or
+--- the plan is over
 --- 400 cells wide or 200 rows tall. A row shorter than the widest is read as
 --- if it ended in spaces, which an editor may have taken off; a marker line or
 --- rows that mark more than one block to repeat are told, and none repeats.
@@ -158,6 +182,9 @@ function M.parse(text, report)
   local marker_line = table.remove(lines, 1)
   if not marker_line or #lines == 0 then
     report(1, 'the plan has no rows')
+    return nil
+  end
+  if not check_controls(marker_line, lines, marker_line_number, report) then
     return nil
   end
   local first_row_line = marker_line_number + 1

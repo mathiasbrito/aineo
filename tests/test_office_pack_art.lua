@@ -185,6 +185,30 @@ local WRONG_ART = {
     'stretch is “columns first-last”',
   },
   {
+    'a NUL in a row',
+    'colours: A = ink\n---\nA\0\n',
+    3,
+    'this line holds a control character',
+  },
+  {
+    'a control byte in the header',
+    'about: a\1b\ncolours: A = ink\n---\nA\n',
+    1,
+    'this line holds a control character',
+  },
+  {
+    'a tab in the header',
+    'colours: A = ink\tx\n---\nA\n',
+    1,
+    'this line holds a control character',
+  },
+  {
+    'a line that is no field, told in its first characters',
+    'colours: A = ink\n' .. ('long '):rep(100) .. '\n---\nA\n',
+    2,
+    '“' .. ('long '):rep(100):sub(1, 40) .. '…” is not “field: value”',
+  },
+  {
     'a stretch outside the art',
     'colours: A = ink\nstretch: columns 2-9\n---\nAAA\n',
     2,
@@ -229,6 +253,12 @@ T['art files']['that are wrong are told with the line, one by one']['case'] = fu
   message
 )
   eq(probe_problems(art_text), { { line, message } })
+end
+
+T['art files']['tell a row of another width once, not for every row'] = function()
+  eq(probe_problems('colours: A = ink\n---\nAA\nA\nA\nAAA\nA\n'), {
+    { 4, 'this row is 1 pixels wide, and the first row is 2' },
+  })
 end
 
 T['art files']['tell every problem at once'] = function()
