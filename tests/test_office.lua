@@ -20,10 +20,11 @@ local QUIET_MS = 400
 --- The recorded turn: a prompt, a call, its result and the turn's end.
 local RECORDED_TURN = fake_transcript.lines_of('turn-with-a-command-2.1.308.jsonl')
 
---- The lines of the recorded turn before the call, the call, and what follows
---- it: the result and the turn's end.
-local BEFORE_THE_CALL = vim.list_slice(RECORDED_TURN, 1, 4)
-local CALL_LINES = vim.list_slice(RECORDED_TURN, 5, 5)
+--- The lines of the recorded turn before the user's prompt, the prompt and the
+--- call it leads to, and what follows: the result and the turn's end. The
+--- prompt starts the agent's work, so the agent stands only before it.
+local BEFORE_THE_CALL = vim.list_slice(RECORDED_TURN, 1, 2)
+local CALL_LINES = vim.list_slice(RECORDED_TURN, 3, 5)
 local END_OF_TURN_LINES = vim.list_slice(RECORDED_TURN, 6, 10)
 
 --- The text of the transcript the office follows, in a directory of its own.

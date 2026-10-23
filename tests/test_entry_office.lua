@@ -242,6 +242,24 @@ T['what the office shows']["follows the transcript in the session's own folder, 
   eq(typing, true)
 end
 
+T['what the office shows']["follows the transcript of the session's id that exists, not the path the folder rule names"] = function()
+  open_layout('office-existing-wins')
+  forget_earlier_transcripts()
+  local session = child.lua_get([[require('aineo.claude').session_id()]])
+  local directory = child.lua_get([[vim.env.CLAUDE_CONFIG_DIR]])
+  fake_transcript.append(
+    vim.fs.joinpath(directory, 'projects', 'elsewhere', session .. '.jsonl'),
+    RECORDED_TURN
+  )
+  entry.command(child, 'Aineo office')
+
+  write_transcript_in_the_sessions_own_folder(vim.list_slice(RECORDED_TURN, 1, 5))
+  vim.wait(1500)
+
+  eq(office_cells.is_standing(child), true)
+  eq(office_cells.is_typing(child), false)
+end
+
 T['what the office shows']["names the session's folder with a dash for each character, not each byte"] = function()
   open_layout('office-folder-rule')
   forget_earlier_transcripts()
