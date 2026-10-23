@@ -100,6 +100,14 @@ T['Aineo office check']['lists the problem that the pack is not found'] = functi
   eq(list.items[1][3]:find('there is no pack “nothing_here”', 1, true) ~= nil, true)
 end
 
+T['Aineo office check']['lists the problem that a name leads to another folder'] = function()
+  entry.command(child, 'Aineo office check ../outside')
+
+  local list = quickfix()
+  eq(#list.items, 1)
+  eq(list.items[1][3], 'the pack name “../outside” is not letters, digits, _ and -')
+end
+
 T['Aineo office check']['checks the art files the setting office.pieces names with the pack'] = function()
   add_pack('alt')
   local mine = vim.fs.joinpath(fixture.directory('office_check_mine'), 'mine.txt')
