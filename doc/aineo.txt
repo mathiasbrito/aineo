@@ -4067,8 +4067,10 @@ of that name, and nowhere else:
 	area a pixel row at a time for four seconds after any agent calls
 	the report tool; a pack without the piece prints nothing
 `name`	the name of the agent whose desk it is, cut to the area's
-	width: the n-th piece that shows names is the desk of the agent
-	with the n-th place, and a desk nobody has stays blank
+	width: the desk of the agent at a `desk` spot is the piece that shows
+	names over that spot, and a desk nobody has, or whose spot the width
+	cut off, stays blank; a plan without `desk` spots gives the n-th
+	such piece to the agent with the n-th place
 A monitor besides writes what its agent looks up on the web into its `query`
 area while the agent is on the web (the query of a search, the host of an
 address it fetches, and only when that has the shape of a host; never the
@@ -4147,8 +4149,9 @@ stands.
 
 A pose whose art has frames, or whose `rises` lifts it, begins at its first
 frame when the agent takes the pose. A pose with `screen` shows that piece in
-the `screen` area of the agent's own monitor, the n-th piece of the plan with
-a `screen` area for the agent with the n-th place. `holding` draws a piece at
+the `screen` area of the agent's own monitor, the one nearest to the agent's
+`desk` spot (the n-th piece of the plan with a `screen` area for the agent with
+the n-th place, in a plan without `desk` spots). `holding` draws a piece at
 the `hand` area of the first layer that has one, mirrored with that layer and
 as the piece's own `faces` says.
 
