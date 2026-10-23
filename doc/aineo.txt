@@ -4321,13 +4321,22 @@ It follows the transcript Claude Code's `SessionStart` hook names; when no
 hook ran, it looks for the session's transcript in `projects/` under Claude
 Code's configuration directory, and when none is there, it waits for the file
 Claude Code makes in the folder named after the directory Neovim started in.
-When the tab's Claude Code switches session (a `/resume`, a `/clear`, a
-fork), the agents of the old session leave and the office follows the new
-session's transcript at once, or when it next shows. When a transcript holds
-a `continued-in` line, which Claude Code writes when it goes on with a
-session in another, the office follows the file of that session instead,
-looking for the line in the last 8 MiB of the file when it starts to follow
-and reading it as it is written afterwards.
+It acts out the session the tab's panes follow, which is the session of a
+claim (|:Aineo-claim|) while the tab claims one, not the session of the tab's
+own Claude Code. When the panes follow another session (the tab's Claude Code
+switched session with a `/resume` or a `/clear`, or a fork of it was named by
+its hooks, or a claim was made), the agents of the old session leave and the
+office follows the new session's transcript at once, or when it next shows.
+When a transcript holds `continued-in` lines, which every Claude Code that
+resumes the session writes as it goes on with it in a new session, the
+office follows the session the first of them stamped at or after the moment
+the tab began following (its Claude Code started, or its session switched)
+names, up to 10 seconds before it, and the one that file's first such line
+names, and so on: not the last line, and not the file written last, which are
+those of other editors, terminals and background sessions. It looks for the
+lines in the last 8 MiB of each file when it starts to follow, and a line
+written while it follows the file makes it follow again. With no such line it
+follows the transcript itself.
 
                                                           *aineo-office-hooks*
 Two of the hooks aineo gives the Claude Code it starts in `--settings`
