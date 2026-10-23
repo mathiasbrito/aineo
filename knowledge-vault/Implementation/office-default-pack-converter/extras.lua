@@ -256,10 +256,10 @@ function M.cat(sprites)
       3
     ),
     cat_sleep_on_a_seat = piece(
-      'The cat asleep on a sofa seat, sunk into the cushion.',
+      'The cat asleep on a sofa seat, its feet four pixels above where it is placed so that the cushion of the sofa front does not cover it.',
       { cat.sleep },
       1,
-      1
+      4
     ),
   }
   -- Rubbing against someone's legs: the walk, and a pixel to the side every
