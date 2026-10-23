@@ -144,6 +144,26 @@ T['the office of a tab']['does not show by itself when the configuration says fa
   eq(shows(), false)
 end
 
+T['the office of a tab']['loads none of the office’s engine until the office first shows'] = function()
+  open_layout('office-life-lazy')
+
+  local before =
+    child.lua_get([[vim.tbl_filter(function(name) return package.loaded[name] ~= nil end, {
+      'aineo.office', 'aineo.office_scene', 'aineo.office_states', 'aineo.office_pack', 'aineo.transcript',
+    })]])
+  entry.command(child, 'Aineo office')
+  local after =
+    child.lua_get([[vim.tbl_filter(function(name) return package.loaded[name] ~= nil end, {
+      'aineo.office_scene', 'aineo.office_states', 'aineo.office_pack', 'aineo.transcript',
+    })]])
+
+  eq(before, { 'aineo.office' })
+  eq(
+    after,
+    { 'aineo.office_scene', 'aineo.office_states', 'aineo.office_pack', 'aineo.transcript' }
+  )
+end
+
 T['a report'] = MiniTest.new_set()
 
 T['a report']['reaches the office of the tab whose Report took it'] = function()
