@@ -15,7 +15,9 @@
 --- cursor is; nothing is read and nothing is drawn. While it shows, one timer
 --- draws 12 frames a second and one file watch follows the session's
 --- transcript; both stop when it closes. The office closes when the cursor
---- enters any window in the cells it covers.
+--- enters any window in the cells it covers; leaving its tab page pauses it,
+--- and entering the tab page again resumes it in place, even with the cursor
+--- in the cells it covers.
 ---
 --- Loading this home loads none of the others of the office's context: they
 --- are required when the office first shows.
@@ -378,6 +380,18 @@ function M.new_office(options)
     end
   end
 
+  --- Whether the office is paused: its tab page was left and not entered
+  --- again, so its frame timer and follower are stopped (`stop_running()`).
+  --- Entering the tab page again fires `WinEnter` for the window the cursor
+  --- was in before `TabEnter` resumes the office, so that window, even when it
+  --- lies in the cells the office covers, is not the cursor entering them.
+  ---
+  ---@param open table what exists while the office shows
+  ---@return boolean
+  local function is_paused(open)
+    return open.timer == nil
+  end
+
   --- Whether the current tab page is the one the office's window is in.
   ---
   ---@param open { float: aineo.office.Float }
@@ -417,7 +431,11 @@ function M.new_office(options)
       group = open.group,
       callback = function()
         local entered = vim.api.nvim_get_current_win()
-        if is_in_current_tab_page(open) and float_module.covers(open.float, entered) then
+        if
+          is_in_current_tab_page(open)
+          and not is_paused(open)
+          and float_module.covers(open.float, entered)
+        then
           close_soon()
         end
       end,
