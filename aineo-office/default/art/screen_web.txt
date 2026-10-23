@@ -1,0 +1,8 @@
+about: A browser: an address bar, and a globe beside the page.
+colours: F = iron, b = blue, c = cyan, m = mauve
+anchor: 0, 0
+---
+FFFFFFFFFF
+FFFFFFFFFF
+.cbbc.mmm.
+.cbbc.mm..

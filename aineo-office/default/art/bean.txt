@@ -1,5 +1,5 @@
 about: The body of an agent, a jelly bean, in the agent's own colours.
-colours: B = agent, L = agent_light, S = agent_shade, k = ink, w = shine, p = agent_blush
+colours: B = agent, L = agent_light, S = agent_shade
 anchor: 5, 11
 ---
 ...LLBBB...

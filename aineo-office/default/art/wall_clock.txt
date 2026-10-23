@@ -1,0 +1,14 @@
+about: A wall clock; the time is written in its time area.
+colours: T = steel, k = ink
+anchor: 0, 8
+area time: 2, 3, 5 x 2
+---
+..TTTTT..
+.TkkkkkT.
+TkkkkkkkT
+TkkkkkkkT
+TkkkkkkkT
+TkkkkkkkT
+TkkkkkkkT
+.TkkkkkT.
+..TTTTT..

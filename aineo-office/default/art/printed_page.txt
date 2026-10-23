@@ -1,0 +1,8 @@
+about: The page the printer prints, drawn from the top of its page area.
+colours: L = silver, W = white
+anchor: 0, 0
+---
+WWWWWWWW
+WLLLLLLW
+WWWWWWWW
+WLLLLLLW

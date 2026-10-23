@@ -1,0 +1,26 @@
+about: An arm holding a cup of coffee, steaming.
+colours: B = agent, O = door_frame, W = white, f = frost
+anchor: 0, 9
+seconds per frame: 0.3333
+---
+........f..
+.........f.
+........f..
+......BWOOW
+......BWWWW
+.......WWW.
+........WW.
+...........
+...........
+...........
+---
+.........f.
+........f..
+.........f.
+......BWOOW
+......BWWWW
+.......WWW.
+........WW.
+...........
+...........
+...........

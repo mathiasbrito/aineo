@@ -1,0 +1,22 @@
+about: The whiteboard. The session's tasks are written in its plan area.
+colours: F = iron, G = leaf, M = slate, R = red, W = white, b = blue, f = frost
+anchor: 0, 15
+stretch: columns 15-16
+area plan: 2, 2, 22 x 10
+---
+.ffffffffffffffffffffffff.
+fWWWWWWWWWWWWWWWWWWWWWWWWf
+fWWWWWWWWWWWWWWWWWWWWWWWWf
+fWWWWWWWWWWWWWWWWWWWWWWWWf
+fWWWWWWWWWWWWWWWWWWWWWWWWf
+fWWWWWWWWWWWWWWWWWWWWWWWWf
+fWWWWWWWWWWWWWWWWWWWWWWWWf
+fWWWWWWWWWWWWWWWWWWWWWWWWf
+fWWWWWWWWWWWWWWWWWWWWWWWWf
+fWWWWWWWWWWWWWWWWWWWWWWWWf
+fWWWWWWWWWWWWWWWWWWWWWWWWf
+fWWWWWWWWWWWWWWWWWWWWWWWWf
+fWWWWWWWWWWWWWWWWWWWWWWWWf
+.ffffffffffffffffffffffff.
+...RR.bb.GG........FFF....
+..MMMMMMMMMMMMMMMMMMMMMM..
