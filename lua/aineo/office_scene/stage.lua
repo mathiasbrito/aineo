@@ -4,6 +4,7 @@
 local director_module = require('aineo.office_scene.director')
 local floor_layout = require('aineo.office_scene.floor_layout')
 local painter = require('aineo.office_scene.painter')
+local status_list = require('aineo.office_scene.status_list')
 
 local M = {}
 
@@ -12,6 +13,7 @@ local M = {}
 ---@field width integer cells
 ---@field height integer cells
 ---@field random? fun(): number the source of the random times of steps: a number from 0 up to, not including, 1; `math.random` when not given
+---@field state_labels? table<string, string> what the status list says of each state, in words; the state's name where not given
 
 ---@class aineo.office_scene.Stage
 ---@field advance fun(agents: aineo.office_states.Agent[], now: number) puts the agents where their states and the time put them; `now` is in seconds, from any origin
@@ -28,14 +30,17 @@ function M.new_stage(options)
   vim.validate('options.width', options.width, 'number')
   vim.validate('options.height', options.height, 'number')
   vim.validate('options.random', options.random, 'function', true)
+  vim.validate('options.state_labels', options.state_labels, 'table', true)
 
   local pack = options.pack
   local width, height = options.width, options.height
   local now = 0
-  local layout, director
+  local agents_shown = {}
+  local plan_height, layout, director
 
   local function lay_out()
-    layout = floor_layout.lay_out(pack, width, height)
+    plan_height = height - status_list.rows_taken(height)
+    layout = floor_layout.lay_out(pack, width, plan_height)
     director = director_module.new_director(pack, layout, options.random or math.random)
   end
   lay_out()
@@ -44,6 +49,7 @@ function M.new_stage(options)
 
   function stage.advance(agents, time)
     now = time
+    agents_shown = agents
     director.update(agents, time)
   end
 
@@ -59,6 +65,9 @@ function M.new_stage(options)
       characters = director.characters(),
       width = width,
       height = height,
+      plan_height = plan_height,
+      agents = agents_shown,
+      state_labels = options.state_labels or {},
       now = now,
     })
   end
