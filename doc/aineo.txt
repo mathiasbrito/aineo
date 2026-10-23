@@ -2719,7 +2719,9 @@ moves you to that tab instead and claims nothing.
 			once (|aineo-office|). It acts on the aineo tab of
 			the current tab page and makes none: with no aineo
 			tab it tells you, with one warning, so. Asked while
-			the office shows, it does nothing. `\O` and, in
+			the office shows, it does nothing. With
+			'termguicolors' off it shows nothing and tells you,
+			with one warning, why (|aineo-office|). `\O` and, in
 			Terminal mode and in Insert mode, `<C-\>O` do the
 			same (|aineo-keys|).
 
@@ -3251,7 +3253,16 @@ find.picker		One of `'auto'`, `'snacks'`, `'fzf-lua'`,
 			each search, with one warning, that the picker is
 			missing. None of them is a dependency of aineo.
 
-                              *aineo-config-office* *aineo-config-office.pack*
+                           *aineo-config-office* *aineo-config-office.idle_ms*
+office.idle_ms		A whole number of at least 1, or `false`. Default:
+			`180000`
+			How many milliseconds the cursor stays out of the
+			right side of the layout before the office shows by
+			itself (|aineo-office|). `false` turns that off: the
+			office then shows only when you ask for it. Read each
+			time the countdown starts, so a change counts at once.
+
+                                                    *aineo-config-office.pack*
 office.pack		A pack's name, or a list of names. Default:
 			`'default'`
 			A name is letters, digits, `_` and `-`.
@@ -3767,6 +3778,15 @@ height, whatever the column shows. Your Claude Code is a jelly bean at a
 desk. It stands beside the desk while nothing runs, and sits behind it and
 types, dots rising over its head, while a tool call runs.
 
+The office shows by itself once the cursor has stayed out of the right side of
+the layout for `office.idle_ms` (|aineo-config-office.idle_ms|), three minutes
+by default, and only while the layout shows a right side to cover: with the
+right column closed or zoomed away, it waits, and shows when the column comes
+back if the time has passed. The cursor entering the right side stops the
+countdown, leaving it starts it again, and so does a report coming in or
+entering a tab page. While the office is hidden, that countdown is the one
+timer it holds, and it reads nothing.
+
 `:Aineo office` (|:Aineo-office|), `\O` and `<Plug>(aineo-office)` show it at
 once. The cursor entering any window the office covers closes it: a click on
 it, `<C-w>w` reaching the right column, `\r`, `\i`, `\g` and the other keys
@@ -3793,7 +3813,40 @@ transcript yet shows its agent standing, and the office follows the file
 from its first line once Claude Code writes it.
 
 The office draws two pixels to a cell, with half blocks, in the colours of
-the art, so it needs `'termguicolors'`.
+the art, so it needs `'termguicolors'`. With it off the office does not show:
+`:Aineo office` and `\O` tell you why, once, the countdown says nothing, and
+`:checkhealth aineo` reports it as an error.
+
+Each tab page has an office of its own, that follows its own session. Leaving
+the tab page stops its frames and its file watches, and entering it starts
+them again, the scene catching up with what the session did meanwhile. In a
+window smaller than 60 columns by 24 rows the office draws one line saying so
+in place of the scene.
+
+                                                          *aineo-office-cards*
+Report cards ~
+A report no longer closes the office. The reporting agent's walk to the
+printer comes from the transcript; the report itself shows as a card in the
+bottom right corner of the office, above the status list: a dot, the status
+and the summary on one line, cut to the office's width. The newest card is at
+the bottom; three show at most, and a line `+N more` above them counts the
+older ones. A card is coloured by its report's status:
+|hl-AineoOfficeCardDone| for `done`, |hl-AineoOfficeCardProgress| for
+`started` and `progress`, and |hl-AineoOfficeCardProblem| for `blocked` and
+`failed`, whose dot also blinks. The cards are kept until the cursor enters
+the right side, where the Report shows every report; a report that comes in
+while the cursor is there, and the office is hidden, leaves none.
+
+                                                    *hl-AineoOfficeCardDone*
+AineoOfficeCardDone     a `done` card, linked to `DiagnosticOk`
+                                                *hl-AineoOfficeCardProgress*
+AineoOfficeCardProgress a `started` or `progress` card, linked to
+                        `DiagnosticInfo`
+                                                 *hl-AineoOfficeCardProblem*
+AineoOfficeCardProblem  a `blocked` or `failed` card, linked to
+                        `DiagnosticError`
+                                                    *hl-AineoOfficeCardMore*
+AineoOfficeCardMore     the line `+N more`, linked to `Comment`
 
 The art is a pack: a folder `aineo-office/<name>/` on 'runtimepath' with
 `pack.lua`, a description in the subset of a Lua table that aineo reads and
