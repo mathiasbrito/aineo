@@ -9,6 +9,9 @@ local M = {}
 --- The name of the pack every other falls back to.
 local DEFAULT_NAME = 'default'
 
+--- The mode of a copied file: read and write for its owner, read for others.
+local WRITABLE_BY_OWNER = tonumber('644', 8)
+
 --- How deep in the default pack's folder its files are searched for: its
 --- `art/` folder is one below.
 local MOST_FOLDERS_DEEP = 4
@@ -19,7 +22,9 @@ local MOST_FOLDERS_DEEP = 4
 ---@field into string the folder the new pack's folder is made in
 
 --- Why `name` cannot be the name of a new pack: it is not a pack's name, or a
---- pack of that name is already on `folders`. `nil` when it can.
+--- pack of that name, whatever the case of its letters, is already on
+--- `folders`: where the disk ignores case, a folder `Default` answers a lookup
+--- of `default`. `nil` when it can.
 ---
 ---@param name string
 ---@param folders string[]
@@ -29,15 +34,16 @@ local function why_not_the_name(name, folders)
     return ('the pack name “%s” is not letters, digits, _ and -'):format(pack_names.shown(name))
   end
   for _, found in ipairs(finder.find(folders)) do
-    if found.name == name then
-      return ('there is already a pack named “%s”, in %s'):format(name, found.directory)
+    if found.name:lower() == name:lower() then
+      return ('there is already a pack named “%s”, in %s'):format(found.name, found.directory)
     end
   end
 end
 
 --- Copies the files of the folder `source` into the folder `target`, with the
---- folders they are in; a link, or anything but a file or a folder, is left
---- out. `nil` when it succeeds, else what went wrong.
+--- folders they are in, each file writable by its owner whatever the mode of
+--- the source. A link is no file of a pack: it is refused. `nil` when it
+--- succeeds, else what went wrong.
 ---
 ---@param source string
 ---@param target string
@@ -45,7 +51,9 @@ end
 local function copy_files(source, target)
   for relative, type in vim.fs.dir(source, { depth = MOST_FOLDERS_DEEP }) do
     local destination = vim.fs.joinpath(target, relative)
-    if type == 'directory' then
+    if type == 'link' then
+      return ('cannot copy %s: it is a link, and a pack is made of files'):format(relative)
+    elseif type == 'directory' then
       vim.fn.mkdir(destination, 'p')
     elseif type == 'file' then
       vim.fn.mkdir(vim.fs.dirname(destination), 'p')
@@ -53,6 +61,7 @@ local function copy_files(source, target)
       if not copied then
         return ('cannot copy %s: %s'):format(relative, failure)
       end
+      vim.uv.fs_chmod(destination, WRITABLE_BY_OWNER)
     end
   end
 end
@@ -79,9 +88,11 @@ end
 --- Makes the pack `options.name` as a copy of the default pack, in the folder
 --- `options.into`/`<name>/`, with its own name in its `pack.lua`. It refuses a
 --- name that is no pack's name or that a pack on `options.folders` already
---- has — the default among them, which every pack falls back to — and a
---- folder of that name that exists, which it leaves as it is. A copy that
---- fails is removed.
+--- has, whatever the case of its letters — the default among them, which
+--- every pack falls back to — and a folder of that name that exists, which it
+--- leaves as it is. The files of the copy are writable by their owner. A copy
+--- that fails, by a returned failure or a raised error, or because the default
+--- pack holds a link, is removed, and the refusal says why.
 ---
 ---@param options aineo.office_pack.StartOptions
 ---@return string|nil directory the new pack's folder; nil when the pack was not made
@@ -108,7 +119,12 @@ function M.start_from_default(options)
     return nil, 'the default pack is not on the folders packs are in'
   end
   vim.fn.mkdir(directory, 'p')
-  local failure = copy_files(default, directory) or rename_pack(directory, options.name)
+  local finished, failure = pcall(function()
+    return copy_files(default, directory) or rename_pack(directory, options.name)
+  end)
+  if not finished then
+    failure = 'cannot make the copy: ' .. tostring(failure)
+  end
   if failure then
     vim.fn.delete(directory, 'rf')
     return nil, failure
