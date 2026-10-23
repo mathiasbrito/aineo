@@ -454,11 +454,23 @@ local WRONG_FIELDS = {
     'a trigger with a Lua pattern that is none',
     { triggers = { { when = { command = { lua_pattern = '[' } }, play = 'work' } } },
     'triggers',
-    'triggers[1].when.command must be text, or a table with lua_pattern',
+    'triggers[1].when.command.lua_pattern must be a Lua pattern with at most one repetition (*, + or -)',
   },
   {
-    'a trigger that matches by something that is not a pattern',
-    { triggers = { { when = { command = { regex = 'x' } }, play = 'work' } } },
+    'a trigger with a Lua pattern of two repetitions',
+    { triggers = { { when = { command = { lua_pattern = '^a*b+' } }, play = 'work' } } },
+    'triggers',
+    'triggers[1].when.command.lua_pattern must be a Lua pattern with at most one repetition (*, + or -)',
+  },
+  {
+    'a trigger with a Lua pattern of two lazy repetitions',
+    { triggers = { { when = { command = { lua_pattern = 'a-b-' } }, play = 'work' } } },
+    'triggers',
+    'triggers[1].when.command.lua_pattern must be a Lua pattern with at most one repetition (*, + or -)',
+  },
+  {
+    'a trigger that matches by a number',
+    { triggers = { { when = { command = 5 }, play = 'work' } } },
     'triggers',
     'triggers[1].when.command must be text, or a table with lua_pattern',
   },
@@ -480,6 +492,43 @@ T['pack.lua']['with something wrong in a field is told with the line of the fiel
   local told, text = pack_problems(changes)
 
   eq(told, { { files.line_of(text, key), message } })
+end
+
+--- Lua patterns a trigger may match with: one repetition at most, and
+--- `*`, `+` and `-` that are escaped or in a set do not count.
+local ACCEPTED_PATTERNS = {
+  { '^make%s+test' },
+  { '%.md$' },
+  { 'a?b?c?d?' },
+  { '[*+-]x[*+-]' },
+  { '%*x%+y%-z' },
+  { '%bxy.*' },
+  { '[%]*]+' },
+  { 'x-' },
+}
+
+T['pack.lua']['accepts a Lua pattern of one repetition at most'] = MiniTest.new_set({
+  parametrize = ACCEPTED_PATTERNS,
+})
+
+T['pack.lua']['accepts a Lua pattern of one repetition at most']['pattern'] = function(pattern)
+  local told = pack_problems({
+    triggers = { { when = { command = { lua_pattern = pattern } }, play = 'work' } },
+  })
+
+  eq(told, {})
+end
+
+T['pack.lua']['tells a match that is neither words nor a pattern, with what is missing and what is extra'] = function()
+  local told, text = pack_problems({
+    triggers = { { when = { command = { regex = 'x' } }, play = 'work' } },
+  })
+
+  local line = files.line_of(text, 'triggers')
+  eq(told, {
+    { line, 'triggers[1].when.command.regex is not a field of a match' },
+    { line, 'triggers[1].when.command is missing lua_pattern' },
+  })
 end
 
 T['pack.lua']['tells every problem at once, in the order of their lines'] = function()

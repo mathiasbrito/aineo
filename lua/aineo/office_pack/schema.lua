@@ -12,6 +12,8 @@
 --- }, { at_least_one_of = { 'art', 'like' } })
 --- ```
 
+local lua_pattern = require('aineo.office_pack.lua_pattern')
+
 local M = {}
 
 ---@class aineo.office_pack.SchemaContext
@@ -69,8 +71,20 @@ M.text_colour = {
 }
 M.cells = { kind = 'cells', expected = 'text of characters one cell wide' }
 
---- A Lua pattern: text `string.find()` accepts as one.
-M.pattern = { kind = 'pattern', expected = 'a Lua pattern' }
+--- A Lua pattern a pack may match with (`lua_pattern.lua`).
+M.pattern = {
+  kind = 'pattern',
+  expected = 'a Lua pattern with at most one repetition (*, + or -)',
+}
+
+--- Text, or a table that `table_node` describes.
+---
+---@param table_node aineo.office_pack.SchemaNode
+---@param expected string
+---@return aineo.office_pack.SchemaNode
+function M.text_or_table(table_node, expected)
+  return { kind = 'text_or_table', table_node = table_node, expected = expected }
+end
 
 --- A key that is a name: lowercase words joined by `_`.
 M.name = { kind = 'name', expected = 'a name of lowercase words joined by _' }
@@ -266,9 +280,7 @@ local SCALAR_CHECKS = {
   colour = is_hex_colour,
   text_colour = is_text_colour,
   cells = is_single_cell_text,
-  pattern = function(value)
-    return type(value) == 'string' and (pcall(string.find, '', value))
-  end,
+  pattern = lua_pattern.is_allowed,
   name = function(value)
     return type(value) == 'string' and value:match(NAME_PATTERN) ~= nil
   end,
@@ -472,6 +484,24 @@ local function check_either(value, node, context, path, line)
   return false
 end
 
+--- Checks `value` that is text or a table the node describes.
+---
+---@param value any
+---@param node aineo.office_pack.SchemaNode
+---@param context aineo.office_pack.SchemaContext
+---@param path string
+---@param line integer|nil
+---@return boolean
+local function check_text_or_table(value, node, context, path, line)
+  if type(value) == 'string' then
+    return true
+  elseif type(value) == 'table' then
+    return check_node(value, node.table_node, context, path, line)
+  end
+  tell_must_be(context, line, path, node)
+  return false
+end
+
 --- Checks `value` against `node`, telling every problem to `context.report`
 --- with the line of the entry that has it, and filling in the defaults the
 --- schema gives. `path` names the entry in what is told.
@@ -493,6 +523,8 @@ function check_node(value, node, context, path, line)
     return check_reference(value, node, context, path, line)
   elseif node.kind == 'either' then
     return check_either(value, node, context, path, line)
+  elseif node.kind == 'text_or_table' then
+    return check_text_or_table(value, node, context, path, line)
   end
   return check_scalar(value, node, context, path, line)
 end
