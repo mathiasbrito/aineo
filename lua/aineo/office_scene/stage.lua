@@ -74,6 +74,7 @@ function M.new_stage(options)
       pack = pack,
       layout = layout,
       characters = director.characters(),
+      things = director.things(),
       width = width,
       height = height,
       plan_height = plan_height,
