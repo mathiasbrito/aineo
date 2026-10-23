@@ -10,7 +10,8 @@ local M = {}
 local TICK = '✓ '
 local BULLET = '○ '
 
---- The tasks of the main agent, the one whose session the board shows.
+--- The tasks of the main agent, the one whose session the board shows, but
+--- the ones deleted.
 ---
 ---@param agents aineo.office_states.Agent[]
 ---@return aineo.office_states.Task[]
@@ -18,7 +19,9 @@ local function tasks_of_main(agents)
   local main = vim.iter(agents):find(function(agent)
     return roles.kind_of(agent) == 'agent'
   end)
-  return main and main.details and main.details.tasks or {}
+  return vim.tbl_filter(function(task)
+    return not task.deleted
+  end, main and main.details and main.details.tasks or {})
 end
 
 --- The tasks of `tasks` that fit `rows` rows: from the first not done, so

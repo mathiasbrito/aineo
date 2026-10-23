@@ -27,6 +27,7 @@ local UNNAMED_CALL = ''
 ---@field state string the state of an agent while the call runs
 ---@field activity? string the activity a trigger of the pack names for the call
 ---@field clue? string what the call looks for on the web
+---@field created_task? integer the number of the task a `TaskCreate` call made
 ---@field order integer how many calls the agent had started when this one did
 
 --- How the agent's last test run ended.
@@ -178,7 +179,12 @@ local HEARS = {
     if record.open_calls[id] then
       return
     end
+    local tasks_before = #record.tasks
     record.tasks = tasks.after_call(record.tasks, signal.tool, signal.input or {})
+    local created_task = signal.tool == 'TaskCreate'
+        and #record.tasks > tasks_before
+        and #record.tasks
+      or nil
     local state = calls.state_of_call(signal, hearing.settings)
     record.started_calls = record.started_calls + 1
     record.open_calls[id] = {
@@ -190,6 +196,7 @@ local HEARS = {
         hearing.settings.trigger_budget
       ),
       clue = clues.of_call(signal.tool, signal.input or {}),
+      created_task = created_task,
       order = record.started_calls,
     }
     if state == 'background_job' then
@@ -211,6 +218,9 @@ local HEARS = {
     end
     record.open_calls[id] = nil
     record.thinking = true
+    if signal.failed and call.created_task then
+      record.tasks = tasks.without(record.tasks, call.created_task)
+    end
     if call.state == 'running_tests' then
       record.test_verdict = verdict_of_result(signal, hearing)
     elseif signal.failed then
