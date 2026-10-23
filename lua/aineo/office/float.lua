@@ -84,6 +84,19 @@ function M.area_holds(area, window)
     and position[2] < area.col + area.width
 end
 
+--- The first window, in the tab page of `float`, other than floats, that lies
+--- in `area`: the one the office's window covers first; nil when there is none.
+---
+---@param float aineo.office.Float
+---@param area aineo.layout.Area
+---@return integer|nil window
+function M.window_under(float, area)
+  local tab_page = vim.api.nvim_win_get_tabpage(float.window)
+  return vim.iter(vim.api.nvim_tabpage_list_wins(tab_page)):find(function(window)
+    return vim.api.nvim_win_get_config(window).relative == '' and M.area_holds(area, window)
+  end)
+end
+
 --- Whether the window `window` lies in the cells the office's window covers:
 --- its top left cell is inside them.
 ---
