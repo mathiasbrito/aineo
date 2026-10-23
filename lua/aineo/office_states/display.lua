@@ -20,6 +20,21 @@ local function is_shown(wanted, shown)
   return wanted.state == shown.state and wanted.activity == shown.activity
 end
 
+--- The events of `record`, the current one first and the queued one after it.
+---
+---@param record aineo.office_states.Record
+---@return aineo.office_states.Event[]
+local function events_of(record)
+  local events = {}
+  if record.event then
+    table.insert(events, record.event)
+  end
+  if record.queued_event then
+    table.insert(events, record.queued_event)
+  end
+  return events
+end
+
 --- What the agent of `record` wants to show at `now`, and since when.
 ---
 ---@param record aineo.office_states.Record
@@ -29,12 +44,13 @@ local function wanted_at(record, now)
   if record.permission_asked_at then
     return { state = 'needs_permission', since = record.permission_asked_at }
   end
-  local event = record.event
-  if event and now < event.since + event.lasts then
-    return { state = event.state, since = event.since }
+  for _, event in ipairs(events_of(record)) do
+    if event.since <= now and now < event.since + event.lasts then
+      return { state = event.state, since = event.since }
+    end
   end
   local since = record.fact.since
-  if event then
+  for _, event in ipairs(events_of(record)) do
     since = math.max(since, event.since + event.lasts)
   end
   if record.fact.state == 'idle' and now >= since + timing.ASLEEP_AFTER_SECONDS then

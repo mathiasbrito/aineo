@@ -183,12 +183,17 @@ T['a background job']['keeps the agent on it after its call finished, until it i
   eq(story.state(), 'thinking')
 end
 
-T['a background job']['ends with the turn'] = function()
+T['a background job']['lasts past the end of the turn, until its notification'] = function()
   local story = office_signals.tell()
   story.started('a', 'Bash', { command = 'sleep 100', run_in_background = true })
   story.finished('a')
 
   story.hear('turn_ended')
+
+  eq(story.state_after(1.3), 'done')
+  eq(story.state_after(30), 'background_job')
+
+  story.hear_after(60, 'background_done')
 
   eq(story.state_after(30), 'idle')
 end

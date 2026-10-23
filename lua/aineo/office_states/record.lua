@@ -49,7 +49,9 @@ local UNNAMED_CALL = ''
 ---@field finished boolean whether it finished: a subagent that is over
 ---@field session_ended boolean whether its session ended
 ---@field permission_asked_at? number when it asked for permission, until its next signal
+---@field known boolean whether a line of its own, or word that it is a subagent, was heard: an agent known only by its permission request is not
 ---@field event? aineo.office_states.Event
+---@field queued_event? aineo.office_states.Event the event that begins when an arrival ends
 ---@field fact aineo.office_states.Appearance the state its facts give, from when they give it
 ---@field shown aineo.office_states.Appearance the state it shows, held by the dwell
 ---@field listed_until? number a finished agent is listed until then
@@ -75,6 +77,7 @@ function M.new(id)
     thinking = false,
     turn_ended = false,
     prompted = false,
+    known = false,
     finished = false,
     session_ended = false,
     fact = { state = 'standing', since = timing.BEFORE_THE_TRACKER },
@@ -98,23 +101,43 @@ local function kind_of_agent(record)
   return is_main(record) and 'main' or 'subagent'
 end
 
---- Makes `state` the agent's event from now on, lasting `lasts` seconds. A
---- signal read from the past brings no event: it is not happening now.
+--- Whether the arrival of `record` is still going on at `now`.
+---
+---@param record aineo.office_states.Record
+---@param now number
+---@return boolean
+local function is_arriving(record, now)
+  local event = record.event
+  return event ~= nil and event.state == 'arriving' and now < event.since + event.lasts
+end
+
+--- Makes `state` the agent's event from now on, lasting `lasts` seconds; while
+--- the agent is arriving, the event waits for the arrival to end, since the
+--- walk in is not cut by what the agent does on its first lines. A signal read
+--- from the past brings no event: it is not happening now.
 ---
 ---@param record aineo.office_states.Record
 ---@param hearing aineo.office_states.Hearing
 ---@param state string
 ---@param lasts number
 local function bring_event(record, hearing, state, lasts)
-  if not hearing.replayed then
-    record.event = { state = state, since = hearing.now, lasts = lasts }
+  if hearing.replayed then
+    return
   end
+  if state ~= 'arriving' and is_arriving(record, hearing.now) then
+    record.queued_event = {
+      state = state,
+      since = record.event.since + record.event.lasts,
+      lasts = lasts,
+    }
+    return
+  end
+  record.event = { state = state, since = hearing.now, lasts = lasts }
 end
 
 ---@param record aineo.office_states.Record
 local function end_turn(record)
   record.open_calls = {}
-  record.background_jobs = 0
   record.thinking = false
   record.turn_ended = true
 end
@@ -196,6 +219,7 @@ local HEARS = {
 
   subagent_finished = function(record, _, hearing)
     record.finished = true
+    record.event = nil
     if hearing.replayed then
       record.listed_until = hearing.now
     else
@@ -226,8 +250,10 @@ function M.hears(kind)
 end
 
 --- Takes in `signal`, which the agent of `record` gave. Any signal but a
---- permission request ends the agent's wait for permission and its event;
---- a finished agent hears nothing more.
+--- permission request ends the agent's event, unless it is arriving, and
+--- any but a permission request or the start of a tool call (which can be
+--- read after the hook that asked about that very call) ends the agent's
+--- wait for permission; a finished agent hears nothing more.
 ---
 ---@param record aineo.office_states.Record
 ---@param signal aineo.transcript.Signal
@@ -237,10 +263,25 @@ function M.hear(record, signal, hearing)
     return
   end
   if signal.kind ~= 'permission_asked' then
-    record.permission_asked_at = nil
-    record.event = nil
+    record.known = true
+    if signal.kind ~= 'tool_started' then
+      record.permission_asked_at = nil
+    end
+    if not is_arriving(record, hearing.now) then
+      record.event = nil
+    end
+    record.queued_event = nil
   end
   HEARS[signal.kind](record, signal, hearing)
+end
+
+--- Whether `record` is an agent heard of only by its permission request: not
+--- the main agent, and not yet heard from or announced.
+---
+---@param record aineo.office_states.Record
+---@return boolean
+function M.is_known_only_by_permission(record)
+  return not record.known and record.id ~= M.MAIN and not record.finished
 end
 
 ---@param record aineo.office_states.Record
