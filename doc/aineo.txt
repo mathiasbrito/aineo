@@ -2720,8 +2720,9 @@ moves you to that tab instead and claims nothing.
 			the current tab page and makes none: with no aineo
 			tab it tells you, with one warning, so. Asked while
 			the office shows, it does nothing. With
-			'termguicolors' off it shows nothing and tells you,
-			with one warning, why (|aineo-office|). `\O` and, in
+			'termguicolors' off, or 'ambiwidth' `double`, it shows
+			nothing and tells you, with one warning, why
+			(|aineo-office|). `\O` and, in
 			Terminal mode and in Insert mode, `<C-\>O` do the
 			same (|aineo-keys|).
 
@@ -3813,9 +3814,10 @@ transcript yet shows its agent standing, and the office follows the file
 from its first line once Claude Code writes it.
 
 The office draws two pixels to a cell, with half blocks, in the colours of
-the art, so it needs `'termguicolors'`. With it off the office does not show:
-`:Aineo office` and `\O` tell you why, once, the countdown says nothing, and
-`:checkhealth aineo` reports it as an error.
+the art, so it needs `'termguicolors'` and `'ambiwidth'` left `single` (which
+`double` makes the half blocks two cells wide). With either wrong the office
+does not show: `:Aineo office` and `\O` tell you why, once, the countdown says
+nothing, and `:checkhealth aineo` reports it as an error.
 
 Each tab page has an office of its own, that follows its own session. Leaving
 the tab page stops its frames and its file watches, and entering it starts
@@ -4054,15 +4056,22 @@ of that name, and nowhere else:
 `plan`	the main agent's tasks, from `TodoWrite` or `TaskCreate` and
 	`TaskUpdate`, a row each: `✓ ` before the ones done, `○ ` before the
 	others, cut to the area's width; from the first task not done when
-	there are more tasks than rows
+	there are more tasks than rows. A task deleted is left out, and a
+	creation whose result is an error takes no number. `TaskUpdate` names
+	a task by the number Claude Code gave it, which the transcript does
+	not carry: aineo counts the creations it has read, so when the part
+	of the transcript it reads at the start begins after some of them,
+	an update can tick another row or none
 `printing`	the pack's piece `printed_page`, coming out of the top of the
 	area a pixel row at a time for four seconds after any agent calls
 	the report tool; a pack without the piece prints nothing
 A monitor besides writes what its agent looks up on the web into its `query`
 area while the agent is on the web (the query of a search, the host of an
-address it fetches, never the rest of it), and a `✓` (green) or `✗` (red) at
-the top left of its `screen` area for three seconds after a test run. A
-character that is not one cell wide, or is a control character, shows as `?`.
+address it fetches, and only when that has the shape of a host; never the
+rest of it), and a `✓` (green) or `✗` (red) at the top left of its `screen`
+area for three seconds after a test run. A character that is not one cell
+wide, a combining mark among them, or is a control character, shows as `?`.
+Nothing is written below the plan: the rows under it are the status list's.
 
                                                      *aineo-office-activities*
 Activities, things and states ~
