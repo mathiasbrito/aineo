@@ -92,7 +92,7 @@ T['the status list']['is shown on a stage as short as the office is shown at'] =
   eq(text_at(picture, 19, 0, 40), ('─'):rep(40))
 end
 
-T['the status list']['is not built on by a plan taller than the rows above it'] = function()
+T['the status list']['is not built on by a plan taller than the rows above it, an agent being put on the floor above it'] = function()
   local plan = '# plan\n \n' .. (' ....\n'):rep(21) .. ' a...\n'
   local pack = scene.people_pack(plan, { a = { spot = 'aside' } })
   local stage = scene.stage_of(pack, 30, 24)
@@ -100,18 +100,20 @@ T['the status list']['is not built on by a plan taller than the rows above it'] 
   stage.advance(scene.agents_in('standing'), 0)
   local picture = stage.picture()
 
-  eq(scene.agent_cell(picture, 30, 24), 'nowhere')
+  eq(scene.agent_cell(picture, 30, 19) ~= 'nowhere', true)
   eq(text_at(picture, 19, 0, 30), ('─'):rep(30))
 end
 
-T['the status list']['is not built on by a block of rows that does not fit above it'] = function()
+T['the status list']['is not built on by a block of rows that does not fit above it, an agent being put on the floor above it'] = function()
   local plan = '# plan\n \n' .. ('~....\n'):rep(22) .. ' a...\n'
   local pack = scene.people_pack(plan, { a = { spot = 'aside' } })
   local stage = scene.stage_of(pack, 30, 24)
 
   stage.advance(scene.agents_in('standing'), 0)
+  local picture = stage.picture()
 
-  eq(scene.agent_cell(stage.picture(), 30, 24), 'nowhere')
+  eq(scene.agent_cell(picture, 30, 19) ~= 'nowhere', true)
+  eq(text_at(picture, 19, 0, 30), ('─'):rep(30))
 end
 
 T['the status list']['is not walked onto by an agent whose only way round is below the plan'] = function()
