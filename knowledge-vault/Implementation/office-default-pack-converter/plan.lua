@@ -32,7 +32,7 @@ M.DESK_ROW_LENGTH = 16
 M.STRIP_LENGTH = 11
 
 --- The column a decoration run starts at, past the fixtures of the wall.
-local DECORATION_START = 140
+local DECORATION_START = 113
 --- How far into the right part the run goes.
 local DECORATION_RIGHT_END = 38
 
@@ -46,8 +46,6 @@ M.FIXTURES = {
   clock = 55,
   coffee = 66,
   printer = 86,
-  window = 101,
-  window_spot = 112,
   calendar = 89,
   ceiling_lamp = 57,
 }
@@ -148,7 +146,6 @@ function M.rows()
   end
   put(wall(7), fixtures.clock, 'K')
   put(wall(6), fixtures.calendar, 'A')
-  put(wall(8), fixtures.window, 'W')
   put(wall(2), fixtures.ceiling_lamp, 'l')
   put(wall(2), M.LEFT + 14, 'l')
   for column = DECORATION_START, M.LEFT + M.SLOT_COLUMNS + DECORATION_RIGHT_END - 1 do
@@ -175,7 +172,6 @@ function M.rows()
   put(first[1], 48, 'n')
   put(first[1], 59, 'm')
   put(first[1], 87, 'p')
-  put(first[1], fixtures.window_spot, 'h')
   put(first[1], M.LEFT + M.SLOT_COLUMNS + 40, 'o')
   for _, row in ipairs(first) do
     rows[#rows + 1] = row
@@ -261,12 +257,11 @@ function M.legend()
     p = on_the_baseboard({ spot = 'printer' }),
     G = { piece = 'corner_plant' },
     o = on_the_baseboard({ spot = 'corner_plant' }),
-    W = { piece = 'window', shows = 'sky' },
-    h = on_the_baseboard({ spot = 'window' }),
     ['*'] = {
       decorations = require('furniture').PREFERENCE,
+      shows = 'sky',
     },
-    T = { piece = 'desk' },
+    T = { piece = 'desk', shows = 'name' },
     V = { piece = 'monitor' },
     s = { spot = 'desk' },
     e = on_the_baseboard({ spot = 'beside_desk' }),
