@@ -318,6 +318,11 @@ end
 
 T['the running sessions'] = MiniTest.new_set()
 
+T['a running session'] = MiniTest.new_set()
+
+--- A session id no record holds.
+local UNRECORDED_SESSION_ID = '2b7e8f0a-6c31-4c3e-9a1d-c9d64d845f2b'
+
 T['the running sessions']['are those of the records of this directory whose process runs, the others’ records of ended processes removed'] = function()
   local state = fixture.directory('mcp-processes-running')
   local ended = ended_pid()
@@ -446,6 +451,35 @@ T['the record of a Claude Code process']['lives in a folder only the user can en
   mcp.record_server_start(by_server, server_start(FIRST_SESSION_ID))
 
   eq({ records_folder_mode(by_hook), records_folder_mode(by_server) }, { '700', '700' })
+end
+
+T['a running session']['is one the record of a process that runs holds, in any directory, and not one whose process ended'] = function()
+  local state = fixture.directory('mcp-processes-session-running')
+  mcp.record_server_start(state, {
+    pid = PID,
+    token = TOKEN,
+    session = FIRST_SESSION_ID,
+    working_directory = '/projects/beta',
+  })
+  mcp.record_server_start(state, {
+    pid = vim.uv.os_getppid(),
+    token = OTHER_TOKEN,
+    session = THIRD_SESSION_ID,
+    working_directory = WORKING_DIRECTORY,
+  })
+  mcp.record_server_start(state, {
+    pid = ended_pid(),
+    token = OTHER_TOKEN,
+    session = SECOND_SESSION_ID,
+    working_directory = WORKING_DIRECTORY,
+  })
+
+  eq({
+    mcp.is_session_running(state, FIRST_SESSION_ID),
+    mcp.is_session_running(state, THIRD_SESSION_ID),
+    mcp.is_session_running(state, SECOND_SESSION_ID),
+    mcp.is_session_running(state, UNRECORDED_SESSION_ID),
+  }, { true, true, false, false })
 end
 
 T['the running sessions']['leave out a record whose pid another user’s process took'] = function()

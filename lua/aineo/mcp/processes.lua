@@ -295,6 +295,19 @@ function M.running_sessions(state_directory, working_directory)
   return sessions
 end
 
+--- Whether a Claude Code process aineo started runs on `session`, in any
+--- directory: the record of a process that runs holds it. The records of
+--- processes that have ended are removed (`running_records()`).
+---
+---@param state_directory string
+---@param session string
+---@return boolean
+function M.is_running(state_directory, session)
+  return vim.iter(running_records(state_directory)):any(function(running)
+    return running.record.session == session
+  end)
+end
+
 --- The session the record of the process `pid` holds when that record is
 --- of the start `token`; else nil. A record of another start's token, left
 --- by a process that ended and whose pid this one took, is removed, if it
