@@ -1946,6 +1946,19 @@ T['the office']["is an error when 'termguicolors' is off: it does not show, and 
   )
 end
 
+T['the office']["is an error when 'ambiwidth' is double: it does not show, and says why"] = function()
+  start_with({ autostart = false })
+  child.o.termguicolors = true
+  child.o.ambiwidth = 'double'
+
+  local report = health.report(child)
+
+  eq(
+    health.section(report, 'Office')[2],
+    "- ❌ ERROR 'ambiwidth' is double, so the office does not show"
+  )
+end
+
 T['the office']['says it shows only when asked to when office.idle_ms is false'] = function()
   start_with({ autostart = false, office = { idle_ms = false } })
   child.o.termguicolors = true
