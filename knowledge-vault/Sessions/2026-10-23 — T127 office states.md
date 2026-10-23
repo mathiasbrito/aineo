@@ -1,7 +1,7 @@
 # 2026-10-23 — T127 office states
 
 **Author:** the repository's maintainer, with Claude — implementer agent (`neovim-lua-developer`)
-**Branch:** `feature/t127-office-states` · **Pull request:** into `feature/t123-office`
+**Branch:** `feature/t127-office-states` · **Pull request:** #325, into `feature/t123-office`
 
 A regular packet of the office screensaver (T123; D26 applies). `aineo.office_states` (C18) now tells, for every agent, one of the 24 states of the vocabulary and the activity a pack's trigger names, from the signals and the clock; `office.commands` joins the configuration.
 
@@ -88,6 +88,8 @@ Each run alone on the test files that exercise the code, restored after; a kill 
 | M23 | `config/init.lua`: any class name accepted | `test_config` | killed, assertion |
 | M24 | `config/init.lua`: a second key beside `lua_pattern` accepted | `test_config` | killed, assertion |
 | M25 | `tracker.lua`: the check that a signal's time is a number removed | `test_office_states` | killed, assertion |
+
+The whole suite (`make test`) on the pushed tree: `Fails (1)` in `test_entry_run_follow` (`\X`, a known load flake) — it fails alone and on the integration branch's head without this packet too; the first whole run's only failure was `test_entry_tabs_routing` Send, a known flake that passes alone.
 
 ## Open threads
 
