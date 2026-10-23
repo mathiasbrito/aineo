@@ -163,7 +163,7 @@ T['the idle countdown']['is the one timer a hidden office holds, with no frame t
   local watches = office_cells.open_handles(child, 'fs_event')
 
   office_child.make_office(child, settings_with_idle('180000'))
-  child.lua([[_G.office.follow_session(...)]], { '/nonexistent/session.jsonl' })
+  office_child.follow_transcript(child, '/nonexistent/session.jsonl')
 
   eq(office_cells.open_handles(child, 'timer'), timers + 1)
   eq(office_cells.open_repeating_timers(child), repeating)
