@@ -212,26 +212,30 @@ end
 --- Makes a named pipe named as the transcript of the child's session in the
 --- folder `any-folder` of its projects, which a process opens for writing a
 --- second from now: an open of it for reading, which blocks until then, ends
---- by itself.
+--- by itself. The process opens the pipe for reading and writing, which does
+--- not wait for a reader, so that it ends by itself when nobody reads the pipe.
+---
+---@return vim.SystemObj opener
 local function make_pipe_named_as_the_transcript()
   local session = child.lua_get([[require('aineo.claude').session_id()]])
   local directory = child.lua_get([[vim.env.CLAUDE_CONFIG_DIR]])
   local path = vim.fs.joinpath(directory, 'projects', 'any-folder', session .. '.jsonl')
   vim.fn.mkdir(vim.fs.dirname(path), 'p')
   vim.system({ 'mkfifo', path }):wait()
-  vim.system({ 'sh', '-c', 'sleep 1; : > "$0"', path })
+  return vim.system({ 'sh', '-c', 'sleep 1; exec 3<> "$0"', path })
 end
 
 T['what the office shows']['is shown at once though a named pipe is named as the transcript'] = function()
   open_layout('office-pipe')
   forget_earlier_transcripts()
-  make_pipe_named_as_the_transcript()
+  local opener = make_pipe_named_as_the_transcript()
 
   local started = vim.uv.hrtime()
   entry.command(child, 'Aineo office')
   local held = math.floor((vim.uv.hrtime() - started) / 1e6)
 
   eq(held < 500, true)
+  eq(opener:wait(3000).code, 0)
 end
 
 T['what the office shows']["follows the transcript in the session's own folder, not a named pipe named as it elsewhere"] = function()
