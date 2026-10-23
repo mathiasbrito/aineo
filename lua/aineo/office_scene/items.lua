@@ -43,6 +43,31 @@ function M.frame_after(piece, elapsed)
   return math.floor(elapsed / piece.seconds_per_frame) % #piece.frames + 1
 end
 
+--- The pixels of the plan: the whole of the picture but the rows of the status
+--- list, which nothing but the list is painted on.
+---
+---@param drawing aineo.office_scene.Drawing
+---@return aineo.office_scene.PixelArea
+function M.plan_area(drawing)
+  return { column = 0, row = 0, width = drawing.width, height = 2 * drawing.plan_height }
+end
+
+--- The pixels that lie in both `area` and `other`.
+---
+---@param area aineo.office_scene.PixelArea
+---@param other aineo.office_scene.PixelArea
+---@return aineo.office_scene.PixelArea
+function M.common_to(area, other)
+  local column = math.max(area.column, other.column)
+  local row = math.max(area.row, other.row)
+  return {
+    column = column,
+    row = row,
+    width = math.max(0, math.min(area.column + area.width, other.column + other.width) - column),
+    height = math.max(0, math.min(area.row + area.height, other.row + other.height) - row),
+  }
+end
+
 --- Paints `items` back to front: the deeper one is in front, and at one
 --- depth the one of the higher rank, and then the one made later.
 ---
