@@ -15,6 +15,11 @@ local M = {}
 --- names none.
 local ENTRANCE = 'door'
 
+--- How many steps an agent begins in one update; the rest it begins in the
+--- updates after, so that an activity of steps that take no time cannot hold
+--- the editor.
+local MOST_STEPS_BEGUN_AN_UPDATE = 8
+
 ---@class aineo.office_scene.Character
 ---@field id string the agent's id
 ---@field kind string 'agent' for the main agent, 'subagent' for the others
@@ -36,6 +41,7 @@ local ENTRANCE = 'door'
 ---@field spot? aineo.office_scene.Spot the spot it has taken
 ---@field path aineo.office_scene.Cell[] the cells it has still to walk over, the next first
 ---@field clock number the time the character has been brought up to
+---@field steps_begun integer how many steps it has begun in this update
 
 ---@class aineo.office_scene.Director
 ---@field update fun(agents: aineo.office_states.Agent[], now: number) brings the agents up to `now`, in the states they are in
@@ -111,6 +117,7 @@ end
 ---@param time number
 local function begin_step(context, performer, index, time)
   local step = performer.activity.steps[index]
+  performer.steps_begun = performer.steps_begun + 1
   performer.step_index = index
   performer.step_seconds = seconds_of(step.for_seconds, context.random)
   performer.arrived_at = nil
@@ -169,7 +176,7 @@ local function bring_up_to(context, performer, now)
       arrive(performer, performer.activity.steps[performer.step_index], clock)
     end
     local ends_at = step_end_before(performer, now)
-    if not ends_at then
+    if not ends_at or performer.steps_begun >= MOST_STEPS_BEGUN_AN_UPDATE then
       break
     end
     clock = ends_at
@@ -190,6 +197,7 @@ local function new_performer(agent, now)
     clock = now,
     path = {},
     step_index = 1,
+    steps_begun = 0,
   }
 end
 
@@ -217,6 +225,7 @@ function M.new_director(pack, layout, random)
       local performer = known[agent.id] or new_performer(agent, now)
       known[agent.id] = performer
       performer.index = index
+      performer.steps_begun = 0
       if activity and performer.activity_name ~= name then
         performer.activity_name, performer.activity, performer.step_index = name, activity, 1
         begin_step(context, performer, 1, performer.clock)
