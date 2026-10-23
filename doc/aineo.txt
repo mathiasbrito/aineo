@@ -3729,7 +3729,12 @@ Two of the hooks aineo gives the Claude Code it starts in `--settings`
   in which tab. It prints nothing and so decides nothing: the prompt stays
   yours to answer. It starts a headless `nvim` for about 20 ms per prompt,
   which Claude Code does not wait for, and ends itself after 6 seconds
-  whatever the editor does.
+  whatever the editor does, one held at a prompt say. In the permission
+  mode `dontAsk`, where Claude Code denies a call without a prompt, it
+  tells nothing.
+The hook was recorded on Claude Code 2.1.308; aineo knows no lowest version
+that runs it. Claude Code runs no `PermissionRequest` hook for a sandboxed
+command's network request, so the office shows no wait for that prompt.
 
 ==============================================================================
 10. THE AUTOSTART                                            *aineo-autostart*
