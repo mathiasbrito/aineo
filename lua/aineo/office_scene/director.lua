@@ -2,8 +2,17 @@
 --- agent plays the activity its state maps to, or the one a trigger of the
 --- pack chose for what it is doing. It plays the activity's steps in order:
 --- it goes to the spot a step names, walking there over the floor, takes the
---- step's pose, and stays for the step's time before the next step begins. The
---- last step lasts until the agent's activity changes.
+--- step's pose, and stays for the step's time before the next step begins. As
+--- a step ends it may leave a thing on the floor or remove one.
+---
+--- The last step of an activity lasts until the agent's activity changes, or,
+--- when it has a time, until that is over: the agent then plays an activity
+--- picked at random among those that name its state, never the one it has just
+--- played, alone or together with the agents the activity needs.
+---
+--- A thing on the floor can upset the agents near it, who play what upsets
+--- them, and calls for the nearest idle agent, who cleans it up; each plays
+--- that as an interlude, after which it goes back to what its state asks for.
 ---
 --- An agent has a place among the agents from the moment it arrives to the
 --- moment it leaves: the lowest number no other agent has. Its colour, its
@@ -15,6 +24,7 @@ local paths = require('aineo.office_scene.paths')
 local random_life = require('aineo.office_scene.random_life')
 local roles = require('aineo.office_scene.roles')
 local spots = require('aineo.office_scene.spots')
+local things = require('aineo.office_scene.things')
 local walking = require('aineo.office_scene.walking')
 
 local M = {}
@@ -33,9 +43,11 @@ local MOST_STEPS_BEGUN_AN_UPDATE = 8
 --- again for an activity it can pick.
 local SECONDS_BETWEEN_LOOKS = 1
 
---- What a performer's activity is: the one its state asks for, or one it
---- picked at random once that was over.
-local WANTED, RANDOM = 'wanted', 'random'
+--- What a performer's activity is: the one its state asks for, one it
+--- picked at random once that was over, or an interlude, which it plays
+--- because of something that happened and after which it goes back to the one
+--- its state asks for.
+local WANTED, RANDOM, INTERLUDE = 'wanted', 'random', 'interlude'
 
 ---@class aineo.office_scene.Character
 ---@field id string the agent's id
@@ -55,8 +67,9 @@ local WANTED, RANDOM = 'wanted', 'random'
 ---@field wanted_name? string the activity its state, or a trigger, asks for
 ---@field activity_name string
 ---@field activity table the activity it plays
----@field playing string `WANTED` when it plays the activity its state asks for, `RANDOM` when it plays one it picked at random
+---@field playing string `WANTED` when it plays the activity its state asks for, `RANDOM` when it plays one it picked at random, `INTERLUDE` when it plays one because of something that happened
 ---@field party? aineo.office_scene.Party the party it plays its activity in with others; none when it plays alone
+---@field cleaning? aineo.office_scene.LyingThing the thing it has gone to clean up
 ---@field looks_for_life_at? number when a performer whose activity is over looks again for an activity to pick; none when it is not waiting for one
 ---@field step_index integer the step it is on
 ---@field step_seconds? number how long the step lasts from its arrival; none when it lasts until the activity changes
@@ -70,12 +83,14 @@ local WANTED, RANDOM = 'wanted', 'random'
 ---@class aineo.office_scene.Director
 ---@field update fun(agents: aineo.office_states.Agent[], now: number) brings the agents up to `now`, in the states they are in
 ---@field characters fun(): aineo.office_scene.Character[] the agents with a place on the plan, in the order they were given
+---@field things fun(): aineo.office_scene.LyingThing[] what lies on the floor, the oldest first
 ---@field places fun(): table<string, integer> the place of every agent the director knows, by its id
 ---@field use_layout fun(layout: aineo.office_scene.FloorLayout) goes on in a new layout of the same plan: each agent keeps its activity and its step, at the spot of the same name and number
 
 ---@class aineo.office_scene.DirectorContext
 ---@field pack aineo.office_pack.Pack
 ---@field lives aineo.office_scene.Lives the activities picked at random
+---@field things aineo.office_scene.Things what lies on the floor
 ---@field agents aineo.office_scene.Performer[] the agents' performers, in the order the agents were given
 ---@field layout aineo.office_scene.FloorLayout
 ---@field random fun(): number a number from 0 up to, not including, 1
@@ -264,8 +279,126 @@ local function play(context, performer, name, how, time, party)
   performer.activity_name, performer.activity = name, context.pack.activities[name]
   performer.playing = how
   performer.party = party
+  performer.cleaning = nil
+  performer.looks_for_life_at = nil
   performer.step_index = 1
   begin_step(context, performer, 1, time)
+end
+
+--- Has `other`, who is not the one whose update this is, play the activity
+--- `name` from `time` on.
+---
+---@param context aineo.office_scene.DirectorContext
+---@param other aineo.office_scene.Performer
+---@param name string
+---@param how string `RANDOM` or `INTERLUDE`
+---@param time number
+---@param party? aineo.office_scene.Party
+local function make_play(context, other, name, how, time, party)
+  other.clock = math.max(time, other.clock)
+  play(context, other, name, how, other.clock, party)
+end
+
+--- Whether the performer is within `cells` cells of the cell `column`, `row`.
+---
+---@param performer aineo.office_scene.Performer
+---@param column integer
+---@param row integer
+---@param cells integer
+---@return boolean
+local function is_within(performer, column, row, cells)
+  local across, down = performer.column - column, performer.row - row
+  return across * across + down * down <= cells * cells
+end
+
+--- Whether an agent has gone to clean up `thing`.
+---
+---@param thing aineo.office_scene.LyingThing
+---@return boolean
+local function has_a_cleaner(thing)
+  return thing.cleaner ~= nil and thing.cleaner.cleaning == thing
+end
+
+--- Has the idle agent nearest to `thing` go to clean it up, if the pack says
+--- what cleans it and an agent is idle; an agent that has only just become
+--- idle is asked in the next update. Does nothing for a thing that has a
+--- cleaner.
+---
+---@param context aineo.office_scene.DirectorContext
+---@param thing aineo.office_scene.LyingThing
+---@param time number
+---@param busy? aineo.office_scene.Performer an agent in the middle of its update, who is not sent
+local function send_cleaner_to(context, thing, time, busy)
+  local activity_name = context.pack.things[thing.name].cleaned_up_by
+  if not activity_name or has_a_cleaner(thing) then
+    return
+  end
+  local nearest, nearest_distance = nil, math.huge
+  for _, agent in ipairs(context.agents) do
+    if
+      agent ~= busy
+      and agent.column
+      and roles.is_idle(agent)
+      and not agent.state_changed
+      and agent.playing ~= INTERLUDE
+    then
+      local distance = math.abs(agent.column - thing.column) + math.abs(agent.row - thing.row)
+      if distance < nearest_distance then
+        nearest, nearest_distance = agent, distance
+      end
+    end
+  end
+  if nearest then
+    make_play(context, nearest, activity_name, INTERLUDE, time)
+    nearest.cleaning, thing.cleaner = thing, nearest
+  end
+end
+
+--- Has the agents near a thing that has just been left play what upsets
+--- them. The one who left it is not upset.
+---
+---@param context aineo.office_scene.DirectorContext
+---@param thing aineo.office_scene.LyingThing
+---@param leaver aineo.office_scene.Performer
+---@param time number
+local function upset_agents_near(context, thing, leaver, time)
+  local definition = context.pack.things[thing.name]
+  local activity_name = definition.upset_agents_play
+  if not (activity_name and definition.upsets_agents_within) then
+    return
+  end
+  for _, agent in ipairs(context.agents) do
+    if
+      agent ~= leaver
+      and agent.column
+      and agent.playing ~= INTERLUDE
+      and is_within(agent, thing.column, thing.row, definition.upsets_agents_within)
+    then
+      make_play(context, agent, activity_name, INTERLUDE, time)
+    end
+  end
+end
+
+--- Does what the step does as it ends: removes the thing it removes from the
+--- cell the performer stands on, and leaves its thing there, to the dismay of
+--- the agents near it.
+---
+---@param context aineo.office_scene.DirectorContext
+---@param performer aineo.office_scene.Performer
+---@param step table
+---@param time number
+local function finish_step(context, performer, step, time)
+  local column, row = math.floor(performer.column + 0.5), math.floor(performer.row + 0.5)
+  if step.remove then
+    context.things.remove_at(step.remove, column, row)
+  end
+  if step.leave and context.layout.is_walkable(column, row) then
+    local thing = context.things.leave(step.leave, column, row)
+    if thing then
+      send_cleaner_to(context, thing, time, performer)
+      upset_agents_near(context, thing, performer, time)
+    end
+  end
 end
 
 --- The characters that could join `performer` in `activity`: the others of
@@ -316,16 +449,22 @@ local function can_play(context, performer, activity)
     and #possible_partners(context, performer, activity) >= activity.players - 1
 end
 
---- Has the performer, whose activity is over, play an activity picked at
---- random among those that name its state, and the characters it plays with
---- begin it too; when none can be picked, it keeps its last pose and looks
---- again after a while.
+--- Has the performer, whose activity is over, go back to the activity its
+--- state asks for when it played an interlude, or else play an activity
+--- picked at random among those that name its state, and the characters it
+--- plays with begin it too; when none can be picked, it keeps its last pose
+--- and looks again after a while.
 ---
 ---@param context aineo.office_scene.DirectorContext
 ---@param performer aineo.office_scene.Performer
 ---@param time number
 ---@return boolean played whether a new activity began
 local function start_next_activity(context, performer, time)
+  local wanted = performer.wanted_name
+  if performer.playing == INTERLUDE and wanted and context.pack.activities[wanted] then
+    play(context, performer, wanted, WANTED, time)
+    return true
+  end
   local life = random_life.pick(
     context.lives.agents,
     performer.state,
@@ -348,8 +487,7 @@ local function start_next_activity(context, performer, time)
   local party = #partners > 0 and parties.new_party() or nil
   play(context, performer, life.name, RANDOM, time, party)
   for _, partner in ipairs(partners) do
-    partner.clock = math.max(time, partner.clock)
-    play(context, partner, life.name, RANDOM, partner.clock, party)
+    make_play(context, partner, life.name, RANDOM, time, party)
   end
   return true
 end
@@ -380,11 +518,16 @@ local function bring_up_to(context, performer, now)
     end
     if not is_on_last_step(performer) then
       clock = ends_at
+      finish_step(context, performer, performer.activity.steps[performer.step_index], clock)
       begin_step(context, performer, performer.step_index + 1, clock)
     elseif performer.looks_for_life_at and performer.looks_for_life_at > now then
       break
     else
-      local started_at = performer.looks_for_life_at and now or ends_at
+      local looked_before = performer.looks_for_life_at ~= nil
+      if not looked_before then
+        finish_step(context, performer, performer.activity.steps[performer.step_index], ends_at)
+      end
+      local started_at = looked_before and now or ends_at
       if not start_next_activity(context, performer, started_at) then
         break
       end
@@ -477,6 +620,7 @@ function M.new_director(pack, layout, random)
     pack = pack,
     lives = random_life.index(pack),
     agents = {},
+    things = things.new_register(pack.things),
     layout = layout,
     random = random,
     taken = {},
@@ -521,9 +665,13 @@ function M.new_director(pack, layout, random)
         table.insert(placed, performer)
       end
     end
+    for _, thing in ipairs(context.things.all()) do
+      send_cleaner_to(context, thing, now)
+    end
     for id, performer in pairs(known) do
       if not present[id] then
         let_go_of_spot(context, performer)
+        performer.cleaning = nil
         context.places_taken[performer.place] = nil
         known[id] = nil
       end
@@ -532,6 +680,10 @@ function M.new_director(pack, layout, random)
 
   function director.characters()
     return placed
+  end
+
+  function director.things()
+    return context.things.all()
   end
 
   function director.places()
@@ -548,6 +700,10 @@ function M.new_director(pack, layout, random)
     for _, performer in pairs(known) do
       move_into_layout(context, performer)
     end
+    placed = vim.tbl_filter(function(performer)
+      return performer.column ~= nil
+    end, placed)
+    context.things.keep_on(new_layout.is_walkable)
   end
 
   return director
