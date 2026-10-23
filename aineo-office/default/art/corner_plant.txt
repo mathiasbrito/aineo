@@ -1,0 +1,16 @@
+about: A plant in a pot, in the corner.
+colours: A = pot, B = pot_light, G = leaf, g = green
+anchor: 0, 9
+---
+...gG...
+..gGGg..
+.gGgGGg.
+gGg.gGGg
+.gG.Gg..
+..gGG...
+...G....
+..AAAA..
+.ABBBBA.
+.ABBBBA.
+..ABBA..
+..AAAA..

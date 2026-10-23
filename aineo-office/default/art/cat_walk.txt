@@ -1,0 +1,18 @@
+about: The cat walking, two frames.
+colours: A = pink, B = agent, g = green
+anchor: 5, 5
+seconds per frame: 0.25
+---
+........B.B
+B.......BBB
+.B.BBBBBBgB
+..BBBBBBBBA
+..BBBBBBBB.
+..B.B...B.B
+---
+........B.B
+B.......BBB
+.B.BBBBBBgB
+..BBBBBBBBA
+..BBBBBBBB.
+...B.B.B.B.

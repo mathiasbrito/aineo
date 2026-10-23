@@ -1,11 +1,15 @@
-about: A monitor on a desk, its screen full of code.
-colours: F = monitor_frame, z = screen, c = code_cyan, g = code_green, m = code_mauve, y = code_yellow
+about: A monitor on a desk. Its owner's pose gives its screen; a web search writes its clue in the query area.
+colours: F = iron, z = screen
+anchor: 0, 8
+area query: 1, 1, 10 x 2
+area screen: 1, 1, 10 x 4
 ---
 FFFFFFFFFFFF
-FcccczgggzzF
-FzzmmmzccccF
-FzzcczyyyyzF
-FggggzzzzzzF
+FzzzzzzzzzzF
+FzzzzzzzzzzF
+FzzzzzzzzzzF
+FzzzzzzzzzzF
 FFFFFFFFFFFF
 .....FF.....
 ....FFFF....
+............

@@ -1,0 +1,6 @@
+about: A paper ball that missed the bin, on the floor beside the agent.
+colours: W = white
+anchor: 0, 1
+---
+................WW
+................WW

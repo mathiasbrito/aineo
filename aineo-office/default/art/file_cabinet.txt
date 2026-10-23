@@ -1,0 +1,28 @@
+about: A tall file cabinet, four drawers.
+colours: A = pewter, F = iron, T = steel, w = shine, y = yellow
+anchor: 7, 21
+---
+........FFFFFFFFFFFF.
+.......FAAAAAAAAAAAAF
+.......FTTTTTTTTTTTTF
+.......FTAAAAyyAAAATF
+.......FTAAAAAAAAAATF
+.......FTAAAwwwwAAATF
+.......FTTTTTTTTTTTTF
+.......FTTTTTTTTTTTTF
+.......FTAAAAyyAAAATF
+.......FTAAAAAAAAAATF
+.......FTAAAwwwwAAATF
+.......FTTTTTTTTTTTTF
+.......FTTTTTTTTTTTTF
+.......FTAAAAyyAAAATF
+.......FTAAAAAAAAAATF
+.......FTAAAwwwwAAATF
+.......FTTTTTTTTTTTTF
+.......FTTTTTTTTTTTTF
+.......FTAAAAyyAAAATF
+.......FTAAAAAAAAAATF
+.......FTAAAwwwwAAATF
+.......FTTTTTTTTTTTTF
+.......FFFFFFFFFFFFFF
+........FF........FF.

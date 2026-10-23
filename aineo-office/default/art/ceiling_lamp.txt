@@ -1,0 +1,8 @@
+about: A lamp hung from the top of the wall.
+colours: A = teal, T = steel, y = yellow
+anchor: 0, 3
+---
+..T..
+AAAAA
+.yyy.
+.....

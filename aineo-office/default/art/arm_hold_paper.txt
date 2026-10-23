@@ -1,0 +1,13 @@
+about: An arm holding a sheet of paper.
+colours: B = agent, L = silver, W = white
+anchor: 0, 8
+---
+.......WWWW
+.......WLLW
+......BWWWW
+......BWLLW
+.......WWWW
+...........
+...........
+...........
+...........
