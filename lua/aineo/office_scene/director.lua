@@ -9,7 +9,10 @@
 --- moment it leaves: the lowest number no other agent has. Its colour, its
 --- desk and its monitor go by its place.
 
+local named_spots = require('aineo.office_scene.named_spots')
+local parties = require('aineo.office_scene.parties')
 local paths = require('aineo.office_scene.paths')
+local random_life = require('aineo.office_scene.random_life')
 local roles = require('aineo.office_scene.roles')
 local spots = require('aineo.office_scene.spots')
 local walking = require('aineo.office_scene.walking')
@@ -26,8 +29,13 @@ local ENTRANCE = 'door'
 local MOST_STEPS_BEGUN_AN_UPDATE = 8
 
 --- How many seconds an agent whose step's spots are all taken waits before it
---- looks again.
+--- looks again, and a performer whose activity is over waits before it looks
+--- again for an activity it can pick.
 local SECONDS_BETWEEN_LOOKS = 1
+
+--- What a performer's activity is: the one its state asks for, or one it
+--- picked at random once that was over.
+local WANTED, RANDOM = 'wanted', 'random'
 
 ---@class aineo.office_scene.Character
 ---@field id string the agent's id
@@ -42,8 +50,14 @@ local SECONDS_BETWEEN_LOOKS = 1
 ---@field effect? string the effect its step names, shown in place of its pose's
 
 ---@class aineo.office_scene.Performer : aineo.office_scene.Character
+---@field state string the state of the agent it is, as of the last update
+---@field state_changed boolean whether the state changed in the last update
+---@field wanted_name? string the activity its state, or a trigger, asks for
 ---@field activity_name string
 ---@field activity table the activity it plays
+---@field playing string `WANTED` when it plays the activity its state asks for, `RANDOM` when it plays one it picked at random
+---@field party? aineo.office_scene.Party the party it plays its activity in with others; none when it plays alone
+---@field looks_for_life_at? number when a performer whose activity is over looks again for an activity to pick; none when it is not waiting for one
 ---@field step_index integer the step it is on
 ---@field step_seconds? number how long the step lasts from its arrival; none when it lasts until the activity changes
 ---@field arrived_at? number when it arrived for the step; none while it walks or waits
@@ -61,6 +75,8 @@ local SECONDS_BETWEEN_LOOKS = 1
 
 ---@class aineo.office_scene.DirectorContext
 ---@field pack aineo.office_pack.Pack
+---@field lives aineo.office_scene.Lives the activities picked at random
+---@field agents aineo.office_scene.Performer[] the agents' performers, in the order the agents were given
 ---@field layout aineo.office_scene.FloorLayout
 ---@field random fun(): number a number from 0 up to, not including, 1
 ---@field taken table<aineo.office_scene.Spot, string> the id of the character that has each spot taken
@@ -139,7 +155,12 @@ end
 ---@param step table
 ---@param time number
 local function start_step(context, performer, step, time)
-  performer.step_seconds = seconds_of(step.for_seconds, context.random)
+  local function draw()
+    return seconds_of(step.for_seconds, context.random)
+  end
+  performer.step_seconds = performer.party
+      and parties.seconds_of_step(performer.party, performer.step_index, draw)
+    or draw()
   performer.effect = nil
   if #performer.path > 0 then
     performer.pose, performer.pose_since = walking.POSE, time
@@ -166,7 +187,11 @@ local function begin_step(context, performer, index, time)
   local spot_name = step.at or (not performer.column and ENTRANCE) or nil
   local route, why
   if spot_name then
-    route, why = spots.route(context.layout, spot_name, performer, context.taken)
+    route, why = spots.route(
+      context.layout,
+      named_spots.choose(context, spot_name, performer, step.even_if_taken),
+      performer
+    )
   end
   if route then
     take_route(context, performer, route)
@@ -192,7 +217,11 @@ local function look_again(context, performer, now)
     return
   end
   local step = performer.activity.steps[performer.step_index]
-  local route = spots.route(context.layout, step.at, performer, context.taken)
+  local route = spots.route(
+    context.layout,
+    named_spots.choose(context, step.at, performer, step.even_if_taken),
+    performer
+  )
   if route then
     take_route(context, performer, route)
     performer.looks_again_at = nil
@@ -202,23 +231,131 @@ local function look_again(context, performer, now)
   end
 end
 
---- Whether the performer's step is over at `time` and there is a step after
---- it.
+--- When the performer's step ended, if it has by `time`.
 ---
 ---@param performer aineo.office_scene.Performer
 ---@param time number
----@return number|nil ends_at when the step ended; nil when it has not or none follows
+---@return number|nil ends_at nil when the step has not ended, or lasts until the activity changes
 local function step_end_before(performer, time)
-  local next_step = performer.activity.steps[performer.step_index + 1]
-  if not (next_step and performer.arrived_at and performer.step_seconds) then
+  if not (performer.arrived_at and performer.step_seconds) then
     return nil
   end
   local ends_at = performer.arrived_at + performer.step_seconds
   return ends_at <= time and ends_at or nil
 end
 
---- Brings the performer up to `now`: walks it, and goes on to the next step
---- whenever a step ends on the way.
+--- Whether the performer is on the last step of its activity.
+---
+---@param performer aineo.office_scene.Performer
+---@return boolean
+local function is_on_last_step(performer)
+  return performer.activity.steps[performer.step_index + 1] == nil
+end
+
+--- Has the performer play the activity `name` from `time`.
+---
+---@param context aineo.office_scene.DirectorContext
+---@param performer aineo.office_scene.Performer
+---@param name string
+---@param how string `WANTED` or `RANDOM`
+---@param time number
+---@param party? aineo.office_scene.Party the party it plays with others in
+local function play(context, performer, name, how, time, party)
+  performer.activity_name, performer.activity = name, context.pack.activities[name]
+  performer.playing = how
+  performer.party = party
+  performer.step_index = 1
+  begin_step(context, performer, 1, time)
+end
+
+--- The characters that could join `performer` in `activity`: the others of
+--- its kind, placed on the plan, in a state the activity names.
+---
+---@param context aineo.office_scene.DirectorContext
+---@param performer aineo.office_scene.Performer
+---@param activity table
+---@return aineo.office_scene.Performer[]
+local function possible_partners(context, performer, activity)
+  return vim.tbl_filter(function(other)
+    return other ~= performer
+      and other.column ~= nil
+      and vim.list_contains(activity.during, other.state)
+  end, context.agents)
+end
+
+--- Whether the plan has the spots for `activity`: as many open spots as
+--- players for its first step with a spot, and a spot for each step after.
+---
+---@param context aineo.office_scene.DirectorContext
+---@param performer aineo.office_scene.Performer
+---@param activity table
+---@return boolean
+local function has_the_spots_for(context, performer, activity)
+  local needed = activity.players
+  for _, step in ipairs(activity.steps) do
+    if step.at then
+      local choice = named_spots.choose(context, step.at, performer, step.even_if_taken)
+      if #choice.open < needed or not choice.any then
+        return false
+      end
+      needed = 1
+    end
+  end
+  return true
+end
+
+--- Whether the performer could play `activity` now: the plan has the spots
+--- for it, and enough characters are free to play it together.
+---
+---@param context aineo.office_scene.DirectorContext
+---@param performer aineo.office_scene.Performer
+---@param activity table
+---@return boolean
+local function can_play(context, performer, activity)
+  return has_the_spots_for(context, performer, activity)
+    and #possible_partners(context, performer, activity) >= activity.players - 1
+end
+
+--- Has the performer, whose activity is over, play an activity picked at
+--- random among those that name its state, and the characters it plays with
+--- begin it too; when none can be picked, it keeps its last pose and looks
+--- again after a while.
+---
+---@param context aineo.office_scene.DirectorContext
+---@param performer aineo.office_scene.Performer
+---@param time number
+---@return boolean played whether a new activity began
+local function start_next_activity(context, performer, time)
+  local life = random_life.pick(
+    context.lives.agents,
+    performer.state,
+    performer.activity_name,
+    function(candidate)
+      return can_play(context, performer, candidate.activity)
+    end,
+    context.random
+  )
+  if not life then
+    performer.looks_for_life_at = time + SECONDS_BETWEEN_LOOKS
+    return false
+  end
+  performer.looks_for_life_at = nil
+  local partners = parties.draw(
+    possible_partners(context, performer, life.activity),
+    life.activity.players - 1,
+    context.random
+  ) or {}
+  local party = #partners > 0 and parties.new_party() or nil
+  play(context, performer, life.name, RANDOM, time, party)
+  for _, partner in ipairs(partners) do
+    partner.clock = math.max(time, partner.clock)
+    play(context, partner, life.name, RANDOM, partner.clock, party)
+  end
+  return true
+end
+
+--- Brings the performer up to `now`: walks it, and goes on to the next step,
+--- or the next activity, whenever a step ends on the way.
 ---
 ---@param context aineo.office_scene.DirectorContext
 ---@param performer aineo.office_scene.Performer
@@ -241,8 +378,18 @@ local function bring_up_to(context, performer, now)
     if not ends_at or performer.steps_begun >= MOST_STEPS_BEGUN_AN_UPDATE then
       break
     end
-    clock = ends_at
-    begin_step(context, performer, performer.step_index + 1, clock)
+    if not is_on_last_step(performer) then
+      clock = ends_at
+      begin_step(context, performer, performer.step_index + 1, clock)
+    elseif performer.looks_for_life_at and performer.looks_for_life_at > now then
+      break
+    else
+      local started_at = performer.looks_for_life_at and now or ends_at
+      if not start_next_activity(context, performer, started_at) then
+        break
+      end
+      clock = started_at
+    end
   end
   performer.clock = now
 end
@@ -326,7 +473,15 @@ end
 ---@return aineo.office_scene.Director
 function M.new_director(pack, layout, random)
   ---@type aineo.office_scene.DirectorContext
-  local context = { pack = pack, layout = layout, random = random, taken = {}, places_taken = {} }
+  local context = {
+    pack = pack,
+    lives = random_life.index(pack),
+    agents = {},
+    layout = layout,
+    random = random,
+    taken = {},
+    places_taken = {},
+  }
   ---@type table<string, aineo.office_scene.Performer>
   local known = {}
   ---@type aineo.office_scene.Performer[]
@@ -336,20 +491,32 @@ function M.new_director(pack, layout, random)
 
   function director.update(agents, now)
     local present = {}
-    placed = {}
+    context.agents = {}
     for _, agent in ipairs(agents) do
-      local name, activity = roles.activity_of(pack, agent)
       local performer = known[agent.id] or new_performer(context, agent, now)
       known[agent.id] = performer
       performer.steps_begun = 0
-      if activity and performer.activity_name ~= name then
-        performer.activity_name, performer.activity, performer.step_index = name, activity, 1
-        begin_step(context, performer, 1, performer.clock)
+      performer.state_changed = performer.state ~= nil and performer.state ~= agent.state
+      performer.state = agent.state
+      present[agent.id] = true
+      table.insert(context.agents, performer)
+    end
+    placed = {}
+    for index, agent in ipairs(agents) do
+      local performer = context.agents[index]
+      local name, activity = roles.activity_of(pack, agent)
+      if
+        activity
+        and (
+          performer.wanted_name ~= name or (performer.state_changed and performer.playing ~= WANTED)
+        )
+      then
+        performer.wanted_name = name
+        play(context, performer, name, WANTED, performer.clock)
       end
       if performer.activity then
         bring_up_to(context, performer, now)
       end
-      present[agent.id] = true
       if performer.column then
         table.insert(placed, performer)
       end
