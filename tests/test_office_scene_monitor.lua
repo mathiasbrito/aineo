@@ -100,6 +100,13 @@ T['a monitor']['shows no clue when its agent looks up nothing'] = function()
   eq(top_text(picture, 2, 6), '      ')
 end
 
+T['a monitor']['of an agent who is not there shows nothing and is no error'] = function()
+  MiniTest.expect.no_error(function()
+    monitors_with({})
+  end)
+  eq(top_text(monitors_with({}), 2, 6), '      ')
+end
+
 T['a monitor']['shows the clue of its own agent, not the other’s'] = function()
   local picture = monitors_with({
     agent('main', 'standing', {}),
