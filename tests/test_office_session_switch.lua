@@ -40,8 +40,9 @@ end
 --- Has the office follow `path` the next time it starts following.
 ---
 ---@param path string
-local function name_transcript(path)
-  office_child.follow_transcript(child, path)
+---@param since? number when the tab began following the session
+local function name_transcript(path, since)
+  office_child.follow_transcript(child, path, since)
 end
 
 --- Waits until `condition` holds.
@@ -154,6 +155,11 @@ end
 --- the case's own directory.
 local FIRST = '11111111-1111-4111-8111-111111111111'
 local SECOND = '22222222-2222-4222-8222-222222222222'
+local THIRD = '33333333-3333-4333-8333-333333333333'
+
+--- When the tab began following the session in the cases: 2026-01-01T00:00:00Z,
+--- three seconds before the stamp of their `continued-in` lines.
+local ANCHOR = 1767225600
 
 T['a continuation of the session'] = MiniTest.new_set()
 
@@ -162,7 +168,7 @@ T['a continuation of the session']['has the office that follows the old transcri
   fake_transcript.append(first, TURN_WITH_A_CALL_RUNNING)
   fake_transcript.append(second, RECORDED_TURN)
   open_office()
-  name_transcript(first)
+  name_transcript(first, ANCHOR)
   child.lua([[_G.office.show_now()]])
   eq(
     wait_until(function()
@@ -181,6 +187,25 @@ T['a continuation of the session']['has the office that follows the old transcri
   )
 end
 
+T['a continuation of the session']['has the office follow the sessions of the chain, those of the transcript and of the file it goes on in'] = function()
+  local first, second = transcript_of(FIRST), transcript_of(SECOND)
+  fake_transcript.append(first, { continued_in_line(FIRST, SECOND) })
+  fake_transcript.append(second, RECORDED_TURN)
+  open_office()
+  name_transcript(first, ANCHOR)
+
+  local function follows(session)
+    return child.lua_get([[tostring(_G.office.follows_session(...))]], { session })
+  end
+  local before_showing = follows(SECOND)
+  child.lua([[_G.office.show_now()]])
+
+  eq(
+    { before_showing, follows(FIRST), follows(SECOND), follows(THIRD) },
+    { 'false', 'true', 'true', 'false' }
+  )
+end
+
 T['a continuation of the session']['asks again which transcript to follow only once for a chain that ends in a loop'] = function()
   local first, second = transcript_of(FIRST), transcript_of(SECOND)
   fake_transcript.append(first, { continued_in_line(FIRST, SECOND) })
@@ -191,10 +216,13 @@ T['a continuation of the session']['asks again which transcript to follow only o
     nil,
     [[{ transcript = function()
       _G.asked = (_G.asked or 0) + 1
-      return _G.asked <= 20 and _G.transcript_path or nil
+      if _G.asked > 20 then
+        return nil
+      end
+      return _G.transcript_path, _G.transcript_since
     end }]]
   )
-  name_transcript(first)
+  name_transcript(first, ANCHOR)
 
   child.lua([[_G.office.show_now()]])
   vim.wait(1000)

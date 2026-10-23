@@ -601,4 +601,22 @@ T['follow()']['tells of a continued-in line written between the search and the r
   })
 end
 
+T['follow()']['names the sessions of the chain it follows, the transcript first and the file followed last'] = function()
+  fake_transcript.append(transcript_of(FIRST), { continued_in_line(FIRST, SECOND) })
+  fake_transcript.append(transcript_of(SECOND), { continued_in_line(SECOND, THIRD) })
+  fake_transcript.append(transcript_of(THIRD), RECORDED_TURN)
+
+  local following = follow_path(transcript_of(FIRST))
+
+  eq(following.follower.sessions, { FIRST, SECOND, THIRD })
+end
+
+T['follow()']['names the session of the transcript alone when it follows no continuation'] = function()
+  fake_transcript.append(transcript_of(FIRST), RECORDED_TURN)
+
+  local following = follow_path(transcript_of(FIRST))
+
+  eq(following.follower.sessions, { FIRST })
+end
+
 return T
