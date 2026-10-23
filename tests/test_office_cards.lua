@@ -319,6 +319,16 @@ T['a report card']['is not kept when the cursor is in the right side, where the 
   eq(wait_for_rows_with_cards(0), true)
 end
 
+T['a report card']['is kept when the office shows over the cursor, which the Report is under'] = function()
+  local buffers = open_office()
+  layout.enter_window_showing(child, buffers.report)
+  child.lua([[_G.office.show_now()]])
+
+  report('done', 'something')
+
+  eq(wait_for_rows_with_cards(1), true)
+end
+
 T['a report card']['blinks the dot of a report that is blocked or failed'] = MiniTest.new_set({
   parametrize = { { 'blocked' }, { 'failed' } },
 })

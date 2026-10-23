@@ -3,6 +3,7 @@ local claude_session = dofile('tests/helpers/claude_session.lua')
 local entry = dofile('tests/helpers/entry.lua')
 local fake_transcript = dofile('tests/helpers/fake_transcript.lua')
 local office_cells = dofile('tests/helpers/office_cells.lua')
+local stand_in = dofile('tests/helpers/office_stand_in.lua')
 
 local eq = MiniTest.expect.equality
 
@@ -164,69 +165,47 @@ T['the transcript a SessionStart hook named']['is not followed for a session the
   eq(office_cells.is_standing(child), true)
 end
 
---- Makes the office module of the child a stand-in whose offices keep what
---- they are told in `_G.office_told`: the transcript path of each
---- `follow_session()` and the agent of each `permission_wait()`.
-local STAND_IN_OFFICE = [[
-  _G.office_told = { follows = {}, waits = {} }
-  package.loaded['aineo.office'] = {
-    new_office = function()
-      return {
-        follow_session = function(path)
-          table.insert(_G.office_told.follows, path or vim.NIL)
-        end,
-        permission_wait = function(agent)
-          table.insert(_G.office_told.waits, agent)
-        end,
-        show_now = function() end,
-        let_go = function() end,
-      }
-    end,
-  }
-]]
-
---- What the stand-in office (`STAND_IN_OFFICE`) was told.
+--- Opens the layout as `open_layout()` does, with the office module a
+--- stand-in (`tests/helpers/office_stand_in.lua`) from before the tab opens.
 ---
----@return { follows: any[], waits: string[] }
-local function office_told()
-  return child.lua_get('_G.office_told')
+---@param name string
+local function open_layout_with_stand_in_offices(name)
+  stand_in.install(child)
+  open_layout(name)
 end
 
 T['a permission wait'] = MiniTest.new_set()
 
 T['a permission wait']['reaches the office of the tab, as the main agent or as the subagent that asks'] = function()
-  open_layout('office-wait')
-  child.lua(STAND_IN_OFFICE)
-  entry.command(child, 'Aineo office')
+  open_layout_with_stand_in_offices('office-wait')
   local session = tab_session()
 
   tell_permission_wait(session, vim.NIL)
   tell_permission_wait(session, 'a0000000000000001')
 
-  eq(office_told().waits, { 'main', 'a0000000000000001' })
+  eq(stand_in.told(child).waits, { 'main', 'a0000000000000001' })
 end
 
 T['a permission wait']['is not told to the office when it is of a session the tab does not run'] = function()
-  open_layout('office-wait-other')
-  child.lua(STAND_IN_OFFICE)
-  entry.command(child, 'Aineo office')
+  open_layout_with_stand_in_offices('office-wait-other')
 
   tell_permission_wait(OTHER_SESSION, vim.NIL)
 
-  eq(office_told().waits, {})
+  eq(stand_in.told(child).waits, {})
 end
 
-T['a permission wait']['asks for no office when the tab has none yet'] = function()
-  open_layout('office-wait-none')
-  child.lua(STAND_IN_OFFICE)
+T['a permission wait']['reaches the office the tab made as it opened, before the office was asked to show'] = function()
+  open_layout_with_stand_in_offices('office-wait-early')
 
   tell_permission_wait(tab_session(), vim.NIL)
 
-  eq({ office_told(), entry.messages(child) }, { { follows = {}, waits = {} }, {} })
+  eq(stand_in.told(child).made, 1)
+  eq(stand_in.told(child).waits, { 'main' })
 end
 
-T['a permission wait']['raises nothing in an office that takes none'] = function()
+T['a permission wait']['raises nothing in the real office, shown or not'] = function()
   open_layout('office-wait-real')
+  tell_permission_wait(tab_session(), vim.NIL)
   entry.command(child, 'Aineo office')
 
   tell_permission_wait(tab_session(), vim.NIL)
