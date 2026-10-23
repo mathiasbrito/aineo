@@ -485,19 +485,17 @@ function M.new_office(options)
 
   --- Brings the countdown and the office to what the cursor and the right
   --- side say: while the office shows, nothing; with the cursor in the right
-  --- side, or the countdown off, no countdown; otherwise the countdown runs,
-  --- and when it has run out the office shows as soon as there is a right
-  --- side.
+  --- side, no countdown and no card; otherwise the countdown runs, if the
+  --- settings give an idle time, and when it has run out the office shows as
+  --- soon as there is a right side. The settings are read only when a
+  --- countdown is to start.
   function settle()
     if showing then
       return
     end
-    local idle_ms = idle_time()
     local area = options.right_side()
     if cursor_is_in(area) then
       cards.clear()
-    end
-    if not idle_ms or cursor_is_in(area) then
       countdown.stop()
       idle_time_has_passed = false
     elseif idle_time_has_passed then
@@ -506,7 +504,10 @@ function M.new_office(options)
         show_over(area)
       end
     elseif not countdown.is_running() then
-      countdown.start(idle_ms)
+      local idle_ms = idle_time()
+      if idle_ms then
+        countdown.start(idle_ms)
+      end
     end
   end
 
