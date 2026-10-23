@@ -311,6 +311,60 @@ T['the cat']['sleeps on a seat of the sofa for a long time'] = function()
   eq(asleep_seconds >= 60, true)
 end
 
+--- How the cat looks in each quarter second of 240 s in which it has only
+--- slept on a seat of the sofa, in the frames where it is at the sofa: how
+--- many of its pixels show, and the pixel row of the lowest of them.
+---
+---@return { visible: integer, lowest: integer }[] frames
+local function cat_frames_asleep_on_the_sofa()
+  local pack = pack_with_life({ 'sleep_on_a_seat' })
+  local spots = default.spots(pack, ROOM[1], ROOM[2] - LIST_ROWS)
+  local stage = default.stage(pack, ROOM[1], ROOM[2])
+  local frames = {}
+  for step = 0, 4 * 240 do
+    stage.advance({}, step / 4)
+    local place = default.where_is(default.pixels(stage.picture(), ROOM[1]), default.CAT_COLOUR)
+    if place and default.nearest_spot(spots, place) == 'sofa' then
+      table.insert(frames, { visible = place.count, lowest = place.bottom })
+    end
+  end
+  return frames
+end
+
+--- How many pixels the art of the cat asleep on a seat draws.
+---
+---@return integer
+local function pixels_of_the_cat_asleep_on_a_seat()
+  local rows = default.load_pack().pieces.cat_sleep_on_a_seat.frames[1]
+  return #table.concat(rows):gsub('%.', '')
+end
+
+--- The pixel row of the top of the sofa front's cushion, where it covers
+--- whatever is drawn behind it.
+local SOFA_CUSHION_TOP = 39
+
+T['the cat']['shows whole while it sleeps on a seat of the sofa'] = function()
+  local frames = cat_frames_asleep_on_the_sofa()
+
+  eq({
+    #frames > 0,
+    vim.iter(frames):all(function(frame)
+      return frame.visible == pixels_of_the_cat_asleep_on_a_seat()
+    end),
+  }, { true, true })
+end
+
+T['the cat']['lies above the cushion of the sofa front while it sleeps on a seat'] = function()
+  local frames = cat_frames_asleep_on_the_sofa()
+
+  eq({
+    #frames > 0,
+    vim.iter(frames):all(function(frame)
+      return frame.lowest < SOFA_CUSHION_TOP
+    end),
+  }, { true, true })
+end
+
 T['the cat']['stays asleep on a seat of the sofa for a minute before it walks off again'] = function()
   local pack = pack_with_life({ 'sleep_on_a_seat', 'wander_the_aisles' })
   local spots = default.spots(pack, ROOM[1], ROOM[2] - LIST_ROWS)
