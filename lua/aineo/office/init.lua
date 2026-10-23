@@ -38,6 +38,9 @@ local DEFAULT_SETTINGS = { pack = 'default', pieces = {}, idle_ms = false }
 local NEEDS_TRUE_COLOUR =
   "aineo: the office needs 'termguicolors' to draw its pixels, and it is off, so it does not show"
 
+--- The most agents whose permission waits an office keeps.
+local MOST_WAITS_KEPT = 64
+
 --- How many offices have been made, which names the autocommand group of
 --- each.
 local offices_made = 0
@@ -68,6 +71,7 @@ local NO_RIGHT_SIDE = "aineo: the office has no right side of aineo's layout to 
 ---@field report_tool? string the name of aineo's report tool, as Claude Code calls it; none, and no call is a report
 ---@field settings? fun(): aineo.office.Settings what the user set for the office, asked each time it shows; the default pack when not given
 ---@field random? fun(count: integer): integer a whole number from 1 to `count`, which picks one of several packs the settings name; the first when not given
+---@field wall_clock? fun(): number the time in seconds since 1970, which the stamps of the transcript's lines are on; the system's when not given
 ---@field transcript? fun(): string|nil the path of the transcript of the session the office acts out, asked each time the office starts following it (each show, and each return to its tab page); none or nil, and it follows none
 ---@field schedule_after? fun(milliseconds: integer, callback: fun()): fun() calls `callback`, on the main loop, once `milliseconds` have passed, and returns what cancels the wait; the idle countdown waits through it; a timer of the editor's loop when not given
 
@@ -78,7 +82,7 @@ local NO_RIGHT_SIDE = "aineo: the office has no right side of aineo's layout to 
 ---@field idle_ms? integer|false how long the cursor stays out of the right side before the office shows by itself, in milliseconds; none or `false`, and it shows only when asked to
 
 ---@class aineo.office.Office
----@field permission_wait fun(agent: string) tells the office the agent, `main` or a subagent's id, waits for the user to answer a permission prompt, until its next line in the transcript; while the office is hidden, nothing is kept
+---@field permission_wait fun(agent: string) tells the office the agent, `main` or a subagent's id, waits for the user to answer a permission prompt, until its next line in the transcript; it is kept, and handed over each time the office starts running unless the transcript shows the agent went on since
 ---@field report_arrived fun(report: aineo.office.Report) keeps the report as a card the office draws in its bottom right corner until the cursor enters the right side, and starts the idle countdown again; keeps nothing when the cursor is in the right side and the office is hidden, where the Report shows it
 ---@field show_now fun() shows the office over the right side at once, and does nothing when it shows
 ---@field let_go fun() closes the office, stops its timer and its watch, and forgets the session
@@ -99,11 +103,31 @@ function M.new_office(options)
   vim.validate('options.random', options.random, 'function', true)
   vim.validate('options.schedule_after', options.schedule_after, 'function', true)
   vim.validate('options.transcript', options.transcript, 'function', true)
+  vim.validate('options.wall_clock', options.wall_clock, 'function', true)
   offices_made = offices_made + 1
 
   --- Whether the idle time has passed without the office showing, because it
   --- could not.
   local idle_time_has_passed = false
+
+  --- The time in seconds since 1970, as the transcript's stamps give it.
+  ---
+  ---@return number
+  local function wall_clock()
+    if options.wall_clock then
+      return options.wall_clock()
+    end
+    local seconds, microseconds = vim.uv.gettimeofday()
+    return seconds + microseconds / 1e6
+  end
+
+  --- When, by `wall_clock`, each agent's permission wait was told, until the
+  --- transcript shows the agent went on; given to the tracker whenever the
+  --- office starts running (`hand_over_kept_waits()`), so that a hand raised
+  --- while the office was hidden or paused, or that a closed office forgot,
+  --- is up again.
+  ---@type table<string, number>
+  local waits_kept = {}
 
   --- Whether `let_go()` has been called: the office counts no more.
   local has_been_let_go = false
@@ -228,6 +252,7 @@ function M.new_office(options)
   ---
   ---@return aineo.office_states.Tracker tracker
   ---@return aineo.transcript.Follower|nil follower
+  ---@return table<string, number> went_on_at for each agent whose lines the follower replayed, the stamp of the latest that is not the start of a call
   local function follow_transcript(open)
     local tracker = require('aineo.office_states').new_tracker({
       commands = open.commands,
@@ -240,17 +265,38 @@ function M.new_office(options)
         vim.notify(SLOW_TRIGGERS, vim.log.levels.WARN)
       end,
     })
+    local went_on_at = {}
     local path = options.transcript and options.transcript()
     if not path then
-      return tracker, nil
+      return tracker, nil, went_on_at
     end
     local follower = require('aineo.transcript').follow({
       path = path,
       on_signal = function(signal)
+        if signal.replayed and signal.kind ~= 'tool_started' and signal.at then
+          went_on_at[signal.agent] = math.max(went_on_at[signal.agent] or 0, signal.at)
+        end
         tracker.take(signal, options.clock())
       end,
     })
-    return tracker, follower
+    return tracker, follower, went_on_at
+  end
+
+  --- Gives `tracker` the permission waits the office was told, but not those
+  --- of an agent whose replayed lines went on after the wait was told, other
+  --- than the start of the call that asked (it may be read after the hook):
+  --- the user answered in Claude's terminal meanwhile, and those are forgotten.
+  ---
+  ---@param tracker aineo.office_states.Tracker
+  ---@param went_on_at table<string, number> as `follow_transcript()` gives it
+  local function hand_over_kept_waits(tracker, went_on_at)
+    for agent, told_at in pairs(waits_kept) do
+      if (went_on_at[agent] or 0) > told_at then
+        waits_kept[agent] = nil
+      else
+        tracker.take({ agent = agent, kind = 'permission_asked' }, options.clock())
+      end
+    end
   end
 
   --- Whether the current tab page is the one the office's window is in.
@@ -376,7 +422,9 @@ function M.new_office(options)
   ---
   ---@param open table what exists while the office shows
   function start_running(open)
-    open.tracker, open.follower = follow_transcript(open)
+    local went_on_at
+    open.tracker, open.follower, went_on_at = follow_transcript(open)
+    hand_over_kept_waits(open.tracker, went_on_at)
     open.timer = start_frames(open.draw)
   end
 
@@ -555,6 +603,9 @@ function M.new_office(options)
   end
 
   function office.permission_wait(agent)
+    if waits_kept[agent] or vim.tbl_count(waits_kept) < MOST_WAITS_KEPT then
+      waits_kept[agent] = wall_clock()
+    end
     local open = showing
     if open and open.tracker then
       open.tracker.take({ agent = agent, kind = 'permission_asked' }, options.clock())
