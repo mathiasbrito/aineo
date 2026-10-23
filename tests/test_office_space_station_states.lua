@@ -240,6 +240,10 @@ T['the trigger']['names the transmission for a git push, whatever follows it'] =
     { 'git push' },
     { 'git push origin main' },
     { 'cd app && git push --force-with-lease' },
+    { 'git  push' },
+    { 'make && git push' },
+    { 'a; git push' },
+    { 'x | git push' },
   },
 })
 
@@ -249,11 +253,22 @@ T['the trigger']['names the transmission for a git push, whatever follows it']['
   eq(activity_while_running(command), 'send_a_transmission')
 end
 
-T['the trigger']['names no activity for a command that is not a git push'] = MiniTest.new_set({
-  parametrize = { { 'git pull' }, { 'git status' }, { 'make test' } },
-})
+T['the trigger']['names no activity for a command that is not a git push, nor one that only mentions it'] =
+  MiniTest.new_set({
+    parametrize = {
+      { 'git pull' },
+      { 'git status' },
+      { 'make test' },
+      { 'git pushd' },
+      { 'git push-something' },
+      { 'echo git push' },
+      { 'git commit -m "then git push"' },
+      { 'grep -rn "git push" docs' },
+      { 'git push.sh' },
+    },
+  })
 
-T['the trigger']['names no activity for a command that is not a git push']['command'] = function(
+T['the trigger']['names no activity for a command that is not a git push, nor one that only mentions it']['command'] = function(
   command
 )
   eq(activity_while_running(command), nil)

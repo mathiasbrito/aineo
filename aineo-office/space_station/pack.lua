@@ -648,6 +648,13 @@ return {
   },
 
   triggers = {
-    { when = { tool = 'Bash', command = 'git push' }, play = 'send_a_transmission' },
+    {
+      when = { tool = 'Bash', command = { lua_pattern = '^git%s+push%f[%s%z;&|]' } },
+      play = 'send_a_transmission',
+    },
+    {
+      when = { tool = 'Bash', command = { lua_pattern = '[;&|]%s*git push%f[%s%z;&|]' } },
+      play = 'send_a_transmission',
+    },
   },
 }
