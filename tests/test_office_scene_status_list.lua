@@ -230,6 +230,18 @@ T['the status list']['dots a subagent in the colours subagents take'] = function
   eq(foreground_at(picture, 22, 1), '#123456')
 end
 
+T['the status list']['dots an agent in the colour of its place, kept while others leave'] = function()
+  local pack = scene.people_pack('# plan\n ~\n~P\n', { P = { piece = 'left' } }, {
+    text_colours = { name = NAME_COLOUR, status = STATUS_COLOUR },
+  })
+  local stage = scene.stage_of(pack, 40, 25)
+  stage.advance(scene.agents_in('standing', 'standing'), 0)
+
+  stage.advance({ { id = 'agent2', state = 'standing' } }, 1)
+
+  eq(foreground_at(stage.picture(), 21, 1), scene.SECOND_AGENT)
+end
+
 T['the status list']['says a state in the words the stage was given for it'] = function()
   local picture = picture_of(25, scene.agents_in('working'), nil, {
     state_labels = { working = 'busy at the desk' },

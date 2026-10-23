@@ -72,11 +72,12 @@ end
 ---@param canvas aineo.office_scene.Canvas
 ---@param drawing aineo.office_scene.Drawing
 ---@param row integer
----@param index integer the agent's place among the agents
+---@param index integer the agent's position in the list
 local function write_line(canvas, drawing, row, index)
   local pack, agent = drawing.pack, drawing.agents[index]
   local own_colours = pack[roles.kind_of(agent)].colours
-  canvas.write_text(DOT_COLUMN, row, DOT, { foreground = colours.of_agent(own_colours, index) })
+  local place = drawing.places[agent.id]
+  canvas.write_text(DOT_COLUMN, row, DOT, { foreground = colours.of_agent(own_colours, place) })
   canvas.write_text(
     NAME_COLUMN,
     row,
