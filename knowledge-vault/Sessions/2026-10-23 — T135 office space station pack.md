@@ -21,8 +21,8 @@ A regular packet of the office screensaver (T123; D26 applies). The second pack:
 1. **The pack is based on `default`** and keeps its spot names, so the default's 24 states and its random life play here as they are. Its own: the colours (50 names), the floor plan, 85 pieces of art, the three characters' poses, an effect, an activity for the trigger, the activities whose spot or words named an object the station has under another name, the things the starhare leaves.
 2. **The plan** is a compact bridge: a wall 11 rows tall (airlock door, message terminal, holo-table, cargo crates, recycler chute under a chronometer, food dispenser, then a run of decorations: viewport, coolant tap, hydroponics rack, data archive, star chart, specimen tank, a hydroponics pod at the end, light bars over bare wall), a first band with a crew bench of two seats beside the first console desks, a band of console desks that repeats down the height, and a strip with a second bench and a holo-game table for two. Because the wall is short, **a desk, a bench seat and the message terminal exist at 60×24**: all 24 states start at a spot the plan has at 60×24, 100×40 and 220×80 (the default's plan lacks 15 of the 24 at 60×24, accepted there by A594).
 3. **Art** (original; nothing named, shaped or coloured after a film's or a game's characters, ships or logos): the wall pieces above with `in_use` art (the airlock's leaves slide apart, the holo-table's grid is scanned, the crates' lid lifts, the dispenser forms a ration, the terminal's lines run, the game table's orb crosses); the four skies are 20 frames of drifting stars with a planet's limb at dawn, a bright star by day, a nebula at dusk and a small planet at night; crew in flight suits (a helmet, a visor with eyes that blink and change); service bots (a box on two legs, one round lens, one antenna); the starhare (long ears, two glowing eyes, a violet tail tip). The limbs, hands, legs and screens are the default pack's; a test names exactly which. Seven props (data slates, a supply case, chips thrown up…) are the default's art recoloured, with their own names.
-4. **The word *droid* is not used**: it is a franchise's mark (A571's "no trademarked names"). The plan and the brief say droids; the pack says service bots (`bot`, `bot_lens_*`). The pet is a starhare, the bench a crew bench.
-5. **The trigger**: `{ when = { tool = 'Bash', command = 'git push' }, play = 'send_a_transmission' }`. The activity stands at the `comms_console` spot (the left half of the message terminal's spots), reaches towards the terminal with signal arcs `)` `))` `)))` over its head, and is labelled "sends a transmission". The terminal shows its active art there.
+4. **The subagents are service bots** (`bot`, `bot_lens_*`); no franchise's word for robots is used anywhere in the pack (A571's "no trademarked names", A600). The pet is a starhare, the bench a crew bench.
+5. **The trigger**: two Lua patterns on a Bash call's command, `'^git%s+push%f[%s%z;&|]'` and `'[;&|]%s*git push%f[%s%z;&|]'`, each playing `send_a_transmission`, so that a push fires and a look-alike (`git push-something`, `echo git push`, a commit message or a search that mentions it, `git push.sh`) stays quiet (A599, review of the pull request). It was first the plain words `git push`, which matched all of those. The activity stands at the `comms_console` spot (the left half of the message terminal's spots), reaches towards the terminal with signal arcs `)` `))` `)))` over its head, and is labelled "sends a transmission". The terminal shows its active art there.
 6. **Reworded activities** (37, same names and steps as the default's, the station's words in `about`, `label`, and for five the spot: `look_out_of_the_window` at `viewport`, `water_the_snake_plant` at `hydroponics_rack`, `water_the_corner_plant` at `hydroponics_pod`, `get_a_drink_at_the_water_cooler` at `coolant_tap`, `stare_at_the_fish` at `specimen_tank`), copied from the default's text by a one-off script that was not kept; the pose tables of the crew and the bots likewise.
 7. **One help sentence** (`doc/aineo.txt`, *aineo-office*) said aineo's own pack is the default; it now names both. Declared as a widening of the packet's files: a sentence the second pack made untrue. The chapters of T136 are untouched.
 
@@ -37,12 +37,12 @@ A regular packet of the office screensaver (T123; D26 applies). The second pack:
 
 ## Spec conflicts
 
-- The plan's §5 and the brief say droids; A571 says no trademarked names. A571 won (point 4); the plan's text stays (rows change only by a converge round).
+- The plan's §5 and the brief name the subagents with a word that is a franchise's mark; A571 says no trademarked names. A571 won (point 4); the plan's §5 text stays (rows change only by a converge round).
 - The brief's "every state reachable at 60×24" is stronger than the default's accepted state at that size; it is met here by the shorter wall, not by the engine's fallback.
 
 ## Tests
 
-232 new cases in four files, every one of the files run in a Neovim of its own (the suite's way). Test first for the plan's contract: the first run of the three files written before the pack existed:
+242 cases in four files, every one of the files run in a Neovim of its own (the suite's way). Test first for the plan's contract: the first run of the three files written before the pack existed:
 
 | File | Cases | Red | Arrived green, and why |
 |---|---|---|---|
@@ -52,7 +52,7 @@ A regular packet of the office screensaver (T123; D26 applies). The second pack:
 
 Added afterwards, each pinning data written ahead of its test and so arriving green; the mutant that kills each is in the table: the stars of the four hours and their drift (M6, M7, M15), the transmission's arcs and label (M8, M9), nothing left out at four sizes (M10), the stretched runs (M21), a push from the tracker to the stage (M1), the starhare's fur (M17), and `test_office_space_station_life.lua` (20 cases: the reworded labels, the spots of the five restated activities, two idle crew playing the holo game, the starhare at the specimen tank, petting: M12–M14, M18, M19). Three cases of the first life file asked for the starhare's labels in the status list; the list names agents only, so they were red for a reason that is not the pack's and were dropped.
 
-Totals after the last edit: see the pull request.
+Fix round of the review of the pull request (A599, A600): five look-alike commands were added to the states file's negative cases and were red (they fired the plain-words trigger), four pushes in other positions to the positive ones; then the trigger became the two patterns and the pack file's literal pin of it was rewritten. Totals after it: pack 30, states 186, switch 6, life 20 (242), each Fails (0).
 
 ## Mutants
 
@@ -60,7 +60,7 @@ Each is the literal edit, run on the files that exercise it from a pristine copy
 
 | Mutant | Literal edit | Killed by |
 |---|---|---|
-| M1 | `pack.lua`: `command = 'git push'` → `command = 'git pushed'` (the trigger never matches) | assertion: states 4, pack 1 |
+| M1 | `pack.lua`: `'^git%s+push` → `'^git%s+pusx` in the first trigger (the trigger never matches; first measured on the plain-words rule, `'git push'` → `'git pushed'`, then re-measured on the patterns) | assertion: states 4, pack 1 |
 | M2 | `floor.txt`, baseboard row, column 32: `b` → `z` (the holo-table spot; thinking and planning have nowhere) | assertion: states 18 |
 | M2b | `floor.txt`, baseboard row: `p` at column 17 → `z`, `z` at column 62 → `p` (reporting unreachable at 60 columns) | assertion: states 4 |
 | M2c | `floor.txt`, row 17, column 41: `s` → space (no desk seat at 60×24) | assertion: states 27 |
