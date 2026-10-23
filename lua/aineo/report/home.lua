@@ -22,6 +22,7 @@ local M = {}
 ---@field with_home_expanded? fun(path: string): string a path with its leading `~` replaced by the home folder, as a report's `~/` paths are read; when not given, a path is read as written
 ---@field schedule_after? fun(delay_ms: integer, callback: fun()): fun() calls `callback`, on the main loop, once `delay_ms` milliseconds have passed, and returns what cancels the wait, which may be called after the wait is over; when not given, a timer waits (`schedule_with_timer()`)
 ---@field open_file? fun(file: string, line: integer?) opens the regular file `file`, an absolute path, that a double-clicked path names, at the line the path names when it names one; when not given, the file opens in the current window
+---@field on_report_received? fun(report: table) called with each report the home took and showed, after it was shown; a failure of it is told to the user and does not undo the report; none when not given
 
 ---@class aineo.report.Home
 ---@field set_report_environment fun(report_environment: aineo.report.Environment)
@@ -313,6 +314,12 @@ function M.new(identity)
     )
     vim.validate('environment.open_file', report_environment.open_file, 'function', true)
     vim.validate('environment.schedule_after', report_environment.schedule_after, 'function', true)
+    vim.validate(
+      'environment.on_report_received',
+      report_environment.on_report_received,
+      'function',
+      true
+    )
     environment = report_environment
     for _, waiting in ipairs(hand_overs_waiting) do
       hand_over(environment, waiting.from, waiting.to)
@@ -609,6 +616,22 @@ function M.new(identity)
     end
   end
 
+  --- Tells the environment's `on_report_received`, if it has one, that the home
+  --- took and showed `arguments`, a report. A failure of it is told to the
+  --- user.
+  ---
+  ---@param arguments table
+  local function tell_report_received(arguments)
+    local on_report_received = environment and environment.on_report_received
+    if not on_report_received then
+      return
+    end
+    local told, failure = pcall(on_report_received, arguments)
+    if not told then
+      warn_later(('aineo: telling that a report was received failed: %s'):format(failure))
+    end
+  end
+
   --- Shows `arguments`, a report, at the end of the Report buffer, moves every
   --- window showing the Report to it, and keeps it as a record
   --- (`show_and_keep()`).
@@ -616,7 +639,8 @@ function M.new(identity)
   --- When it cannot, raises the error saying why, and tells the user why too,
   --- once: the relay that sent the report may have stopped waiting for this
   --- answer (an editor held at a hit-enter prompt answers late), and then only
-  --- the user can learn that the report is not shown.
+  --- the user can learn that the report is not shown. Once it is shown, tells
+  --- the environment's `on_report_received` (`tell_report_received()`).
   ---
   ---@param arguments table
   ---@param records_file? string where to keep it instead of the file the home keeps reports in
@@ -626,6 +650,7 @@ function M.new(identity)
       warn_later(failure)
       error(failure, 0)
     end
+    tell_report_received(arguments)
   end
 
   --- Shows `arguments`, a report, at the end of the Report buffer, moves every
