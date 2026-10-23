@@ -204,4 +204,40 @@ T['a stage']['keeps a seated agent seated when it is resized'] = function()
   eq({ seated, watched.cell_at(scene.agents_in('working'), 3.05) }, { '10,0', '10,0' })
 end
 
+T['a stage']['draws for the agents that lose their way in a resize in the order they were given'] = function()
+  local colours = { scene.AGENT, scene.SECOND_AGENT, YELLOW, LIME, '#ff8800', '#0088ff' }
+  local pack = scene.people_pack('# plan\n \n aaaaaa..............\n', { a = { spot = 'aside' } }, {
+    characters = {
+      agent = {
+        colours = colours,
+        poses = { standing = { art = { 'person' } }, walking = { art = { 'person' } } },
+      },
+    },
+    activities = {
+      stand = {
+        steps = { { at = 'aside', for_seconds = 1 }, { at = 'anywhere', for_seconds = 5 } },
+      },
+    },
+    states = { standing = 'stand' },
+  })
+  local first_draws = { 0.99, 0.99, 0.99, 0.99, 0.99, 0.99 }
+  local draws = vim.list_extend(first_draws, { 0.11, 0.21, 0.31, 0.41, 0.51, 0.61 })
+  local stage = scene.stage_of(pack, 20, 1, { random = scene.sequence(draws, 0) })
+  local six =
+    scene.agents_in('standing', 'standing', 'standing', 'standing', 'standing', 'standing')
+  stage.advance(six, 0)
+  stage.advance(six, 1.05)
+
+  stage.resize(20, 1)
+  stage.advance(six, 4)
+
+  local picture = stage.picture()
+  eq(
+    vim.tbl_map(function(colour)
+      return scene.agent_cell(picture, 20, 1, colour)
+    end, colours),
+    { '2,0', '4,0', '6,0', '8,0', '10,0', '12,0' }
+  )
+end
+
 return T
