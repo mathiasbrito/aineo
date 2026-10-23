@@ -132,6 +132,70 @@ T['the idle countdown']['is not run for a report that comes in while the cursor 
   eq(office_child.waits_pending(child), 0)
 end
 
+T['the idle countdown']['is not run again by an office that closed with its tab page, and was let go'] = function()
+  open_office_waiting('1000')
+  child.lua([[_G.office.show_now()]])
+  office_child.enter_the_left_window(child)
+  child.lua([[
+    local float = vim.iter(vim.api.nvim_list_wins()):find(function(window)
+      return vim.api.nvim_win_get_config(window).relative ~= ''
+    end)
+    vim.api.nvim_win_close(float, true)
+    _G.office.let_go()
+  ]])
+
+  child.lua([[vim.wait(50)]])
+
+  eq(office_child.waits_pending(child), 0)
+end
+
+T['the idle countdown']['does not show the office when the settings turned it off while it ran'] = function()
+  office_child.open_layout(child)
+  child.lua([[_G.settings_now = { pack = 'default', pieces = {}, idle_ms = 1000 }]])
+  office_child.make_office(
+    child,
+    nil,
+    [[{
+      settings = function() return _G.settings_now end,
+      schedule_after = function(milliseconds, callback)
+        local wait = { milliseconds = milliseconds, callback = callback, over = false }
+        table.insert(_G.waits, wait)
+        return function() wait.over = true end
+      end,
+    }]]
+  )
+  office_child.enter_the_left_window(child)
+  child.lua([[_G.settings_now = { pack = 'default', pieces = {}, idle_ms = false }]])
+
+  office_child.let_time_pass(child)
+
+  eq(shows(), false)
+end
+
+T['the idle countdown']['of an office that showed by itself waits a new countdown after the office closes without the cursor entering the right side'] = function()
+  open_office_waiting('1000')
+  office_child.enter_the_left_window(child)
+  office_child.let_time_pass(child)
+  eq(shows(), true)
+
+  child.lua([[vim.api.nvim_win_close(..., true)]], { office_cells.window(child) })
+  child.lua([[vim.wait(100)]])
+
+  eq(shows(), false)
+  eq(office_child.waits_pending(child), 1)
+end
+
+T['the idle countdown']['stops while the office shows because it was asked to'] = function()
+  open_office_waiting('1000')
+  office_child.enter_the_left_window(child)
+  eq(office_child.waits_pending(child), 1)
+
+  child.lua([[_G.office.show_now()]])
+
+  eq(shows(), true)
+  eq(office_child.waits_pending(child), 0)
+end
+
 T['the idle countdown']['is off when office.idle_ms is false'] = function()
   open_office_waiting('false')
 
