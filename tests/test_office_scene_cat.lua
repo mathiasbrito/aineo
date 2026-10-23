@@ -520,4 +520,61 @@ T['the cat']['whose only activity follows someone is never placed, and no error 
   eq(where_the_cat_is(stage, 13), 'nowhere')
 end
 
+--- A stage where the cat sits on the keyboard of an idle agent, who lounges
+--- on a sofa, and naps on the sofa after; the agent works at its desk when
+--- it is `working`.
+---
+---@return aineo.office_scene.Stage
+local function stage_of_a_cat_on_a_keyboard()
+  local pack = scene.people_pack(
+    '# plan\n \n d.d.....s\n',
+    { d = { spot = 'desk', sitting = true }, s = { spot = 'sofa', sitting = true } },
+    {
+      characters = PEOPLE,
+      activities = {
+        lounge = { steps = { { at = 'sofa', pose = 'sitting' } } },
+        work = { steps = { { at = 'desk', pose = 'sitting' } } },
+        sit_on_keyboard = {
+          who = 'cat',
+          during = { 'always' },
+          steps = { { at = 'an_idle_agents_desk', pose = 'sitting', for_seconds = 60 } },
+        },
+        zz_nap = {
+          who = 'cat',
+          during = { 'always' },
+          steps = { { at = 'sofa', pose = 'sitting', for_seconds = 5 } },
+        },
+      },
+      states = { standing = 'lounge', idle = 'lounge', working = 'work' },
+    }
+  )
+  return scene.stage_of(pack, 9, 1, { random = scene.always(0) })
+end
+
+--- Advances `stage` every tenth of a second to 3 seconds with the agent idle
+--- and on to 8 seconds with it working.
+---
+---@param stage aineo.office_scene.Stage
+local function idle_then_work(stage)
+  for tenth = 0, 80 do
+    stage.advance(scene.agents_in(tenth < 30 and 'idle' or 'working'), tenth / 10)
+  end
+end
+
+T['the cat']['sits on the keyboard of an idle agent, who goes to its desk to work all the same'] = function()
+  local stage = stage_of_a_cat_on_a_keyboard()
+
+  idle_then_work(stage)
+
+  eq(scene.agent_cell(stage.picture(), 9, 1), '0,0')
+end
+
+T['the cat']['goes on to another activity when the agent whose keyboard it sat on comes to work'] = function()
+  local stage = stage_of_a_cat_on_a_keyboard()
+
+  idle_then_work(stage)
+
+  eq(where_the_cat_is(stage, 9), '8,0')
+end
+
 return T
