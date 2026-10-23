@@ -110,7 +110,7 @@ end
 ---@field permission_wait fun(agent: string) tells the office the agent, `main` or a subagent's id, waits for the user to answer a permission prompt, until its next line in the transcript; it is kept, and handed over each time the office starts running unless the transcript shows the agent went on since
 ---@field report_arrived fun(report: aineo.office.Report) keeps the report as a card the office draws in its bottom right corner until the cursor enters the right side, and starts the idle countdown again; keeps nothing when the cursor is in the right side and the office is hidden, where the Report shows it
 ---@field show_now fun() shows the office over the right side at once, and does nothing when it shows
----@field preview fun(pack?: string) shows the pack, or the one the settings name, over the right side with every state of the vocabulary acted out in turn, each named, in place of the office that shows; the preview follows no transcript
+---@field preview fun(pack?: string) shows the pack, or the one the settings name, over the right side with every state of the vocabulary acted out in turn, each named, in place of the office that shows, which stays when the pack cannot be shown; the preview follows no transcript
 ---@field let_go fun() closes the office, stops its timer and its watch, and forgets the session
 
 --- Makes the office of one tab.
@@ -495,8 +495,9 @@ function M.new_office(options)
   ---
   ---@param area aineo.layout.Area
   ---@param previewing? { pack: string|nil } the pack to preview, none for the settings' own
+  ---@param before_opening? fun() called once the pack is loaded and the stage made, just before the window opens: the place to close the office that shows, which a failure above leaves as it is
   ---@return boolean shown whether the office shows now
-  local function show_over(area, previewing)
+  local function show_over(area, previewing, before_opening)
     local office_pack = require('aineo.office_pack')
     local settings = options.settings and options.settings() or DEFAULT_SETTINGS
     local name = previewing and (previewing.pack or first_pack_name_of(settings))
@@ -530,6 +531,9 @@ function M.new_office(options)
     if not made then
       vim.notify(('aineo: the office cannot show: %s'):format(stage), vim.log.levels.ERROR)
       return false
+    end
+    if before_opening then
+      before_opening()
     end
     local float = float_module.open(area)
     local screen = screen_module.new_screen(float.buffer)
@@ -697,10 +701,9 @@ function M.new_office(options)
       vim.notify(why, vim.log.levels.WARN)
       return
     end
-    close()
     idle_time_has_passed = false
     countdown.stop()
-    if not show_over(area, { pack = pack }) then
+    if not show_over(area, { pack = pack }, close) then
       settle()
     end
   end
