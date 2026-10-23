@@ -3978,9 +3978,9 @@ activity it plays while the call runs. `when` holds `tool`, `agent` (`main` or
 plain words matches a value that contains them as whole words, `'docker'`
 matches `sudo docker compose up` and not `dockerfile`; a value with `*` or `?`
 is a glob over the whole value; `{ lua_pattern = '^make%s+test' }` is a Lua
-pattern, which may hold at most one repetition item (`*`, `+` or `-`, not
-escaped by `%` and not in a set) so that no match can take long; a pattern
-Lua rejects, or with more, is a problem at its line. A trigger costs a string
+pattern, which may hold at most one repetition item (`*`, `+`, `-` or `?`,
+after a character, a class or a set) so that no match can take long; a
+pattern Lua rejects, or with more, is a problem at its line. A trigger costs a string
 match on a call already read.
 >lua
     triggers = {
