@@ -304,6 +304,10 @@ M.agent_poses = {
     art = { 'bean', 'bean_face_side', 'bean_legs_stand', 'arm_pet' },
     effect = 'sweeping',
   },
+  petting = {
+    art = { 'bean', 'bean_face_happy', 'bean_legs_stand', 'arm_pet' },
+    effect = 'purring',
+  },
   grumbling = {
     art = { 'bean', 'bean_face_error', 'bean_legs_stand' },
     effect = 'angry',
@@ -730,6 +734,17 @@ M.activities = {
       chance = 1,
       players = 2,
       steps = { { at = 'table_tennis', pose = 'playing_table_tennis', for_seconds = { 6, 10 } } },
+    },
+  },
+
+  {
+    'pet_the_cat',
+    {
+      about = 'Goes beside the cat when it sits still and pets it.',
+      label = 'pets the cat',
+      during = DURING_IDLE,
+      chance = 1,
+      steps = { { at = 'next_to_the_cat', pose = 'petting', for_seconds = { 2, 3.5 } } },
     },
   },
 

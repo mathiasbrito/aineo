@@ -114,7 +114,36 @@ T['the window'] = MiniTest.new_set({
 T['the window']['shows the sky of the hour'] = function(hour, top_of_the_sky)
   local pixels = office_at(NOBODY, 0, hour)
 
-  eq(default.pixel_at(pixels, 103, 6), top_of_the_sky)
+  eq(default.pixel_at(pixels, 110, 6), top_of_the_sky)
+end
+
+T['the desks'] = MiniTest.new_set()
+
+--- The first place in the rows of text of a picture where `word` is written,
+--- as the row from 1 and the cell from 0, nil when it is nowhere.
+---
+---@param rows string[]
+---@param word string
+---@return integer[]|nil
+local function where_written(rows, word)
+  for row, text in ipairs(rows) do
+    local byte = text:find(word, 1, true)
+    if byte then
+      return { row, vim.str_utfindex(text, 'utf-32', byte - 1) }
+    end
+  end
+  return nil
+end
+
+T['the desks']['write the name of their agent on the plate under the desk top'] = function()
+  local agents = default.agents(2, 'writing_code')
+  local _, picture = office_at(agents, 0)
+  local plan_rows = vim.list_slice(default.text_rows(picture, 1), 1, SIZE[2] - 5)
+
+  eq(
+    { where_written(plan_rows, 'main'), where_written(plan_rows, 'sub2') },
+    { { 22, 18 }, { 22, 102 } }
+  )
 end
 
 T['the door'] = MiniTest.new_set()
