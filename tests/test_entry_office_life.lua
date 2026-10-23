@@ -195,6 +195,111 @@ T['the office of a tab']['loads none of the office’s engine until the office f
   )
 end
 
+--- The session the child's tab runs, as `write_transcript()` names its file.
+---
+---@return string
+local function tab_session()
+  return child.lua_get([[require('aineo.claude').session_id()]])
+end
+
+--- Writes `lines` as the transcript of `session`, where Claude Code keeps it.
+---
+---@param session string
+---@param lines string[]
+local function write_transcript_of(session, lines)
+  local directory = child.lua_get([[vim.env.CLAUDE_CONFIG_DIR]])
+  local path = vim.fs.joinpath(directory, 'projects', 'office-life', session .. '.jsonl')
+  vim.fn.mkdir(vim.fs.dirname(path), 'p')
+  fake_transcript.append(path, lines)
+  return path
+end
+
+--- Tells the child's Claude home, as the hook relay does when the session
+--- Claude Code runs switches to `new` (a `/resume`, say): the `SessionEnd`
+--- of the session followed, then the `SessionStart` of `new`, the tab's own
+--- start token with both.
+---
+---@param new string
+local function switch_session_to(new)
+  child.lua(
+    [[
+      local claude = require('aineo.claude')
+      local left, new = ...
+      claude.receive_session_event('SessionEnd', left, 'resume', claude.start_token(), 1, nil, nil)
+      claude.receive_session_event('SessionStart', new, 'resume', claude.start_token(), 2, nil, nil)
+    ]],
+    { tab_session(), new }
+  )
+  vim.wait(PATIENCE_MS, function()
+    return tab_session() == new
+  end, 20)
+end
+
+--- Whether the main agent goes to the file cabinet, as it does for a call
+--- that reads, waiting for it.
+---
+---@return boolean
+local function goes_to_the_cabinet()
+  return vim.wait(PATIENCE_MS, function()
+    return office_cells.is_at(child, 'file_cabinet')
+  end, 20)
+end
+
+--- A session of the form Claude Code gives that a case's tab switches to,
+--- one for each case: the session a start last followed is kept for the
+--- folder, and the cases share the folder's state.
+---
+---@param number integer the case's own number
+---@return string
+local function session_numbered(number)
+  return ('9a1c2b3d-4e5f-4a6b-8c7d-0e1f2a3b%04d'):format(number)
+end
+
+T['a switch of the tab’s session'] = MiniTest.new_set()
+
+T['a switch of the tab’s session']['has the office that shows act out the new session’s transcript'] = function()
+  local switched_to = session_numbered(1)
+  open_layout('office-life-switch')
+  write_transcript_of(tab_session(), vim.list_slice(RECORDED_TURN, 6, 10))
+  write_transcript_of(switched_to, vim.list_slice(RECORDED_TURN, 1, 5))
+  entry.command(child, 'Aineo office')
+  eq(office_cells.is_on_the_sofa(child), true)
+
+  switch_session_to(switched_to)
+
+  eq(goes_to_the_cabinet(), true)
+end
+
+T['a switch of the tab’s session']['has the office that is hidden follow the new session’s transcript when it shows'] = function()
+  local switched_to = session_numbered(2)
+  open_layout('office-life-switch-hidden')
+  write_transcript_of(tab_session(), vim.list_slice(RECORDED_TURN, 6, 10))
+  write_transcript_of(switched_to, vim.list_slice(RECORDED_TURN, 1, 5))
+
+  switch_session_to(switched_to)
+  entry.command(child, 'Aineo office')
+
+  eq(goes_to_the_cabinet(), true)
+end
+
+T['a switch of the tab’s session']['has the office follow the transcript a hook names for the new session afterwards'] = function()
+  local switched_to = session_numbered(3)
+  open_layout('office-life-switch-hook')
+  local named = write_transcript_of('named-elsewhere', vim.list_slice(RECORDED_TURN, 1, 5))
+  entry.command(child, 'Aineo office')
+  switch_session_to(switched_to)
+
+  child.lua(
+    [[
+      local claude = require('aineo.claude')
+      claude.receive_session_event('SessionStart', ..., 'resume', claude.start_token(), nil, nil, select(2, ...))
+    ]],
+    { switched_to, named }
+  )
+
+  eq(goes_to_the_cabinet(), true)
+end
+
 T['a report'] = MiniTest.new_set()
 
 T['a report']['reaches the office of the tab whose Report took it'] = function()

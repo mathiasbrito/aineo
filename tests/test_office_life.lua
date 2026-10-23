@@ -1,6 +1,7 @@
 local MiniTest = require('mini.test')
 local fake_transcript = dofile('tests/helpers/fake_transcript.lua')
 local fixture = dofile('tests/helpers/fixture.lua')
+local layout = dofile('tests/helpers/layout.lua')
 local office_cells = dofile('tests/helpers/office_cells.lua')
 local office_child = dofile('tests/helpers/office_child.lua')
 
@@ -181,6 +182,55 @@ T['a tab page left']['keeps the office on screen for when the tab page is entere
   child.cmd('tabprevious')
 
   eq(shows(), true)
+end
+
+T['a tab page left']['keeps the office on screen when the cursor was in the right side it covers'] = function()
+  local buffers = office_child.open_layout(child)
+  office_child.make_office(child)
+  layout.enter_window_showing(child, buffers.input)
+  child.lua([[_G.office.show_now()]])
+
+  child.cmd('tabnew')
+  child.cmd('tabprevious')
+
+  eq(shows(), true)
+end
+
+T['a tab page left']['has the office run again, with its agent where it was, when the cursor was in the right side it covers'] = function()
+  local path = transcript_path()
+  fake_transcript.append(path, RECORDED_TURN)
+  local buffers = office_child.open_layout(child)
+  office_child.make_office(child)
+  office_child.follow_transcript(child, path)
+  layout.enter_window_showing(child, buffers.input)
+  child.lua([[_G.office.show_now()]])
+  local running = handles()
+  eq(office_cells.is_on_the_sofa(child), true)
+
+  child.cmd('tabnew')
+  child.cmd('tabprevious')
+
+  eq(handles(), running)
+  eq(office_cells.is_on_the_sofa(child), true)
+end
+
+T['a tab page left']['still closes the office when the cursor enters the right side after the tab page was entered again'] = function()
+  local buffers = office_child.open_layout(child)
+  office_child.make_office(child)
+  layout.enter_window_showing(child, buffers.input)
+  child.lua([[_G.office.show_now()]])
+  child.cmd('tabnew')
+  child.cmd('tabprevious')
+  layout.enter_window_showing(child, buffers.claude)
+
+  layout.enter_window_showing(child, buffers.report)
+
+  eq(
+    vim.wait(PATIENCE_MS, function()
+      return not shows()
+    end, 10),
+    true
+  )
 end
 
 T['a tab page left']['has the office catch up with what the session did while it was away'] = function()

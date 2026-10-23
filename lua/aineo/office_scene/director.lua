@@ -11,8 +11,10 @@
 --- played, alone or together with the agents the activity needs.
 ---
 --- A thing on the floor can upset the agents near it, who play what upsets
---- them, and calls for the nearest idle agent, who cleans it up; each plays
---- that as an interlude, after which it goes back to what its state asks for.
+--- them, and calls for the nearest idle agent, or else the nearest other one
+--- in the office, who plays what upsets agents too, then cleans it up; each
+--- plays that as an interlude, after which it goes back to what its state asks
+--- for.
 ---
 --- An agent has a place among the agents from the moment it arrives to the
 --- moment it leaves: the lowest number no other agent has. Its colour, its
@@ -344,6 +346,9 @@ end
 ---@param time number
 ---@return boolean played whether a new activity began
 local function start_next_activity(context, performer, time)
+  if reactions.begin_cleaning_after_upset(context, performer, time, play) then
+    return true
+  end
   local wanted = performer.wanted_name
   if performer.playing == INTERLUDE and wanted and context.pack.activities[wanted] then
     play(context, performer, wanted, WANTED, time)

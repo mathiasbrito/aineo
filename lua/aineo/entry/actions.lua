@@ -191,6 +191,21 @@ ACTIONS.office = function()
   offices.show(tab)
 end
 
+--- What `:Aineo office preview [name]` does: shows the office of the existing
+--- aineo tab to act on (as `:Aineo office`) acting out every state in turn
+--- with the pack `name`, or the one the setting `office.pack` names
+--- (`aineo.entry.office`'s `preview()`). With no aineo tab, tells the user.
+---
+---@param name? string
+function M.preview_office(name)
+  local tab = opening.existing_acting_tab()
+  if not tab then
+    vim.notify(NO_TAB_FOR_OFFICE, vim.log.levels.WARN)
+    return
+  end
+  offices.preview(tab, name)
+end
+
 --- What `:Aineo zoom` does: zooms the window of the right column the cursor
 --- is in, or gives back the heights it took (`aineo.layout`'s `toggle_zoom()`),
 --- in the aineo tab of the current tab page, and never makes a tab. From a tab

@@ -58,13 +58,21 @@ local function open_layout(name)
 end
 
 --- Runs `lua` in the child, then waits until the callbacks scheduled by then
---- have run, as the hook relay's notifications are handled.
+--- have run, and those they scheduled in turn, as the hook relay's
+--- notifications are handled.
 ---
 ---@param lua string
 ---@param arguments? any[]
 local function run_and_settle(lua, arguments)
   child.lua(lua, arguments or {})
-  child.lua('_G.settled = false; vim.schedule(function() _G.settled = true end)')
+  child.lua([[
+    _G.settled = false
+    vim.schedule(function()
+      vim.schedule(function()
+        _G.settled = true
+      end)
+    end)
+  ]])
   vim.wait(claude_session.PATIENCE_MS, function()
     return child.lua_get('_G.settled')
   end, 20)
@@ -123,6 +131,23 @@ local function write_transcript_elsewhere(session, lines)
   return path
 end
 
+--- Has the tracker of every office the child makes keep the kinds of the
+--- signals it takes in `_G.taken`.
+local KEEP_THE_SIGNALS_TAKEN = [[
+  local office_states = require('aineo.office_states')
+  local new_tracker = office_states.new_tracker
+  _G.taken = {}
+  office_states.new_tracker = function(options)
+    local tracker = new_tracker(options)
+    local take = tracker.take
+    tracker.take = function(signal, now)
+      table.insert(_G.taken, signal.kind)
+      return take(signal, now)
+    end
+    return tracker
+  end
+]]
+
 T['the transcript a SessionStart hook named'] = MiniTest.new_set()
 
 T['the transcript a SessionStart hook named']['is the one the office follows, wherever Claude Code wrote it'] = function()
@@ -163,6 +188,58 @@ T['the transcript a SessionStart hook named']['wins over one Claude Code’s fol
   )
 end
 
+T['the transcript a SessionStart hook named']['is followed to the session it says Claude Code went on in'] = function()
+  open_layout('office-hook-continued')
+  child.lua(KEEP_THE_SIGNALS_TAKEN)
+  local session = tab_session()
+  local continued_in = '22222222-2222-4222-8222-222222222222'
+  local directory = vim.fs.joinpath(child.lua_get([[vim.env.CLAUDE_CONFIG_DIR]]), 'continued')
+  local named = vim.fs.joinpath(directory, session .. '.jsonl')
+  fake_transcript.append(named, {
+    vim.json.encode({
+      type = 'continued-in',
+      timestamp = os.date('!%Y-%m-%dT%H:%M:%S.000Z', os.time() + 5),
+      sessionId = session,
+      continuedInSessionId = continued_in,
+    }),
+  })
+  fake_transcript.append(
+    vim.fs.joinpath(directory, continued_in .. '.jsonl'),
+    vim.list_slice(RECORDED_TURN, 1, 5)
+  )
+  tell_transcript(session, named)
+
+  entry.command(child, 'Aineo office')
+
+  eq(child.lua_get('_G.taken'), { 'prompt', 'tool_started' })
+end
+
+T['the transcript a SessionStart hook named']['is not followed to a session a line stamped before the tab began following says it went on in'] = function()
+  open_layout('office-hook-continued-old')
+  child.lua(KEEP_THE_SIGNALS_TAKEN)
+  local session = tab_session()
+  local continued_in = '22222222-2222-4222-8222-222222222222'
+  local directory = vim.fs.joinpath(child.lua_get([[vim.env.CLAUDE_CONFIG_DIR]]), 'continued-old')
+  local named = vim.fs.joinpath(directory, session .. '.jsonl')
+  fake_transcript.append(named, {
+    vim.json.encode({
+      type = 'continued-in',
+      timestamp = os.date('!%Y-%m-%dT%H:%M:%S.000Z', os.time() - 600),
+      sessionId = session,
+      continuedInSessionId = continued_in,
+    }),
+  })
+  fake_transcript.append(
+    vim.fs.joinpath(directory, continued_in .. '.jsonl'),
+    vim.list_slice(RECORDED_TURN, 1, 5)
+  )
+  tell_transcript(session, named)
+
+  entry.command(child, 'Aineo office')
+
+  eq(child.lua_get('_G.taken'), {})
+end
+
 T['the transcript a SessionStart hook named']['is not followed for a session the tab does not run'] = function()
   open_layout('office-hook-other')
   tell_transcript(
@@ -184,6 +261,216 @@ local function open_layout_with_stand_in_offices(name)
   open_layout(name)
 end
 
+--- A session of the form Claude Code gives that the tab switches to, one for
+--- each case: the session a start last followed is kept for the folder, and
+--- the cases share the folder's state.
+---
+---@param number integer the case's own number
+---@return string
+local function new_session_numbered(number)
+  return ('1f1c5b0e-7a3d-4d52-8f0b-6d2e9a7c%04d'):format(number)
+end
+
+--- Tells the child's Claude home, as the hook relay does when the session
+--- Claude Code runs switches to `new` (a `/resume`, say): the `SessionEnd`
+--- of the session followed, then the `SessionStart` of `new`, the tab's own
+--- start token with both.
+---
+---@param new string
+local function tell_switch_to(new)
+  run_and_settle(
+    [[
+      local claude = require('aineo.claude')
+      local left, new = ...
+      claude.receive_session_event('SessionEnd', left, 'resume', claude.start_token(), 1, nil, nil)
+      claude.receive_session_event('SessionStart', new, 'resume', claude.start_token(), 2, nil, nil)
+    ]],
+    { tab_session(), new }
+  )
+end
+
+T['a switch of the tab’s session'] = MiniTest.new_set()
+
+T['a switch of the tab’s session']['is told to the office of the tab'] = function()
+  local new_session = new_session_numbered(1)
+  open_layout_with_stand_in_offices('office-switch')
+  local at_start = stand_in.told(child).session_changed
+
+  tell_switch_to(new_session)
+
+  eq(tab_session(), new_session)
+  eq(stand_in.told(child).session_changed - at_start, 1)
+end
+
+T['a switch of the tab’s session']['is not told to the office by a hook of the session the tab runs, which names no transcript'] = function()
+  open_layout_with_stand_in_offices('office-switch-same')
+  local at_start = stand_in.told(child).session_changed
+
+  run_and_settle([[
+    local claude = require('aineo.claude')
+    claude.receive_session_event('SessionStart', claude.session_id(), 'compact', claude.start_token(), nil, nil, nil)
+  ]])
+
+  eq(stand_in.told(child).session_changed - at_start, 0)
+end
+
+T['a switch of the tab’s session']['is told again when a hook then names another transcript for the session the tab runs now'] = function()
+  local new_session = new_session_numbered(3)
+  open_layout_with_stand_in_offices('office-switch-path')
+  local at_start = stand_in.told(child).session_changed
+  tell_switch_to(new_session)
+
+  tell_transcript(new_session, '/named/by/the/hook.jsonl')
+
+  eq(stand_in.told(child).session_changed - at_start, 2)
+end
+
+T['a switch of the tab’s session']['is not told again when a hook names a transcript for a session the tab does not run'] = function()
+  local new_session = new_session_numbered(4)
+  open_layout_with_stand_in_offices('office-switch-path-other')
+  local at_start = stand_in.told(child).session_changed
+  tell_switch_to(new_session)
+
+  tell_transcript(OTHER_SESSION, '/named/by/the/hook.jsonl')
+
+  eq(stand_in.told(child).session_changed - at_start, 1)
+end
+
+T['a switch of the tab’s session']['is not told again when a hook names the transcript the office follows already'] = function()
+  local new_session = new_session_numbered(5)
+  open_layout_with_stand_in_offices('office-switch-path-twice')
+  local at_start = stand_in.told(child).session_changed
+  tell_switch_to(new_session)
+  tell_transcript(new_session, '/named/by/the/hook.jsonl')
+
+  tell_transcript(new_session, '/named/by/the/hook.jsonl')
+
+  eq(stand_in.told(child).session_changed - at_start, 2)
+end
+
+--- A session of the form Claude Code gives that a case's tab claims, one for
+--- each case: the session a claim leaves is kept for the folder.
+---
+---@param number integer the case's own number
+---@return string
+local function claimed_session_numbered(number)
+  return ('5c1a1ed0-7a3d-4d52-8f0b-6d2e9a7c%04d'):format(number)
+end
+
+--- Writes `lines` as the transcript of `session` where Claude Code keeps it.
+---
+---@param session string
+---@param lines string[]
+local function write_transcript_of(session, lines)
+  local directory =
+    vim.fs.joinpath(child.lua_get([[vim.env.CLAUDE_CONFIG_DIR]]), 'projects', 'other')
+  vim.fn.mkdir(directory, 'p')
+  fake_transcript.append(vim.fs.joinpath(directory, session .. '.jsonl'), lines)
+end
+
+--- Makes `os.time()` in the child answer `_G.fake_now`, which the case sets, so
+--- that the moments the tab marks are the case's.
+local FAKE_THE_CLOCK = [[
+  _G.fake_now = ...
+  os.time = function()
+    return _G.fake_now
+  end
+]]
+
+--- Opens the layout as `open_layout_with_stand_in_offices()` does, with the
+--- child's clock at `now` (`FAKE_THE_CLOCK`).
+---
+---@param name string
+---@param now integer
+local function open_layout_at(name, now)
+  stand_in.install(child)
+  child.lua(FAKE_THE_CLOCK, { now })
+  open_layout(name)
+end
+
+T['the moment the tab began following its session'] = MiniTest.new_set()
+
+T['the moment the tab began following its session']['is the moment its Claude Code started, as the office asks for the transcript'] = function()
+  open_layout_at('office-since-made', 1767225600)
+
+  local _, since = stand_in.transcript_asked(child)
+
+  eq(since, 1767225600)
+end
+
+T['the moment the tab began following its session']['is the moment of its latest switch of session'] = function()
+  open_layout_at('office-since-switch', 1767225600)
+  child.lua('_G.fake_now = 1767226100')
+
+  tell_switch_to(new_session_numbered(20))
+  local _, since = stand_in.transcript_asked(child)
+
+  eq(since, 1767226100)
+end
+
+T['a claimed session'] = MiniTest.new_set()
+
+T['a claimed session']['is the one the office acts out, in place of the session of the tab’s own Claude Code'] = function()
+  local claimed = claimed_session_numbered(1)
+  open_layout('office-claim')
+  child.lua(KEEP_THE_SIGNALS_TAKEN)
+  write_transcript_of(claimed, vim.list_slice(RECORDED_TURN, 1, 5))
+  write_transcript_of(tab_session(), RECORDED_TURN)
+  child.cmd('Aineo claim ' .. claimed)
+
+  entry.command(child, 'Aineo office')
+
+  eq(child.lua_get('_G.taken'), { 'prompt', 'tool_started' })
+end
+
+T['a claimed session']['is acted out from the moment it is claimed, by an office that shows'] = function()
+  local claimed = claimed_session_numbered(2)
+  open_layout('office-claim-shown')
+  child.lua(KEEP_THE_SIGNALS_TAKEN)
+  write_transcript_of(claimed, vim.list_slice(RECORDED_TURN, 1, 5))
+  write_transcript_of(tab_session(), RECORDED_TURN)
+  entry.command(child, 'Aineo office')
+  child.lua('_G.taken = {}')
+
+  child.cmd('Aineo claim ' .. claimed)
+
+  eq(child.lua_get('_G.taken'), { 'prompt', 'tool_started' })
+end
+
+T['a fork of the tab’s Claude Code'] = MiniTest.new_set()
+
+T['a fork of the tab’s Claude Code']['is the session the office acts out once its SessionStart hook, with the tab’s token, names it'] = function()
+  local forked = new_session_numbered(30)
+  open_layout('office-fork')
+  child.lua(KEEP_THE_SIGNALS_TAKEN)
+  write_transcript_of(forked, vim.list_slice(RECORDED_TURN, 1, 5))
+  run_and_settle(
+    [[
+      local claude = require('aineo.claude')
+      local own, forked = ...
+      claude.receive_session_event('SessionStart', own, 'startup', claude.start_token(), 1, 111, nil)
+      claude.receive_session_event('SessionStart', forked, 'startup', claude.start_token(), 2, 222, nil)
+    ]],
+    { tab_session(), forked }
+  )
+
+  entry.command(child, 'Aineo office')
+
+  eq(tab_session(), forked)
+  eq(child.lua_get('_G.taken'), { 'prompt', 'tool_started' })
+end
+
+T['a claimed session']['is told to the office once, not again by a claim of the session the panes follow already'] = function()
+  local claimed = claimed_session_numbered(3)
+  open_layout_with_stand_in_offices('office-claim-twice')
+  local at_start = stand_in.told(child).session_changed
+
+  child.cmd('Aineo claim ' .. claimed)
+  child.cmd('Aineo claim ' .. claimed)
+
+  eq(stand_in.told(child).session_changed - at_start, 1)
+end
+
 T['a permission wait'] = MiniTest.new_set()
 
 T['a permission wait']['reaches the office of the tab, as the main agent or as the subagent that asks'] = function()
@@ -202,6 +489,68 @@ T['a permission wait']['is not told to the office when it is of a session the ta
   tell_permission_wait(OTHER_SESSION, vim.NIL)
 
   eq(stand_in.told(child).waits, {})
+end
+
+T['a permission wait']['reaches the office when it is of a session of the chain the office follows, the continuation of the tab’s session'] = function()
+  open_layout('office-wait-chain')
+  child.lua(KEEP_THE_SIGNALS_TAKEN)
+  local session = tab_session()
+  local continued_in = '22222222-2222-4222-8222-222222222222'
+  local directory = vim.fs.joinpath(child.lua_get([[vim.env.CLAUDE_CONFIG_DIR]]), 'wait-chain')
+  local named = vim.fs.joinpath(directory, session .. '.jsonl')
+  fake_transcript.append(named, {
+    vim.json.encode({
+      type = 'continued-in',
+      timestamp = os.date('!%Y-%m-%dT%H:%M:%S.000Z', os.time() + 5),
+      sessionId = session,
+      continuedInSessionId = continued_in,
+    }),
+  })
+  fake_transcript.append(
+    vim.fs.joinpath(directory, continued_in .. '.jsonl'),
+    vim.list_slice(RECORDED_TURN, 1, 5)
+  )
+  tell_transcript(session, named)
+  entry.command(child, 'Aineo office')
+  child.lua('_G.taken = {}')
+
+  tell_permission_wait(continued_in, vim.NIL)
+
+  eq(child.lua_get('_G.taken'), { 'permission_asked' })
+end
+
+T['a permission wait']['reaches the office when it is of the session the tab’s panes follow, a claim'] = function()
+  local claimed = claimed_session_numbered(4)
+  open_layout('office-wait-claim')
+  child.lua(KEEP_THE_SIGNALS_TAKEN)
+  child.cmd('Aineo claim ' .. claimed)
+  entry.command(child, 'Aineo office')
+  child.lua('_G.taken = {}')
+
+  tell_permission_wait(claimed, vim.NIL)
+
+  eq(child.lua_get('_G.taken'), { 'permission_asked' })
+end
+
+T['a permission wait']['reaches an office that does not follow the session yet when it is of the session the tab’s panes follow, a claim'] = function()
+  local claimed = claimed_session_numbered(5)
+  open_layout_with_stand_in_offices('office-wait-claim-hidden')
+  child.cmd('Aineo claim ' .. claimed)
+
+  tell_permission_wait(claimed, vim.NIL)
+
+  eq(stand_in.told(child).waits, { 'main' })
+end
+
+T['a permission wait']['does not reach the office when it is of a session outside the chain the office follows'] = function()
+  open_layout('office-wait-outside')
+  child.lua(KEEP_THE_SIGNALS_TAKEN)
+  entry.command(child, 'Aineo office')
+  child.lua('_G.taken = {}')
+
+  tell_permission_wait(OTHER_SESSION, vim.NIL)
+
+  eq(child.lua_get('_G.taken'), {})
 end
 
 T['a permission wait']['reaches the office the tab made as it opened, before the office was asked to show'] = function()

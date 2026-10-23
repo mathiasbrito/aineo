@@ -6,15 +6,6 @@ local offices = require('aineo.entry.office')
 
 local M = {}
 
---- The name of the pack the setting `office.pack` names, the first when it
---- lists several.
----
----@param pack string|string[]
----@return string
-local function first_name_of(pack)
-  return type(pack) == 'table' and pack[1] or pack
-end
-
 --- Checks the pack `name`, or, when none is given, the pack the setting
 --- `office.pack` names, with the art files of the setting `office.pieces`
 --- over its pieces. Lists its problems in the quickfix list and opens it; a
@@ -24,7 +15,7 @@ end
 function M.check(name)
   local office_pack = require('aineo.office_pack')
   local settings = offices.settings()
-  local checked = name or first_name_of(settings.pack)
+  local checked = name or offices.chosen_pack_name()
   local problems = office_pack.check({
     name = checked,
     folders = offices.pack_folders(),

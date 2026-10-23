@@ -230,18 +230,18 @@ T['a thing that is cleaned up']['is cleaned up by the nearest idle agent, while 
 
   eq(
     { during, where_the_others_are(stage), group_at(stage, 6) },
-    { { '6,0', '11,0' }, { '2,0', '4,0' }, scene.solid(scene.FLOOR) }
+    { { '11,0', '4,0' }, { '2,0', '4,0' }, scene.solid(scene.FLOOR) }
   )
 end
 
-T['a thing that is cleaned up']['does not upset the agent sent to clean it up'] = function()
-  local stage = stage_of_a_mess_to_clean(5)
+T['a thing that is cleaned up']['has the agent sent to clean it up grumble first, then go to it'] = function()
+  local stage = stage_of_a_mess_to_clean(1)
   local crew = scene.agents_in('working', 'idle', 'standing')
   stage.advance(crew, 0)
 
   stage.advance(crew, 1.8)
 
-  eq(where_the_others_are(stage), { '6,0', '11,0' })
+  eq(where_the_others_are(stage), { '11,0', '4,0' })
 end
 
 T['a thing that is cleaned up']['is cleaned up by the nearest idle agent only'] = function()
@@ -252,7 +252,7 @@ T['a thing that is cleaned up']['is cleaned up by the nearest idle agent only'] 
   stage.advance(crew, 1.8)
   stage.advance(crew, 1.9)
 
-  eq(where_the_others_are(stage), { '2,0', '6,0' })
+  eq(where_the_others_are(stage), { '2,0', '11,0' })
 end
 
 T['a thing that is cleaned up']['does not draft a second idle agent to leave its desk for it'] = function()
@@ -265,9 +265,9 @@ T['a thing that is cleaned up']['does not draft a second idle agent to leave its
   eq(table.concat(cells, ' '), ('2,0 '):rep(22):sub(1, -2))
 end
 
-T['a thing that is cleaned up']['waits where it lies while no agent is idle, and is cleaned up when one is'] = function()
+T['a thing that is cleaned up']['waits where it lies while no agent can go to it, and is cleaned up when an idle one can'] = function()
   local stage = stage_of_a_mess_to_clean()
-  local nobody_idle = scene.agents_in('working', 'standing', 'standing')
+  local nobody_idle = scene.agents_in('working', 'arriving', 'leaving')
   stage.advance(nobody_idle, 0)
   stage.advance(nobody_idle, 6)
   local while_nobody_is_idle = group_at(stage, 6)
@@ -275,7 +275,7 @@ T['a thing that is cleaned up']['waits where it lies while no agent is idle, and
   local one_idle = scene.agents_in('working', 'idle', 'standing')
   stage.advance(one_idle, 7)
   stage.advance(one_idle, 8)
-  stage.advance(one_idle, 12)
+  stage.advance(one_idle, 20)
 
   eq({ while_nobody_is_idle, group_at(stage, 6) }, { scene.solid(RED), scene.solid(scene.FLOOR) })
 end
@@ -327,6 +327,85 @@ T['a thing that is cleaned up']['leaves the other idle agents to what they are d
   stage.advance(crew, 7.9)
 
   eq(scene.agent_cell(stage.picture(), 21, 1, scene.SECOND_AGENT), '20,0')
+end
+
+--- A stage where the agent that thinks leaves a mess at the seat after a
+--- second and goes away, and the agents that work sit at their desks: the
+--- mess upsets agents one cell from it only, so no agent is upset unless it
+--- is sent to clean the mess up. The random source gives 0 every time.
+---
+---@return aineo.office_scene.Stage
+local function stage_of_a_mess_among_working_agents()
+  local pack = scene.people_pack(CLEANING_PLAN, CLEANING_LEGEND, {
+    characters = THREE_COLOURS,
+    activities = {
+      stand = { steps = { { at = 'desk' } } },
+      messy = {
+        steps = {
+          { at = 'seat', pose = 'sitting', for_seconds = 1, leave = 'mess' },
+          { at = 'away' },
+        },
+      },
+      grumble = { steps = { { at = 'huff', for_seconds = 1 } } },
+      clean_up = { steps = { { at = 'mess', for_seconds = 1, remove = 'mess' } } },
+    },
+    things = {
+      mess = {
+        piece = 'left',
+        upsets_agents_within = 1,
+        upset_agents_play = 'grumble',
+        cleaned_up_by = 'clean_up',
+      },
+    },
+    states = { standing = 'stand', idle = 'stand', working = 'stand', thinking = 'messy' },
+  })
+  return scene.stage_of(pack, 12, 1, { random = scene.always(0) })
+end
+
+local ONE_LITTERS_TWO_WORK = scene.agents_in('thinking', 'working', 'working')
+
+T['a thing that is cleaned up']['is cleaned up by the nearest working agent when no agent is idle, which grumbles first and goes back to work'] = function()
+  local stage = stage_of_a_mess_among_working_agents()
+  stage.advance(ONE_LITTERS_TWO_WORK, 0)
+
+  stage.advance(ONE_LITTERS_TWO_WORK, 1.8)
+  local while_upset = where_the_others_are(stage)
+  stage.advance(ONE_LITTERS_TWO_WORK, 12)
+
+  eq(
+    { while_upset, where_the_others_are(stage), group_at(stage, 6) },
+    { { '2,0', '11,0' }, { '2,0', '4,0' }, scene.solid(scene.FLOOR) }
+  )
+end
+
+T['a thing that is cleaned up']['is cleaned up by an idle agent rather than by a nearer working one'] = function()
+  local stage = stage_of_a_mess_among_working_agents()
+  local crew = scene.agents_in('thinking', 'idle', 'working')
+  stage.advance(crew, 0)
+
+  stage.advance(crew, 1.8)
+  local while_upset = where_the_others_are(stage)
+  stage.advance(crew, 12)
+
+  eq(
+    { while_upset, where_the_others_are(stage), group_at(stage, 6) },
+    { { '11,0', '4,0' }, { '2,0', '4,0' }, scene.solid(scene.FLOOR) }
+  )
+end
+
+T['a thing that is cleaned up']['is left where it lies by an agent that is arriving or leaving'] =
+  MiniTest.new_set({ parametrize = { { 'arriving' }, { 'leaving' } } })
+
+T['a thing that is cleaned up']['is left where it lies by an agent that is arriving or leaving']['state'] = function(
+  state
+)
+  local stage = stage_of_a_mess_among_working_agents()
+  local crew = scene.agents_in('thinking', state)
+  stage.advance(crew, 0)
+
+  stage.advance(crew, 12)
+
+  eq(group_at(stage, 6), scene.solid(RED))
 end
 
 T['a thing that lies on the floor'] = MiniTest.new_set()

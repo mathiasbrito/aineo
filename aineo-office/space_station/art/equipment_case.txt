@@ -1,0 +1,8 @@
+about: A low equipment case in front of the crew bench.
+colours: A = alloy, B = steel_blue, a = amber_glow
+anchor: 0, 3
+---
+AAAAAAAAAAAAAA
+BBBBBaaaaBBBBB
+.B..........B.
+.B..........B.

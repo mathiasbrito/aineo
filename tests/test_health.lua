@@ -5,6 +5,7 @@ local entry_editor = dofile('tests/helpers/entry_editor.lua')
 local find_pickers = dofile('tests/helpers/find_pickers.lua')
 local fixture = dofile('tests/helpers/fixture.lua')
 local health = dofile('tests/helpers/health.lua')
+local pack_files = dofile('tests/helpers/office_pack_files.lua')
 
 local eq = MiniTest.expect.equality
 
@@ -65,7 +66,7 @@ local EDITOR_STATE = [[(function()
   }
 end)()]]
 
-T['the check']['starts nothing, maps nothing and loads only the configuration, the Claude session, the file finder and the shell home'] = function()
+T['the check']['starts nothing, maps nothing and loads only the configuration, the Claude session, the file finder, the shell home and the office’s packs and states'] = function()
   start_with({ autostart = false })
   local before = child.lua_get(EDITOR_STATE)
 
@@ -74,7 +75,15 @@ T['the check']['starts nothing, maps nothing and loads only the configuration, t
   eq(
     child.lua_get(EDITOR_STATE),
     vim.tbl_extend('force', before, {
-      modules = { 'aineo.claude', 'aineo.config', 'aineo.find', 'aineo.health', 'aineo.shell' },
+      modules = {
+        'aineo.claude',
+        'aineo.config',
+        'aineo.find',
+        'aineo.health',
+        'aineo.office_pack',
+        'aineo.office_states',
+        'aineo.shell',
+      },
     })
   )
 end
@@ -1922,6 +1931,45 @@ end
 
 T['the office'] = MiniTest.new_set()
 
+--- The packs aineo ships, which the health check finds on 'runtimepath' in
+--- every editor, sorted.
+local SHIPPED_PACKS = { 'default', 'space_station' }
+
+--- The folder of the pack `name` among the packs aineo ships, as the child
+--- finds it.
+---
+---@param name string
+---@return string
+local function shipped_pack_folder(name)
+  return child.lua_get(
+    [[vim.fs.joinpath(vim.api.nvim_get_runtime_file('aineo-office', true)[1], ...)]],
+    { name }
+  )
+end
+
+--- Starts the child with `settings` and the packs of a folder of the test's
+--- own, `broken` (one problem: its `about` is no text), `fine` and any of
+--- `more_files`, on its 'runtimepath'.
+---
+---@param settings table
+---@param more_files? table<string, table<string, string>> by pack name, the files to write over the smallest pack's
+---@return string folder the `aineo-office` folder the packs are in
+local function start_with_packs(settings, more_files)
+  local root = fixture.directory('office_health')
+  pack_files.write_pack(root, 'fine')
+  local folder = pack_files.write_pack(root, 'broken', {
+    ['pack.lua'] = pack_files.pack_text({ name = 'broken', about = 5 }),
+  })
+  for name, files in pairs(more_files or {}) do
+    pack_files.write_pack(root, name, files)
+  end
+  children.restart(
+    child,
+    vim.list_extend(settings_arguments(settings), { '--cmd', 'set runtimepath+=' .. root })
+  )
+  return folder
+end
+
 T['the office']["is fine when 'termguicolors' is on, and says when it shows by itself"] = function()
   start_with({ autostart = false, office = { idle_ms = 90000 } })
   child.o.termguicolors = true
@@ -1931,7 +1979,109 @@ T['the office']["is fine when 'termguicolors' is on, and says when it shows by i
   eq(health.section(report, 'Office'), {
     "- ✅ OK 'termguicolors' is on: the office draws its pixels",
     '- the office shows by itself after 90 s without the cursor in the right side (office.idle_ms), and for :Aineo office and \\O: :help |aineo-office|',
+    ('- %d office packs found'):format(#SHIPPED_PACKS),
+    ('- ✅ OK the office pack “default” in %s, named by office.pack, has no problem'):format(
+      shipped_pack_folder('default')
+    ),
+    ('- ✅ OK the office pack “space_station” in %s has no problem'):format(
+      shipped_pack_folder('space_station')
+    ),
   })
+end
+
+T['the office']['counts the packs found, and each one’s problems, the pack office.pack names first'] = function()
+  local folder = start_with_packs({ autostart = false, office = { pack = 'fine' } })
+  child.o.termguicolors = true
+
+  local report = health.report(child)
+
+  eq(vim.list_slice(health.section(report, 'Office'), 3), {
+    ('- %d office packs found'):format(#SHIPPED_PACKS + 2),
+    ('- ✅ OK the office pack “fine” in %s, named by office.pack, has no problem'):format(
+      vim.fs.joinpath(folder, 'fine')
+    ),
+    ('- ⚠️ WARNING the office pack “broken” in %s has 1 problem: :Aineo office check broken lists them'):format(
+      vim.fs.joinpath(folder, 'broken')
+    ),
+    ('- ✅ OK the office pack “default” in %s has no problem'):format(
+      shipped_pack_folder('default')
+    ),
+    ('- ✅ OK the office pack “space_station” in %s has no problem'):format(
+      shipped_pack_folder('space_station')
+    ),
+  })
+end
+
+T['the office']['warns of the pack office.pack names when it has problems, and says how many'] = function()
+  local folder = start_with_packs({ autostart = false, office = { pack = 'broken' } }, {
+    broken = {
+      ['pack.lua'] = pack_files.pack_text({ name = 'broken', about = 5 }),
+      ['art/spare.txt'] = 'colours: A = ink\n---\nAA\nA\n',
+    },
+  })
+  child.o.termguicolors = true
+
+  local report = health.report(child)
+
+  eq(
+    health.section(report, 'Office')[4],
+    ('- ⚠️ WARNING the office pack “broken” in %s, named by office.pack, has 2 problems: :Aineo office check broken lists them'):format(
+      vim.fs.joinpath(folder, 'broken')
+    )
+  )
+  eq(health.advice(report, 'Office'), { 'Fix what the check lists: :help |aineo-office-packs|' })
+end
+
+T['the office']['warns of a pack office.pack names that is not found'] = function()
+  start_with({ autostart = false, office = { pack = 'nowhere' } })
+  child.o.termguicolors = true
+
+  local report = health.report(child)
+
+  eq(
+    health.section(report, 'Office')[4],
+    '- ⚠️ WARNING office.pack names “nowhere”, which is not found, so the office draws the default pack: :Aineo office check nowhere'
+  )
+end
+
+T['the office']['warns of an art file of office.pieces that cannot be used, with its line'] = function()
+  local mine = vim.fs.joinpath(fixture.directory('office_health_mine'), 'mine.txt')
+  vim.fn.writefile({ 'colours: A = ink', '---', 'AA', 'A' }, mine)
+  start_with({ autostart = false, office = { pieces = { person = mine } } })
+  child.o.termguicolors = true
+
+  local report = health.report(child)
+
+  eq(
+    vim.tbl_contains(
+      health.section(report, 'Office'),
+      ('- ⚠️ WARNING office.pieces: %s:4: this row is 1 pixels wide, and the first row is 2'):format(
+        mine
+      )
+    ),
+    true
+  )
+  eq(
+    vim.tbl_contains(
+      health.section(report, 'Office'),
+      ('- ✅ OK the office pack “default” in %s, named by office.pack, has no problem'):format(
+        shipped_pack_folder('default')
+      )
+    ),
+    true
+  )
+end
+
+T['the office']['tells a pack once when office.pack names it twice'] = function()
+  start_with_packs({ autostart = false, office = { pack = { 'broken', 'broken' } } })
+  child.o.termguicolors = true
+
+  local report = health.report(child)
+
+  local told = vim.tbl_filter(function(line)
+    return line:find('the office pack “broken”', 1, true) ~= nil
+  end, health.section(report, 'Office'))
+  eq(#told, 1)
 end
 
 T['the office']["is an error when 'termguicolors' is off: it does not show, and says why"] = function()

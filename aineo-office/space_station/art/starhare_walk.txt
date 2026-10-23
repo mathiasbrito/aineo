@@ -1,0 +1,22 @@
+about: The starhare walking, two frames.
+colours: B = agent, L = agent_light, e = cyan_glow, v = violet_glow, k = visor
+anchor: 5, 7
+seconds per frame: 0.25
+---
+........B.B
+........B.B
+........B.B
+........BBB
+v.......eBe
+.B.BBBBBBLB
+..BBBBBBBB.
+..B.B...B.B
+---
+........B.B
+........B.B
+........B.B
+........BBB
+v.......eBe
+.B.BBBBBBLB
+..BBBBBBBB.
+...B.B.B.B.

@@ -1,0 +1,5 @@
+about: The visor of a crew member: back.
+colours: B = agent
+anchor: 0, 0
+---
+.

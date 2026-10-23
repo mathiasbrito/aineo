@@ -1,8 +1,9 @@
---- The default office pack as the tests of its pack see it: the pack loaded
---- from the checkout, its agents recoloured so that each is found in a picture
---- by one colour nothing else is drawn in, a stage of it, the plan laid out as
---- `:help aineo-office-floor` says so that its spots can be counted, and the
---- picture read as a grid of pixels.
+--- An office pack as the tests of the packs of the checkout see it, the default
+--- pack unless a test names another: the pack loaded from the checkout, its
+--- agents recoloured so that each is found in a picture by one colour nothing
+--- else is drawn in, a stage of it, the plan laid out as `:help
+--- aineo-office-floor` says so that its spots can be counted, and the picture
+--- read as a grid of pixels.
 
 local office_pack = require('aineo.office_pack')
 local office_scene = require('aineo.office_scene')
@@ -16,15 +17,17 @@ M.AGENT_COLOURS = { '#ff00ff', '#00ffff', '#ffff00', '#ff8000', '#80ff00' }
 --- The colour the tests give the cat.
 M.CAT_COLOUR = '#7f00ff'
 
---- The default pack, loaded from the `aineo-office` folders on 'runtimepath',
---- where the checkout puts it, its agents and subagents in `AGENT_COLOURS`
---- and its cat, if it has one, in `CAT_COLOUR`. The pack is a copy: the loader
---- gives the same pack to whoever asks for it again, and a test changes its own.
+--- The pack `name`, the default pack when none is named, loaded from the
+--- `aineo-office` folders on 'runtimepath', where the checkout puts them, its
+--- agents and subagents in `AGENT_COLOURS` and its cat, if it has one, in
+--- `CAT_COLOUR`. The pack is a copy: the loader gives the same pack to whoever
+--- asks for it again, and a test changes its own.
 ---
+---@param name? string
 ---@return aineo.office_pack.Pack
-function M.load_pack()
+function M.load_pack(name)
   local pack, problem = office_pack.load({
-    name = 'default',
+    name = name or 'default',
     folders = vim.api.nvim_get_runtime_file('aineo-office', true),
   })
   assert(pack, vim.inspect(problem))

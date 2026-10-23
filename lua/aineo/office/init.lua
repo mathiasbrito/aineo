@@ -15,7 +15,9 @@
 --- cursor is; nothing is read and nothing is drawn. While it shows, one timer
 --- draws 12 frames a second and one file watch follows the session's
 --- transcript; both stop when it closes. The office closes when the cursor
---- enters any window in the cells it covers.
+--- enters any window in the cells it covers; leaving its tab page pauses it,
+--- and entering the tab page again resumes it in place, even with the cursor
+--- in the cells it covers.
 ---
 --- Loading this home loads none of the others of the office's context: they
 --- are required when the office first shows.
@@ -24,6 +26,7 @@ local cards_module = require('aineo.office.cards')
 local colours = require('aineo.office.colours')
 local countdown_module = require('aineo.office.countdown')
 local float_module = require('aineo.office.float')
+local preview_module = require('aineo.office.preview')
 local screen_module = require('aineo.office.screen')
 local too_small = require('aineo.office.too_small')
 
@@ -95,7 +98,8 @@ end
 ---@field settings? fun(): aineo.office.Settings what the user set for the office, asked each time it shows; the default pack when not given
 ---@field random? fun(count: integer): integer a whole number from 1 to `count`, which picks one of several packs the settings name; the first when not given
 ---@field wall_clock? fun(): number the time in seconds since 1970, which the stamps of the transcript's lines are on; the system's when not given
----@field transcript? fun(): string|nil the path of the transcript of the session the office acts out, asked each time the office starts following it (each show, and each return to its tab page); none or nil, and it follows none
+---@field transcript? fun(): string|nil, number|nil the path of the transcript of the session the office acts out, asked each time the office starts following it (each show, and each return to its tab page), and when the tab began following that session, in seconds since 1970, which lets the follower go on in the session its transcript says was continued in another (`aineo.transcript`'s `follow()`); none or nil, and it follows none
+---@field preview_seconds_per_state? number how long `preview()` shows each state, in seconds; 9 when not given
 ---@field schedule_after? fun(milliseconds: integer, callback: fun()): fun() calls `callback`, on the main loop, once `milliseconds` have passed, and returns what cancels the wait; the idle countdown waits through it; a timer of the editor's loop when not given
 
 ---@class aineo.office.Settings
@@ -107,7 +111,11 @@ end
 ---@class aineo.office.Office
 ---@field permission_wait fun(agent: string) tells the office the agent, `main` or a subagent's id, waits for the user to answer a permission prompt, until its next line in the transcript; it is kept, and handed over each time the office starts running unless the transcript shows the agent went on since
 ---@field report_arrived fun(report: aineo.office.Report) keeps the report as a card the office draws in its bottom right corner until the cursor enters the right side, and starts the idle countdown again; keeps nothing when the cursor is in the right side and the office is hidden, where the Report shows it
+---@field session_changed fun() tells the office the session it acts out is another now: the agents of the old session leave, its permission waits are forgotten, and an office that is running follows the transcript `options.transcript` names now at once; one that is hidden or paused follows it when it next starts
+---@field follows_session fun(session: string): boolean whether `session` is one of the sessions of the chain the office followed last: the session of the transcript it was given and those it went on in; false before it has followed any
 ---@field show_now fun() shows the office over the right side at once, and does nothing when it shows
+---@field preview fun(pack?: string) shows the pack, or the one the settings name, over the right side with every state of the vocabulary acted out in turn, each named, in place of the office that shows, which stays when the pack cannot be shown; the preview follows no transcript
+---@field reload fun() shows the office again with what the settings name now, when it shows, and does nothing when it is hidden, previews a pack or has no right side; a pack that cannot be shown is told, and the office that shows stays
 ---@field let_go fun() closes the office, stops its timer and its watch, and forgets the session
 
 --- Makes the office of one tab.
@@ -125,6 +133,12 @@ function M.new_office(options)
   vim.validate('options.settings', options.settings, 'function', true)
   vim.validate('options.random', options.random, 'function', true)
   vim.validate('options.schedule_after', options.schedule_after, 'function', true)
+  vim.validate(
+    'options.preview_seconds_per_state',
+    options.preview_seconds_per_state,
+    'number',
+    true
+  )
   vim.validate('options.transcript', options.transcript, 'function', true)
   vim.validate('options.wall_clock', options.wall_clock, 'function', true)
   offices_made = offices_made + 1
@@ -159,6 +173,12 @@ function M.new_office(options)
   --- is up again.
   ---@type table<string, number>
   local waits_kept = {}
+
+  --- The sessions of the chain the office followed last, as a set: kept when
+  --- the office stops following, so that a permission wait of a session it
+  --- followed is known while it is hidden.
+  ---@type table<string, true>
+  local followed_sessions = {}
 
   --- Whether `let_go()` has been called: the office counts no more.
   local has_been_let_go = false
@@ -200,7 +220,7 @@ function M.new_office(options)
   --- What exists while the office shows; nil while it is hidden. Its timer,
   --- tracker and follower are nil while the office is paused, as it is while
   --- its tab page is left.
-  ---@type { float: aineo.office.Float, group: integer, pack: aineo.office_pack.Pack, commands: aineo.office_states.CommandClasses|nil, stage: aineo.office_scene.Stage, screen: aineo.office.Screen, area: aineo.layout.Area, refresh_colours: fun(), draw: fun(), timer: uv.uv_timer_t|nil, tracker: aineo.office_states.Tracker|nil, follower: aineo.transcript.Follower|nil }|nil
+  ---@type { float: aineo.office.Float, group: integer, pack: aineo.office_pack.Pack, commands: aineo.office_states.CommandClasses|nil, stage: aineo.office_scene.Stage, screen: aineo.office.Screen, area: aineo.layout.Area, refresh_colours: fun(), draw: fun(), timer: uv.uv_timer_t|nil, tracker: aineo.office_states.Tracker|nil, follower: aineo.transcript.Follower|nil, preview: aineo.office.Preview|nil }|nil
   local showing = nil
 
   local office = {}
@@ -214,6 +234,15 @@ function M.new_office(options)
     local names = type(settings.pack) == 'table' and settings.pack or { settings.pack }
     local pick = options.random and options.random(#names) or 1
     return names[pick]
+  end
+
+  --- The name of the first pack the settings name: the pack of a preview that
+  --- is not given one.
+  ---
+  ---@param settings aineo.office.Settings
+  ---@return string
+  local function first_pack_name_of(settings)
+    return type(settings.pack) == 'table' and settings.pack[1] or settings.pack
   end
 
   --- Tells the user, in one warning, what is wrong with the pack `name`: the
@@ -281,7 +310,10 @@ function M.new_office(options)
 
   --- A tracker of the agents' states, and the follower that feeds it from the
   --- transcript `options.transcript` names; none when it names none, or the
-  --- file cannot be followed.
+  --- file cannot be followed. A line the follower reads as news that says the
+  --- session was continued in another has the office follow again, once the
+  --- current event is over (`office.session_changed()`); one it replays does
+  --- not, since the follower has gone on to the file that line names already.
   ---
   ---@param open { pack: aineo.office_pack.Pack, commands: aineo.office_states.CommandClasses|nil } the pack whose triggers the tracker tries, and the classes of commands it tells apart
   ---
@@ -301,19 +333,33 @@ function M.new_office(options)
       end,
     })
     local went_on_at = {}
-    local path = options.transcript and options.transcript()
+    local path, since
+    if options.transcript then
+      path, since = options.transcript()
+    end
     if not path then
       return tracker, nil, went_on_at
     end
     local follower = require('aineo.transcript').follow({
       path = path,
+      since = since,
       on_signal = function(signal)
+        if signal.kind == 'session_continued' then
+          if not signal.replayed then
+            vim.schedule(office.session_changed)
+          end
+          return
+        end
         if signal.replayed and signal.kind ~= 'tool_started' and signal.at then
           went_on_at[signal.agent] = math.max(went_on_at[signal.agent] or 0, signal.at)
         end
         tracker.take(signal, options.clock())
       end,
     })
+    followed_sessions = {}
+    for _, session in ipairs(follower.sessions) do
+      followed_sessions[session] = true
+    end
     return tracker, follower, went_on_at
   end
 
@@ -332,6 +378,18 @@ function M.new_office(options)
         tracker.take({ agent = agent, kind = 'permission_asked' }, options.clock())
       end
     end
+  end
+
+  --- Whether the office is paused: its tab page was left and not entered
+  --- again, so its frame timer and follower are stopped (`stop_running()`).
+  --- Entering the tab page again fires `WinEnter` for the window the cursor
+  --- was in before `TabEnter` resumes the office, so that window, even when it
+  --- lies in the cells the office covers, is not the cursor entering them.
+  ---
+  ---@param open table what exists while the office shows
+  ---@return boolean
+  local function is_paused(open)
+    return open.timer == nil
   end
 
   --- Whether the current tab page is the one the office's window is in.
@@ -373,7 +431,11 @@ function M.new_office(options)
       group = open.group,
       callback = function()
         local entered = vim.api.nvim_get_current_win()
-        if is_in_current_tab_page(open) and float_module.covers(open.float, entered) then
+        if
+          is_in_current_tab_page(open)
+          and not is_paused(open)
+          and float_module.covers(open.float, entered)
+        then
           close_soon()
         end
       end,
@@ -405,6 +467,9 @@ function M.new_office(options)
       callback = function()
         open.refresh_colours()
         cards_module.define_groups()
+        if open.preview then
+          preview_module.define_group()
+        end
         open.screen.forget_groups()
       end,
     })
@@ -457,29 +522,39 @@ function M.new_office(options)
   ---
   ---@param open table what exists while the office shows
   function start_running(open)
+    if open.preview then
+      open.timer = start_frames(open.draw)
+      return
+    end
     local went_on_at
     open.tracker, open.follower, went_on_at = follow_transcript(open)
     hand_over_kept_waits(open.tracker, went_on_at)
     open.timer = start_frames(open.draw)
   end
 
-  --- Shows the office over `area`. With a pack that cannot be loaded or a
+  --- Shows the office over `area`: the tab's Claude Code acted out, or, with
+  --- `previewing`, every state of the vocabulary in turn. With a pack that
+  --- cannot be loaded, for a preview one other than the pack asked for, or a
   --- stage that cannot be made, tells the user why and shows nothing.
   ---
   ---@param area aineo.layout.Area
-  local function show_over(area)
+  ---@param previewing? { pack: string|nil } the pack to preview, none for the settings' own
+  ---@param before_opening? fun() called once the pack is loaded and the stage made, just before the window opens: the place to close the office that shows, which a failure above leaves as it is
+  ---@return boolean shown whether the office shows now
+  local function show_over(area, previewing, before_opening)
     local office_pack = require('aineo.office_pack')
     local settings = options.settings and options.settings() or DEFAULT_SETTINGS
-    local name = pack_name_of(settings)
+    local name = previewing and (previewing.pack or first_pack_name_of(settings))
+      or pack_name_of(settings)
     local pack, problems = office_pack.load({
       name = name,
       folders = options.pack_folders(),
       replaced_pieces = settings.pieces,
     })
-    if not pack then
+    if not pack or (previewing and pack.name ~= name) then
       local why = office_pack.describe_problem(problems[1])
       vim.notify(('aineo: the office cannot show: %s'):format(why), vim.log.levels.ERROR)
-      return
+      return false
     end
     warn_of(name, problems)
     local refresh_colours = colours.follow_highlights(pack)
@@ -499,7 +574,10 @@ function M.new_office(options)
     })
     if not made then
       vim.notify(('aineo: the office cannot show: %s'):format(stage), vim.log.levels.ERROR)
-      return
+      return false
+    end
+    if before_opening then
+      before_opening()
     end
     local float = float_module.open(area)
     local screen = screen_module.new_screen(float.buffer)
@@ -514,8 +592,15 @@ function M.new_office(options)
       area = area,
       refresh_colours = refresh_colours,
     }
+    if previewing then
+      preview_module.define_group()
+      open.preview = preview_module.new_preview({
+        start = options.clock(),
+        seconds_per_state = options.preview_seconds_per_state,
+      })
+    end
     open.draw = function()
-      if not open.tracker then
+      if not open.tracker and not open.preview then
         return
       end
       local width = vim.api.nvim_win_get_width(float.window)
@@ -525,13 +610,19 @@ function M.new_office(options)
         return
       end
       local now = options.clock()
-      stage.advance(open.tracker.agents(now), now)
-      screen.paint(cards.overlay(stage.picture(), { width = width, now = now }))
+      if open.preview then
+        stage.advance(open.preview.agents(now), now)
+        screen.paint(open.preview.overlay(stage.picture(), now))
+      else
+        stage.advance(open.tracker.agents(now), now)
+        screen.paint(cards.overlay(stage.picture(), { width = width, now = now }))
+      end
     end
     start_running(open)
     watch_the_screen(open)
     showing = open
     draw_frame(open.draw)
+    return true
   end
 
   --- The settings the user gave the office, or the default when it was given
@@ -647,6 +738,28 @@ function M.new_office(options)
     show_over(area)
   end
 
+  function office.preview(pack)
+    local area = options.right_side()
+    local why = why_it_cannot_show(area)
+    if why then
+      vim.notify(why, vim.log.levels.WARN)
+      return
+    end
+    idle_time_has_passed = false
+    countdown.stop()
+    if not show_over(area, { pack = pack }, close) then
+      settle()
+    end
+  end
+
+  function office.reload()
+    local open = showing
+    local area = options.right_side()
+    if open and not open.preview and area then
+      show_over(area, nil, close)
+    end
+  end
+
   function office.permission_wait(agent)
     if waits_kept[agent] or vim.tbl_count(waits_kept) < MOST_WAITS_KEPT then
       waits_kept[agent] = wall_clock()
@@ -657,12 +770,25 @@ function M.new_office(options)
     end
   end
 
+  function office.follows_session(session)
+    return followed_sessions[session] == true
+  end
+
   function office.report_arrived(report)
     if not showing and cursor_is_in(options.right_side()) then
       return
     end
     cards.add(report)
     start_counting_again()
+  end
+
+  function office.session_changed()
+    waits_kept = {}
+    local open = showing
+    if open and open.timer then
+      stop_running(open)
+      start_running(open)
+    end
   end
 
   --- Closes the office and stops its countdown.

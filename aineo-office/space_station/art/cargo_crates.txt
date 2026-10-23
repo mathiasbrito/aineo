@@ -1,0 +1,26 @@
+about: Three cargo crates stacked on a pallet, strapped.
+colours: C = crate, D = crate_dark, L = crate_light, S = strap, F = steel_blue, W = rivet, g = cyan_glow
+anchor: 3, 19
+---
+.............
+.............
+.............
+.............
+.....DLSSLD..
+.....DDSSDD..
+.....DDSSDD..
+.....DDSSDD..
+....DDDSSDDD.
+....DLLSSLLD.
+....DCCSSCCD.
+....DCCSSCCD.
+....DDDSSDDD.
+...DDDDSSDDDD
+...DLLLSSLLLD
+...DCCCSSCCCD
+...DDDDSSDDDD
+...DCCCSSCCCD
+...DCCCSSCWCD
+...DDDDSSDDDD
+...FFFFFFFFFF
+...FFFFFFFFFF

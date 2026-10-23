@@ -18,6 +18,11 @@ M.LINES = 42
 M.USAGE =
   'aineo: :Aineo takes one of send, open, report, input, claude, claude-numbers, sessions, new, pane, run, claim, tab, diff, find, zoom, explain, office'
 
+--- What `:Aineo office` tells the user when it is given words it does not
+--- take.
+M.OFFICE_USAGE =
+  'aineo: :Aineo office takes check, states, preview, new or pack, and the name of a pack'
+
 --- Starts `child` afresh at `M.COLUMNS` by `M.LINES`, with every notification
 --- it gives from then on kept for `messages()` rather than shown.
 ---

@@ -1,0 +1,20 @@
+about: The arms and the seat of the crew bench, in front of the crew who sit on it.
+colours: A = bench_light, B = bench_teal, L = bench_light, c = cyan_glow, F = alloy
+anchor: 0, 15
+---
+...............................
+...............................
+...............................
+...............................
+...............................
+.AA.........................AA.
+AAA.........................AAA
+AAA.........................AAA
+AAA.........................AAA
+AAA.........................AAA
+AAA.........................AAA
+AAALLLLLLLLLLLLLLLLLLLLLLLLLAAA
+AAABBBBBBBBBBBBBBBBBBBBBBBBBAAA
+AAAAAAAAcccccccccccccccAAAAAAAA
+.FF.........................FF.
+...............................
