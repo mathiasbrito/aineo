@@ -74,6 +74,30 @@ M.PACK_FIELDS = {
   states = { standing = 'stand', working = 'work' },
 }
 
+--- A random source that gives `value` every time.
+---
+---@param value number from 0 up to, not including, 1
+---@return fun(): number
+function M.always(value)
+  return function()
+    return value
+  end
+end
+
+--- A random source that gives the numbers of `first` in turn, and `value`
+--- every time after them.
+---
+---@param first number[]
+---@param value number
+---@return fun(): number
+function M.sequence(first, value)
+  local drawn = 0
+  return function()
+    drawn = drawn + 1
+    return first[drawn] or value
+  end
+end
+
 --- What a test of the scene needs, with its packs written under the
 --- fixture directory `directory_name`, which no other test file uses.
 ---
@@ -86,6 +110,8 @@ function M.new(directory_name)
     AGENT = M.AGENT,
     SECOND_AGENT = M.SECOND_AGENT,
     cell_art = M.cell_art,
+    always = M.always,
+    sequence = M.sequence,
   }
 
   --- Loads a pack from `plan` and `legend` (the plan text and what its
