@@ -4064,7 +4064,8 @@ leaving, the lowest number no other agent has, and its desk, its monitor and
 its colour go by it: the agent with the first place has the first desk, the
 first monitor and the first colour. After `for_seconds` from its arrival (a
 random time between the two numbers when it has two) the next step begins; the
-last step lasts until the agent's activity changes. An agent whose step names
+last step lasts until the agent's activity changes, or, when it has
+`for_seconds`, until they are over (see below). An agent whose step names
 a spot that other agents have keeps the spot it stands on and looks again
 every second; an agent that has no place yet is not drawn until a spot is
 free. A spot that cannot be walked to leaves the agent where it is and its
@@ -4073,6 +4074,31 @@ step without walking there, or at the spot `door` when the step has no `at`.
 A step's `effect` shows over the pose's. When the office is resized, each
 agent keeps its activity and its step, at the spot of the same name and
 number in the new plan.
+
+When the last step of an activity has `for_seconds` and they are over while
+the agent's state goes on, the agent plays another activity: one whose
+`during` names its state, picked at random in proportion to its `chance`
+(`1` unless it says), never the one the agent has just played, and only one it
+can play now. It can play an activity when the plan has as many free spots as
+`players` for its first step with a spot and a spot for each step after, when
+the others that must play it are free, and, for a step that follows someone,
+when someone is on the move. An activity with `players = 2` takes along
+another agent, picked at random among those in a state its `during` names,
+who leaves what it was doing: both begin it together, each at a spot of its
+own of the name, and each step lasts the same time for both; with no such
+agent it is not picked. An agent with nothing to pick keeps its last pose and
+looks again every second. When the agent's state changes, what it picked at
+random is dropped for what the new state asks for.
+
+A step's `at` may name a spot aineo knows without a legend: `anywhere` is a
+floor cell the random source picks; `an_empty_desk` a desk of the plan no
+agent has; `an_idle_agents_desk` the desk of another agent in the state `idle`
+who is away from it; `next_to_an_agent` a cell beside another agent who stands
+still; and a thing's name is the cell where a thing of that name lies. With
+`even_if_taken` a step goes to the nearest spot of its name, taken or not:
+the character that has it is moved when the one coming arrives, and plays the
+activity `the_one_moved_plays` names, or, when the step names none, looks for
+another spot of the name.
 
 A pose whose art has frames, or whose `rises` lifts it, begins at its first
 frame when the agent takes the pose. A pose with `screen` shows that piece in
@@ -4083,8 +4109,30 @@ as the piece's own `faces` says.
 
 `things` says what an activity leaves behind: `piece`, and optionally
 `upsets_agents_within` (cells), `upset_agents_play` and `cleaned_up_by` (an
-activity each). `states` maps the name of a state to an activity; a state it
-leaves out takes its parent's.
+activity each). A step with `leave` lays that thing on the floor at the
+character's feet as the step ends, and a step with `remove` takes away the
+thing of that name on the cell the character stands on as it ends; a step
+that never ends leaves and removes nothing. A thing is drawn under what stands
+on its cell. When one is left, the agents at most `upsets_agents_within` cells
+from it, in a straight line, play `upset_agents_play`, and the idle agent (the
+state `idle`) nearest to it plays `cleaned_up_by` instead; with no idle agent
+the thing waits until one is. Both are interludes: when they are over, or when
+the agent's state changes, the agent goes back to what its state asks for. At
+most 64 things lie at a time, and a resize drops those on cells the new plan
+cannot be walked on.
+
+`characters.cat` draws a cat, `how_many` of them (at most 4), once the pack
+has activities with `who = 'cat'`. The cat has no state: it plays those
+activities at random, as agents do, the ones whose `during` names `always`.
+It takes no place among the agents, so it has no desk, no monitor and no row
+in the status list, and its colour goes by its number among the cats. A cat's
+step may `follow = 'someone_walking'`, the only name there is: the cat trails
+the nearest character on the move for `for_seconds` or until it stops. A cat
+that takes a seat an agent is on, with `even_if_taken`, angers the agent and
+the agent leaves, if the pack says so by `the_one_moved_plays`.
+
+`states` maps the name of a state to an activity; a state it leaves out takes
+its parent's.
 
                                                        *aineo-office-triggers*
 Triggers ~
