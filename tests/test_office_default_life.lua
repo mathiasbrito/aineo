@@ -140,6 +140,27 @@ T['an idle agent']['waters the plant in the corner too'] = function()
   eq(visited.corner_plant, true)
 end
 
+T['an idle agent']['pets the cat, standing right beside it'] = function()
+  local pack = pack_with_life({ 'pet_the_cat', 'wander_the_aisles' })
+  local stage = default.stage(pack, ROOM[1], ROOM[2])
+  local agents = default.agents(1, 'idle')
+  local closest_while_petting = math.huge
+
+  for step = 0, 4 * 120 do
+    stage.advance(agents, step / 4)
+    local picture = stage.picture()
+    local petting = table.concat(default.text_rows(picture, ROOM[2] - LIST_ROWS + 2), '\n')
+    local pixels = default.pixels(picture, ROOM[1])
+    local agent = default.where_is(pixels, default.AGENT_COLOURS[1])
+    local cat = default.where_is(pixels, default.CAT_COLOUR)
+    if petting:find('pets the cat', 1, true) and agent and cat then
+      closest_while_petting = math.min(closest_while_petting, math.abs(agent.column - cat.column))
+    end
+  end
+
+  eq(closest_while_petting <= 16, true)
+end
+
 T['two idle agents'] = MiniTest.new_set()
 
 T['two idle agents']['play table tennis together, each at an end of the table'] = function()
