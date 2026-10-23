@@ -5,8 +5,8 @@
 local M = {}
 
 --- What is wrong with the Lua pattern `pattern` as a match of a class of
---- commands: Lua cannot read it whole, or it repeats (`*`, `+`, `-`) more than
---- once. `nil` when nothing is. The walk that tells is loaded when first
+--- commands: Lua cannot read it whole, or it repeats (`*`, `+`, `-`, `?`) more
+--- than once. `nil` when nothing is. The walk that tells is loaded when first
 --- asked, so that starting the editor loads only this file.
 ---
 ---@param pattern string
