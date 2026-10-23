@@ -4,6 +4,7 @@
 --- and a piece laid on the floor is under everything that stands on it.
 
 local items = require('aineo.office_scene.items')
+local live_text = require('aineo.office_scene.live_text')
 local poses = require('aineo.office_scene.poses')
 local stretch = require('aineo.office_scene.stretch')
 
@@ -81,6 +82,29 @@ local function paint_screen(canvas, drawing, placed, monitor)
   })
 end
 
+--- Writes the live text a piece that shows content of the wall clock gives,
+--- into the piece's area of that name, no more of it than the area holds.
+---
+---@param canvas aineo.office_scene.Canvas
+---@param drawing aineo.office_scene.Drawing
+---@param placed aineo.office_scene.PlacedPiece
+---@param piece aineo.office_pack.Piece the art the piece is drawn in
+local function write_live_text(canvas, drawing, placed, piece)
+  local text = placed.shows and drawing.wall_time and live_text.of(placed.shows, drawing.wall_time)
+  local area = piece.areas[placed.shows or '']
+  if not (text and area) then
+    return
+  end
+  local column = placed.column - piece.anchor.column + area.column
+  local row = math.floor((2 * placed.row + 1 - piece.anchor.row + area.row) / 2)
+  canvas.write_text(
+    column,
+    row,
+    vim.fn.strcharpart(text, 0, area.width),
+    { foreground = drawing.pack.text_colours.status }
+  )
+end
+
 --- The items for the pieces the plan places that lie on the canvas.
 ---
 ---@param canvas aineo.office_scene.Canvas
@@ -102,6 +126,7 @@ function M.items(canvas, drawing)
             colours = drawing.pack.colours,
           })
           paint_screen(canvas, drawing, placed, piece)
+          write_live_text(canvas, drawing, placed, piece)
         end,
       })
     end

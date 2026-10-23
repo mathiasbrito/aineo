@@ -41,6 +41,13 @@ local FRAME_MS = 83
 --- right side to cover.
 local NO_RIGHT_SIDE = "aineo: the office has no right side of aineo's layout to cover"
 
+--- The local time, as the wall clock of the office when it is given none.
+---
+---@return aineo.office_scene.WallTime
+local function local_time()
+  return os.date('*t') --[[@as aineo.office_scene.WallTime]]
+end
+
 --- What the status list says of each state: the words of the vocabulary.
 ---
 ---@return table<string, string>
@@ -58,6 +65,7 @@ end
 ---@field clock fun(): number the time in seconds, from any origin, that only grows
 ---@field commands? aineo.office_states.CommandClasses the classes of shell commands that tell what an agent running one does (`office.commands`); none, and every command is a command run
 ---@field report_tool? string the name of aineo's report tool, as Claude Code calls it; none, and no call is a report
+---@field wall_clock? fun(): aineo.office_scene.WallTime the time on the wall outside the office, asked for each frame; the local time when not given
 ---@field settings? fun(): aineo.office.Settings what the user set for the office, asked each time it shows; the default pack when not given
 ---@field random? fun(count: integer): integer a whole number from 1 to `count`, which picks one of several packs the settings name; the first when not given
 
@@ -82,6 +90,7 @@ function M.new_office(options)
   vim.validate('options.pack_folders', options.pack_folders, 'table')
   vim.validate('options.clock', options.clock, 'function')
   vim.validate('options.settings', options.settings, 'function', true)
+  vim.validate('options.wall_clock', options.wall_clock, 'function', true)
   vim.validate('options.random', options.random, 'function', true)
 
   ---@type string|nil
@@ -313,6 +322,7 @@ function M.new_office(options)
       width = area.width,
       height = area.height,
       state_labels = state_labels(),
+      clock = options.wall_clock or local_time,
     })
     if not made then
       vim.notify(('aineo: the office cannot show: %s'):format(stage), vim.log.levels.ERROR)
