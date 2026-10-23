@@ -36,7 +36,7 @@ end
 local function has_the_spots_for(context, performer, activity)
   local needed = activity.players
   for _, step in ipairs(activity.steps) do
-    if step.follow and not following.nearest_walker(context, performer) then
+    if following.is_followed_by(step) and not following.nearest_walker(context, performer) then
       return false
     end
     if step.at then

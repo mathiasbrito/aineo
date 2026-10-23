@@ -8,6 +8,18 @@ local walking = require('aineo.office_scene.walking')
 
 local M = {}
 
+--- The only thing a step's `follow` can name: the nearest character on the
+--- move.
+M.SOMEONE_WALKING = 'someone_walking'
+
+--- Whether `step` has its character follow someone on the move.
+---
+---@param step table
+---@return boolean
+function M.is_followed_by(step)
+  return step.follow == M.SOMEONE_WALKING
+end
+
 --- The character on the move that is nearest to `performer`, other than it.
 ---
 ---@param context aineo.office_scene.DirectorContext
