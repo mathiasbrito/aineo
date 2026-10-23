@@ -7,6 +7,7 @@
 --- is first made.
 
 local places = require('aineo.entry.places')
+local settings = require('aineo.entry.settings')
 
 local M = {}
 
@@ -64,6 +65,8 @@ local function office_of(tab)
       clock = function()
         return vim.uv.hrtime() / 1e9
       end,
+      commands = settings.resolved().office.commands,
+      report_tool = require('aineo.mcp').report_tool_name(),
     })
   end
   return offices[tab]

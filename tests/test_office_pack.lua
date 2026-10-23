@@ -183,12 +183,28 @@ T['load()']['gives each state the activity of the first state it falls back thro
 
   local pack = load_pack('small', { folder })
 
-  eq(pack.state_activity, {
-    standing = 'stand',
-    working = 'work',
-    resting = 'stand',
-    idle = 'stand',
-  })
+  eq(pack.state_activity.standing, 'stand')
+  eq(pack.state_activity.working, 'work')
+  eq(pack.state_activity.resting, 'stand')
+  eq(pack.state_activity.idle, 'stand')
+  eq(pack.state_activity.reading, 'work')
+  eq(pack.state_activity.asleep, 'stand')
+end
+
+T['load()']['gives every state of the vocabulary, and nothing else, an activity'] = function()
+  local folder = files.write_pack(pack_root(), 'small')
+
+  local pack = load_pack('small', { folder })
+
+  local names = vim.tbl_map(function(state)
+    return state.name
+  end, require('aineo.office_states').vocabulary())
+  local keys = vim.tbl_keys(pack.state_activity)
+  table.sort(names)
+  table.sort(keys)
+  eq(keys, names)
+  eq(pack.state_activity.leaving, 'stand')
+  eq(pack.state_activity.running_tests, 'work')
 end
 
 T['load()']['prefers the activity a pack maps to a state over the one it falls back to'] = function()

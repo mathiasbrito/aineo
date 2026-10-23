@@ -46,8 +46,9 @@ local NO_TAB = 'aineo: there is no aineo tab to show the office in'
 --- `ready` mode under `name`, and waits until Claude Code is ready.
 ---
 ---@param name string the case's own name for its files, starting `office-`
-local function open_layout(name)
-  entry.use_fake(child, claude_session.fake(name, 'ready'))
+---@param settings? table more of `vim.g.aineo`
+local function open_layout(name, settings)
+  entry.use_fake(child, claude_session.fake(name, 'ready'), settings)
   child.cmd('Aineo open')
   claude_session.wait_for_status(child, 'ready')
 end
@@ -280,6 +281,59 @@ T['what the office shows']['follows no transcript a session id with a path in it
   ]])
 
   eq(office_cells.is_standing(child), true)
+end
+
+--- The Lua that makes the child note, as `_G.tracker_options`, the options
+--- the office makes its tracker with.
+local NOTE_THE_TRACKER_OPTIONS = [[
+  local office_states = require('aineo.office_states')
+  local new_tracker = office_states.new_tracker
+  office_states.new_tracker = function(options)
+    _G.tracker_options = options
+    return new_tracker(options)
+  end
+]]
+
+T['what the office is told'] = MiniTest.new_set()
+
+T['what the office is told']['gives its tracker the classes of commands of office.commands'] = function()
+  open_layout('office-commands', { office = { commands = { tests = { 'just check' } } } })
+  child.lua(NOTE_THE_TRACKER_OPTIONS)
+
+  entry.command(child, 'Aineo office')
+
+  eq(child.lua_get([[_G.tracker_options.commands]]), { tests = { 'just check' } })
+end
+
+T['what the office is told']['gives its tracker the default classes of commands when none is set'] = function()
+  open_layout('office-default-commands')
+  child.lua(NOTE_THE_TRACKER_OPTIONS)
+
+  entry.command(child, 'Aineo office')
+
+  eq(
+    child.lua_get([[(_G.tracker_options.commands or {}).committing]]),
+    { 'git commit', 'git push', 'gh pr create' }
+  )
+end
+
+T['what the office is told']['gives its tracker the classes of commands that setup() was given'] = function()
+  open_layout('office-setup-commands')
+  child.lua([[require('aineo').setup({ office = { commands = { tests = { 'just check' } } } })]])
+  child.lua(NOTE_THE_TRACKER_OPTIONS)
+
+  entry.command(child, 'Aineo office')
+
+  eq(child.lua_get([[_G.tracker_options.commands]]), { tests = { 'just check' } })
+end
+
+T['what the office is told']["gives its tracker the name of aineo's report tool"] = function()
+  open_layout('office-report-tool')
+  child.lua(NOTE_THE_TRACKER_OPTIONS)
+
+  entry.command(child, 'Aineo office')
+
+  eq(child.lua_get([[_G.tracker_options.report_tool]]), 'mcp__aineo__report')
 end
 
 T['without an aineo tab'] = MiniTest.new_set()

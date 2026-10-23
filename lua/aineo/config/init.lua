@@ -4,6 +4,17 @@
 
 local M = {}
 
+--- What is wrong with the Lua pattern `pattern` as a match of a class of
+--- commands: Lua cannot read it whole, or it repeats (`*`, `+`, `-`) more than
+--- once. `nil` when nothing is. The walk that tells is loaded when first
+--- asked, so that starting the editor loads only this file.
+---
+---@param pattern string
+---@return string|nil problem
+function M.lua_pattern_problem(pattern)
+  return require('aineo.config.lua_pattern').problem(pattern)
+end
+
 local recorded_setup_options = {}
 
 --- Whether `value` is a prefix, of Normal-mode keys or of Terminal-mode and
@@ -101,6 +112,55 @@ local function is_find_picker(value)
   return vim.list_contains(FIND_PICKERS, value)
 end
 
+--- The classes of shell commands the office tells apart, in the order they are
+--- tried.
+local COMMAND_CLASSES = { 'tests', 'committing', 'searching', 'reading' }
+
+--- Whether `value` is one match of a class of commands: plain words or a glob,
+--- a non-empty string; or a table of a `lua_pattern` string and nothing else.
+---
+---@param value any
+---@return boolean
+local function is_command_match(value)
+  if type(value) == 'string' then
+    return value ~= ''
+  end
+  return type(value) == 'table'
+    and type(value.lua_pattern) == 'string'
+    and vim.tbl_count(value) == 1
+end
+
+--- Whether `value` is the classes of shell commands: a table of at most the
+--- four classes, each a list of matches, the Lua patterns among them read
+--- whole by Lua and repeating once at most (`M.lua_pattern_problem()`).
+---
+--- When a Lua pattern is what is wrong, the second result says how.
+---
+---@param value any
+---@return boolean
+---@return string|nil problem
+local function is_command_classes(value)
+  if type(value) ~= 'table' then
+    return false
+  end
+  for class, matches in pairs(value) do
+    if
+      not vim.list_contains(COMMAND_CLASSES, class)
+      or not vim.islist(matches)
+      or not vim.iter(matches):all(is_command_match)
+    then
+      return false
+    end
+    for _, match in ipairs(matches) do
+      local problem = type(match) == 'table' and M.lua_pattern_problem(match.lua_pattern)
+      if problem then
+        return false, ("the Lua pattern '%s': %s"):format(match.lua_pattern, problem)
+      end
+    end
+  end
+  return true
+end
+
 --- aineo's settings, each named by its path in `vim.g.aineo`, with its
 --- default and the check its value must pass (`vim.validate`'s validator and,
 --- for a function, the words that describe what it expects).
@@ -173,6 +233,27 @@ local SETTINGS = {
     default = 'Some issues were found in this code, can you check and propose a fix if the issue holds:',
     validator = is_prompt,
     expected = 'a non-empty string',
+  },
+  {
+    name = 'office.commands',
+    default = {
+      tests = {
+        'make test',
+        'make test_file',
+        'npm test',
+        'pytest',
+        'go test',
+        'cargo test',
+        'busted',
+        'mix test',
+        'rspec',
+      },
+      committing = { 'git commit', 'git push', 'gh pr create' },
+      searching = { 'rg', 'grep', 'git grep', 'find', 'fd', 'ag', 'ack' },
+      reading = { 'cat', 'head', 'tail', 'less', 'bat', 'sed -n' },
+    },
+    validator = is_command_classes,
+    expected = 'a table of tests, committing, searching and reading, each a list of matches: a non-empty string, or { lua_pattern = <pattern> }',
   },
 }
 
