@@ -119,6 +119,8 @@ end
 
 T['the desks'] = MiniTest.new_set()
 
+T['the monitors'] = MiniTest.new_set()
+
 --- The first place in the rows of text of a picture where `word` is written,
 --- as the row from 1 and the cell from 0, nil when it is nowhere.
 ---
@@ -143,6 +145,43 @@ T['the desks']['write the name of their agent on the plate under the desk top'] 
   eq(
     { where_written(plan_rows, 'main'), where_written(plan_rows, 'sub2') },
     { { 22, 18 }, { 22, 102 } }
+  )
+end
+
+--- The rows of text of the plan, the status list left out, of the default
+--- office `size` big with `agents` in it, at the moment they start.
+---
+---@param agents aineo.office_states.Agent[]
+---@param size integer[] columns and rows
+---@return string[]
+local function plan_text_of(agents, size)
+  local stage = default.stage(default.load_pack(), size[1], size[2])
+  stage.advance(agents, 0)
+  return vim.list_slice(default.text_rows(stage.picture(), 1), 1, size[2] - 5)
+end
+
+T['the desks']['name the agent that sits at them where the width cuts the seat of the last desk of a row'] = function()
+  local plan_rows = plan_text_of(default.agents(5, 'writing_code'), { 157, 78 })
+
+  eq({
+    where_written(plan_rows, 'main'),
+    where_written(plan_rows, 'sub2'),
+    where_written(plan_rows, 'sub3'),
+    where_written(plan_rows, 'sub4'),
+    where_written(plan_rows, 'sub5'),
+  }, { { 22, 18 }, { 22, 102 }, { 22, 130 }, { 38, 18 }, { 38, 46 } })
+end
+
+T['the monitors']['show the clue of the agent that sits at them where the width cuts the monitor of the last desk of a row'] = function()
+  local agents = default.agents(5, 'writing_code')
+  agents[4] = { id = 'sub4', state = 'on_the_web', details = { web_clue = 'FOUR clue' } }
+  agents[5] = { id = 'sub5', state = 'on_the_web', details = { web_clue = 'FIVE clue' } }
+
+  local plan_rows = plan_text_of(agents, { 165, 78 })
+
+  eq(
+    { where_written(plan_rows, 'FOUR clue'), where_written(plan_rows, 'FIVE clue') },
+    { nil, { 33, 30 } }
   )
 end
 

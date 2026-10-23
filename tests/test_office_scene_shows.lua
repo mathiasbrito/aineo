@@ -151,4 +151,21 @@ T['a piece that shows names']['leaves the plate of a desk nobody has blank'] = f
   )
 end
 
+T['a piece that shows names']['leaves blank the plate of a desk the width cut off from its seat'] = function()
+  local pack = scene.people_pack(
+    '# plan\n \n P.......P.......P.\n ...S.......S.......S\n',
+    { P = { piece = 'plate', shows = 'name' }, S = { spot = 'desk' } },
+    nil,
+    desk_art(6)
+  )
+  local stage = scene.stage_of(pack, 18, 3)
+
+  stage.advance(scene.agents_in('working', 'working', 'working'), 0)
+
+  eq(
+    (vim.fn.strcharpart(stage.picture().rows[1].text, 0, 18):gsub('▀', ' ')),
+    'main    agent2    '
+  )
+end
+
 return T
