@@ -96,4 +96,35 @@ function M.nearest(layout, start, spots)
   return nil
 end
 
+--- Every cell that can be walked to from `start`, and `start` itself, as
+--- `row * width + column`. Walks one step a time like `nearest`, and costs
+--- the cells it finds.
+---
+---@param layout aineo.office_scene.FloorLayout
+---@param start aineo.office_scene.Cell
+---@return table<integer, true> reachable
+function M.cells_reachable_from(layout, start)
+  local width, walkable = layout.width, layout.walkable_cells
+  local start_key = start.row * width + start.column
+  local reachable = { [start_key] = true }
+  local pending = { start_key }
+  while #pending > 0 do
+    local key = table.remove(pending)
+    local column = key % width
+    local neighbours = {
+      column < width - 1 and key + 1,
+      column > 0 and key - 1,
+      key + width,
+      key - width,
+    }
+    for _, neighbour in pairs(neighbours) do
+      if neighbour and walkable[neighbour] and not reachable[neighbour] then
+        reachable[neighbour] = true
+        table.insert(pending, neighbour)
+      end
+    end
+  end
+  return reachable
+end
+
 return M
