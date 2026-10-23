@@ -1,9 +1,10 @@
---- The office of each tab, in the composition root: makes a tab's office the
---- first time it is asked to show, hands it what it is not to reach for — the
---- layout's right side, the folders packs are in, the clock, the settings and
---- the transcript of the tab's session — and shows it. It keeps the transcript path the
---- tab's `SessionStart` hooks name, and tells the office the tab's
---- permission waits.
+--- The office of each tab, in the composition root: makes a tab's office as
+--- the tab's layout opens, so that it counts the user's idleness from then on,
+--- hands it what it is not to reach for — the layout's right side, the folders
+--- packs are in, the clock, the settings and the transcript of the tab's
+--- session — and shows it when asked. It keeps the transcript path the tab's
+--- `SessionStart` hooks name, tells the office the tab's permission waits and
+--- the reports its Report took, and lets it go when the tab closes.
 ---
 --- Loading it loads no other home: `aineo.office` is required when an office
 --- is first made.
@@ -117,18 +118,37 @@ local function office_of(tab)
   if not offices[tab] then
     offices[tab] = require('aineo.office').new_office({
       right_side = tab.homes.layout.right_column_area,
-      pack_folders = M.pack_folders(),
+      pack_folders = M.pack_folders,
       clock = function()
         return vim.uv.hrtime() / 1e9
       end,
       settings = M.settings,
       random = random_pick,
-
-      commands = settings.resolved().office.commands,
       report_tool = require('aineo.mcp').report_tool_name(),
     })
   end
   return offices[tab]
+end
+
+--- Makes the office of `tab`, if it has none, which counts the user's
+--- idleness from then on: called as the tab's layout opens in a tab page.
+---
+---@param tab aineo.entry.Tab
+function M.watch(tab)
+  office_of(tab)
+end
+
+--- Lets the office of `tab` go, if it has one, as the tab closes: its
+--- countdown, window and watch end, and the tab has no office until it is
+--- watched again.
+---
+---@param tab aineo.entry.Tab
+function M.let_go(tab)
+  local office = offices[tab]
+  offices[tab] = nil
+  if office then
+    office.let_go()
+  end
 end
 
 --- Shows the office of `tab` over the right side of its layout, following the
@@ -141,19 +161,29 @@ function M.show(tab)
   office.show_now()
 end
 
---- Tells the office `tab` has, if it has made one, that the agent `agent_id`
---- of the session `session_id` waits for the user to answer a permission
---- prompt: the subagent of that id, or `'main'` when `agent_id` is nil. A
---- wait of a session the tab does not run, and one for a tab that has made
---- no office, tell nothing, nor does an office that takes no waits.
+--- Tells the office `tab` has, if it has one, that the agent `agent_id` of
+--- the session `session_id` waits for the user to answer a permission
+--- prompt: the subagent of that id, or `'main'` when `agent_id` is nil. A wait
+--- of a session the tab does not run tells nothing.
 ---
 ---@param tab aineo.entry.Tab
 ---@param session_id string
 ---@param agent_id string?
 function M.take_permission_wait(tab, session_id, agent_id)
   local office = offices[tab]
-  if office and office.permission_wait and session_id == tab.session_id() then
+  if office and session_id == tab.session_id() then
     office.permission_wait(agent_id or 'main')
+  end
+end
+
+--- Tells the office `tab` has, if it has one, a report the tab's Report took.
+---
+---@param tab aineo.entry.Tab
+---@param report table the report's arguments
+function M.report_arrived(tab, report)
+  local office = offices[tab]
+  if office then
+    office.report_arrived(report)
   end
 end
 
