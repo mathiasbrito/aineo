@@ -5,19 +5,9 @@
 
 local colours = require('aineo.office_scene.colours')
 local items = require('aineo.office_scene.items')
+local poses = require('aineo.office_scene.poses')
 
 local M = {}
-
---- The pose of `character` in the pack: the pose it holds, or standing when
---- the pack does not describe it; nil when the pack has neither.
----
----@param pack aineo.office_pack.Pack
----@param character aineo.office_scene.Character
----@return aineo.office_pack.Pose|nil
-local function pose_of(pack, character)
-  local looks = pack[character.kind]
-  return looks.poses[character.pose] or looks.poses.standing
-end
 
 --- The pieces of art a pose draws that the pack has, bottom first.
 ---
@@ -142,7 +132,7 @@ end
 function M.items(canvas, drawing)
   local made = {}
   for _, character in ipairs(drawing.characters) do
-    local pose = pose_of(drawing.pack, character)
+    local pose = poses.of(drawing.pack, character)
     if pose then
       table.insert(made, item_of(canvas, drawing, character, pose))
     end
@@ -194,7 +184,7 @@ local PLACES = {
 ---@param character aineo.office_scene.Character
 local function write_effect(canvas, drawing, character)
   local pack = drawing.pack
-  local pose = pose_of(pack, character)
+  local pose = poses.of(pack, character)
   local effect_name = character.effect or (pose and pose.effect)
   local effect = effect_name and pack.effects[effect_name]
   if not (pose and effect) then

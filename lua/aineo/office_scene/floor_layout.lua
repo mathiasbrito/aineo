@@ -21,6 +21,7 @@ local PLAIN_CELLS = { [WALL] = true, [FLOOR] = true, [UNWALKED_FLOOR] = true }
 ---@field walk_over? boolean whether the piece lies on the floor, under the characters
 ---@field in_use? string the piece that shows in its place while a character is at its spot
 ---@field used_at? aineo.office_scene.Spot the spot nearest to a piece that has `in_use` art
+---@field owner_index? integer for a piece with a screen area: the place among the agents of the agent whose monitor it is
 ---@field shows? string the live content drawn into the piece's area of that name
 
 ---@class aineo.office_scene.Spot
@@ -267,14 +268,22 @@ local function place_run(layout, entry, column, row, length)
   end
 end
 
---- Gives each placed piece that has `in_use` art the spot it is used from.
+--- Gives each placed piece that has `in_use` art the spot it is used from,
+--- and each one that has a screen area the place among the agents of the agent
+--- whose monitor it is: the n-th such piece, as the plan reads, is the n-th
+--- agent's.
 ---
 ---@param layout aineo.office_scene.Layout
-local function assign_use_spots(layout)
+local function assign_users(layout)
+  local monitors = 0
   for _, placed in ipairs(layout.pieces) do
     local piece = layout.pack.pieces[placed.piece]
     if placed.in_use and piece then
       placed.used_at = use_spot.nearest_to(placed, piece, layout.spot_order)
+    end
+    if piece and piece.areas.screen then
+      monitors = monitors + 1
+      placed.owner_index = monitors
     end
   end
 end
@@ -320,7 +329,7 @@ function M.lay_out(pack, width, height)
       column = column + length
     end
   end
-  assign_use_spots(layout)
+  assign_users(layout)
   return {
     width = width,
     is_wall = function(column, row)
