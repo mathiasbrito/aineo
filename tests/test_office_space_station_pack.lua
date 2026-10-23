@@ -7,6 +7,20 @@ local default = dofile('tests/helpers/office_default.lua')
 
 local PACK = 'space_station'
 
+--- The names of the colours the default pack paints its skies of the day in,
+--- which the space station replaces with stars.
+local SKY_COLOURS_OF_THE_DEFAULT_PACK = {
+  'dawn_top',
+  'dawn_middle',
+  'dawn_low',
+  'day_top',
+  'day_middle',
+  'day_low',
+  'dusk_top',
+  'dusk_middle',
+  'dusk_low',
+}
+
 --- The pieces of the default pack the space station takes as they are: the
 --- limbs, hands and legs its crew and bots are drawn with, and the screens
 --- its consoles show, which are lines of light on dark glass.
@@ -106,6 +120,25 @@ local function pieces_of_the_poses(pack)
   return names
 end
 
+--- The letters of the art of `piece` that are drawn in the character's own
+--- colour, `agent`, and that its frames use.
+---
+---@param piece aineo.office_pack.Piece
+---@return string[]
+local function fur_letters_of(piece)
+  local used = {}
+  for _, frame in ipairs(piece.frames) do
+    for _, row in ipairs(frame) do
+      for letter in row:gmatch('.') do
+        if piece.colours[letter] == 'agent' then
+          used[letter] = true
+        end
+      end
+    end
+  end
+  return vim.tbl_keys(used)
+end
+
 --- The names in `names` that are not in `known`, each once, sorted.
 ---
 ---@param names string[]
@@ -176,6 +209,29 @@ T['the space station pack']['has a crew member, a service bot and a starhare of 
   }, { 'crew', 'bot', 'starhare_sit' })
 end
 
+T['the space station pack']['draws each pose of the starhare in the fur the pack gives it'] =
+  MiniTest.new_set({
+    parametrize = {
+      { 'purring' },
+      { 'rubbing' },
+      { 'sitting_on_a_desk' },
+      { 'sleeping' },
+      { 'sleeping_on_a_seat' },
+      { 'standing' },
+      { 'walking' },
+      { 'washing' },
+    },
+  })
+
+T['the space station pack']['draws each pose of the starhare in the fur the pack gives it']['pose'] = function(
+  pose
+)
+  local pack = default.load_pack(PACK)
+  local piece = pack.pieces[pack.cat.poses[pose].art[1]]
+
+  eq(#fur_letters_of(piece) > 0, true)
+end
+
 T['the space station pack']['draws the sky of every hour as drifting stars'] = MiniTest.new_set({
   parametrize = { { 'sky_dawn' }, { 'sky_day' }, { 'sky_dusk' }, { 'sky_night' } },
 })
@@ -184,14 +240,12 @@ T['the space station pack']['draws the sky of every hour as drifting stars']['pi
   name
 )
   local pack = default.load_pack(PACK)
-  local daylight = { 'dawn_top', 'dawn_middle', 'dawn_low', 'day_top', 'day_middle', 'day_low' }
   local colours = vim.tbl_values(pack.pieces[name].colours)
 
   eq(#pack.pieces[name].frames >= 8, true)
   eq(
     vim.tbl_filter(function(colour)
-      return vim.list_contains(daylight, colour)
-        or vim.list_contains({ 'dusk_top', 'dusk_middle', 'dusk_low' }, colour)
+      return vim.list_contains(SKY_COLOURS_OF_THE_DEFAULT_PACK, colour)
     end, colours),
     {}
   )
