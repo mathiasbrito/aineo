@@ -480,4 +480,66 @@ T['a thing that lies on the floor']['is left only while fewer than 64 lie'] = fu
   eq(cells_of_mess(stage, 100), 64)
 end
 
+--- Where the first agent is, as `column,row`, at each tenth of a second from
+--- `from` to `to` seconds, the stage advanced every tenth of a second from 0
+--- with `agents`.
+---
+---@param stage aineo.office_scene.Stage
+---@param agents aineo.office_states.Agent[]
+---@param width integer
+---@param from integer
+---@param to integer
+---@return string[]
+local function first_agents_cells_every_tenth_second(stage, agents, width, from, to)
+  local cells = {}
+  for tenth = 0, to * 10 do
+    stage.advance(agents, tenth / 10)
+    if tenth >= from * 10 then
+      cells[#cells + 1] = scene.agent_cell(stage.picture(), width, 1)
+    end
+  end
+  return cells
+end
+
+T['a thing that lies on the floor']['no agent can walk to is left where it lies, the idle agents going on with their lives'] = function()
+  local pack = scene.people_pack('# plan\n \n dhd.#c..m\n', {
+    d = { spot = 'desk', sitting = true },
+    h = { spot = 'huff' },
+    c = { spot = 'corner' },
+    m = { spot = 'away' },
+  }, {
+    characters = {
+      agent = THREE_COLOURS.agent,
+      cat = {
+        poses = { standing = { art = { 'first' } }, walking = { art = { 'first' } } },
+      },
+    },
+    activities = {
+      stand = { steps = { { at = 'desk', for_seconds = 0.5 } } },
+      a_visit_the_huff = { during = { 'idle' }, steps = { { at = 'huff', for_seconds = 0.5 } } },
+      b_visit_the_desk = { during = { 'idle' }, steps = { { at = 'desk', for_seconds = 0.5 } } },
+      relieve_itself = {
+        who = 'cat',
+        during = { 'always' },
+        steps = {
+          { at = 'corner', for_seconds = 1, leave = 'mess' },
+          { at = 'away', for_seconds = 100 },
+        },
+      },
+      clean_up = { steps = { { at = 'mess', for_seconds = 1, remove = 'mess' } } },
+    },
+    things = { mess = { piece = 'left', cleaned_up_by = 'clean_up' } },
+    states = { standing = 'stand', idle = 'stand' },
+  })
+  local stage = scene.stage_of(pack, 9, 1, { random = scene.always(0) })
+
+  local cells = first_agents_cells_every_tenth_second(stage, scene.agents_in('idle'), 9, 10, 20)
+
+  eq({
+    vim.tbl_contains(cells, '0,0'),
+    vim.tbl_contains(cells, '1,0'),
+    group_at(stage, 5),
+  }, { true, true, scene.solid(RED) })
+end
+
 return T

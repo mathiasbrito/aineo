@@ -14,6 +14,7 @@ local MOST_LYING = 64
 ---@field column integer the cell it lies on
 ---@field row integer
 ---@field spot aineo.office_scene.Spot where a character stands to deal with it
+---@field reach? { layout: aineo.office_scene.FloorLayout, cells: table<integer, true> } the cells that can be walked to from it in a layout, found when an agent is to be sent
 ---@field cleaner? table the agent that has gone to clean it up, while it is on its way
 
 ---@class aineo.office_scene.Things

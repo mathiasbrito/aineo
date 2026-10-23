@@ -2,6 +2,7 @@
 --- upset, and the nearest idle one cleans it up. Both are interludes the
 --- caller has the agent play.
 
+local paths = require('aineo.office_scene.paths')
 local performers = require('aineo.office_scene.performers')
 local roles = require('aineo.office_scene.roles')
 
@@ -31,9 +32,25 @@ local function has_a_cleaner(thing)
   return thing.cleaner ~= nil and thing.cleaner.cleaning == thing
 end
 
---- Has the idle agent nearest to `thing` go to clean it up, if the pack says
---- what cleans it and an agent is idle. Does nothing for a thing that has a
---- cleaner.
+--- Whether `agent` can walk to `thing`. The cells that can be walked to from
+--- a thing are found once for each layout the thing lies in, and kept with it.
+---
+---@param context aineo.office_scene.DirectorContext
+---@param thing aineo.office_scene.LyingThing
+---@param agent aineo.office_scene.Performer
+---@return boolean
+local function can_walk_to(context, thing, agent)
+  local layout = context.layout
+  if not (thing.reach and thing.reach.layout == layout) then
+    thing.reach = { layout = layout, cells = paths.cells_reachable_from(layout, thing) }
+  end
+  local key = math.floor(agent.row + 0.5) * layout.width + math.floor(agent.column + 0.5)
+  return thing.reach.cells[key] == true
+end
+
+--- Has the idle agent nearest to `thing` that can walk to it go to clean it
+--- up, if the pack says what cleans it; a thing no idle agent can walk to
+--- stays where it lies. Does nothing for a thing that has a cleaner.
 ---
 ---@param context aineo.office_scene.DirectorContext
 ---@param thing aineo.office_scene.LyingThing
@@ -47,7 +64,13 @@ function M.send_cleaner_to(context, thing, time, busy, make_play)
   end
   local nearest, nearest_distance = nil, math.huge
   for _, agent in ipairs(context.agents) do
-    if agent ~= busy and agent.column and roles.is_idle(agent) and agent.playing ~= INTERLUDE then
+    if
+      agent ~= busy
+      and agent.column
+      and roles.is_idle(agent)
+      and agent.playing ~= INTERLUDE
+      and can_walk_to(context, thing, agent)
+    then
       local distance = math.abs(agent.column - thing.column) + math.abs(agent.row - thing.row)
       if distance < nearest_distance then
         nearest, nearest_distance = agent, distance
