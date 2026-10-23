@@ -3905,9 +3905,11 @@ nothing, and `:checkhealth aineo` reports it as an error.
 
 Each tab page has an office of its own, that follows its own session. Leaving
 the tab page stops its frames and its file watches, and entering it starts
-them again, the scene catching up with what the session did meanwhile. In a
-window smaller than 60 columns by 24 rows the office draws one line saying so
-in place of the scene.
+them again, the scene catching up with what the session did meanwhile. An
+office that shows stays shown through that, even when the cursor was in the
+right side it covers (shown with `\O` while there); it closes only when the
+cursor enters the right side afterwards. In a window smaller than 60 columns
+by 24 rows the office draws one line saying so in place of the scene.
 
                                                           *aineo-office-cards*
 Report cards ~
