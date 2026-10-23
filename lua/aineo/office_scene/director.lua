@@ -63,7 +63,7 @@ local WANTED, RANDOM, INTERLUDE = performers.WANTED, performers.RANDOM, performe
 ---@field things fun(): aineo.office_scene.LyingThing[] what lies on the floor, the oldest first
 ---@field activities_played fun(): table<string, table> the activity each agent plays now, by its id
 ---@field places fun(): table<string, integer> the place of every agent the director knows, by its id
----@field use_layout fun(layout: aineo.office_scene.FloorLayout) goes on in a new layout of the same plan: each agent keeps its activity and its step, at the spot of the same name and number
+---@field use_layout fun(layout: aineo.office_scene.FloorLayout) goes on in a new layout of the same plan: each agent keeps its activity and its step, at the spot of the same name and number, the agents taken in the order they were given so that a random source draws for them in that order
 
 ---@class aineo.office_scene.DirectorContext
 ---@field pack aineo.office_pack.Pack
@@ -551,7 +551,7 @@ function M.new_director(pack, layout, random)
   function director.use_layout(new_layout)
     context.layout = new_layout
     context.taken = {}
-    for _, performer in pairs(known) do
+    for _, performer in ipairs(context.agents) do
       relocation.move_into_layout(context, performer)
       resume_step(context, performer)
     end
