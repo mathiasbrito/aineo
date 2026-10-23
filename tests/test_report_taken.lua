@@ -93,8 +93,10 @@ T['a report home with a callback for the reports it takes']['shows the report th
     vim.notify = function(message) table.insert(_G.told, message) end
   ]])
 
-  child.lua([[_G.home.receive_report(...)]], { REPORT })
-  child.lua([[_G.home.receive_report(...)]], { REPORT })
+  expect.no_error(function()
+    child.lua([[_G.home.receive_report(...)]], { REPORT })
+    child.lua([[_G.home.receive_report(...)]], { REPORT })
+  end)
   child.lua([[vim.wait(100)]])
 
   eq(child.lua_get([[#vim.api.nvim_buf_get_lines(_G.home.report_buffer(), 0, -1, false)]]), 3)

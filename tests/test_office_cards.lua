@@ -286,12 +286,36 @@ T['a report card']['stays until the cursor enters the right side'] = function()
   eq(wait_for_rows_with_cards(0), true)
 end
 
-T['a report card']['is kept while the cursor stays out of the right side, though the office hides and shows'] = function()
+T['a report card']['is forgotten when the cursor enters the office’s own window, which leaves it in the right side'] = function()
   open_office()
   child.lua([[_G.office.show_now()]])
   report('done', 'something')
   wait_for_rows_with_cards(1)
-  child.lua([[_G.office.let_go()]])
+
+  child.lua([[vim.api.nvim_set_current_win(...)]], { office_cells.window(child) })
+  vim.wait(PATIENCE_MS, function()
+    return office_cells.window(child) == vim.NIL
+  end, 10)
+  local cursor_in_right_side = child.lua_get([[(function()
+    local area = require('aineo.layout').right_column_area()
+    return vim.api.nvim_win_get_position(0)[2] >= area.col
+  end)()]])
+  office_child.enter_the_left_window(child)
+  child.lua([[_G.office.show_now()]])
+
+  eq(cursor_in_right_side, true)
+  eq(wait_for_rows_with_cards(0), true)
+end
+
+T['a report card']['is kept while the cursor stays out of the right side, though the office closes and shows again'] = function()
+  open_office()
+  child.lua([[_G.office.show_now()]])
+  report('done', 'something')
+  wait_for_rows_with_cards(1)
+  child.lua([[vim.api.nvim_win_close(..., true)]], { office_cells.window(child) })
+  vim.wait(PATIENCE_MS, function()
+    return office_cells.window(child) == vim.NIL
+  end, 10)
 
   child.lua([[_G.office.show_now()]])
 
