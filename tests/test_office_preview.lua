@@ -54,21 +54,23 @@ local NUMBERED_STATES = {
 ---
 ---@param settings_source? string the source of the office's settings, the default pack by default
 ---@param folders_source? string the source of a list of the folders the packs are in, those of 'runtimepath' by default
-local function open_office(settings_source, folders_source)
+---@param waits_through_stand_in? boolean whether the office's countdown waits through the stand-in that keeps each wait (`office_child.WAIT_THROUGH_STAND_IN`)
+local function open_office(settings_source, folders_source, waits_through_stand_in)
   office_child.open_layout(child)
   child.lua([[_G.now = ...]], { START })
   child.lua([[_G.asked_for_a_transcript = 0]])
   office_child.make_office(
     child,
     settings_source,
-    ([[{
+    ([[vim.tbl_extend('force', %s, {
       clock = function() return _G.now end,
       preview_seconds_per_state = %d,
       pack_folders = function() return %s end,
       transcript = function()
         _G.asked_for_a_transcript = _G.asked_for_a_transcript + 1
       end,
-    }]]):format(
+    })]]):format(
+      waits_through_stand_in and office_child.WAIT_THROUGH_STAND_IN or '{}',
       STATE_SECONDS,
       folders_source or "vim.api.nvim_get_runtime_file('aineo-office', true)"
     )
@@ -334,6 +336,29 @@ T['previewing the office']['is not the report cards: it draws none of the report
     end),
     false
   )
+end
+
+T['previewing the office']['leaves the office that shows as it is when the pack to preview is not found'] = function()
+  open_office()
+  child.lua([[_G.office.show_now()]])
+
+  child.lua([[_G.office.preview('nothing_here')]])
+
+  eq(shows(), true)
+  eq(first_line():find('preview', 1, true), nil)
+  eq(#child.lua_get([[_G.told]]), 1)
+end
+
+T['previewing the office']['counts the idle time again after a preview that could not show'] = function()
+  open_office("{ pack = 'default', pieces = {}, idle_ms = 1000 }", nil, true)
+  office_child.enter_the_left_window(child)
+  eq(office_child.waits_pending(child), 1)
+
+  child.lua([[_G.office.preview('nothing_here')]])
+
+  eq(office_child.waits_pending(child), 1)
+  office_child.let_time_pass(child)
+  eq(shows(), true)
 end
 
 return T
