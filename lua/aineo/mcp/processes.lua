@@ -295,16 +295,28 @@ function M.running_sessions(state_directory, working_directory)
   return sessions
 end
 
+--- Whether `record`'s process has ended the session the record holds: a
+--- `SessionEnd` of it that no `SessionStart` has paired (`follow_switches()`).
+---
+---@param record aineo.mcp.ProcessRecord
+---@return boolean
+local function ended_its_session(record)
+  return vim.iter(record.unpaired):any(function(event)
+    return event.event == 'SessionEnd' and event.session == record.session
+  end)
+end
+
 --- Whether a Claude Code process aineo started runs on `session`, in any
---- directory: the record of a process that runs holds it. The records of
---- processes that have ended are removed (`running_records()`).
+--- directory: the record of a process that runs holds it, and that process
+--- has not ended it (`ended_its_session()`). The records of processes that
+--- have ended are removed (`running_records()`).
 ---
 ---@param state_directory string
 ---@param session string
 ---@return boolean
 function M.is_running(state_directory, session)
   return vim.iter(running_records(state_directory)):any(function(running)
-    return running.record.session == session
+    return running.record.session == session and not ended_its_session(running.record)
   end)
 end
 
