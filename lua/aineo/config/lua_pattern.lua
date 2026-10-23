@@ -5,10 +5,12 @@
 ---
 --- Lua's matcher backtracks, so a pattern's cost on a text grows as the
 --- text's length to the power of its repetition items (`*`, `+` and `-`
---- after a single character, class or set; `?` is bounded). With one such
---- item the cost is quadratic at most, which a text cut to a thousand bytes
---- keeps within milliseconds; with two it is cubic, and seconds on a long
---- command. A pattern with more than one is refused.
+--- after a single character, class or set), and doubles with each `?`, which
+--- tries both with and without its item. With one such item the cost is
+--- quadratic at most, which a text cut to a thousand bytes keeps within
+--- milliseconds; with two it is cubic or exponential, and seconds on a long
+--- command. A pattern with more than one repetition item (`*`, `+`, `-` or
+--- `?`) is refused.
 
 local M = {}
 
@@ -16,7 +18,7 @@ local M = {}
 local MOST_CAPTURES = 32
 
 --- The characters that repeat the item before them without bound.
-local REPEATS = { ['*'] = true, ['+'] = true, ['-'] = true }
+local REPEATS = { ['*'] = true, ['+'] = true, ['-'] = true, ['?'] = true }
 
 --- Where the set that starts at `from` (the index of its `[`) ends, as Lua
 --- reads one: the index after its closing `]`, whose first character may be a
@@ -140,15 +142,13 @@ function M.problem(pattern)
     if repeatable and REPEATS[following] then
       walk.repeats = walk.repeats + 1
       at = at + 1
-    elseif repeatable and following == '?' then
-      at = at + 1
     end
   end
   if #open > 0 then
     return 'a ( is never closed'
   end
   if walk.repeats > 1 then
-    return 'it repeats ' .. walk.repeats .. ' times (*, + or -); at most one is taken'
+    return 'it repeats ' .. walk.repeats .. ' times (*, +, - or ?); at most one is taken'
   end
   return nil
 end
