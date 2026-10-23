@@ -171,6 +171,12 @@ end
 --- the case would hang, not fail; no case opens so many.
 local MOST_OPENS = 500
 
+--- The notifications the case's code gave through `vim.notify`; the hooks put
+--- the function back.
+---@type { message: string, level: integer }[]
+local notified = {}
+local notify = vim.notify
+
 --- The function `vim.uv.fs_open` is while the case runs: the one the hooks
 --- found, which they put back.
 local opener = nil
@@ -178,6 +184,10 @@ local opener = nil
 local T = MiniTest.new_set({
   hooks = {
     pre_case = function()
+      notified = {}
+      vim.notify = function(message, level)
+        table.insert(notified, { message = message, level = level })
+      end
       local open = vim.uv.fs_open
       local opens = 0
       opener = open
@@ -192,6 +202,7 @@ local T = MiniTest.new_set({
       end
     end,
     post_case = function()
+      vim.notify = notify
       vim.uv.fs_open = opener
       for _, follower in ipairs(started_followers) do
         follower.stop()
@@ -667,6 +678,36 @@ T['follow()']['stops looking every half second at a file once it is there to wat
   end, 10)
 
   eq({ while_missing, open_repeating_timers() }, { 2, 1 })
+end
+
+T['follow()']['goes on, delivering no line twice, after a callback that raised, and says so once without the line'] = function()
+  local path = vim.fs.joinpath(fixture.directory('office_transcript'), 'session.jsonl')
+  fake_transcript.append_text(path, '')
+  local heard = {}
+  local follower = transcript.follow({
+    path = path,
+    on_signal = function(signal)
+      table.insert(heard, signal.call)
+      if signal.call == 'raises_secret' or signal.call == 'three' then
+        error('the consumer failed')
+      end
+    end,
+  })
+  table.insert(started_followers, follower)
+
+  fake_transcript.append(path, { tool_line('one'), tool_line('raises_secret'), tool_line('three') })
+  vim.wait(PATIENCE_MS, function()
+    return #heard >= 3
+  end, 10)
+  fake_transcript.append(path, { tool_line('four') })
+  vim.wait(PATIENCE_MS, function()
+    return #heard >= 4
+  end, 10)
+
+  eq(heard, { 'one', 'raises_secret', 'three', 'four' })
+  eq(#notified, 1)
+  eq(notified[1].message:find('tool_started', 1, true) ~= nil, true)
+  eq(notified[1].message:find('raises_secret', 1, true), nil)
 end
 
 T['follow()']['stops delivering and releases its watch once stopped'] = function()
