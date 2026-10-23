@@ -171,7 +171,7 @@ resumes it.
 | `]v`, `[v` | jump to the next and the previous explanation or issue of the buffer |
 | `\z` | zooms the window of the right column the cursor is in, and gives the heights back when pressed again |
 | `\Z` | zooms the window the cursor is in to the whole tab page, and gives the sizes back when pressed again |
-| `\O` | shows the office, an animation of your Claude Code at work over the right column; the cursor entering a window it covers closes it |
+| `\O` | shows the office, an animation of your Claude Code at work over the right column, which also shows by itself after `office.idle_ms` without the cursor in the right column; the cursor entering a window it covers closes it. A report that comes in shows as a card in its corner |
 
 `\z` gives the right-column window with the cursor the column's whole height,
 in every pane, and the other windows of the column shrink to a line or so;
@@ -547,6 +547,7 @@ vim.g.aineo = {
     issues_prompt = 'Some issues were found in this code, can you check and propose a fix if the issue holds:',
   },
   office = {
+    idle_ms = 180000,
     commands = {
       tests = { 'make test', 'make test_file', 'npm test', 'pytest', 'go test', 'cargo test', 'busted', 'mix test', 'rspec' },
       committing = { 'git commit', 'git push', 'gh pr create' },
@@ -573,6 +574,7 @@ vim.g.aineo = {
 | `explain.model` | `'sonnet'` | The model of the Claude Code that `\v` and `\V` start to explain code, as `claude --model` takes it: an alias such as `'opus'` or a full name. A non-empty string. |
 | `explain.timeout_ms` | `180000` | How long a request to explain code may run before aineo stops its Claude Code, a whole number of milliseconds of at least 1. |
 | `explain.issues_prompt` | `'Some issues were found in this code, can you check and propose a fix if the issue holds:'` | The words that open the message `\s` sends when issues are marked, before the line for each issue. A non-empty string. |
+| `office.idle_ms` | `180000` | How long the cursor stays out of the right side before the office shows by itself, in milliseconds, a whole number of at least 1; `false` turns that off, and the office then shows only for `\O`. It needs `'termguicolors'`. See `:help aineo-config-office.idle_ms`. |
 | `office.commands` | the four lists in the example above | How the office tells what a shell command does: `tests`, `committing`, `searching` and `reading`, each a list of matches. A match is plain words (`'make test'`, whole words), a glob (`'cat *.md'`) or `{ lua_pattern = '^make%s+test' }`, a Lua pattern that may repeat (`*`, `+`, `-`) once at most. Heredoc bodies are not read. A command is split at `&&`, `\|\|`, `;` and `\|`, and the first class any part matches names it. A class left out has no match. See `:help aineo-config-office.commands`. |
 
 The highlight groups can be overridden in a colorscheme or with
@@ -580,7 +582,9 @@ The highlight groups can be overridden in a colorscheme or with
 `AineoTabLineFill`. The Report uses `AineoReportTime`,
 `AineoReportStarted`, `AineoReportProgress`, `AineoReportBlocked`,
 `AineoReportDone`, `AineoReportFailed`, `AineoReportStatusBold`,
-`AineoReportLink`, `AineoReportPath` and `AineoReportDay`. The changes pane uses the
+`AineoReportLink`, `AineoReportPath` and `AineoReportDay`. The office's report cards
+use `AineoOfficeCardDone`, `AineoOfficeCardProgress`, `AineoOfficeCardProblem` and
+`AineoOfficeCardMore`. The changes pane uses the
 `AineoChanges*` groups. `:help aineo` lists each with its default.
 
 ## The activity indicator and tmux
