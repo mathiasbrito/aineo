@@ -92,6 +92,15 @@ T['a step whose spot the plan lacks']['is played by two agents on different cell
   eq(where_the_two_are(stage, 8), { '0,0', '1,0' })
 end
 
+T['a step whose spot the plan lacks']['is played on the free floor cells nearest the door by agents not yet placed'] = function()
+  local stage =
+    stage_of_a_visit('# plan\n \n d.......\n', { d = { spot = 'door' } }, 8, 'anywhere', 0.99)
+
+  stage.advance(scene.agents_in('standing', 'standing'), 0)
+
+  eq(where_the_two_are(stage, 8), { '0,0', '1,0' })
+end
+
 T['a step whose spot the plan lacks']['is played where an agent already placed stands'] = function()
   local pack = scene.people_pack('# plan\n \n a.......\n', { a = { spot = 'aside' } }, {
     activities = {

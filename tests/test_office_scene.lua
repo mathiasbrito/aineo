@@ -595,12 +595,32 @@ T['an agent']['is drawn on a floor cell when its activity names a spot the plan 
   end, row_groups(stage.picture(), 0, 4)), 1)
 end
 
-T['an agent']['is not drawn when there are more agents than spots'] = function()
+--- How many cells of the picture's only row are drawn in `colour`.
+---
+---@param stage aineo.office_scene.Stage
+---@param width integer
+---@param colour string
+---@return integer
+local function cells_drawn_in(stage, width, colour)
+  return #vim.tbl_filter(function(group)
+    return group == solid(colour)
+  end, row_groups(stage.picture(), 0, width))
+end
+
+T['an agent']['stands on a free floor cell when there are more agents than spots'] = function()
   local stage = stage_of(scene_pack('# plan\n \n .a..\n', { a = { spot = 'aside' } }), 4, 1)
 
   stage.advance(agents_in('standing', 'standing'), 0)
 
-  eq(row_groups(stage.picture(), 0, 4), { solid(FLOOR), solid(AGENT), solid(FLOOR), solid(FLOOR) })
+  eq({ cells_drawn_in(stage, 4, AGENT), cells_drawn_in(stage, 4, '#00ffff') }, { 1, 1 })
+end
+
+T['an agent']['is not drawn when there are more agents than spots and no floor cell is free'] = function()
+  local stage = stage_of(scene_pack('# plan\n \n a\n', { a = { spot = 'aside' } }), 1, 1)
+
+  stage.advance(agents_in('standing', 'standing'), 0)
+
+  eq(row_groups(stage.picture(), 0, 1), { solid(AGENT) })
 end
 
 T['an agent']['is forgotten when it is no longer in the agents given'] = function()
