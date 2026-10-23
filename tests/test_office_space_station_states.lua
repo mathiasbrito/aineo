@@ -180,6 +180,7 @@ T['an agent']['reaches 22 of the 24 states in turn on a pass, at the spot each e
   size
 )
   local pack = default.load_pack(PACK)
+  pack.cat = nil
   local spots = default.spots(pack, size[1], size[2] - LIST_ROWS)
   local stage = default.stage(pack, size[1], size[2])
   local reached = {}
