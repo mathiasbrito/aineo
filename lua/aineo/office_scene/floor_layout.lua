@@ -6,6 +6,10 @@ local use_spot = require('aineo.office_scene.use_spot')
 
 local M = {}
 
+--- How many pieces a plan places at most, so that a pack with a piece in
+--- every cell cannot make a frame expensive.
+local MAX_PLACEMENTS = 2000
+
 local WALL = '#'
 local FLOOR = '.'
 local UNWALKED_FLOOR = ' '
@@ -142,6 +146,18 @@ local function mark_walkable(layout, column, row)
   layout.walkable[row][column] = true
 end
 
+--- Adds `placed` to the pieces of `layout`, unless the plan already places
+--- `MAX_PLACEMENTS` of them: a plan reads from the top and the left, and what
+--- comes beyond the cap is not placed.
+---
+---@param layout aineo.office_scene.Layout
+---@param placed aineo.office_scene.PlacedPiece
+local function add_piece(layout, placed)
+  if #layout.pieces < MAX_PLACEMENTS then
+    table.insert(layout.pieces, placed)
+  end
+end
+
 --- Adds the spot `name` at `column` of `row` to `layout`; a spot is a cell
 --- characters walk to, so it is one they walk on.
 ---
@@ -171,7 +187,7 @@ local function decorate(layout, names, column, row, length)
   for _, name in ipairs(names) do
     local piece = layout.pack.pieces[name]
     if piece and piece.width <= left then
-      table.insert(layout.pieces, { piece = name, column = next_column, row = row })
+      add_piece(layout, { piece = name, column = next_column, row = row })
       add_spot(layout, name, {
         column = next_column,
         row = first_floor_row_below(layout.texts, row, next_column),
@@ -232,11 +248,11 @@ local function place_piece(layout, entry, column, row, length)
     }
   end
   if piece and piece.stretch then
-    table.insert(layout.pieces, placed_at(column, length))
+    add_piece(layout, placed_at(column, length))
     return
   end
   for offset = 0, length - 1 do
-    table.insert(layout.pieces, placed_at(column + offset))
+    add_piece(layout, placed_at(column + offset))
   end
 end
 
