@@ -498,7 +498,7 @@ end
 local function replace_pieces(pack, replaced_pieces, problems)
   local colour_names = colour_names_of(pack.colours)
   for _, name in ipairs(entries.sorted_keys(replaced_pieces)) do
-    local path = replaced_pieces[name]
+    local path = vim.fs.normalize(replaced_pieces[name])
     local directory, file = vim.fs.dirname(path), vim.fs.basename(path)
     local report = problems.reporter_for('office.pieces', directory, file)
     local text, read_problem = files.read_text(path)

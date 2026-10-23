@@ -111,6 +111,11 @@ local REFUSED = {
   { 'return { a = 0x10 }', 1 },
   { "return 'a string, not a table'", 1 },
   { 'return { a = - }', 1 },
+  { 'return { a = 1 -2 }', 1 },
+  { 'return { a = true b = false }', 1 },
+  { "return { a = 'x' [[y]] }", 1 },
+  { "return { a = {} [1] = 'k' }", 1 },
+  { 'return { a = 1 b = 2 }', 1 },
 }
 
 T['parse_table_literal()']['refuses what is not data, and names the line'] = MiniTest.new_set({
@@ -183,6 +188,14 @@ end
 T['parse_table_literal()']['refuses a number too large to be one'] = function()
   local value, problem =
     office_pack.parse_table_literal('return {\n a = ' .. ('9'):rep(400) .. ' }')
+
+  eq(value, nil)
+  eq(problem, 'line 2: the number is too large')
+end
+
+T['parse_table_literal()']['refuses a negative number too large to be one'] = function()
+  local value, problem =
+    office_pack.parse_table_literal('return {\n a = -' .. ('9'):rep(400) .. ' }')
 
   eq(value, nil)
   eq(problem, 'line 2: the number is too large')
