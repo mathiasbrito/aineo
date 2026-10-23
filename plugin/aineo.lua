@@ -117,7 +117,35 @@ local CLAIM_USAGE = 'aineo: :Aineo claim takes at most one Claude session id'
 
 --- What `:Aineo office` tells the user when it is given a word, or words,
 --- that it does not take.
-local OFFICE_USAGE = 'aineo: :Aineo office takes check, and the name of a pack'
+local OFFICE_USAGE = 'aineo: :Aineo office takes check, states or new, and the name of a pack'
+
+--- The words `:Aineo office` takes, in the order it offers them, and the
+--- function of `aineo.entry` that does what each says; `new` needs the name
+--- of the pack to make, and the others take the name of a pack, or none.
+local OFFICE_WORDS = {
+  { word = 'check', action = 'check_office_pack' },
+  { word = 'states', action = 'show_office_states' },
+  { word = 'new', action = 'start_office_pack', needs_a_name = true },
+}
+
+--- The function of `aineo.entry` that does what `:Aineo` with `words` says,
+--- when `words` are `office`, one of `OFFICE_WORDS` and a pack's name (or none,
+--- unless the word needs one); `nil` otherwise.
+---
+---@param words string[]
+---@return string|nil action
+local function office_action_of(words)
+  if words[1] ~= 'office' then
+    return nil
+  end
+  local names_given = #words - 2
+  for _, office_word in ipairs(OFFICE_WORDS) do
+    local takes_the_names = names_given == 1 or (names_given == 0 and not office_word.needs_a_name)
+    if words[2] == office_word.word and takes_the_names then
+      return office_word.action
+    end
+  end
+end
 
 --- What `:Aineo tab` tells the user when it is given no word, another word
 --- than `new` or `close`, or more than one.
@@ -200,9 +228,11 @@ local function offered_words(typed)
     return tab_words()
   end
   if #typed == 2 and typed[2] == 'office' then
-    return { 'check' }
+    return vim.tbl_map(function(office_word)
+      return office_word.word
+    end, OFFICE_WORDS)
   end
-  if #typed == 3 and typed[2] == 'office' and typed[3] == 'check' then
+  if #typed == 3 and typed[2] == 'office' and vim.tbl_contains({ 'check', 'states' }, typed[3]) then
     return require('aineo.entry').office_pack_names()
   end
   if #typed == 2 and typed[2] ~= RANGE_SUBCOMMAND then
@@ -770,9 +800,10 @@ vim.api.nvim_create_user_command('Aineo', function(command)
     run_action(argument)
     return
   end
-  if command.fargs[1] == 'office' and command.fargs[2] == 'check' and #command.fargs <= 3 then
+  local office_action = office_action_of(command.fargs)
+  if office_action then
     run(function()
-      require('aineo.entry').check_office_pack(command.fargs[3])
+      require('aineo.entry')[office_action](command.fargs[3])
     end)
     return
   end
@@ -794,5 +825,5 @@ end, {
   range = true,
   bar = true,
   complete = complete_subcommand,
-  desc = 'aineo: send, open, report, input, claude, claude-numbers, sessions, new, pane agent|changes|terminal|run|explorer, run shell, claim [id], tab new|close|{n}, diff close, find, zoom or zoom full, [range]explain [issues] [tools] [new]|clear, office [check [name]]',
+  desc = 'aineo: send, open, report, input, claude, claude-numbers, sessions, new, pane agent|changes|terminal|run|explorer, run shell, claim [id], tab new|close|{n}, diff close, find, zoom or zoom full, [range]explain [issues] [tools] [new]|clear, office [check|states [name]|new name]',
 })
