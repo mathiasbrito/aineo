@@ -617,8 +617,10 @@ end
 
 T['resolve_config()']['takes the office’s idle time from either source, three minutes by default'] = function()
   local from_global = config.resolve_config({ office = { idle_ms = 5000 } }, nil)
-  local from_setup =
-    config.resolve_config({ office = { idle_ms = 5000 } }, { office = { idle_ms = 90000 } })
+  local from_setup = config.resolve_config(
+    { office = { idle_ms = 5000 } },
+    { office = { idle_ms = 90000 } }
+  )
 
   eq(from_global.office.idle_ms, 5000)
   eq(from_setup.office.idle_ms, 90000)
