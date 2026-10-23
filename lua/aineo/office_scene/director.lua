@@ -4,7 +4,12 @@
 --- it goes to the spot a step names, walking there over the floor, takes the
 --- step's pose, and stays for the step's time before the next step begins. The
 --- last step lasts until the agent's activity changes.
+---
+--- An agent has a place among the agents from the moment it arrives to the
+--- moment it leaves: the lowest number no other agent has. Its colour, its
+--- desk and its monitor go by its place.
 
+local paths = require('aineo.office_scene.paths')
 local roles = require('aineo.office_scene.roles')
 local spots = require('aineo.office_scene.spots')
 local walking = require('aineo.office_scene.walking')
@@ -20,10 +25,14 @@ local ENTRANCE = 'door'
 --- the editor.
 local MOST_STEPS_BEGUN_AN_UPDATE = 8
 
+--- How many seconds an agent whose step's spots are all taken waits before it
+--- looks again.
+local SECONDS_BETWEEN_LOOKS = 1
+
 ---@class aineo.office_scene.Character
 ---@field id string the agent's id
 ---@field kind string 'agent' for the main agent, 'subagent' for the others
----@field index integer the agent's place among the agents given, from 1
+---@field place integer the agent's place among the agents, from 1, kept while it stays
 ---@field column number the cell column it is at, between cells while it walks
 ---@field row number the cell row its feet are at
 ---@field facing string 'left' or 'right'
@@ -37,21 +46,25 @@ local MOST_STEPS_BEGUN_AN_UPDATE = 8
 ---@field activity table the activity it plays
 ---@field step_index integer the step it is on
 ---@field step_seconds? number how long the step lasts from its arrival; none when it lasts until the activity changes
----@field arrived_at? number when it arrived for the step; none while it walks
+---@field arrived_at? number when it arrived for the step; none while it walks or waits
 ---@field spot? aineo.office_scene.Spot the spot it has taken
 ---@field path aineo.office_scene.Cell[] the cells it has still to walk over, the next first
 ---@field clock number the time the character has been brought up to
 ---@field steps_begun integer how many steps it has begun in this update
+---@field looks_again_at? number when an agent waiting for a spot looks for one again; none when it is not waiting
 
 ---@class aineo.office_scene.Director
 ---@field update fun(agents: aineo.office_states.Agent[], now: number) brings the agents up to `now`, in the states they are in
----@field characters fun(): aineo.office_scene.Character[] the agents with a place, in the order they were given
+---@field characters fun(): aineo.office_scene.Character[] the agents with a place on the plan, in the order they were given
+---@field places fun(): table<string, integer> the place of every agent the director knows, by its id
+---@field use_layout fun(layout: aineo.office_scene.FloorLayout) goes on in a new layout of the same plan: each agent keeps its activity and its step, at the spot of the same name and number
 
 ---@class aineo.office_scene.DirectorContext
 ---@field pack aineo.office_pack.Pack
 ---@field layout aineo.office_scene.FloorLayout
 ---@field random fun(): number a number from 0 up to, not including, 1
 ---@field taken table<aineo.office_scene.Spot, string> the id of the character that has each spot taken
+---@field places_taken table<integer, true> the places the agents the director knows have
 
 --- How long a step lasts: its `for_seconds`, or a time between its two
 --- numbers.
@@ -109,6 +122,33 @@ local function take_route(context, performer, route)
   end
 end
 
+--- Has the performer wait for a spot of its step: it keeps the spot it stands
+--- on, and looks again after a while.
+---
+---@param performer aineo.office_scene.Performer
+---@param time number
+local function wait_for_a_spot(performer, time)
+  performer.looks_again_at = time + SECONDS_BETWEEN_LOOKS
+end
+
+--- Starts the performer on its step once it has a place on the plan: draws
+--- how long the step lasts, and has it walk to its spot or take the pose.
+---
+---@param context aineo.office_scene.DirectorContext
+---@param performer aineo.office_scene.Performer
+---@param step table
+---@param time number
+local function start_step(context, performer, step, time)
+  performer.step_seconds = seconds_of(step.for_seconds, context.random)
+  performer.effect = nil
+  if #performer.path > 0 then
+    performer.pose, performer.pose_since = walking.POSE, time
+    performer.at_a_seat = false
+  else
+    arrive(performer, step, time)
+  end
+end
+
 --- Begins step `index` of the performer's activity at `time`.
 ---
 ---@param context aineo.office_scene.DirectorContext
@@ -119,25 +159,46 @@ local function begin_step(context, performer, index, time)
   local step = performer.activity.steps[index]
   performer.steps_begun = performer.steps_begun + 1
   performer.step_index = index
-  performer.step_seconds = seconds_of(step.for_seconds, context.random)
+  performer.step_seconds = nil
   performer.arrived_at = nil
-  performer.effect = nil
-  performer.at_a_seat = false
+  performer.looks_again_at = nil
   performer.path = {}
   local spot_name = step.at or (not performer.column and ENTRANCE) or nil
-  local route = spot_name and spots.route(context.layout, spot_name, performer, context.taken)
+  local route, why
+  if spot_name then
+    route, why = spots.route(context.layout, spot_name, performer, context.taken)
+  end
   if route then
     take_route(context, performer, route)
-  elseif spot_name then
-    let_go_of_spot(context, performer)
   end
   if not performer.column then
     return
   end
-  if #performer.path > 0 then
-    performer.pose, performer.pose_since = walking.POSE, time
+  if spot_name and not route and why == spots.TAKEN then
+    wait_for_a_spot(performer, time)
+    return
+  end
+  start_step(context, performer, step, time)
+end
+
+--- Looks again for a spot of the step the performer waits for, when it is
+--- time, and goes to it when there is one.
+---
+---@param context aineo.office_scene.DirectorContext
+---@param performer aineo.office_scene.Performer
+---@param now number
+local function look_again(context, performer, now)
+  if not (performer.looks_again_at and performer.looks_again_at <= now) then
+    return
+  end
+  local step = performer.activity.steps[performer.step_index]
+  local route = spots.route(context.layout, step.at, performer, context.taken)
+  if route then
+    take_route(context, performer, route)
+    performer.looks_again_at = nil
+    start_step(context, performer, step, now)
   else
-    arrive(performer, step, time)
+    wait_for_a_spot(performer, now)
   end
 end
 
@@ -166,6 +227,7 @@ local function bring_up_to(context, performer, now)
   if not performer.column then
     begin_step(context, performer, performer.step_index, now)
   end
+  look_again(context, performer, now)
   local clock = performer.clock
   while performer.column do
     if #performer.path > 0 then
@@ -185,20 +247,75 @@ local function bring_up_to(context, performer, now)
   performer.clock = now
 end
 
---- A performer for `agent` that has no activity and no place yet.
+--- The lowest place no agent has.
 ---
+---@param context aineo.office_scene.DirectorContext
+---@return integer
+local function lowest_free_place(context)
+  local place = 1
+  while context.places_taken[place] do
+    place = place + 1
+  end
+  return place
+end
+
+--- A performer for `agent` that has no activity and no position yet, in the
+--- lowest place no agent has.
+---
+---@param context aineo.office_scene.DirectorContext
 ---@param agent aineo.office_states.Agent
 ---@param now number
 ---@return aineo.office_scene.Performer
-local function new_performer(agent, now)
+local function new_performer(context, agent, now)
+  local place = lowest_free_place(context)
+  context.places_taken[place] = true
   return {
     id = agent.id,
     kind = roles.kind_of(agent),
+    place = place,
     clock = now,
     path = {},
     step_index = 1,
     steps_begun = 0,
   }
+end
+
+--- Puts the performer in a new layout of the same plan: at the spot of the
+--- same name and number when the plan has it, walking there on from where it
+--- is; on its cell when it had no spot and the cell can be walked on;
+--- otherwise without a position, to find one again.
+---
+---@param context aineo.office_scene.DirectorContext
+---@param performer aineo.office_scene.Performer
+local function move_into_layout(context, performer)
+  local old = performer.spot
+  performer.spot = nil
+  local named = old and context.layout.spots[old.name]
+  local spot = named and named[old.number]
+  if spot then
+    performer.spot = spot
+    context.taken[spot] = performer.id
+    local route = performer.column
+      and #performer.path > 0
+      and paths.nearest(context.layout, {
+        column = math.floor(performer.column + 0.5),
+        row = math.floor(performer.row + 0.5),
+      }, { spot })
+    performer.path = route and route.path or {}
+    if not route then
+      performer.column, performer.row = spot.column, spot.row
+    end
+    return
+  end
+  performer.path = {}
+  local at_a_cell = performer.column
+    and context.layout.is_walkable(
+      math.floor(performer.column + 0.5),
+      math.floor(performer.row + 0.5)
+    )
+  if not at_a_cell then
+    performer.column, performer.row = nil, nil
+  end
 end
 
 --- A director of the agents of `pack`'s office, laid out as `layout`.
@@ -209,7 +326,7 @@ end
 ---@return aineo.office_scene.Director
 function M.new_director(pack, layout, random)
   ---@type aineo.office_scene.DirectorContext
-  local context = { pack = pack, layout = layout, random = random, taken = {} }
+  local context = { pack = pack, layout = layout, random = random, taken = {}, places_taken = {} }
   ---@type table<string, aineo.office_scene.Performer>
   local known = {}
   ---@type aineo.office_scene.Performer[]
@@ -220,11 +337,10 @@ function M.new_director(pack, layout, random)
   function director.update(agents, now)
     local present = {}
     placed = {}
-    for index, agent in ipairs(agents) do
+    for _, agent in ipairs(agents) do
       local name, activity = roles.activity_of(pack, agent)
-      local performer = known[agent.id] or new_performer(agent, now)
+      local performer = known[agent.id] or new_performer(context, agent, now)
       known[agent.id] = performer
-      performer.index = index
       performer.steps_begun = 0
       if activity and performer.activity_name ~= name then
         performer.activity_name, performer.activity, performer.step_index = name, activity, 1
@@ -241,6 +357,7 @@ function M.new_director(pack, layout, random)
     for id, performer in pairs(known) do
       if not present[id] then
         let_go_of_spot(context, performer)
+        context.places_taken[performer.place] = nil
         known[id] = nil
       end
     end
@@ -248,6 +365,22 @@ function M.new_director(pack, layout, random)
 
   function director.characters()
     return placed
+  end
+
+  function director.places()
+    local places = {}
+    for id, performer in pairs(known) do
+      places[id] = performer.place
+    end
+    return places
+  end
+
+  function director.use_layout(new_layout)
+    context.layout = new_layout
+    context.taken = {}
+    for _, performer in pairs(known) do
+      move_into_layout(context, performer)
+    end
   end
 
   return director
