@@ -401,6 +401,21 @@ T['the pack']['draws its text in the colours of the highlight groups it names, a
   )
 end
 
+T['the pack']['draws its text in the colour of its role when the group it names has none'] = function()
+  local folder = write_packs('alt', '#ff0000', STANDING_WITH_DOTS)
+  open_office(nil, { folder }, settings_naming('alt'))
+  child.cmd('highlight Normal guifg=NONE')
+
+  child.lua([[_G.office.show_now()]])
+
+  eq(
+    wait_until(function()
+      return office_cells.shows_colour(child, 'cdd6f4')
+    end),
+    true
+  )
+end
+
 T['showing the office']['opens no window, and says why, when the stage cannot be made'] = function()
   open_office()
   child.lua([[require('aineo.office_scene').new_stage = function() error('no stage today') end]])
