@@ -32,8 +32,7 @@ local function has_a_cleaner(thing)
 end
 
 --- Has the idle agent nearest to `thing` go to clean it up, if the pack says
---- what cleans it and an agent is idle; an agent that has only just become
---- idle is asked in the next update. Does nothing for a thing that has a
+--- what cleans it and an agent is idle. Does nothing for a thing that has a
 --- cleaner.
 ---
 ---@param context aineo.office_scene.DirectorContext
@@ -48,13 +47,7 @@ function M.send_cleaner_to(context, thing, time, busy, make_play)
   end
   local nearest, nearest_distance = nil, math.huge
   for _, agent in ipairs(context.agents) do
-    if
-      agent ~= busy
-      and agent.column
-      and roles.is_idle(agent)
-      and not agent.state_changed
-      and agent.playing ~= INTERLUDE
-    then
+    if agent ~= busy and agent.column and roles.is_idle(agent) and agent.playing ~= INTERLUDE then
       local distance = math.abs(agent.column - thing.column) + math.abs(agent.row - thing.row)
       if distance < nearest_distance then
         nearest, nearest_distance = agent, distance
