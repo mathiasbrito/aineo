@@ -1,0 +1,15 @@
+about: An angled console screen. Its owner's pose gives its screen; a web search writes its clue in the query area.
+colours: F = steel_blue, S = panel, z = glass, g = green_glow
+anchor: 0, 8
+area screen: 1, 1, 10 x 4
+area query: 1, 1, 10 x 2
+---
+FFFFFFFFFFFF
+FzzzzzzzzzzS
+FzzzzzzzzzzS
+FzzzzzzzzzzS
+FzzzzzzzzzzS
+SSSSSSSSSgSS
+.....SS.....
+....SSSS....
+............
