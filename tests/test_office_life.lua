@@ -15,6 +15,11 @@ local T = MiniTest.new_set({ hooks = { post_once = child.stop } })
 local NEEDS_TRUE_COLOUR =
   "aineo: the office needs 'termguicolors' to draw its pixels, and it is off, so it does not show"
 
+--- What `show_now()` tells the user, as a warning, when the editor draws the
+--- half blocks two cells wide.
+local NEEDS_SINGLE_CELL_BLOCKS =
+  "aineo: the office needs 'ambiwidth' to be single to draw its half blocks one cell wide, and it is double, so it does not show"
+
 --- How long a wait for something that should happen may last, in milliseconds.
 local PATIENCE_MS = 4000
 
@@ -64,6 +69,47 @@ T['without true colours']['the office shows when it is asked to once the option 
   child.lua([[_G.office.show_now()]])
 
   child.o.termguicolors = true
+  child.lua([[_G.office.show_now()]])
+
+  eq(shows(), true)
+end
+
+T['with double-width ambiguous characters'] = MiniTest.new_set()
+
+T['with double-width ambiguous characters']['the office does not show when it is asked to, and says why'] = function()
+  office_child.open_layout(child)
+  office_child.make_office(child)
+  child.o.ambiwidth = 'double'
+
+  child.lua([[_G.office.show_now()]])
+
+  eq(shows(), false)
+  eq(child.lua_get([[_G.told]]), { { message = NEEDS_SINGLE_CELL_BLOCKS, level = 3 } })
+end
+
+T['with double-width ambiguous characters']['the office does not show when the idle time passes, and says nothing'] = function()
+  office_child.open_layout(child)
+  office_child.enter_the_left_window(child)
+  office_child.make_office(
+    child,
+    "{ pack = 'default', pieces = {}, idle_ms = 1000 }",
+    office_child.WAIT_THROUGH_STAND_IN
+  )
+  child.o.ambiwidth = 'double'
+
+  office_child.let_time_pass(child)
+
+  eq(shows(), false)
+  eq(child.lua_get([[_G.told]]), {})
+end
+
+T['with double-width ambiguous characters']['the office shows when it is asked to once the option is single'] = function()
+  office_child.open_layout(child)
+  office_child.make_office(child)
+  child.o.ambiwidth = 'double'
+  child.lua([[_G.office.show_now()]])
+
+  child.o.ambiwidth = 'single'
   child.lua([[_G.office.show_now()]])
 
   eq(shows(), true)
