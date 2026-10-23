@@ -2274,8 +2274,9 @@ from another tab, `\o` moves you to it.
 			(|:Aineo-tab|), and `close` after `diff`
 			(|:Aineo-diff|), and `tools` and `clear` after
 			`explain` (|:Aineo-explain|), and `check`, `states`,
-			`preview` and `new` after `office`, the names of the
-			office packs found after the first three
+			`preview`, `new` and `pack` after `office`, the names
+			of the office packs found after `check`, `states`,
+			`preview` and `pack`
 			(|:Aineo-office|). Without one of them, or
 			with anything else, it tells you, with one error,
 			which ones it takes. Only `explain` takes a range;
@@ -2801,6 +2802,24 @@ moves you to that tab instead and claims nothing.
 			made there, and `:Aineo office check` and
 			`office.pack` find it after a restart. It needs no
 			aineo tab.
+
+                                                          *:Aineo-office-pack*
+:Aineo office pack [name]
+			Makes every office draw the pack {name} from now on,
+			in this Neovim: the office of each tab, at once if
+			it shows (it is shown again with the pack), else the
+			next time it shows. It stands in place of
+			`office.pack` (|aineo-config-office.pack|) for as long
+			as this Neovim runs, and nothing is written to disk.
+			The pack is loaded and checked first, with the art
+			files of `office.pieces` over its pieces; a pack not
+			found, or that cannot be used, is told with one error
+			naming it, and nothing changes: the office that shows
+			stays. A preview in progress is not replaced
+			(|:Aineo-office-preview|). With no name it tells you,
+			with one message, the pack in use and whether it comes
+			from this command or from `office.pack`. {name} is
+			completed from the packs found. It needs no aineo tab.
 
 When an action fails — `claude.cmd` is not executable, say — aineo tells you
 once, with one error message starting with `aineo:`, and opens nothing.
@@ -3335,7 +3354,8 @@ office.pack		A pack's name, or a list of names. Default:
 			list is a choice made again each time the office
 			shows, at random among the names. A pack aineo does
 			not find, or cannot use, gives way to the default
-			pack, with a warning.
+			pack, with a warning. `:Aineo office pack` replaces it
+			for the session (|:Aineo-office-pack|).
 
                                                   *aineo-config-office.pieces*
 office.pieces		A table of piece names to art files. Default: `{}`
@@ -3941,8 +3961,10 @@ on it that `office.pack` (|aineo-config-office.pack|) can name in its place.
 `:Aineo office check` (|:Aineo-office-check|) lists what is wrong with a
 pack, `:Aineo office states` (|:Aineo-office-states|) lists what it draws for
 each state, `:Aineo office preview` (|:Aineo-office-preview|) plays every
-state over scripted agents, and `:Aineo office new` (|:Aineo-office-new|)
-starts a pack of your own from the default. How a pack is chosen, found and
+state over scripted agents, `:Aineo office new` (|:Aineo-office-new|)
+starts a pack of your own from the default, and `:Aineo office pack`
+(|:Aineo-office-pack|) switches the pack every office draws for this
+Neovim's session. How a pack is chosen, found and
 written is told next.
 
                                                          *aineo-office-packs*
