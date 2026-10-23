@@ -221,6 +221,14 @@ T['the default pack']['has the pieces the scene looks for by name'] = function()
   end
 end
 
+T['the default pack']['has an agent that pets the cat do it with an arm reaching out'] = function()
+  local pack = default.load_pack()
+
+  local pose = pack.activities.pet_the_cat.steps[1].pose
+
+  eq({ pose, vim.list_contains(pack.agent.poses[pose].art, 'arm_pet') }, { 'petting', true })
+end
+
 T['the default pack']['has the window first among the decorations of the wall, which show the sky'] = function()
   local decorations = default.load_pack().floor.legend['*']
 
