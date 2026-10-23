@@ -279,9 +279,9 @@ end
 
 --- Has the performer take the pose of `step` at the spot it has come to; if it
 --- took the spot from a character that was on it, that one is moved: it plays
---- what the step says, or looks for another spot. A chain of characters that
---- move one another stops after `MOST_MOVED_IN_A_ROW`: the last is left
---- where it stands.
+--- what the step says, or looks for another spot and, finding none, has its
+--- step over at once. A chain of characters that move one another stops after
+--- `MOST_MOVED_IN_A_ROW`: the last is left where it stands.
 ---
 ---@param context aineo.office_scene.DirectorContext
 ---@param performer aineo.office_scene.Performer
@@ -303,7 +303,12 @@ function settle_at_spot(context, performer, step, time)
   if activity_name and context.pack.activities[activity_name] then
     make_play(context, occupant, activity_name, INTERLUDE, time)
   else
-    begin_step(context, occupant, occupant.step_index, math.max(time, occupant.clock))
+    local since = math.max(time, occupant.clock)
+    begin_step(context, occupant, occupant.step_index, since)
+    if occupant.spot == nil and occupant.column then
+      occupant.looks_again_at = nil
+      occupant.arrived_at, occupant.step_seconds = since, 0
+    end
   end
   context.moved_in_a_row = context.moved_in_a_row - 1
 end
