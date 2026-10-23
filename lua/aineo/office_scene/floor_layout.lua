@@ -35,6 +35,7 @@ local PLAIN_CELLS = { [WALL] = true, [FLOOR] = true, [UNWALKED_FLOOR] = true }
 ---@field row integer
 ---@field sitting boolean whether a character at the spot sits
 ---@field facing string 'left' or 'right'
+---@field beside? string for a cell found beside a character: that character's id
 
 ---@class aineo.office_scene.FloorLayout
 ---@field width integer

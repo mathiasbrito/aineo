@@ -433,14 +433,45 @@ local function resume_step(context, performer)
   end
 end
 
+--- Whether an agent has gone beside `cat`, or is on its way, and its step is
+--- not over at `now`.
+---
+---@param context aineo.office_scene.DirectorContext
+---@param cat aineo.office_scene.Performer
+---@param now number
+---@return boolean
+local function is_visited(context, cat, now)
+  return vim.iter(context.agents):any(function(agent)
+    return agent.spot ~= nil and agent.spot.beside == cat.id and step_end_before(agent, now) == nil
+  end)
+end
+
+--- Has the cat keep its pose and its place up to `now`; the time its step has
+--- left, and the time it waits before it looks for an activity, are not used
+--- up meanwhile.
+---
+---@param cat aineo.office_scene.Performer
+---@param now number
+local function hold_still(cat, now)
+  local held_for = now - cat.clock
+  cat.arrived_at = cat.arrived_at and cat.arrived_at + held_for
+  cat.looks_for_life_at = cat.looks_for_life_at and cat.looks_for_life_at + held_for
+  cat.clock = now
+end
+
 --- Brings the cat up to `now`: it picks the activity of its life when it has
---- none, and plays it.
+--- none, and plays it; while an agent is beside it, or on its way to be, it
+--- holds still.
 ---
 ---@param context aineo.office_scene.DirectorContext
 ---@param cat aineo.office_scene.Performer
 ---@param now number
 local function bring_cat_up_to(context, cat, now)
   cat.steps_begun = 0
+  if is_visited(context, cat, now) then
+    hold_still(cat, now)
+    return
+  end
   local waiting = cat.looks_for_life_at ~= nil and cat.looks_for_life_at > now
   if not cat.activity and not waiting then
     start_next_activity(context, cat, now)
