@@ -33,6 +33,44 @@ function M.running_sessions_here()
   )
 end
 
+--- Claude Code's configuration directory: `$CLAUDE_CONFIG_DIR`, else
+--- `.claude` in the user's home.
+---
+---@return string
+function M.claude_config_directory()
+  local configured = vim.env.CLAUDE_CONFIG_DIR
+  if configured and configured ~= '' then
+    return configured
+  end
+  return vim.fs.joinpath(vim.uv.os_homedir(), '.claude')
+end
+
+--- The file Claude Code writes the transcript of `session_id` in when the
+--- session belongs to the folder this Neovim started in (`kept_places()`):
+--- `projects/<folder>/<session id>.jsonl` under its configuration directory
+--- (`M.claude_config_directory()`), `<folder>` that folder's path with every
+--- character but a letter or a digit made a dash.
+---
+---@param session_id string
+---@return string path
+function M.folder_transcript(session_id)
+  local folder = vim.fn.substitute(kept_places().working_directory, '[^a-zA-Z0-9]', '-', 'g')
+  return vim.fs.joinpath(M.claude_config_directory(), 'projects', folder, session_id .. '.jsonl')
+end
+
+--- Whether a Claude Code runs the session `session`, wherever it runs: a
+--- process aineo started, by its record under the state directory of
+--- `kept_places()` (`aineo.mcp`'s `is_session_running()`), or any process
+--- Claude Code's own registry names in its configuration directory
+--- (`aineo.claude`'s `is_session_registered()`, `M.claude_config_directory()`).
+---
+---@param session string
+---@return boolean
+function M.is_session_running(session)
+  return require('aineo.mcp').is_session_running(kept_places().state_directory, session)
+    or require('aineo.claude').is_session_registered(M.claude_config_directory(), session)
+end
+
 M.kept_places = kept_places
 
 return M

@@ -482,6 +482,26 @@ T['a running session']['is one the record of a process that runs holds, in any d
   }, { true, true, false, false })
 end
 
+T['a running session']['is not one its process ended, though the process runs on'] = function()
+  local state = fixture.directory('mcp-processes-session-ended')
+  record_all(state, {
+    hook('SessionStart', FIRST_SESSION_ID, 1000),
+    hook('SessionEnd', FIRST_SESSION_ID, 2000),
+  })
+
+  eq(mcp.is_session_running(state, FIRST_SESSION_ID), false)
+end
+
+T['a running session']['is one its process runs on after it ended another session'] = function()
+  local state = fixture.directory('mcp-processes-other-ended')
+  record_all(state, {
+    hook('SessionStart', FIRST_SESSION_ID, 1000),
+    hook('SessionEnd', SECOND_SESSION_ID, 2000),
+  })
+
+  eq(mcp.is_session_running(state, FIRST_SESSION_ID), true)
+end
+
 T['the running sessions']['leave out a record whose pid another user’s process took'] = function()
   local state = fixture.directory('mcp-processes-eperm')
   mcp.record_server_start(state, {

@@ -1531,20 +1531,23 @@ local function make_tab(homes, key, callbacks)
   --- a layout opened around it, as the first open does for the kept session:
   --- what the reopening of the folder's tabs does for each tab. With
   --- `kept_claim`, the session the tab claimed when the list was kept: while a
-  --- Claude Code process aineo started runs it (`aineo.mcp`'s
-  --- `is_session_running()`; the tab's own has not started yet), the tab
-  --- claims it again once its Claude Code starts on `id`
-  --- (`claim_session()`); else its Claude Code resumes `kept_claim` in place of
-  --- `id`, and that is the tab's own session from then on.
+  --- Claude Code runs it (`places.is_session_running()`; the tab's own has not
+  --- started yet), the tab claims it again once its Claude Code starts on `id`
+  --- (`claim_session()`). Else, when its transcript is in this folder's
+  --- (`places.folder_transcript()`), its Claude Code resumes `kept_claim` in
+  --- place of `id`, and that is the tab's own session from then on; when it is
+  --- not, the claim is dropped and the tab resumes `id`.
   ---
   ---@param id string
   ---@param kept_claim? string
   local function open_on_session(id, kept_claim)
     opened_from_list = true
     local config = resolved_config()
-    local state_directory = places.kept_places().state_directory
-    if kept_claim and not require('aineo.mcp').is_session_running(state_directory, kept_claim) then
-      id, kept_claim = kept_claim, nil
+    if kept_claim and not places.is_session_running(kept_claim) then
+      if vim.fn.filereadable(places.folder_transcript(kept_claim)) == 1 then
+        id = kept_claim
+      end
+      kept_claim = nil
     end
     open_layout_around(config, claude_terminal_resuming(config, id))
     if kept_claim then
