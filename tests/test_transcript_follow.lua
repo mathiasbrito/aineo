@@ -34,13 +34,14 @@ end
 ---@class transcript_follow.Reads
 ---@field opened string[]
 ---@field bytes integer
+---@field largest integer the most bytes one read returned
 ---@field stop fun() puts the functions back
 
 --- Counts what is opened and read through `vim.uv` from now until `stop()`.
 ---
 ---@return transcript_follow.Reads
 local function count_reads()
-  local reads = { opened = {}, bytes = 0 }
+  local reads = { opened = {}, bytes = 0, largest = 0 }
   local open, read = vim.uv.fs_open, vim.uv.fs_read
   vim.uv.fs_open = function(path, ...)
     table.insert(reads.opened, path)
@@ -49,12 +50,31 @@ local function count_reads()
   vim.uv.fs_read = function(...)
     local data, problem = read(...)
     reads.bytes = reads.bytes + #(data or '')
+    reads.largest = math.max(reads.largest, #(data or ''))
     return data, problem
   end
   reads.stop = function()
     vim.uv.fs_open, vim.uv.fs_read = open, read
   end
   return reads
+end
+
+--- How many signals a follower of a case may deliver before the case stops it.
+--- No case delivers so many; a follower that reads the same bytes again and
+--- again would deliver them for ever, and the case would hang, not fail.
+local MOST_SIGNALS = 1000
+
+--- The number of timers open in this Neovim that repeat.
+---
+---@return integer
+local function open_repeating_timers()
+  local count = 0
+  vim.uv.walk(function(handle)
+    if handle:get_type() == 'timer' and not handle:is_closing() and handle:get_repeat() > 0 then
+      count = count + 1
+    end
+  end)
+  return count
 end
 
 --- The followers the case started, which its end stops, whether or not the
@@ -73,6 +93,9 @@ local function follow_path(path)
     path = path,
     on_signal = function(signal)
       table.insert(following.signals, signal)
+      if #following.signals > MOST_SIGNALS and following.follower then
+        following.follower.stop()
+      end
     end,
     on_unreadable_line = function(length)
       table.insert(following.unreadable, length)
@@ -143,9 +166,33 @@ local function tool_line(call, command)
   })
 end
 
+--- How many files a case may open before the case stops its followers. A
+--- follower that reads again what it has read opens the file for ever, and
+--- the case would hang, not fail; no case opens so many.
+local MOST_OPENS = 500
+
+--- The function `vim.uv.fs_open` is while the case runs: the one the hooks
+--- found, which they put back.
+local opener = nil
+
 local T = MiniTest.new_set({
   hooks = {
+    pre_case = function()
+      local open = vim.uv.fs_open
+      local opens = 0
+      opener = open
+      vim.uv.fs_open = function(...)
+        opens = opens + 1
+        if opens > MOST_OPENS then
+          for _, follower in ipairs(started_followers) do
+            follower.stop()
+          end
+        end
+        return open(...)
+      end
+    end,
     post_case = function()
+      vim.uv.fs_open = opener
       for _, follower in ipairs(started_followers) do
         follower.stop()
       end
@@ -227,23 +274,15 @@ end
 T['follow()']['replays a line the file holds without its newline once the newline arrives'] = function()
   local path = vim.fs.joinpath(fixture.directory('office_transcript'), 'session.jsonl')
   fake_transcript.append_text(path, tool_line('toolu_open'))
-  local signals = {}
-  local follower = assert(transcript.follow({
-    path = path,
-    on_signal = function(signal)
-      table.insert(signals, signal)
-    end,
-  }))
+  local following = follow_path(path)
 
-  eq(#signals, 0)
+  eq(#following.signals, 0)
   fake_transcript.append_text(path, '\n')
   vim.wait(PATIENCE_MS, function()
-    return #signals > 0
+    return #following.signals > 0
   end, 10)
 
-  eq(#signals, 1)
-  eq(signals[1].call, 'toolu_open')
-  follower.stop()
+  eq(calls_of(following.signals), { 'toolu_open' })
 end
 
 T['follow()']['reports the length of a line that is not JSON and goes on'] = function()
@@ -563,6 +602,71 @@ T['follow()']['delivers none of the other calls of a line once stopped from the 
   vim.wait(QUIET_MS)
 
   eq(calls, { 'first' })
+end
+
+T['follow()']['reads a megabyte at most in one pass of what is appended'] = function()
+  local following = follow_new_transcript()
+  local reads = count_reads()
+  local filler = vim.json.encode({ type = 'progress', padding = ('x'):rep(1000) })
+  local lines = {}
+  for number = 1, 3 * 1024 do
+    lines[number] = filler
+  end
+  table.insert(lines, tool_line('after_the_burst'))
+
+  fake_transcript.append(following.path, lines)
+  vim.wait(PATIENCE_MS, function()
+    return #following.signals > 0
+  end, 10)
+  reads.stop()
+
+  eq(calls_of(following.signals), { 'after_the_burst' })
+  eq(reads.largest <= 1024 * 1024, true)
+end
+
+T['follow()']['lets the event loop turn between the passes of a burst it reads'] = function()
+  local following = follow_new_transcript()
+  local turns = 0
+  local turn_counter = assert(vim.uv.new_check())
+  turn_counter:start(function()
+    turns = turns + 1
+  end)
+  local turns_at_reads = {}
+  local read = vim.uv.fs_read
+  vim.uv.fs_read = function(...)
+    turns_at_reads[turns] = true
+    return read(...)
+  end
+  local filler = vim.json.encode({ type = 'progress', padding = ('x'):rep(1000) })
+  local lines = {}
+  for number = 1, 6 * 1024 do
+    lines[number] = filler
+  end
+  table.insert(lines, tool_line('after_the_burst'))
+
+  fake_transcript.append(following.path, lines)
+  vim.wait(PATIENCE_MS, function()
+    return #following.signals > 0
+  end, 10)
+  vim.uv.fs_read = read
+  turn_counter:stop()
+  turn_counter:close()
+
+  eq(calls_of(following.signals), { 'after_the_burst' })
+  eq(vim.tbl_count(turns_at_reads) >= 4, true)
+end
+
+T['follow()']['stops looking every half second at a file once it is there to watch'] = function()
+  local path = vim.fs.joinpath(fixture.directory('office_transcript'), 'late', 'session.jsonl')
+  local following = follow_path(path)
+  local while_missing = open_repeating_timers()
+
+  fake_transcript.append(path, { tool_line('first') })
+  vim.wait(PATIENCE_MS, function()
+    return #following.signals > 0
+  end, 10)
+
+  eq({ while_missing, open_repeating_timers() }, { 2, 1 })
 end
 
 T['follow()']['stops delivering and releases its watch once stopped'] = function()
