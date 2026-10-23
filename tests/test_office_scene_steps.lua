@@ -218,6 +218,25 @@ T['an agent']['goes to the nearest spot of the name that no other agent has take
   eq(scene.agent_cell(picture, 9, 1, scene.SECOND_AGENT), '6,0')
 end
 
+T['an agent']['goes to the first of two spots that are as near, as the plan reads them'] = function()
+  local pack = scene.people_pack(
+    '# plan\n \n .b.a.b.\n',
+    { a = { spot = 'aside' }, b = { spot = 'bench' } },
+    {
+      activities = {
+        stand = { steps = { { at = 'aside' } } },
+        sit = { steps = { { at = 'bench' } } },
+      },
+      states = { standing = 'stand', working = 'sit' },
+    }
+  )
+  local watched = scene.watch(pack, 7, 1)
+  watched.cell_at(scene.agents_in('standing'), 0)
+  watched.cell_at(scene.agents_in('working'), 0.1)
+
+  eq(watched.cell_at(scene.agents_in('working'), 5), '1,0')
+end
+
 T['an agent']['has its own desk, the one in its place among the agents, even when the first is free'] = function()
   local pack = scene.people_pack('# plan\n \n .d.d.\n', { d = { spot = 'desk' } }, {
     states = { standing = 'stand', working = 'play' },
