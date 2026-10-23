@@ -414,6 +414,20 @@ local function read_triggers(build)
   return triggers
 end
 
+--- The text a pack's `about` or `author` gives, or `''` when it is not text
+--- or holds a control character (a line break among them): the pack is
+--- usable and these are told as problems, but nothing that shows them to the
+--- user may be handed a value that is not a line of text.
+---
+---@param value any
+---@return string
+local function head_text(value)
+  if type(value) == 'string' and not value:find('%c') then
+    return value
+  end
+  return ''
+end
+
 --- Tells the problems of `pack.lua` that no entry has: a field no pack has, a
 --- name that is not the folder's.
 ---
@@ -514,7 +528,7 @@ function resolve_pack(name, reading, chain)
     files = reading.files,
   }
   check_head(build, name)
-  local pack = { name = data.name, about = data.about, author = data.author }
+  local pack = { name = data.name, about = head_text(data.about), author = head_text(data.author) }
   pack.colours = read_entries(build, 'colours', pack_format.COLOURS)
   pack.pieces = entries.overlaid(
     base and base.pieces,
