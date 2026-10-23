@@ -133,6 +133,24 @@ T['the transcript a SessionStart hook named']['is the one the office follows, wh
   eq(office_cells.is_typing(child), true)
 end
 
+T['the transcript a SessionStart hook named']['wins over one Claude Code’s folder rule finds for the session'] = function()
+  open_layout('office-hook-wins')
+  local session = tab_session()
+  local stale = vim.fs.joinpath(
+    child.lua_get([[vim.env.CLAUDE_CONFIG_DIR]]),
+    'projects',
+    'stale',
+    session .. '.jsonl'
+  )
+  vim.fn.mkdir(vim.fs.dirname(stale), 'p')
+  fake_transcript.append(stale, RECORDED_TURN)
+  tell_transcript(session, write_transcript_elsewhere(session, vim.list_slice(RECORDED_TURN, 1, 5)))
+
+  entry.command(child, 'Aineo office')
+
+  eq(office_cells.is_typing(child), true)
+end
+
 T['the transcript a SessionStart hook named']['is not followed for a session the tab does not run'] = function()
   open_layout('office-hook-other')
   tell_transcript(
