@@ -8,6 +8,12 @@ local scene = dofile('tests/helpers/office_scene.lua').new('office_scene_cost')
 --- milliseconds: well under the 83 ms between two frames.
 local MOST_MILLISECONDS_AN_UPDATE = 50
 
+--- The most a picture of the stage may take, in milliseconds.
+local MOST_MILLISECONDS_A_PICTURE = 20
+
+--- The most laying a stage out may take, at its first size or a new one.
+local MOST_MILLISECONDS_TO_LAY_OUT = 100
+
 --- How long `work` takes, in milliseconds.
 ---
 ---@param work fun()
@@ -82,6 +88,62 @@ T['an update']['in which 65 agents change their activity is cheap on the largest
   end)
 
   eq(milliseconds < MOST_MILLISECONDS_AN_UPDATE, true)
+end
+
+T['a frame'] = MiniTest.new_set()
+
+T['a frame']['of 2,000 pieces of the largest art, hung from their tops, costs under 20 ms'] = function()
+  local rows = (('R'):rep(400) .. '\n'):rep(200)
+  local pack = scene.people_pack('# plan\n ~\n~P\n', { P = { piece = 'huge' } }, nil, {
+    ['art/huge.txt'] = 'colours: R = red\nanchor: 0, 0\n---\n' .. rows,
+  })
+  local stage = scene.stage_of(pack, 220, 80)
+  stage.advance({}, 0)
+
+  local milliseconds = milliseconds_of(function()
+    stage.picture()
+  end)
+
+  eq(milliseconds < MOST_MILLISECONDS_A_PICTURE, true)
+end
+
+T['a stage'] = MiniTest.new_set()
+
+--- A pack whose every cell is a monitor with `in_use` art and a spot.
+---
+---@return aineo.office_pack.Pack
+local function pack_with_a_spot_in_every_cell()
+  return scene.people_pack(
+    '# plan\n ~\n~P\n',
+    {
+      P = { piece = 'monitor', in_use = 'monitor_on', spot = 'seat' },
+    },
+    nil,
+    {
+      ['art/monitor.txt'] = 'colours: R = red\nanchor: 0, 1\n---\nR\nR\n',
+      ['art/monitor_on.txt'] = 'colours: G = green\nanchor: 0, 1\n---\nG\nG\n',
+    }
+  )
+end
+
+T['a stage']['is made in under 100 ms from a plan with a spot and a piece in use in every cell'] = function()
+  local pack = pack_with_a_spot_in_every_cell()
+
+  local milliseconds = milliseconds_of(function()
+    scene.stage_of(pack, 220, 80)
+  end)
+
+  eq(milliseconds < MOST_MILLISECONDS_TO_LAY_OUT, true)
+end
+
+T['a stage']['is laid out again in under 100 ms for a new size'] = function()
+  local stage = scene.stage_of(pack_with_a_spot_in_every_cell(), 220, 80)
+
+  local milliseconds = milliseconds_of(function()
+    stage.resize(219, 80)
+  end)
+
+  eq(milliseconds < MOST_MILLISECONDS_TO_LAY_OUT, true)
 end
 
 T['an update']['begins at most eight steps of an agent, the rest in the updates after'] = function()
