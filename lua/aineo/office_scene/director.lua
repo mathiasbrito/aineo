@@ -294,8 +294,8 @@ local function has_the_spots_for(context, performer, activity)
   local needed = activity.players
   for _, step in ipairs(activity.steps) do
     if step.at then
-      local choice = named_spots.choose(context, step.at, performer, step.even_if_taken)
-      if #choice.open < needed or not choice.any then
+      local choice = named_spots.availability(context, step.at, performer, step.even_if_taken)
+      if choice.free < needed or not choice.any then
         return false
       end
       needed = 1
