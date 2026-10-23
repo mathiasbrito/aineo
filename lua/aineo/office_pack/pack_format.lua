@@ -39,7 +39,7 @@ local SHOWN = { 'time', 'date', 'sky', 'plan', 'printing' }
 --- A match: plain words, a glob, or `{ lua_pattern = … }`.
 local MATCH = schema.either(
   'text, or a table with lua_pattern',
-  { schema.text, schema.fields('a match', { lua_pattern = schema.required(schema.text) }) }
+  { schema.text, schema.fields('a match', { lua_pattern = schema.required(schema.pattern) }) }
 )
 
 local TEXT_ROLE_NAME = schema.choice(M.TEXT_ROLES)
