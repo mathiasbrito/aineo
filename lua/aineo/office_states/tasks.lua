@@ -1,17 +1,20 @@
 --- The tasks an agent keeps for itself, as the calls of Claude Code's task
 --- tools tell them: `TodoWrite` gives the whole list at once, and
---- `TaskCreate` adds a task and `TaskUpdate` finishes one. Pure.
+--- `TaskCreate` adds a task and `TaskUpdate` finishes or deletes one. Pure.
 ---
 --- A task `TaskCreate` makes is numbered by the order it was made in, from 1,
---- which is how `TaskUpdate` names it.
+--- which is how `TaskUpdate` names it; a creation whose result is an error
+--- takes no number (`without()`).
 
 local M = {}
 
 ---@class aineo.office_states.Task
 ---@field subject string what the task is
 ---@field done boolean whether it is finished
+---@field deleted? boolean whether a `TaskUpdate` deleted it: it keeps its number, so that the tasks after it keep theirs, and is not to be shown
 
 local COMPLETED = 'completed'
+local DELETED = 'deleted'
 
 --- `value` when it is a non-empty string, else nothing.
 ---
@@ -57,7 +60,7 @@ end
 
 --- `tasks` with the status a `TaskUpdate` with `input` gives to the task it
 --- names, by its number in the order the tasks were made: the task is done
---- when the status is `completed`. An update of a task that is not in the
+--- when the status is `completed`, and deleted when it is `deleted`. An update of a task that is not in the
 --- list, or that gives no status, changes nothing.
 ---
 ---@param tasks aineo.office_states.Task[]
@@ -70,7 +73,11 @@ local function with_updated(tasks, input)
     return tasks
   end
   local changed = vim.list_extend({}, tasks)
-  changed[number] = { subject = task.subject, done = input.status == COMPLETED }
+  if input.status == DELETED then
+    changed[number] = { subject = task.subject, done = task.done, deleted = true }
+  else
+    changed[number] = { subject = task.subject, done = input.status == COMPLETED }
+  end
   return changed
 end
 
@@ -93,6 +100,18 @@ local CHANGES_OF_TOOL = {
 function M.after_call(tasks, tool, input)
   local change = tool and CHANGES_OF_TOOL[tool]
   return change and change(tasks, input) or tasks
+end
+
+--- `tasks` without the task numbered `number`, the ones after it taking its
+--- number: Claude Code gives no number to a task whose creation failed.
+---
+---@param tasks aineo.office_states.Task[]
+---@param number integer
+---@return aineo.office_states.Task[]
+function M.without(tasks, number)
+  local kept = vim.list_extend({}, tasks)
+  table.remove(kept, number)
+  return kept
 end
 
 return M

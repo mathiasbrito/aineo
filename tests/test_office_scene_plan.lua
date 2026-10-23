@@ -132,6 +132,17 @@ T['the plan']['writes no more rows than the area holds'] = function()
   eq(text_of(picture, 2, 10), '          ')
 end
 
+T['the plan']['leaves out a task deleted, and starts at the first not done after it'] = function()
+  local picture = board_with(main_with({
+    task('One', true),
+    { subject = 'Gone', done = false, deleted = true },
+    task('Three', false),
+  }))
+
+  eq(text_of(picture, 0, 10), '✓ One     ')
+  eq(text_of(picture, 1, 10), '○ Three   ')
+end
+
 T['the plan']['starts at the first task not done when the tasks outgrow the area'] = function()
   local picture = board_with(
     main_with({ task('One', true), task('Two', true), task('Three', false), task('Four', false) })

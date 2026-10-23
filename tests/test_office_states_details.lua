@@ -78,6 +78,56 @@ T['the tasks']['a TaskUpdate that names no task changes nothing'] = function()
   eq(story.details().tasks, { { subject = 'Write the test', done = false } })
 end
 
+T['the tasks']['a TaskUpdate to deleted keeps the number of the tasks after it and marks the task'] = function()
+  local story = office_signals.tell()
+  story.started('c1', 'TaskCreate', { subject = 'A' })
+  story.started('c2', 'TaskCreate', { subject = 'B' })
+  story.started('c3', 'TaskCreate', { subject = 'C' })
+
+  story.started('c4', 'TaskUpdate', { taskId = '2', status = 'deleted' })
+  story.started('c5', 'TaskUpdate', { taskId = '3', status = 'completed' })
+
+  eq(story.details().tasks, {
+    { subject = 'A', done = false },
+    { subject = 'B', done = false, deleted = true },
+    { subject = 'C', done = true },
+  })
+end
+
+T['the tasks']['a TaskCreate whose result is an error takes no number'] = function()
+  local story = office_signals.tell()
+  story.started('c1', 'TaskCreate', { subject = 'A' })
+  story.finished('c1')
+  story.started('c2', 'TaskCreate', { subject = 'Failed' })
+  story.finished('c2', true)
+  story.started('c3', 'TaskCreate', { subject = 'B' })
+
+  story.started('c4', 'TaskUpdate', { taskId = '2', status = 'completed' })
+
+  eq(story.details().tasks, {
+    { subject = 'A', done = false },
+    { subject = 'B', done = true },
+  })
+end
+
+T['the tasks']['a TaskCreate whose result is not an error keeps its task'] = function()
+  local story = office_signals.tell()
+  story.started('c1', 'TaskCreate', { subject = 'A' })
+
+  story.finished('c1', false)
+
+  eq(story.details().tasks, { { subject = 'A', done = false } })
+end
+
+T['the tasks']['a TaskCreate heard started twice adds its task once'] = function()
+  local story = office_signals.tell()
+  story.started('c1', 'TaskCreate', { subject = 'A' })
+
+  story.started('c1', 'TaskCreate', { subject = 'A' })
+
+  eq(story.details().tasks, { { subject = 'A', done = false } })
+end
+
 T['the tasks']['are kept by each agent for itself'] = function()
   local story = office_signals.tell()
   story.hear('subagent_started', { agent = 'a1' })
