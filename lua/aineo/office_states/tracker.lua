@@ -29,6 +29,9 @@ local M = {}
 ---@field take fun(signal: aineo.transcript.Signal, now: number) takes in what an agent did, heard at `now`, in seconds on the caller's clock
 ---@field agents fun(now: number): aineo.office_states.Agent[] each agent and its state at `now`, the main agent first, the others in the order they were first heard of; a subagent that left is listed for a while, then not
 
+--- The kinds of signal of the main agent that end its work.
+local ENDS_THE_MAIN_AGENTS_WORK = { turn_ended = true, interrupted = true, session_ended = true }
+
 --- How many of `records` are subagents that have not finished.
 ---
 ---@param records aineo.office_states.Record[]
@@ -114,16 +117,22 @@ function M.new_tracker(options)
     end
   end
 
-  --- Lets the agent that gave `signal` hear it, at `now`.
+  --- Lets the agent that gave `signal` hear it, at `now`; when it ends the
+  --- main agent's work, the agents heard of only by their permission requests
+  --- leave: nothing else will ever tell they are over.
   ---
   ---@param signal aineo.transcript.Signal
   ---@param now number
   local function let_hear(signal, now)
-    record_module.hear(record_of(signal.agent), signal, {
-      now = now,
-      replayed = signal.replayed == true,
-      settings = settings,
-    })
+    local hearing = { now = now, replayed = signal.replayed == true, settings = settings }
+    record_module.hear(record_of(signal.agent), signal, hearing)
+    if signal.agent == record_module.MAIN and ENDS_THE_MAIN_AGENTS_WORK[signal.kind] then
+      for _, record in ipairs(records) do
+        if record_module.is_known_only_by_permission(record) then
+          record_module.hear(record, { agent = record.id, kind = 'subagent_finished' }, hearing)
+        end
+      end
+    end
     refresh_facts(now)
     if signal.replayed then
       show_at_once(now)
