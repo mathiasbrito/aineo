@@ -112,4 +112,40 @@ T['a screen']['belongs to the agent whose place among the agents is the monitorâ
   })
 end
 
+T['a screen']['begins at its first frame when its agent takes the pose'] = function()
+  local pack = scene.people_pack(
+    '# plan\n \n ..m.......\n .s........\n',
+    { m = { piece = 'monitor' }, s = { spot = 'seat' } },
+    {
+      characters = {
+        agent = {
+          colours = { scene.AGENT },
+          poses = {
+            standing = { art = { 'person' } },
+            walking = { art = { 'person' } },
+            typing = { art = { 'person' }, screen = 'flash' },
+          },
+        },
+      },
+      activities = {
+        stand = { steps = { { at = 'seat' } } },
+        work = { steps = { { at = 'seat', pose = 'typing' } } },
+      },
+      states = { standing = 'stand', working = 'work' },
+    },
+    {
+      ['art/monitor.txt'] = MONITOR_ART['art/monitor.txt'],
+      ['art/flash.txt'] = 'colours: R = red, G = green\nanchor: 0, 0\nseconds per frame: 1\n---\nRR\nRR\n---\nGG\nGG\n',
+    }
+  )
+  local stage = scene.stage_of(pack, 10, 2)
+  stage.advance(scene.agents_in('standing'), 0)
+  stage.advance(scene.agents_in('standing'), 1.4)
+  stage.advance(scene.agents_in('working'), 1.5)
+
+  stage.advance(scene.agents_in('working'), 1.6)
+
+  eq(scene.group_at(stage.picture(), 3, 0), 'AineoOfficePixel_ff0000_885500')
+end
+
 return T

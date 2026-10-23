@@ -126,6 +126,24 @@ T['the status list']['names each agent and the state it is in, the dot in the ag
   )
 end
 
+T['the status list']['dots a subagent in the colours subagents take'] = function()
+  local function people(colour)
+    return {
+      colours = { colour },
+      poses = {
+        standing = { art = { 'person' } },
+        walking = { art = { 'person' } },
+        sitting = { art = { 'person' }, sitting = true },
+      },
+    }
+  end
+  local picture = picture_of(25, scene.agents_in('standing', 'standing'), {
+    characters = { agent = people(scene.AGENT), subagent = people('#123456') },
+  })
+
+  eq(foreground_at(picture, 22, 1), '#123456')
+end
+
 T['the status list']['says a state in the words the stage was given for it'] = function()
   local picture = picture_of(25, scene.agents_in('working'), nil, {
     state_labels = { working = 'busy at the desk' },
