@@ -24,6 +24,7 @@ local cards_module = require('aineo.office.cards')
 local colours = require('aineo.office.colours')
 local countdown_module = require('aineo.office.countdown')
 local float_module = require('aineo.office.float')
+local preview_module = require('aineo.office.preview')
 local screen_module = require('aineo.office.screen')
 local too_small = require('aineo.office.too_small')
 
@@ -96,6 +97,7 @@ end
 ---@field random? fun(count: integer): integer a whole number from 1 to `count`, which picks one of several packs the settings name; the first when not given
 ---@field wall_clock? fun(): number the time in seconds since 1970, which the stamps of the transcript's lines are on; the system's when not given
 ---@field transcript? fun(): string|nil the path of the transcript of the session the office acts out, asked each time the office starts following it (each show, and each return to its tab page); none or nil, and it follows none
+---@field preview_seconds_per_state? number how long `preview()` shows each state, in seconds; 9 when not given
 ---@field schedule_after? fun(milliseconds: integer, callback: fun()): fun() calls `callback`, on the main loop, once `milliseconds` have passed, and returns what cancels the wait; the idle countdown waits through it; a timer of the editor's loop when not given
 
 ---@class aineo.office.Settings
@@ -108,6 +110,7 @@ end
 ---@field permission_wait fun(agent: string) tells the office the agent, `main` or a subagent's id, waits for the user to answer a permission prompt, until its next line in the transcript; it is kept, and handed over each time the office starts running unless the transcript shows the agent went on since
 ---@field report_arrived fun(report: aineo.office.Report) keeps the report as a card the office draws in its bottom right corner until the cursor enters the right side, and starts the idle countdown again; keeps nothing when the cursor is in the right side and the office is hidden, where the Report shows it
 ---@field show_now fun() shows the office over the right side at once, and does nothing when it shows
+---@field preview fun(pack?: string) shows the pack, or the one the settings name, over the right side with every state of the vocabulary acted out in turn, each named, in place of the office that shows; the preview follows no transcript
 ---@field let_go fun() closes the office, stops its timer and its watch, and forgets the session
 
 --- Makes the office of one tab.
@@ -125,6 +128,12 @@ function M.new_office(options)
   vim.validate('options.settings', options.settings, 'function', true)
   vim.validate('options.random', options.random, 'function', true)
   vim.validate('options.schedule_after', options.schedule_after, 'function', true)
+  vim.validate(
+    'options.preview_seconds_per_state',
+    options.preview_seconds_per_state,
+    'number',
+    true
+  )
   vim.validate('options.transcript', options.transcript, 'function', true)
   vim.validate('options.wall_clock', options.wall_clock, 'function', true)
   offices_made = offices_made + 1
@@ -200,7 +209,7 @@ function M.new_office(options)
   --- What exists while the office shows; nil while it is hidden. Its timer,
   --- tracker and follower are nil while the office is paused, as it is while
   --- its tab page is left.
-  ---@type { float: aineo.office.Float, group: integer, pack: aineo.office_pack.Pack, commands: aineo.office_states.CommandClasses|nil, stage: aineo.office_scene.Stage, screen: aineo.office.Screen, area: aineo.layout.Area, refresh_colours: fun(), draw: fun(), timer: uv.uv_timer_t|nil, tracker: aineo.office_states.Tracker|nil, follower: aineo.transcript.Follower|nil }|nil
+  ---@type { float: aineo.office.Float, group: integer, pack: aineo.office_pack.Pack, commands: aineo.office_states.CommandClasses|nil, stage: aineo.office_scene.Stage, screen: aineo.office.Screen, area: aineo.layout.Area, refresh_colours: fun(), draw: fun(), timer: uv.uv_timer_t|nil, tracker: aineo.office_states.Tracker|nil, follower: aineo.transcript.Follower|nil, preview: aineo.office.Preview|nil }|nil
   local showing = nil
 
   local office = {}
@@ -214,6 +223,15 @@ function M.new_office(options)
     local names = type(settings.pack) == 'table' and settings.pack or { settings.pack }
     local pick = options.random and options.random(#names) or 1
     return names[pick]
+  end
+
+  --- The name of the first pack the settings name: the pack of a preview that
+  --- is not given one.
+  ---
+  ---@param settings aineo.office.Settings
+  ---@return string
+  local function first_pack_name_of(settings)
+    return type(settings.pack) == 'table' and settings.pack[1] or settings.pack
   end
 
   --- Tells the user, in one warning, what is wrong with the pack `name`: the
@@ -405,6 +423,9 @@ function M.new_office(options)
       callback = function()
         open.refresh_colours()
         cards_module.define_groups()
+        if open.preview then
+          preview_module.define_group()
+        end
         open.screen.forget_groups()
       end,
     })
@@ -457,29 +478,38 @@ function M.new_office(options)
   ---
   ---@param open table what exists while the office shows
   function start_running(open)
+    if open.preview then
+      open.timer = start_frames(open.draw)
+      return
+    end
     local went_on_at
     open.tracker, open.follower, went_on_at = follow_transcript(open)
     hand_over_kept_waits(open.tracker, went_on_at)
     open.timer = start_frames(open.draw)
   end
 
-  --- Shows the office over `area`. With a pack that cannot be loaded or a
+  --- Shows the office over `area`: the tab's Claude Code acted out, or, with
+  --- `previewing`, every state of the vocabulary in turn. With a pack that
+  --- cannot be loaded, for a preview one other than the pack asked for, or a
   --- stage that cannot be made, tells the user why and shows nothing.
   ---
   ---@param area aineo.layout.Area
-  local function show_over(area)
+  ---@param previewing? { pack: string|nil } the pack to preview, none for the settings' own
+  ---@return boolean shown whether the office shows now
+  local function show_over(area, previewing)
     local office_pack = require('aineo.office_pack')
     local settings = options.settings and options.settings() or DEFAULT_SETTINGS
-    local name = pack_name_of(settings)
+    local name = previewing and (previewing.pack or first_pack_name_of(settings))
+      or pack_name_of(settings)
     local pack, problems = office_pack.load({
       name = name,
       folders = options.pack_folders(),
       replaced_pieces = settings.pieces,
     })
-    if not pack then
+    if not pack or (previewing and pack.name ~= name) then
       local why = office_pack.describe_problem(problems[1])
       vim.notify(('aineo: the office cannot show: %s'):format(why), vim.log.levels.ERROR)
-      return
+      return false
     end
     warn_of(name, problems)
     local refresh_colours = colours.follow_highlights(pack)
@@ -499,7 +529,7 @@ function M.new_office(options)
     })
     if not made then
       vim.notify(('aineo: the office cannot show: %s'):format(stage), vim.log.levels.ERROR)
-      return
+      return false
     end
     local float = float_module.open(area)
     local screen = screen_module.new_screen(float.buffer)
@@ -514,8 +544,15 @@ function M.new_office(options)
       area = area,
       refresh_colours = refresh_colours,
     }
+    if previewing then
+      preview_module.define_group()
+      open.preview = preview_module.new_preview({
+        start = options.clock(),
+        seconds_per_state = options.preview_seconds_per_state,
+      })
+    end
     open.draw = function()
-      if not open.tracker then
+      if not open.tracker and not open.preview then
         return
       end
       local width = vim.api.nvim_win_get_width(float.window)
@@ -525,13 +562,19 @@ function M.new_office(options)
         return
       end
       local now = options.clock()
-      stage.advance(open.tracker.agents(now), now)
-      screen.paint(cards.overlay(stage.picture(), { width = width, now = now }))
+      if open.preview then
+        stage.advance(open.preview.agents(now), now)
+        screen.paint(open.preview.overlay(stage.picture(), now))
+      else
+        stage.advance(open.tracker.agents(now), now)
+        screen.paint(cards.overlay(stage.picture(), { width = width, now = now }))
+      end
     end
     start_running(open)
     watch_the_screen(open)
     showing = open
     draw_frame(open.draw)
+    return true
   end
 
   --- The settings the user gave the office, or the default when it was given
@@ -645,6 +688,21 @@ function M.new_office(options)
     idle_time_has_passed = false
     countdown.stop()
     show_over(area)
+  end
+
+  function office.preview(pack)
+    local area = options.right_side()
+    local why = why_it_cannot_show(area)
+    if why then
+      vim.notify(why, vim.log.levels.WARN)
+      return
+    end
+    close()
+    idle_time_has_passed = false
+    countdown.stop()
+    if not show_over(area, { pack = pack }) then
+      settle()
+    end
   end
 
   function office.permission_wait(agent)

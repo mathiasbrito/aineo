@@ -177,13 +177,14 @@ end
 
 T['Aineo office completion'] = MiniTest.new_set()
 
-T['Aineo office completion']['offers check, states and new after office'] = function()
-  eq(child.fn.getcompletion('Aineo office ', 'cmdline'), { 'check', 'states', 'new' })
+T['Aineo office completion']['offers check, states, preview and new after office'] = function()
+  eq(child.fn.getcompletion('Aineo office ', 'cmdline'), { 'check', 'states', 'preview', 'new' })
 end
 
-T['Aineo office completion']['offers the packs found after states and check, and nothing after new'] = function()
+T['Aineo office completion']['offers the packs found after states, check and preview, and nothing after new'] = function()
   add_pack('alt')
 
+  eq(child.fn.getcompletion('Aineo office preview ', 'cmdline'), { 'alt', 'default' })
   eq(child.fn.getcompletion('Aineo office states ', 'cmdline'), { 'alt', 'default' })
   eq(child.fn.getcompletion('Aineo office check ', 'cmdline'), { 'alt', 'default' })
   eq(child.fn.getcompletion('Aineo office states a', 'cmdline'), { 'alt' })

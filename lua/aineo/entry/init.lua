@@ -29,6 +29,7 @@ local M = {}
 M.act = actions.act
 M.send_visual_selection = actions.send_visual_selection
 M.claim_in_current_tab = actions.claim_in_current_tab
+M.preview_office = actions.preview_office
 M.jump_to_tab = actions.jump_to_tab
 M.running_sessions_here = places.running_sessions_here
 M.forgo_tab_reopening = reopening.forgo_tab_reopening
