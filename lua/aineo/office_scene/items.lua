@@ -15,6 +15,7 @@ M.RANK = { on_the_floor = 0, seated = 1, piece = 2, standing = 3 }
 ---@field things aineo.office_scene.LyingThing[] what lies on the floor
 ---@field agents aineo.office_states.Agent[] every agent, whether it has a position on the plan or not
 ---@field places table<string, integer> the place of every agent, by its id
+---@field activities_played table<string, table> the activity each agent plays now, by its id
 ---@field state_labels table<string, string> what the status list says of each state, in words
 ---@field width integer cells
 ---@field height integer cells, the status list's rows among them
