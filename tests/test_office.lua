@@ -45,6 +45,7 @@ end
 ---@return table buffers the layout's `claude`, `report` and `input` buffers
 local function open_office(path, pack_folders, more_options)
   local buffers = layout.open_with_stand_ins(child)
+  child.o.termguicolors = true
   child.lua(
     [[
     local given = ...

@@ -34,6 +34,7 @@ local T = MiniTest.new_set({
     pre_case = function()
       stop_the_child()
       entry.restart(child)
+      child.o.termguicolors = true
     end,
     post_once = stop_the_child,
   },
