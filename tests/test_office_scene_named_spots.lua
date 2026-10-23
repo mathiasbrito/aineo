@@ -93,6 +93,16 @@ T['a step that goes to an idle agent’s desk']['goes to the desk of another idl
   eq(where_the_two_are(stage, 8), { '4,0', '2,0' })
 end
 
+T['a step that goes to an idle agent’s desk']['goes nowhere when no other agent is idle'] = function()
+  local stage = stage_of_a_visit('# plan\n \n aad.d.d.\n', DESKS_LEGEND, 8, 'an_idle_agents_desk')
+  local crew = scene.agents_in('idle', 'standing')
+  stage.advance(crew, 0)
+
+  stage.advance(crew, 3)
+
+  eq(where_the_two_are(stage, 8)[1], '0,0')
+end
+
 T['a step that goes next to an agent'] = MiniTest.new_set()
 
 T['a step that goes next to an agent']['goes to the nearest free cell beside another agent who stands still'] = function()
@@ -104,6 +114,73 @@ T['a step that goes next to an agent']['goes to the nearest free cell beside ano
   stage.advance(crew, 3)
 
   eq(where_the_two_are(stage, 8), { '5,0', '6,0' })
+end
+
+T['a step that goes next to an agent']['does not go beside an agent on the move'] = function()
+  local legend = { a = { spot = 'aside' }, f = { spot = 'far' } }
+  local pack = scene.people_pack('# plan\n \n aa' .. ('.'):rep(39) .. 'f\n', legend, {
+    activities = {
+      stand = { steps = { { at = 'aside', for_seconds = 2 } } },
+      walk = { steps = { { at = 'aside', for_seconds = 0.5 }, { at = 'far' } } },
+      visit = { during = { 'idle' }, steps = { { at = 'next_to_an_agent' } } },
+    },
+    states = { standing = 'stand', idle = 'stand', working = 'walk' },
+  })
+  local stage = scene.stage_of(pack, 42, 1, { random = scene.always(0) })
+  local crew = scene.agents_in('idle', 'working')
+  stage.advance(crew, 0)
+  stage.advance(crew, 1)
+  stage.advance(crew, 2)
+
+  stage.advance(crew, 2.5)
+
+  eq(where_the_two_are(stage, 42)[1], '0,0')
+end
+
+T['a step that goes next to an agent']['does not go to a cell off the plan, which is another row’s'] = function()
+  local pack = scene.people_pack('# plan\n \n ......a\n a......\n', { a = { spot = 'aside' } }, {
+    activities = {
+      stand = { steps = { { at = 'aside', for_seconds = 1 } } },
+      visit = { during = { 'idle' }, steps = { { at = 'next_to_an_agent' } } },
+    },
+    states = { standing = 'stand', idle = 'stand' },
+  })
+  local stage = scene.stage_of(pack, 7, 2, { random = scene.always(0) })
+  local crew = scene.agents_in('idle', 'standing')
+  stage.advance(crew, 0)
+
+  stage.advance(crew, 3)
+
+  eq(scene.agent_cell(stage.picture(), 7, 2), '1,1')
+end
+
+T['a step that goes next to an agent']['faces the agent it goes beside'] = function()
+  local pack = scene.people_pack('# plan\n \n ..a...a.\n', { a = { spot = 'aside' } }, {
+    characters = {
+      agent = {
+        colours = { scene.AGENT, scene.SECOND_AGENT },
+        poses = {
+          standing = { art = { 'person' } },
+          walking = { art = { 'person' } },
+          pointing = { art = { 'three' } },
+        },
+      },
+    },
+    activities = {
+      stand = { steps = { { at = 'aside', for_seconds = 1 } } },
+      visit = { during = { 'idle' }, steps = { { at = 'next_to_an_agent', pose = 'pointing' } } },
+    },
+    states = { standing = 'stand', idle = 'stand' },
+  }, {
+    ['art/three.txt'] = 'colours: L = red, M = green, R = blue\nanchor: 0, 1\n---\nLMR\nLMR\n',
+  })
+  local stage = scene.stage_of(pack, 8, 1, { random = scene.always(0) })
+  local crew = scene.agents_in('standing', 'idle')
+  stage.advance(crew, 0)
+
+  stage.advance(crew, 3)
+
+  eq(scene.group_at(stage.picture(), 1, 0), scene.solid('#0000ff'))
 end
 
 return T
