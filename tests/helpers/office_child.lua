@@ -19,7 +19,7 @@ M.LINES = 40
 
 --- Starts `child` at `M.COLUMNS` by `M.LINES`, with true colours as a terminal
 --- gives them, and aineo's layout open around the stand-ins, the cursor in the
---- layout's Claude window.
+--- layout's Claude window, which is out of the right side.
 ---
 ---@param child table
 ---@return { claude: integer, report: integer, input: integer } buffers
