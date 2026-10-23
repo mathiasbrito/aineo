@@ -44,6 +44,12 @@ local ENTRANCE = 'door'
 --- the editor.
 local MOST_STEPS_BEGUN_AN_UPDATE = 8
 
+--- How many characters can move one another off their spots in a row, a
+--- character that takes a spot moving the one on it, who takes another spot
+--- and moves the one on that, and so on; the chain stops there, so that
+--- characters whose steps take each other's spots cannot move for ever.
+local MOST_MOVED_IN_A_ROW = 4
+
 --- How many seconds an agent whose step's spots are all taken waits before it
 --- looks again, and a performer whose activity is over waits before it looks
 --- again for an activity it can pick.
@@ -65,6 +71,7 @@ local WANTED, RANDOM, INTERLUDE = performers.WANTED, performers.RANDOM, performe
 ---@field things aineo.office_scene.Things what lies on the floor
 ---@field agents aineo.office_scene.Performer[] the agents' performers, in the order the agents were given
 ---@field by_id table<string, aineo.office_scene.Performer> every performer, by its id
+---@field moved_in_a_row integer how many characters are being moved off their spots, one by another, at this moment
 ---@field cats aineo.office_scene.Performer[] the cats' performers, none until the office has been advanced
 ---@field layout aineo.office_scene.FloorLayout
 ---@field random fun(): number a number from 0 up to, not including, 1
@@ -269,7 +276,9 @@ end
 
 --- Has the performer take the pose of `step` at the spot it has come to; if it
 --- took the spot from a character that was on it, that one is moved: it plays
---- what the step says, or looks for another spot.
+--- what the step says, or looks for another spot. A chain of characters that
+--- move one another stops after `MOST_MOVED_IN_A_ROW`: the last is left
+--- where it stands.
 ---
 ---@param context aineo.office_scene.DirectorContext
 ---@param performer aineo.office_scene.Performer
@@ -283,12 +292,17 @@ function settle_at_spot(context, performer, step, time)
     return
   end
   occupant.spot = nil
+  if context.moved_in_a_row >= MOST_MOVED_IN_A_ROW then
+    return
+  end
+  context.moved_in_a_row = context.moved_in_a_row + 1
   local activity_name = step.the_one_moved_plays
   if activity_name and context.pack.activities[activity_name] then
     make_play(context, occupant, activity_name, INTERLUDE, time)
   else
     begin_step(context, occupant, occupant.step_index, math.max(time, occupant.clock))
   end
+  context.moved_in_a_row = context.moved_in_a_row - 1
 end
 
 --- Has the performer, whose activity is over, go back to the activity its
@@ -416,6 +430,7 @@ function M.new_director(pack, layout, random)
     agents = {},
     cats = {},
     by_id = {},
+    moved_in_a_row = 0,
     things = things.new_register(pack.things),
     layout = layout,
     random = random,
@@ -431,6 +446,7 @@ function M.new_director(pack, layout, random)
   local director = {}
 
   function director.update(agents, now)
+    context.moved_in_a_row = 0
     local present = {}
     context.agents = {}
     for _, agent in ipairs(agents) do
