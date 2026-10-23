@@ -3,7 +3,6 @@ local MiniTest = require('mini.test')
 local eq = MiniTest.expect.equality
 
 local default = dofile('tests/helpers/office_default.lua')
-local floor_layout = require('aineo.office_scene.floor_layout')
 
 local SMALL, MEDIUM, LARGE = { 60, 24 }, { 100, 40 }, { 220, 80 }
 
@@ -20,6 +19,38 @@ local function spot_counts(width, height)
     counts[name] = #list
   end
   return counts
+end
+
+--- The runs of one letter in the plan laid out `size` big that are narrower
+--- than the narrowest the piece the letter stands for can be drawn, since a
+--- piece that stretches is never drawn narrower than its art: each as
+--- `letter at column,row over length`.
+---
+---@param pack aineo.office_pack.Pack
+---@param size integer[]
+---@return string[]
+local function runs_narrower_than_their_stretched_piece(pack, size)
+  local narrow = {}
+  for row_index, text in ipairs(default.laid_out_rows(pack, size[1], size[2] - 5)) do
+    local column = 1
+    while column <= #text do
+      local letter = text:sub(column, column)
+      local length = 1
+      while text:sub(column + length, column + length) == letter do
+        length = length + 1
+      end
+      local entry = pack.floor.legend[letter]
+      local piece = entry and entry.piece and pack.pieces[entry.piece]
+      if piece and piece.stretch and length < piece.width then
+        table.insert(
+          narrow,
+          ('%s at %d,%d over %d'):format(letter, column - 1, row_index - 1, length)
+        )
+      end
+      column = column + length
+    end
+  end
+  return narrow
 end
 
 local T = MiniTest.new_set()
@@ -141,25 +172,7 @@ T['the plan']['stretches no piece beyond the run of cells it is laid over'] = Mi
 })
 
 T['the plan']['stretches no piece beyond the run of cells it is laid over']['size'] = function(size)
-  local pack = default.load_pack()
-
-  local too_wide = vim
-    .iter(floor_layout.lay_out(pack, size[1], size[2] - 5).pieces)
-    :filter(function(placed)
-      local piece = pack.pieces[placed.piece]
-      return piece.stretch ~= nil and placed.columns ~= nil and piece.width > placed.columns
-    end)
-    :map(function(placed)
-      return ('%s at %d,%d over %d columns'):format(
-        placed.piece,
-        placed.column,
-        placed.row,
-        placed.columns
-      )
-    end)
-    :totable()
-
-  eq(too_wide, {})
+  eq(runs_narrower_than_their_stretched_piece(default.load_pack(), size), {})
 end
 
 T['the plan']['has no window where the wall is too narrow for it'] = function()
