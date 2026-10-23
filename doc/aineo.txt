@@ -3850,12 +3850,20 @@ AineoOfficeCardMore     the line `+N more`, linked to `Comment`
 
 From 24 rows tall, the last five rows of the office are its status list: a
 rule, then a line for each agent, up to four, with a dot in the agent's
-colour, its name cut to nine cells and what it is doing (the activity's
-`label`, or the state's own words); when there are more agents than lines,
-the last line counts the rest. The floor plan takes the rows above. A plan
-places at most 2000 pieces, the first it reads from the top and the left,
-and a frame paints only what lies on the screen, so that a pack cannot make
-a frame costly.
+colour, its name and what it is doing (the activity's `label`, or the
+state's own words), each cut to the cells it has, a character that is not one
+cell wide shown as `?`; when there are more agents than lines, the last line
+counts the rest. The floor plan is cut to the rows above, and nothing but the
+list is painted on its rows.
+
+What a pack can ask of a frame is bounded. A plan places at most 2000 pieces,
+and the pieces together paint at most sixteen times the pixels of the plan's
+area; when it places more, aineo leaves out first the decorations, then the
+furniture, and last the pieces that stand on a spot, show something, have a
+screen or have art for when they are in use, the last the plan reads first,
+and says so once each time the office shows. A piece is painted only where it
+lies on the plan. An agent begins at most eight steps in one update, the rest
+in the updates after, and looking for a spot stops at the nearest.
 
 The art is a pack: a folder `aineo-office/<name>/` on 'runtimepath' with
 `pack.lua`, a description in the subset of a Lua table that aineo reads and
@@ -4051,20 +4059,27 @@ goes to the nearest spot called `at` that no other agent has taken, walking
 the shortest way over floor (`.`), spots and pieces with `walk_over`, never
 over a wall, a space or a piece that stands on the floor, and takes the
 step's `pose`, facing the spot's way or the step's `facing`. A spot called
-`desk` is the agent's own: the first agent has the first desk of the plan,
-the second the second. After `for_seconds` from its arrival (a random time
-between the two numbers when it has two) the next step begins; the last step
-lasts until the agent's activity changes, and an agent whose activity has no
-free spot is not drawn until one is free. A spot that cannot be walked to
-leaves the agent where it is. An agent first appears at the first spot of its
-first step without walking there, or at the spot `door` when the step has no
-`at`. A step's `effect` shows over the pose's.
+`desk` is the agent's own. An agent has a place from its arrival to its
+leaving, the lowest number no other agent has, and its desk, its monitor and
+its colour go by it: the agent with the first place has the first desk, the
+first monitor and the first colour. After `for_seconds` from its arrival (a
+random time between the two numbers when it has two) the next step begins; the
+last step lasts until the agent's activity changes. An agent whose step names
+a spot that other agents have keeps the spot it stands on and looks again
+every second; an agent that has no place yet is not drawn until a spot is
+free. A spot that cannot be walked to leaves the agent where it is and its
+activity goes on. An agent first appears at the first spot of its first
+step without walking there, or at the spot `door` when the step has no `at`.
+A step's `effect` shows over the pose's. When the office is resized, each
+agent keeps its activity and its step, at the spot of the same name and
+number in the new plan.
 
 A pose whose art has frames, or whose `rises` lifts it, begins at its first
 frame when the agent takes the pose. A pose with `screen` shows that piece in
 the `screen` area of the agent's own monitor, the n-th piece of the plan with
-a `screen` area for the n-th agent. `holding` draws a piece at the `hand`
-area of the first layer that has one.
+a `screen` area for the agent with the n-th place. `holding` draws a piece at
+the `hand` area of the first layer that has one, mirrored with that layer and
+as the piece's own `faces` says.
 
 `things` says what an activity leaves behind: `piece`, and optionally
 `upsets_agents_within` (cells), `upset_agents_play` and `cleaned_up_by` (an
