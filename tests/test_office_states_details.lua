@@ -69,6 +69,15 @@ T['the tasks']['a TaskUpdate of a task nobody made changes nothing'] = function(
   eq(story.details().tasks, { { subject = 'Write the test', done = false } })
 end
 
+T['the tasks']['a TaskUpdate that names no task changes nothing'] = function()
+  local story = office_signals.tell()
+  story.started('c1', 'TaskCreate', { subject = 'Write the test' })
+
+  story.started('c2', 'TaskUpdate', { status = 'completed' })
+
+  eq(story.details().tasks, { { subject = 'Write the test', done = false } })
+end
+
 T['the tasks']['are kept by each agent for itself'] = function()
   local story = office_signals.tell()
   story.hear('subagent_started', { agent = 'a1' })
@@ -120,6 +129,14 @@ T['the web clue']['of a fetch of an address with no scheme is its host'] = funct
   story.started('c1', 'WebFetch', { url = 'example.org/a/b' })
 
   eq(story.details().web_clue, 'example.org')
+end
+
+T['the web clue']['of a fetch of an address with an IPv6 host is the host in its brackets'] = function()
+  local story = office_signals.tell()
+
+  story.started('c1', 'WebFetch', { url = 'http://[::1]:8080/status' })
+
+  eq(story.details().web_clue, '[::1]')
 end
 
 T['the web clue']['is none for a call that looks nothing up'] = function()

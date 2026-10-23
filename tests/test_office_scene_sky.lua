@@ -21,8 +21,9 @@ local SKY_ART = {
 ---
 ---@param hour integer|nil nil for a stage with no wall clock
 ---@param art? table<string, string> the art files of the pack
+---@param seconds? number the time the stage is advanced to, 0 when not given
 ---@return string|nil group
-local function glass_at(hour, art)
+local function glass_at(hour, art, seconds)
   local pack = scene.people_pack(
     '# plan\n \n W.....\n',
     { W = { piece = 'window', shows = 'sky' } },
@@ -34,7 +35,7 @@ local function glass_at(hour, art)
       return { hour = hour, min = 0, month = 10, day = 23 }
     end,
   })
-  stage.advance({}, 0)
+  stage.advance({}, seconds or 0)
   return scene.group_at(stage.picture(), 1, 0)
 end
 
@@ -68,13 +69,11 @@ T['the sky']['is the sky of the hour of the wall clock, in the glass only'][''] 
   eq(glass_at(hour), scene.solid(colour))
 end
 
-T['the sky']['leaves the frame of the window as it is'] = function()
-  local pack = scene.people_pack(
-    '# plan\n \n W.....\n',
-    { W = { piece = 'window', shows = 'sky' } },
-    nil,
-    SKY_ART
-  )
+T['the sky']['leaves the frame of the window as it is, though the pack’s sky is wider than the glass'] = function()
+  local art = vim.deepcopy(SKY_ART)
+  art['art/sky_day.txt'] = 'colours: A = green\nanchor: 0, 1\n---\nAAA\nAAA\n'
+  local pack =
+    scene.people_pack('# plan\n \n W.....\n', { W = { piece = 'window', shows = 'sky' } }, nil, art)
   local stage = scene.stage_of(pack, 6, 2, {
     clock = function()
       return { hour = 12, min = 0, month = 10, day = 23 }
@@ -85,7 +84,24 @@ T['the sky']['leaves the frame of the window as it is'] = function()
 
   local picture = stage.picture()
   eq(scene.group_at(picture, 0, 0), scene.solid('#885500'))
+  eq(scene.group_at(picture, 1, 0), scene.solid(DAY))
   eq(scene.group_at(picture, 2, 0), scene.solid('#885500'))
+end
+
+T['the sky']['starts at the top left of the glass whatever the anchor of the pack’s sky'] = function()
+  local art = vim.deepcopy(SKY_ART)
+  art['art/sky_day.txt'] = 'colours: B = green, A = red\nanchor: 1, 1\n---\nBAA\nBAA\n'
+
+  eq(glass_at(12, art), scene.solid(DAY))
+end
+
+T['the sky']['plays the frames of the pack’s sky'] = function()
+  local art = vim.deepcopy(SKY_ART)
+  art['art/sky_day.txt'] =
+    'colours: A = green, B = red\nanchor: 0, 1\nseconds per frame: 1\n---\nA\nA\n---\nB\nB\n'
+
+  eq(glass_at(12, art, 0), scene.solid(DAY))
+  eq(glass_at(12, art, 1), scene.solid(DUSK))
 end
 
 T['the sky']['is not drawn without a wall clock'] = function()

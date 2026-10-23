@@ -57,6 +57,25 @@ T['the printer']['lets the page come out further as the print goes on'] = functi
   eq(printer_cells({ main = 10 }, 3), { scene.solid(GREEN), 'AineoOfficePixel_00ff00_885500' })
 end
 
+T['the printer']['lets the page come out a whole pixel row at a time'] = function()
+  eq(printer_cells({ main = 10 }, 2.5), { scene.solid(GREEN), scene.solid(BROWN) })
+end
+
+T['the printer']['prints nothing for a report that is yet to come'] = function()
+  eq(printer_cells({ main = 10 }, -2), { scene.solid(BROWN), scene.solid(BROWN) })
+end
+
+T['the printer']['plays the frames of the page'] = function()
+  local art = vim.deepcopy(PRINTER_ART)
+  art['art/printed_page.txt'] =
+    'colours: Q = green, R = red\nanchor: 0, 3\nseconds per frame: 1\n---\nQ\nQ\nQ\nQ\n---\nR\nR\nR\nR\n'
+
+  eq(
+    printer_cells({ main = 10 }, 3, art),
+    { scene.solid('#ff0000'), 'AineoOfficePixel_ff0000_885500' }
+  )
+end
+
 T['the printer']['takes the page away when the print is over'] = function()
   eq(printer_cells({ main = 10 }, 4), { scene.solid(BROWN), scene.solid(BROWN) })
 end
