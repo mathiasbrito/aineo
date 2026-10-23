@@ -78,4 +78,77 @@ T['a piece that shows']['nothing is written without a wall clock'] = function()
   eq(clock_text('time', nil, 0, 5), '     ')
 end
 
+T['a piece that shows names'] = MiniTest.new_set()
+
+--- The art of a desk six cells wide whose `name` area, the plate, is
+--- `plate_width` cells wide and one cell tall.
+---
+---@param plate_width integer
+---@return table<string, string>
+local function desk_art(plate_width)
+  return {
+    ['art/plate.txt'] = ('colours: W = brown\nanchor: 0, 1\narea name: 0, 0, %d x 2\n---\nWWWWWW\nWWWWWW\n'):format(
+      plate_width
+    ),
+  }
+end
+
+--- The text of the first row of a picture of two desks, at the first and the
+--- ninth cell of a row of fourteen, whose plates show names, the agents `agents`
+--- sitting nowhere, a cell with no text read as a space.
+---
+---@param agents aineo.office_states.Agent[]
+---@param plate_width integer
+---@return string
+local function plates_of_two_desks(agents, plate_width)
+  local pack = scene.people_pack(
+    '# plan\n \n P.......P.....\n',
+    { P = { piece = 'plate', shows = 'name' } },
+    nil,
+    desk_art(plate_width)
+  )
+  local stage = scene.stage_of(pack, 14, 2)
+  stage.advance(agents, 0)
+  return (stage.picture().rows[1].text:gsub('▀', ' '))
+end
+
+T['a piece that shows names']['writes the name of the agent with the first place on the first plate and the second place’s on the second'] = function()
+  eq(
+    vim.fn.strcharpart(plates_of_two_desks(scene.agents_in('working', 'working'), 6), 0, 14),
+    'main    agent2'
+  )
+end
+
+T['a piece that shows names']['writes the name in the colour the pack gives to names'] = function()
+  local pack = scene.people_pack(
+    '# plan\n \n P.....\n',
+    { P = { piece = 'plate', shows = 'name' } },
+    { text_colours = { name = '#aaaaaa', status = STATUS_COLOUR } },
+    desk_art(6)
+  )
+  local stage = scene.stage_of(pack, 6, 2)
+
+  stage.advance(scene.agents_in('working'), 0)
+
+  local picture = stage.picture()
+  local written = vim.iter(picture.rows[1].runs):find(function(run)
+    return run.group:find('^AineoOfficeText') ~= nil
+  end)
+  eq(picture.looks[written.group].foreground, '#aaaaaa')
+end
+
+T['a piece that shows names']['writes no more of a name than the plate holds'] = function()
+  eq(
+    vim.fn.strcharpart(plates_of_two_desks(scene.agents_in('working', 'working'), 3), 0, 14),
+    'mai     age   '
+  )
+end
+
+T['a piece that shows names']['leaves the plate of a desk nobody has blank'] = function()
+  eq(
+    vim.fn.strcharpart(plates_of_two_desks(scene.agents_in('working'), 6), 0, 14),
+    'main          '
+  )
+end
+
 return T

@@ -4066,6 +4066,9 @@ of that name, and nowhere else:
 `printing`	the pack's piece `printed_page`, coming out of the top of the
 	area a pixel row at a time for four seconds after any agent calls
 	the report tool; a pack without the piece prints nothing
+`name`	the name of the agent whose desk it is, cut to the area's
+	width: the n-th piece that shows names is the desk of the agent
+	with the n-th place, and a desk nobody has stays blank
 A monitor besides writes what its agent looks up on the web into its `query`
 area while the agent is on the web (the query of a search, the host of an
 address it fetches, and only when that has the shape of a host; never the
