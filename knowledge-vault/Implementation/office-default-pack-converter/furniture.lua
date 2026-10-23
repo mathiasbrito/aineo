@@ -222,7 +222,7 @@ function M.pieces(sprites)
   pieces.rug = placed_on_row(rug, 22)
   pieces.low_table = placed_on_row(
     from_mock('A low table in front of a sofa.', sprites.low_table_wide, sprites.TABLE_PAL, 40),
-    22
+    21
   )
   pieces.floor_lamp = placed_on_row(
     from_mock('A floor lamp.', sprites.floor_lamp, sprites.FLOOR_LAMP_PAL, 23),
