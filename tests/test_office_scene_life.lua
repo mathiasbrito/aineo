@@ -188,6 +188,69 @@ T['two players']['do not start a game for two with one agent'] = function()
   eq(where_the_two_are(stage)[1], '0,0')
 end
 
+T['two players']['do not start a game for two at a table with one end'] = function()
+  local pack = scene.people_pack('# plan\n \n aa..p...\n', {
+    a = { spot = 'aside' },
+    p = { spot = 'table' },
+  }, {
+    activities = {
+      stand = { steps = { { at = 'aside', for_seconds = 1 } } },
+      game = { during = { 'idle' }, players = 2, steps = { { at = 'table' } } },
+    },
+    states = { standing = 'stand', idle = 'stand' },
+  })
+  local stage = scene.stage_of(pack, 8, 1, { random = scene.always(0) })
+  local both_idle = scene.agents_in('idle', 'idle')
+  stage.advance(both_idle, 0)
+
+  stage.advance(both_idle, 3)
+
+  eq(where_the_two_are(stage), { '0,0', '1,0' })
+end
+
+T['two players']['do not take along an agent in a state the game does not name'] = function()
+  local stage = stage_of_a_game_for(2)
+  local one_idle_one_standing = scene.agents_in('idle', 'standing')
+  stage.advance(one_idle_one_standing, 0)
+
+  stage.advance(one_idle_one_standing, 3)
+
+  eq(where_the_two_are(stage)[1], '0,0')
+end
+
+T['two players']['do not take along an agent that has no place on the plan yet'] = function()
+  local pack = scene.people_pack('# plan\n \n a...p.q.\n', {
+    a = { spot = 'aside' },
+    p = { spot = 'table' },
+    q = { spot = 'table' },
+  }, {
+    activities = {
+      stand = { steps = { { at = 'aside', for_seconds = 1 } } },
+      game = { during = { 'idle' }, players = 2, steps = { { at = 'table' } } },
+    },
+    states = { standing = 'stand', idle = 'stand' },
+  })
+  local stage = scene.stage_of(pack, 8, 1, { random = scene.always(0) })
+  local both_idle = scene.agents_in('idle', 'idle')
+  stage.advance(both_idle, 0)
+
+  stage.advance(both_idle, 3)
+
+  eq(where_the_two_are(stage), { '0,0', 'nowhere' })
+end
+
+T['two players']['start their game once the second agent is there, the first having looked again'] = function()
+  local stage = stage_of_a_game_for(2)
+  stage.advance(scene.agents_in('idle'), 0)
+  stage.advance(scene.agents_in('idle'), 3)
+  stage.advance(scene.agents_in('idle', 'idle'), 3.5)
+  stage.advance(scene.agents_in('idle', 'idle'), 6)
+
+  stage.advance(scene.agents_in('idle', 'idle'), 7)
+
+  eq(where_the_two_are(stage), { '4,0', '7,0' })
+end
+
 T['two players']['stay at their game for the same time, whenever each arrived'] = function()
   local pack = scene.people_pack(TABLE_PLAN, TABLE_LEGEND, {
     activities = {
