@@ -168,6 +168,15 @@ local function is_command_match(value)
     and vim.tbl_count(value) == 1
 end
 
+--- Whether `value` is the idle time of the office: a whole number of
+--- milliseconds of at least 1, or `false`, which turns the office off.
+---
+---@param value any
+---@return boolean
+local function is_idle_time(value)
+  return value == false or is_positive_count(value)
+end
+
 --- Whether `value` is the classes of shell commands: a table of at most the
 --- four classes, each a list of matches, the Lua patterns among them read
 --- whole by Lua and repeating once at most (`M.lua_pattern_problem()`).
@@ -253,6 +262,12 @@ local SETTINGS = {
     default = 'auto',
     validator = is_find_picker,
     expected = 'one of ' .. table.concat(FIND_PICKERS, ', '),
+  },
+  {
+    name = 'office.idle_ms',
+    default = 180000,
+    validator = is_idle_time,
+    expected = 'a whole number of at least 1, or false',
   },
   {
     name = 'office.pack',
