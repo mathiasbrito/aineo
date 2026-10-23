@@ -2,6 +2,7 @@
 --- signals the agent gave. Pure: it reads no clock and no editor state; the
 --- caller says what time it is, on a clock of its own that only grows.
 
+local details = require('aineo.office_states.details')
 local display = require('aineo.office_states.display')
 local record_module = require('aineo.office_states.record')
 local timing = require('aineo.office_states.timing')
@@ -26,6 +27,7 @@ local M = {}
 ---@field state string a state of the vocabulary
 ---@field activity? string the activity a trigger of the pack names for what the agent is doing, in place of its state's own; none when no trigger matches
 ---@field since? number when the agent came into its state, on the caller's clock; none for an agent that has been in it since the tracker was made
+---@field details aineo.office_states.AgentDetails what the agent knows of the world it works in, which the pieces of the office show
 
 ---@class aineo.office_states.Tracker
 ---@field take fun(signal: aineo.transcript.Signal, now: number) takes in what an agent did, heard at `now`, in seconds on the caller's clock
@@ -194,6 +196,7 @@ function M.new_tracker(options)
             state = shown.state,
             activity = shown.activity,
             since = since,
+            details = details.of(record),
           })
         end
       end
