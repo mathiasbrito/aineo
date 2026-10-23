@@ -128,4 +128,37 @@ T['the states a pack draws']['tells a Lua pattern of a trigger as one, after the
   eq(lines[#lines], '  tool = Bash, command = Lua pattern ^make%s+test → work')
 end
 
+--- The lines that tell of the pack `small` made of `changes` to the smallest
+--- pack, which loads whatever its `about` and `author` hold.
+---
+---@param changes table
+---@return string[]
+local function lines_of_small_pack_with(changes)
+  local folder = pack_files.write_pack(
+    fixture.directory('office_state_list'),
+    'small',
+    { ['pack.lua'] = pack_files.pack_text(changes) }
+  )
+  local pack = office_pack.load({ name = 'small', folders = { folder } })
+  return office_pack.describe_states(pack)
+end
+
+T['the states a pack draws']['leaves out an about that is not text'] = function()
+  eq(lines_of_small_pack_with({ about = 5 })[2], '')
+end
+
+T['the states a pack draws']['leaves out an about that holds a line break'] = function()
+  eq(lines_of_small_pack_with({ about = 'first\nsecond' })[2], '')
+end
+
+T['the states a pack draws']['leaves out an author that is not text'] = function()
+  eq(lines_of_small_pack_with({ author = { 'a' } })[1], 'Office pack “small”')
+end
+
+T['the states a pack draws']['keeps an about and an author that are plain text'] = function()
+  local lines = lines_of_small_pack_with({ about = 'A plain sentence.', author = 'Someone' })
+
+  eq({ lines[1], lines[2] }, { 'Office pack “small” by Someone', 'A plain sentence.' })
+end
+
 return T
