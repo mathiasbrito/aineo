@@ -20,6 +20,7 @@
 --- Loading this home loads none of the others of the office's context: they
 --- are required when the office first shows.
 
+local cards_module = require('aineo.office.cards')
 local colours = require('aineo.office.colours')
 local countdown_module = require('aineo.office.countdown')
 local float_module = require('aineo.office.float')
@@ -76,6 +77,7 @@ local NO_RIGHT_SIDE = "aineo: the office has no right side of aineo's layout to 
 
 ---@class aineo.office.Office
 ---@field follow_session fun(transcript_path: string|nil) follows the transcript of the session whose file is `transcript_path` while the office shows, or none
+---@field report_arrived fun(report: aineo.office.Report) keeps the report as a card the office draws in its bottom right corner until the cursor enters the right side, and starts the idle countdown again; keeps nothing when the cursor is in the right side, where the Report shows it
 ---@field show_now fun() shows the office over the right side at once, and does nothing when it shows
 ---@field let_go fun() closes the office, stops its timer and its watch, and forgets the session
 
@@ -111,6 +113,8 @@ function M.new_office(options)
   --- needs.
   ---@type fun()
   local settle
+
+  local cards = cards_module.new_cards()
 
   --- Why the office cannot show over `area` now: the editor draws no true
   --- colours, or the layout shows no right side; nil when it can.
@@ -271,6 +275,7 @@ function M.new_office(options)
       group = open.group,
       callback = function()
         open.refresh_colours()
+        cards_module.define_groups()
         open.screen.forget_groups()
       end,
     })
@@ -356,10 +361,14 @@ function M.new_office(options)
     local float = float_module.open(area)
     local screen = screen_module.new_screen(float.buffer)
     local tracker, follower = follow_transcript(pack)
+    cards_module.define_groups()
     local function draw()
       local now = options.clock()
       stage.advance(tracker.agents(now), now)
-      screen.paint(stage.picture())
+      screen.paint(cards.overlay(stage.picture(), {
+        width = vim.api.nvim_win_get_width(float.window),
+        now = now,
+      }))
     end
     local open = {
       float = float,
@@ -432,6 +441,9 @@ function M.new_office(options)
     end
     local idle_ms = idle_time()
     local area = options.right_side()
+    if cursor_is_in(area) then
+      cards.clear()
+    end
     if not idle_ms or cursor_is_in(area) then
       countdown.stop()
       idle_time_has_passed = false
@@ -480,6 +492,14 @@ function M.new_office(options)
     idle_time_has_passed = false
     countdown.stop()
     show_over(area)
+  end
+
+  function office.report_arrived(report)
+    if cursor_is_in(options.right_side()) then
+      return
+    end
+    cards.add(report)
+    start_counting_again()
   end
 
   --- Closes the office, stops its countdown and forgets the transcript.
