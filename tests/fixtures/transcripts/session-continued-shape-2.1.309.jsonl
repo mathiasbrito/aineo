@@ -1,0 +1,11 @@
+{"type": "fixture-header", "kind": "shape", "claude_version": "2.1.309", "measured": "2026-10-23", "note": "hand-built from the measured shape of a session that was continued in another; no recorded content"}
+{"type":"mode","mode":"normal","sessionId":"11111111-1111-4111-8111-111111111111"}
+{"type":"permission-mode","permissionMode":"default","sessionId":"11111111-1111-4111-8111-111111111111"}
+{"type":"atis-latch","atis":false,"sessionId":"11111111-1111-4111-8111-111111111111"}
+{"type":"bridge-session","bridgeSessionId":"scrubbed","lastSequenceNum":0,"ownerAccountUuid":"scrubbed","ownerOrganizationUuid":"scrubbed","sessionId":"11111111-1111-4111-8111-111111111111"}
+{"type":"user","parentUuid":null,"isSidechain":false,"promptId":"33333333-3333-4333-8333-333333333333","message":{"role":"user","content":"scrubbed"},"uuid":"44444444-4444-4444-8444-444444444444","timestamp":"2026-01-01T00:00:01.000Z","sessionId":"11111111-1111-4111-8111-111111111111","session_id":"11111111-1111-4111-8111-111111111111"}
+{"type":"api-request","id":"scrubbed","querySource":"scrubbed","params":{"system":[{"type":"text","text":"scrubbed","cacheControl":{"type":"ephemeral"}}]},"keep":0,"tail":0,"requestDigest":"scrubbed","timestamp":"2026-01-01T00:00:02.000Z","sessionId":"11111111-1111-4111-8111-111111111111"}
+{"type":"api-request-blob","hash":"scrubbed","blob":"scrubbed"}
+{"type":"cost-state","totalCostUSD":0,"sessionId":"11111111-1111-4111-8111-111111111111"}
+{"type":"last-prompt","lastPrompt":"scrubbed","leafUuid":"44444444-4444-4444-8444-444444444444","sessionId":"11111111-1111-4111-8111-111111111111"}
+{"type":"continued-in","timestamp":"2026-01-01T00:00:03.000Z","sessionId":"11111111-1111-4111-8111-111111111111","continuedInSessionId":"22222222-2222-4222-8222-222222222222"}

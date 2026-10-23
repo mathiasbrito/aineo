@@ -2,6 +2,7 @@
 --- those of its subagents.
 
 local consumer = require('aineo.transcript.consumer')
+local continuation = require('aineo.transcript.continuation')
 local file_follower = require('aineo.transcript.file_follower')
 local signals = require('aineo.transcript.signals')
 local subagents = require('aineo.transcript.subagents')
@@ -9,7 +10,7 @@ local subagents = require('aineo.transcript.subagents')
 local M = {}
 
 ---@class aineo.transcript.FollowOptions
----@field path string the session's transcript file, which need not exist yet
+---@field path string the session's transcript file, which need not exist yet; when it says the session was continued in another, the file of that one (`continuation.continuation_of()`)
 ---@field on_signal fun(signal: aineo.transcript.Signal) called for each signal, with the editor's API usable; a raise in it is caught and told once (`consumer.protect()`)
 ---@field on_unreadable_line? fun(length: integer) called with the length in bytes of each line that is not JSON or is too long, never with its text
 
@@ -25,7 +26,9 @@ end
 
 --- Starts following the session whose transcript is `options.path` and its
 --- subagents (`aineo.transcript.follow_file()` and `follow_subagents()` give
---- the rules for the file and for each subagent).
+--- the rules for the file and for each subagent). When that transcript says
+--- the session was continued in another, it follows the transcript and the
+--- subagents of that one instead (`continuation.continuation_of()`).
 ---
 ---@param options aineo.transcript.FollowOptions
 ---@return aineo.transcript.Follower follower
@@ -35,14 +38,15 @@ function M.follow(options)
   vim.validate('options.on_unreadable_line', options.on_unreadable_line, 'function', true)
 
   local on_signal = consumer.protect(options.on_signal)
+  local path = continuation.continuation_of(options.path)
   local session = file_follower.follow_file({
-    path = options.path,
+    path = path,
     agent = signals.MAIN_AGENT,
     on_signal = on_signal,
     on_unreadable_line = options.on_unreadable_line,
   })
   local subagents_followed = subagents.follow_subagents({
-    folder = subagents_folder(options.path),
+    folder = subagents_folder(path),
     on_signal = on_signal,
     on_unreadable_line = options.on_unreadable_line,
   })
