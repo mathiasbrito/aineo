@@ -12,7 +12,7 @@
 --- }, { at_least_one_of = { 'art', 'like' } })
 --- ```
 
-local lua_pattern = require('aineo.office_pack.lua_pattern')
+local config = require('aineo.config')
 
 local M = {}
 
@@ -71,10 +71,11 @@ M.text_colour = {
 }
 M.cells = { kind = 'cells', expected = 'text of characters one cell wide' }
 
---- A Lua pattern a pack may match with (`lua_pattern.lua`).
+--- A Lua pattern a pack may match with: one Lua reads whole that repeats once
+--- at most (`aineo.config`'s `lua_pattern_problem()`).
 M.pattern = {
   kind = 'pattern',
-  expected = 'a Lua pattern with at most one repetition (*, + or -)',
+  expected = 'a Lua pattern Lua reads whole that repeats once at most',
 }
 
 --- Text, or a table that `table_node` describes.
@@ -280,7 +281,9 @@ local SCALAR_CHECKS = {
   colour = is_hex_colour,
   text_colour = is_text_colour,
   cells = is_single_cell_text,
-  pattern = lua_pattern.is_allowed,
+  pattern = function(value)
+    return type(value) == 'string' and config.lua_pattern_problem(value) == nil
+  end,
   name = function(value)
     return type(value) == 'string' and value:match(NAME_PATTERN) ~= nil
   end,
@@ -322,7 +325,14 @@ local function check_scalar(value, node, context, path, line)
   if SCALAR_CHECKS[node.kind](value, node) then
     return true
   end
-  if node.kind == 'cells' and type(value) == 'string' then
+  if node.kind == 'pattern' and type(value) == 'string' then
+    tell_must_be(
+      context,
+      line,
+      path,
+      { expected = node.expected .. ': ' .. config.lua_pattern_problem(value) }
+    )
+  elseif node.kind == 'cells' and type(value) == 'string' then
     tell(
       context,
       line,
