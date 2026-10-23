@@ -1,0 +1,13 @@
+about: A table-tennis table: a blue top, a net and four legs.
+colours: F = iron, W = white, b = blue, w = shine
+anchor: 0, 8
+---
+............ww............
+............ww............
+............ww............
+WWWWWWWWWWWWWWWWWWWWWWWWWW
+bbbbbbbbbbbbbbbbbbbbbbbbbb
+bbbbbbbbbbbbbbbbbbbbbbbbbb
+FFFFFFFFFFFFFFFFFFFFFFFFFF
+.FF....................FF.
+.FF....................FF.

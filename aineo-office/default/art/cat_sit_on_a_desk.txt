@@ -1,0 +1,14 @@
+about: The cat sitting on a desk, its feet three pixels above where it is placed.
+colours: A = pink, B = agent, g = green
+anchor: 5, 8
+seconds per frame: 1
+---
+......B.B..
+......BBB..
+......BgB..
+......BBA..
+....BBBBB..
+BBBBBBBBB..
+...........
+...........
+...........

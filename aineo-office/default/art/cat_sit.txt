@@ -1,0 +1,11 @@
+about: The cat sitting.
+colours: A = pink, B = agent, g = green
+anchor: 5, 5
+seconds per frame: 1
+---
+......B.B..
+......BBB..
+......BgB..
+......BBA..
+....BBBBB..
+BBBBBBBBB..

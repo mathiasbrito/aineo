@@ -1,0 +1,28 @@
+about: The office door, open: the hall dark, the light spilling on the floor. Shown while someone is at the door.
+colours: O = door_frame, d = door_panel, e = door_inset, v = shadow, y = yellow
+anchor: 0, 21
+---
+OOOOOOOOOO
+OddvvvvvvO
+OddvvvvvvO
+OddvvvvvvO
+OddvvvvvvO
+OddvvvvvvO
+OddvvvvvvO
+OddvvvvvvO
+OddvvvvvvO
+OddvvvvvvO
+OddvvvvvvO
+OdyvvvvvvO
+OddvvvvvvO
+OddvvvvvvO
+OddvvvvvvO
+OddvvvvvvO
+OddvvvvvvO
+OddvvvvvvO
+OddvvvvvvO
+OddvvvvvvO
+OddveeeevO
+OddeeeeeeO
+OddeeeeeeO
+OddeeeeeeO

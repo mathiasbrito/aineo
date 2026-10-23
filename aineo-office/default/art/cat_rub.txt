@@ -1,0 +1,32 @@
+about: The cat rubbing against legs.
+colours: A = pink, B = agent, g = green
+anchor: 5, 5
+seconds per frame: 0.3333
+---
+........B.B.
+B.......BBB.
+.B.BBBBBBgB.
+..BBBBBBBBA.
+..BBBBBBBB..
+..B.B...B.B.
+---
+........B.B.
+B.......BBB.
+.B.BBBBBBgB.
+..BBBBBBBBA.
+..BBBBBBBB..
+...B.B.B.B..
+---
+.........B.B
+.B.......BBB
+..B.BBBBBBgB
+...BBBBBBBBA
+...BBBBBBBB.
+...B.B...B.B
+---
+.........B.B
+.B.......BBB
+..B.BBBBBBgB
+...BBBBBBBBA
+...BBBBBBBB.
+....B.B.B.B.
