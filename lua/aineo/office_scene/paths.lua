@@ -1,6 +1,8 @@
---- Ways over the floor: the shortest walks from one cell to the cells
---- characters walk on, one cell up, down, left or right at a time. A walk
---- never crosses a cell the layout does not let characters walk on.
+--- Ways over the floor: the shortest walk from one cell to the nearest of some
+--- spots, one cell up, down, left or right at a time. A walk never crosses a
+--- cell the layout does not let characters walk on, and the search stops at
+--- the end of the step in which the first spot is reached, so that it costs
+--- what lies between the walker and the spot, not the size of the floor.
 
 local M = {}
 
@@ -8,70 +10,92 @@ local M = {}
 ---@field column integer from 0
 ---@field row integer from 0
 
----@class aineo.office_scene.Reach
----@field distance fun(column: integer, row: integer): integer|nil the steps of the shortest walk to the cell; nil when it cannot be reached
----@field path_to fun(column: integer, row: integer): aineo.office_scene.Cell[]|nil the cells of the shortest walk to the cell, the first step first and the cell last; empty at the start; nil when it cannot be reached
+---@class aineo.office_scene.Nearest
+---@field spot aineo.office_scene.Spot
+---@field path aineo.office_scene.Cell[] the cells of the shortest walk to it, the first step first and the spot's cell last; empty at the start
 
---- The steps from a cell to its neighbours, as `{ across, down }`.
-local STEPS = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } }
-
---- Every cell that can be walked to from `start`, with the steps it takes.
+--- The cell at `direction` from `column` and `row`: 1 right, 2 left, 3 down,
+--- 4 up, the order the search tries them in.
 ---
----@param layout aineo.office_scene.FloorLayout
----@param start aineo.office_scene.Cell
----@return table<integer, integer> steps by the cell's key
----@return table<integer, integer> came_from the key of the cell before it, by the cell's key
-local function walk_everywhere(layout, start)
-  local function key_of(column, row)
-    return row * layout.width + column
+---@param direction integer
+---@param column integer
+---@param row integer
+---@return integer column
+---@return integer row
+local function neighbour(direction, column, row)
+  if direction == 1 then
+    return column + 1, row
+  elseif direction == 2 then
+    return column - 1, row
+  elseif direction == 3 then
+    return column, row + 1
   end
-  local start_key = key_of(start.column, start.row)
-  local steps, came_from = { [start_key] = 0 }, {}
-  local queue, head = { start }, 1
-  while head <= #queue do
-    local cell = queue[head]
-    head = head + 1
-    local cell_key = key_of(cell.column, cell.row)
-    for _, step in ipairs(STEPS) do
-      local column, row = cell.column + step[1], cell.row + step[2]
-      local key = key_of(column, row)
-      if layout.is_walkable(column, row) and steps[key] == nil then
-        steps[key] = steps[cell_key] + 1
-        came_from[key] = cell_key
-        table.insert(queue, { column = column, row = row })
-      end
-    end
-  end
-  return steps, came_from
+  return column, row - 1
 end
 
---- What can be walked to from `start` over `layout`'s floor.
+--- The cells of the shortest walk from the cell `start_key` to the cell
+--- `key`, the first step first.
+---
+---@param came_from table<integer, integer> the key of the cell before it, by the cell's key
+---@param key integer
+---@param width integer
+---@return aineo.office_scene.Cell[]
+local function path_to(came_from, key, width)
+  local reversed = {}
+  while came_from[key] do
+    reversed[#reversed + 1] = { column = key % width, row = math.floor(key / width) }
+    key = came_from[key]
+  end
+  local path = {}
+  for index = #reversed, 1, -1 do
+    path[#path + 1] = reversed[index]
+  end
+  return path
+end
+
+--- The nearest of `spots` to walk to from `start`, and the way there: the
+--- first of `spots` that is as near when several are.
 ---
 ---@param layout aineo.office_scene.FloorLayout
 ---@param start aineo.office_scene.Cell where the walk begins, walkable or not
----@return aineo.office_scene.Reach
-function M.reach_from(layout, start)
-  local steps, came_from = walk_everywhere(layout, start)
-  local reach = {}
-
-  function reach.distance(column, row)
-    return steps[row * layout.width + column]
+---@param spots aineo.office_scene.Spot[]
+---@return aineo.office_scene.Nearest|nil nearest nil when none of the spots can be walked to
+function M.nearest(layout, start, spots)
+  local width, is_walkable = layout.width, layout.is_walkable
+  local is_target = {}
+  for _, spot in ipairs(spots) do
+    is_target[spot.row * width + spot.column] = true
   end
-
-  function reach.path_to(column, row)
-    local key = row * layout.width + column
-    if steps[key] == nil then
-      return nil
+  local start_key = start.row * width + start.column
+  local steps, came_from = { [start_key] = 0 }, {}
+  local columns, rows = { start.column }, { start.row }
+  local head, tail = 1, 1
+  local found_at = is_target[start_key] and 0 or nil
+  while head <= tail and not (found_at and steps[rows[head] * width + columns[head]] >= found_at) do
+    local column, row = columns[head], rows[head]
+    local key = row * width + column
+    head = head + 1
+    for direction = 1, 4 do
+      local next_column, next_row = neighbour(direction, column, row)
+      local next_key = next_row * width + next_column
+      if steps[next_key] == nil and is_walkable(next_column, next_row) then
+        steps[next_key] = steps[key] + 1
+        came_from[next_key] = key
+        tail = tail + 1
+        columns[tail], rows[tail] = next_column, next_row
+        if is_target[next_key] and not found_at then
+          found_at = steps[next_key]
+        end
+      end
     end
-    local path = {}
-    while came_from[key] do
-      table.insert(path, 1, { column = key % layout.width, row = math.floor(key / layout.width) })
-      key = came_from[key]
-    end
-    return path
   end
-
-  return reach
+  for _, spot in ipairs(spots) do
+    local key = spot.row * width + spot.column
+    if found_at and steps[key] == found_at then
+      return { spot = spot, path = path_to(came_from, key, width) }
+    end
+  end
+  return nil
 end
 
 return M
