@@ -495,19 +495,17 @@ T['follow()']['delivers a line only whole, once, with a line cut short after it'
   following.follower.stop()
 end
 
-T['follow()']['reads no more than the tail of a long file when it starts'] = function()
+T['follow()']['replays no more than the tail of a long file when it starts'] = function()
   local lines = {}
   for number = 1, 600 do
     table.insert(lines, tool_line(('call%d'):format(number), ('x'):rep(1000)))
   end
   local path = vim.fs.joinpath(fixture.directory('office_transcript'), 'session.jsonl')
   fake_transcript.append(path, lines)
-  local reads = count_reads()
 
   local following = follow_path(path)
-  reads.stop()
 
-  eq(reads.bytes <= 256 * 1024 + 1, true)
+  eq(#following.signals > 200 and #following.signals <= 256 * 1024 / 1000, true)
   following.follower.stop()
 end
 

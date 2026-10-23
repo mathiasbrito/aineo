@@ -8,7 +8,9 @@
 --- - a `user` line: the user's prompt, a tool's result (`tool_result` blocks),
 ---   the user's interruption, and the notice of a finished background task;
 --- - a `system` line: the end of a turn (`turn_duration`) and a compaction
----   (`compact_boundary`).
+---   (`compact_boundary`);
+--- - a `continued-in` line of the session's own transcript: the session Claude
+---   Code goes on in.
 --- Every other line, known or not, gives no signal. The format is not
 --- documented by Claude Code; the recordings under
 --- `tests/fixtures/transcripts/` pin the shapes read here.
@@ -27,7 +29,7 @@ M.MAIN_AGENT = 'main'
 --- What `signals_of_line()` says of a line that is not JSON.
 M.NOT_JSON = 'not JSON'
 
----@alias aineo.transcript.SignalKind 'prompt'|'thinking'|'tool_started'|'tool_finished'|'turn_ended'|'interrupted'|'compacted'|'background_done'|'subagent_started'|'subagent_finished'
+---@alias aineo.transcript.SignalKind 'prompt'|'thinking'|'tool_started'|'tool_finished'|'turn_ended'|'interrupted'|'compacted'|'background_done'|'session_continued'|'subagent_started'|'subagent_finished'
 
 --- What an agent did, in plain words. The lines of a transcript give every kind
 --- but `subagent_started` and `subagent_finished`, which the follower gives
@@ -38,6 +40,7 @@ M.NOT_JSON = 'not JSON'
 ---@field tool? string the tool's name, for `tool_started`
 ---@field input? table the tool's input, for `tool_started`
 ---@field call? string the tool call's id, for `tool_started` and `tool_finished`
+---@field session? string the id of the session Claude Code goes on in, for `session_continued`
 ---@field failed? boolean whether the tool's result was an error, for `tool_finished`
 ---@field at? number seconds since 1970 of the line the signal came from, when the line is stamped
 ---@field replayed? boolean set by the follower on what it read from the file's tail at the start
@@ -200,6 +203,25 @@ local function signals_of_assistant(record, agent)
   return signals
 end
 
+--- A session id as Claude Code writes it: a UUID. A transcript's file is named
+--- after one, so nothing else is taken for one.
+local SESSION_ID_PATTERN =
+  '^%x%x%x%x%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%x%x%x%x%x%x%x%x$'
+
+--- The signals of a `continued-in` line: the session it names, when the line
+--- is the session's own and the name is a session id.
+---
+---@param record table
+---@param agent string
+---@return aineo.transcript.Signal[]
+local function signals_of_continuation(record, agent)
+  local session = string_or_nil(record.continuedInSessionId)
+  if agent ~= M.MAIN_AGENT or not session or not session:match(SESSION_ID_PATTERN) then
+    return {}
+  end
+  return { { agent = agent, kind = 'session_continued', session = session } }
+end
+
 --- The kind of signal a `system` line gives, by the line's `subtype`.
 ---@type table<string, aineo.transcript.SignalKind>
 local SYSTEM_SUBTYPE_KINDS = {
@@ -211,6 +233,7 @@ local SYSTEM_SUBTYPE_KINDS = {
 ---@type table<string, fun(record: table, agent: string): aineo.transcript.Signal[]>
 local READERS = {
   assistant = signals_of_assistant,
+  ['continued-in'] = signals_of_continuation,
   user = function(record, agent)
     local content = message_content(record)
     if type(content) == 'string' then
