@@ -167,6 +167,28 @@ T['a pose']['rises by the pixels of its frame, counted from when the agent took 
   eq(cells_while_rising({ 0, 2 }, { 10.25, 10.5, 10.75 }), { '4,1', '4,0', '4,1' })
 end
 
+T['a pose']['rises by the frames of its first layer, a second each when that layer says so'] = function()
+  local pack = scene.people_pack(
+    '# plan\n \n ........\n a...s...\n',
+    { a = { spot = 'aside' }, s = { spot = 'seat' } },
+    {
+      characters = people_with({ jumping = { art = { 'slow' }, rises = { 0, 2 } } }),
+      activities = {
+        stand = { steps = { { at = 'aside' } } },
+        play = { steps = { { at = 'seat', pose = 'jumping' } } },
+      },
+      states = { standing = 'stand', working = 'play' },
+    },
+    { ['art/slow.txt'] = 'colours: A = agent\nanchor: 0, 1\nseconds per frame: 1\n---\nA\nA\n' }
+  )
+  local stage = scene.stage_of(pack, 8, 2)
+  stage.advance(scene.agents_in('working'), 0)
+
+  stage.advance(scene.agents_in('working'), 0.3)
+
+  eq(scene.agent_cell(stage.picture(), 8, 2), '4,1')
+end
+
 T['a pose']['begins its effect at the first frame when the agent takes the pose'] = function()
   local pack = scene.people_pack(
     '# plan\n \n ........\n a...s...\n',
