@@ -999,15 +999,20 @@ local function check_explain(resolved_config)
 end
 
 --- The names of the packs the report tells of: those the setting `office.pack`
---- names, in its order, then the others found, by name.
+--- names, in its order, then the others found, by name; each once.
 ---
 ---@param chosen string[] the names `office.pack` gives
 ---@param found aineo.office_pack.FoundPack[]
 ---@return string[]
 local function office_pack_names_in_order(chosen, found)
-  local names = vim.list_slice(chosen)
+  local names = {}
+  for _, name in ipairs(chosen) do
+    if not vim.tbl_contains(names, name) then
+      table.insert(names, name)
+    end
+  end
   for _, pack in ipairs(found) do
-    if not vim.tbl_contains(chosen, pack.name) then
+    if not vim.tbl_contains(names, pack.name) then
       table.insert(names, pack.name)
     end
   end
