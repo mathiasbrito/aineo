@@ -63,9 +63,8 @@ local NO_RIGHT_SIDE = "aineo: the office has no right side of aineo's layout to 
 
 ---@class aineo.office.Options
 ---@field right_side fun(): aineo.layout.Area|nil the screen cells the layout's right side takes now, nil when it shows none
----@field pack_folders string[] the `aineo-office` folders the office's packs are searched in
+---@field pack_folders fun(): string[] the `aineo-office` folders the office's packs are searched in, asked each time the office shows
 ---@field clock fun(): number the time in seconds, from any origin, that only grows
----@field commands? aineo.office_states.CommandClasses the classes of shell commands that tell what an agent running one does (`office.commands`); none, and every command is a command run
 ---@field report_tool? string the name of aineo's report tool, as Claude Code calls it; none, and no call is a report
 ---@field settings? fun(): aineo.office.Settings what the user set for the office, asked each time it shows; the default pack when not given
 ---@field random? fun(count: integer): integer a whole number from 1 to `count`, which picks one of several packs the settings name; the first when not given
@@ -74,12 +73,13 @@ local NO_RIGHT_SIDE = "aineo: the office has no right side of aineo's layout to 
 ---@class aineo.office.Settings
 ---@field pack string|string[] the pack to draw, or packs to pick one from at random each time
 ---@field pieces table<string, string> art files of the user's own, by the name of the piece each replaces
+---@field commands? aineo.office_states.CommandClasses the classes of shell commands that tell what an agent running one does (`office.commands`); none, and every command is a command run
 ---@field idle_ms? integer|false how long the cursor stays out of the right side before the office shows by itself, in milliseconds; none or `false`, and it shows only when asked to
 
 ---@class aineo.office.Office
 ---@field follow_session fun(transcript_path: string|nil) follows the transcript of the session whose file is `transcript_path` while the office shows, or none
 ---@field permission_wait fun(agent: string) tells the office the agent, `main` or a subagent's id, waits for the user to answer a permission prompt, until its next line in the transcript; while the office is hidden, nothing is kept
----@field report_arrived fun(report: aineo.office.Report) keeps the report as a card the office draws in its bottom right corner until the cursor enters the right side, and starts the idle countdown again; keeps nothing when the cursor is in the right side, where the Report shows it
+---@field report_arrived fun(report: aineo.office.Report) keeps the report as a card the office draws in its bottom right corner until the cursor enters the right side, and starts the idle countdown again; keeps nothing when the cursor is in the right side and the office is hidden, where the Report shows it
 ---@field show_now fun() shows the office over the right side at once, and does nothing when it shows
 ---@field let_go fun() closes the office, stops its timer and its watch, and forgets the session
 
@@ -93,7 +93,7 @@ local NO_RIGHT_SIDE = "aineo: the office has no right side of aineo's layout to 
 ---@return aineo.office.Office office
 function M.new_office(options)
   vim.validate('options.right_side', options.right_side, 'function')
-  vim.validate('options.pack_folders', options.pack_folders, 'table')
+  vim.validate('options.pack_folders', options.pack_folders, 'function')
   vim.validate('options.clock', options.clock, 'function')
   vim.validate('options.settings', options.settings, 'function', true)
   vim.validate('options.random', options.random, 'function', true)
@@ -140,7 +140,7 @@ function M.new_office(options)
   --- What exists while the office shows; nil while it is hidden. Its timer,
   --- tracker and follower are nil while the office is paused, as it is while
   --- its tab page is left.
-  ---@type { float: aineo.office.Float, group: integer, pack: aineo.office_pack.Pack, stage: aineo.office_scene.Stage, screen: aineo.office.Screen, area: aineo.layout.Area, refresh_colours: fun(), draw: fun(), timer: uv.uv_timer_t|nil, tracker: aineo.office_states.Tracker|nil, follower: aineo.transcript.Follower|nil }|nil
+  ---@type { float: aineo.office.Float, group: integer, pack: aineo.office_pack.Pack, commands: aineo.office_states.CommandClasses|nil, stage: aineo.office_scene.Stage, screen: aineo.office.Screen, area: aineo.layout.Area, refresh_colours: fun(), draw: fun(), timer: uv.uv_timer_t|nil, tracker: aineo.office_states.Tracker|nil, follower: aineo.transcript.Follower|nil }|nil
   local showing = nil
 
   local office = {}
@@ -214,15 +214,15 @@ function M.new_office(options)
   --- transcript the office was told to follow; none when it was told of none,
   --- or the file cannot be followed.
   ---
-  ---@param pack aineo.office_pack.Pack the pack whose triggers the tracker tries
+  ---@param open { pack: aineo.office_pack.Pack, commands: aineo.office_states.CommandClasses|nil } the pack whose triggers the tracker tries, and the classes of commands it tells apart
   ---
   ---@return aineo.office_states.Tracker tracker
   ---@return aineo.transcript.Follower|nil follower
-  local function follow_transcript(pack)
+  local function follow_transcript(open)
     local tracker = require('aineo.office_states').new_tracker({
-      commands = options.commands,
+      commands = open.commands,
       report_tool = options.report_tool,
-      triggers = pack.triggers,
+      triggers = open.pack.triggers,
       clock = function()
         return vim.uv.hrtime() / 1e9
       end,
@@ -365,7 +365,7 @@ function M.new_office(options)
   ---
   ---@param open table what exists while the office shows
   function start_running(open)
-    open.tracker, open.follower = follow_transcript(open.pack)
+    open.tracker, open.follower = follow_transcript(open)
     open.timer = start_frames(open.draw)
   end
 
@@ -387,7 +387,7 @@ function M.new_office(options)
     local name = pack_name_of(settings)
     local pack, problems = office_pack.load({
       name = name,
-      folders = options.pack_folders,
+      folders = options.pack_folders(),
       replaced_pieces = settings.pieces,
     })
     if not pack then
@@ -412,6 +412,7 @@ function M.new_office(options)
       float = float,
       group = vim.api.nvim_create_augroup('aineo.office.' .. float.buffer, { clear = true }),
       pack = pack,
+      commands = settings.commands,
       stage = stage,
       screen = screen,
       area = area,
@@ -554,7 +555,7 @@ function M.new_office(options)
   end
 
   function office.report_arrived(report)
-    if cursor_is_in(options.right_side()) then
+    if not showing and cursor_is_in(options.right_side()) then
       return
     end
     cards.add(report)

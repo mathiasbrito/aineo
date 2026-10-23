@@ -234,6 +234,9 @@ local function make_tab(homes, key, callbacks)
       working_directory = places.kept_places().working_directory,
       with_home_expanded = links.with_home_expanded,
       open_file = links.open_file,
+      on_report_received = function(report)
+        offices.report_arrived(tab, report)
+      end,
     })
     report_environment_given = true
   end
@@ -1653,7 +1656,7 @@ local function make_tab(homes, key, callbacks)
   local function leave_as_it_is() end
 
   --- Lets the tab's homes go as its tab page has closed, at once: its claim
-  --- is let go, Input's draft is saved first (`aineo.draft`'s `let_go()`),
+  --- and its office are let go, Input's draft is saved first (`aineo.draft`'s `let_go()`),
   --- then the layout, the shell, the changes pane, the Report and the
   --- explorer are let go, the shell after the layout, whose handlers must
   --- not see its wipe; the first tab's explorer too, which makes its buffer
@@ -1666,6 +1669,9 @@ local function make_tab(homes, key, callbacks)
     is_released = true
     let_each_go({
       release_claim,
+      function()
+        offices.let_go(tab)
+      end,
       homes.draft.let_go or leave_as_it_is,
       homes.layout.let_go or leave_as_it_is,
       homes.shell.let_go or leave_as_it_is,

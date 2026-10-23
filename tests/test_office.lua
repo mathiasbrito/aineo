@@ -60,7 +60,9 @@ local function open_office(path, pack_folders, more_options)
       right_side = function()
         return require('aineo.layout').right_column_area()
       end,
-      pack_folders = given.folders or vim.api.nvim_get_runtime_file('aineo-office', true),
+      pack_folders = function()
+        return given.folders or vim.api.nvim_get_runtime_file('aineo-office', true)
+      end,
       clock = function()
         return vim.uv.hrtime() / 1e9
       end,
@@ -212,7 +214,7 @@ T['showing the office']['says there is no right side to cover, and opens nothing
   open_office()
   child.lua([[_G.office = require('aineo.office').new_office({
     right_side = function() return nil end,
-    pack_folders = {},
+    pack_folders = function() return {} end,
     clock = function() return 0 end,
   })]])
 
@@ -228,7 +230,7 @@ T['showing the office']['says why the pack cannot be loaded, and opens nothing']
   open_office()
   child.lua([[_G.office = require('aineo.office').new_office({
     right_side = function() return require('aineo.layout').right_column_area() end,
-    pack_folders = {},
+    pack_folders = function() return {} end,
     clock = function() return 0 end,
   })]])
 
@@ -319,6 +321,23 @@ T['the pack']['the office draws is the default pack when the settings name none'
   child.lua([[_G.office.show_now()]])
 
   eq(office_cells.shows_colour(child, '404040'), true)
+end
+
+T['the pack']['is searched for in the folders as they are when the office shows, not when it was made'] = function()
+  local folder = write_packs('alt', '#ff0000')
+  open_office(
+    nil,
+    nil,
+    [[{
+      pack_folders = function() return _G.pack_folders end,
+      settings = function() return { pack = 'alt', pieces = {} } end,
+    }]]
+  )
+  child.lua('_G.pack_folders = ...', { { folder } })
+
+  child.lua([[_G.office.show_now()]])
+
+  eq(office_cells.shows_colour(child, 'ff0000'), true)
 end
 
 T['the pack']['the office draws is picked from the names the settings list, by the random source'] = function()
