@@ -9,12 +9,24 @@ local MAIN_AGENT = 'main'
 --- The state of an agent that has nothing to do.
 local IDLE_STATE = 'idle'
 
+--- The states of an agent that is coming in or going out.
+local ENTRANCE_STATES = { arriving = true, leaving = true }
+
 --- Whether `agent` has nothing to do: it is in the state `idle`.
 ---
 ---@param agent { state: string }
 ---@return boolean
 function M.is_idle(agent)
   return agent.state == IDLE_STATE
+end
+
+--- Whether `agent` is neither arriving nor leaving: it is in the office, and
+--- may be sent to do something.
+---
+---@param agent { state: string }
+---@return boolean
+function M.is_settled_in(agent)
+  return not ENTRANCE_STATES[agent.state]
 end
 
 --- The kind of character `agent` is drawn as: the agent for the main agent,
