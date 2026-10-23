@@ -4129,7 +4129,8 @@ still; and a thing's name is the cell where a thing of that name lies. With
 `even_if_taken` a step goes to the nearest spot of its name, taken or not:
 the character that has it is moved when the one coming arrives, and plays the
 activity `the_one_moved_plays` names, or, when the step names none, looks for
-another spot of the name.
+another spot of the name. A chain of characters moved one by another stops at
+the fourth, who is left where it stands.
 
 A pose whose art has frames, or whose `rises` lifts it, begins at its first
 frame when the agent takes the pose. A pose with `screen` shows that piece in
