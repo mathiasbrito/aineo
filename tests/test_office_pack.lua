@@ -44,6 +44,17 @@ local T = MiniTest.new_set({
   },
 })
 
+T['quickfix_items()'] = MiniTest.new_set()
+
+T['quickfix_items()']['puts ^@ in the place of a NUL of a problem’s text, which setqflist() would refuse'] = function()
+  local items = office_pack.quickfix_items({
+    { pack = 'p', file = 'f', path = '/p/f', line = 3, message = 'a\0b' },
+  })
+
+  eq(items, { { filename = '/p/f', lnum = 3, text = 'a^@b' } })
+  eq(pcall(vim.fn.setqflist, {}, ' ', { items = items }), true)
+end
+
 T['find()'] = MiniTest.new_set()
 
 T['find()']['lists the packs of the folders, by name, each with the folder it is in'] = function()
