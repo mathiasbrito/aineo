@@ -139,6 +139,14 @@ local function marks_in(path)
   return vim.list_slice(marks, 1, MOST_MARKS)
 end
 
+--- The session whose transcript is the file `path`.
+---
+---@param path string
+---@return string
+local function session_of(path)
+  return vim.fn.fnamemodify(path, ':t:r')
+end
+
 --- The session the first `continued-in` line of the file `path` stamped at or
 --- after `since` (less the slack) names; `nil` when there is none.
 ---
@@ -161,27 +169,28 @@ end
 --- of that stamped so names, and so on to the end of the chain, `MOST_HOPS`
 --- continuations at most and none twice. `path` itself when it holds no such
 --- line, or when `since` is `nil`; the last file of the chain need not exist
---- yet.
+--- yet. Also the sessions of the chain, the one of `path` first.
 ---
 ---@param path string
 ---@param since number|nil
 ---@return string path
+---@return string[] sessions
 function M.resolve(path, since)
-  if not since then
-    return path
-  end
   local visited = { [path] = true }
   local current = path
-  for _ = 1, MOST_HOPS do
+  local sessions = { session_of(path) }
+  local most_hops = since and MOST_HOPS or 0
+  for _ = 1, most_hops do
     local session = session_first_continued_in_after(current, since)
     local next_path = session and vim.fs.joinpath(vim.fs.dirname(current), session .. '.jsonl')
     if not next_path or visited[next_path] then
-      return current
+      break
     end
     visited[next_path] = true
     current = next_path
+    table.insert(sessions, session)
   end
-  return current
+  return current, sessions
 end
 
 return M
