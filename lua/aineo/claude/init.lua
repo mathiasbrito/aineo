@@ -12,6 +12,7 @@ local arguments = require('aineo.claude.arguments')
 local environment = require('aineo.claude.environment')
 local prompt = require('aineo.claude.prompt')
 local readiness = require('aineo.claude.readiness')
+local registry = require('aineo.claude.registry')
 local session_name = require('aineo.claude.session_name')
 local session_ids = require('aineo.claude.session_ids')
 local stop = require('aineo.claude.stop')
@@ -1550,6 +1551,17 @@ end
 ---@param id string a session id of the form Claude Code gives
 function M.keep_session(state_directory, folder, id)
   session_ids.keep_session_id(state_directory, folder, id)
+end
+
+--- Whether Claude Code's own registry under `config_directory` (its
+--- configuration directory) names a running process on `session`
+--- (`registry.is_registered()`).
+---
+---@param config_directory string
+---@param session string
+---@return boolean
+function M.is_session_registered(config_directory, session)
+  return registry.is_registered(config_directory, session)
 end
 
 --- Whether `text` is a session id of the form Claude Code gives, a
