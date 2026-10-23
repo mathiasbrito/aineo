@@ -1,7 +1,7 @@
 # 2026-10-23 — T138 office cleaner
 
 **Author:** the repository's maintainer, with Claude — implementer agent (`neovim-lua-developer`)
-**Branch:** `bugfix/t138-office-cleaner` (from `feature/t123-office-authors`) · **Pull request:** into `feature/t123-office-authors` (number recorded after the merge)
+**Branch:** `bugfix/t138-office-cleaner-linear` (from `feature/t123-office-authors`, rebuilt from `bugfix/t138-office-cleaner` after the space-station pack landed) · **Pull request:** into `feature/t123-office-authors` (number recorded after the merge)
 
 A small fix (D30) of the office screensaver (T123): the cat's mess and puddles piled up for ever while every agent worked, because only an idle agent was sent to clean.
 
@@ -25,6 +25,8 @@ A small fix (D30) of the office screensaver (T123): the cat's mess and puddles p
 ## Changed tests
 
 Four older cases pinned that the agent sent to clean is not upset; D113 reverses that, so they now expect it to grumble first (`has the agent sent to clean it up grumble first, then go to it`, the idle-cleaner case, the nearest-idle-only case, the cat's mess case); the case that a mess waits while nobody is idle now has nobody able to go (arriving, leaving), since a standing agent now goes.
+
+The passes through 22 of the 24 states (default pack, and the station's at three sizes) draw no cat now: a working agent sent to clean the cat's mess ended `writing_code` at the trash bin by the coffee machine when the spot was read. The pass pins where each state ends and is as strict as before.
 
 ## Open threads
 
