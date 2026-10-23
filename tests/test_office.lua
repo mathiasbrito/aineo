@@ -610,14 +610,14 @@ T['the office’s timer and watch']['runs the frames’ timer, a look every half
   local path = transcript_path()
   fake_transcript.append(path, RECORDED_TURN)
   open_office(path)
-  local timers, watches = open_handles('timer'), open_handles('fs_event')
+  local timers, watches = office_cells.open_repeating_timers(child), open_handles('fs_event')
 
   child.lua([[_G.office.show_now()]])
-  wait_until(function()
-    return open_handles('timer') == timers + 2
-  end)
 
-  eq({ open_handles('timer'), open_handles('fs_event') }, { timers + 2, watches + 1 })
+  eq(
+    { office_cells.open_repeating_timers(child), open_handles('fs_event') },
+    { timers + 2, watches + 1 }
+  )
 end
 
 T['the office’s timer and watch']['stops both once the office is closed by the cursor entering the column'] = function()
