@@ -109,6 +109,7 @@ end
 ---@class aineo.office.Office
 ---@field permission_wait fun(agent: string) tells the office the agent, `main` or a subagent's id, waits for the user to answer a permission prompt, until its next line in the transcript; it is kept, and handed over each time the office starts running unless the transcript shows the agent went on since
 ---@field report_arrived fun(report: aineo.office.Report) keeps the report as a card the office draws in its bottom right corner until the cursor enters the right side, and starts the idle countdown again; keeps nothing when the cursor is in the right side and the office is hidden, where the Report shows it
+---@field session_changed fun() tells the office the session it acts out is another now: the agents of the old session leave, its permission waits are forgotten, and an office that is running follows the transcript `options.transcript` names now at once; one that is hidden or paused follows it when it next starts
 ---@field show_now fun() shows the office over the right side at once, and does nothing when it shows
 ---@field preview fun(pack?: string) shows the pack, or the one the settings name, over the right side with every state of the vocabulary acted out in turn, each named, in place of the office that shows, which stays when the pack cannot be shown; the preview follows no transcript
 ---@field reload fun() shows the office again with what the settings name now, when it shows, and does nothing when it is hidden, previews a pack or has no right side; a pack that cannot be shown is told, and the office that shows stays
@@ -733,6 +734,15 @@ function M.new_office(options)
     end
     cards.add(report)
     start_counting_again()
+  end
+
+  function office.session_changed()
+    waits_kept = {}
+    local open = showing
+    if open and open.timer then
+      stop_running(open)
+      start_running(open)
+    end
   end
 
   --- Closes the office and stops its countdown.
