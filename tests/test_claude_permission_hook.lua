@@ -54,10 +54,12 @@ local SESSION = 'c9d64d84-5f2b-4c3e-9a1d-2b7e8f0a6c31'
 --- `_G.copies`), each on a new session against the fake `claude`, each with
 --- an `on_permission_wait` that appends what it is told to
 --- `_G.waits[<copy's number>]`; waits until the fake has recorded both
---- starts and returns the start token of each.
+--- starts and returns the start token of each copy's start, found by the
+--- session id the start was given, not by the order the fake recorded the
+--- starts in.
 ---
 ---@param fake { record: string, environment: table<string, string> }
----@return string[] tokens
+---@return string[] tokens by the copy's number
 local function start_two_copies(fake)
   child.lua(
     [[
@@ -78,8 +80,17 @@ local function start_two_copies(fake)
     ]],
     { 'tests/helpers/claude_session.lua', fake.environment }
   )
-  claude.wait_for_starts(fake, 2)
-  return { claude.start_token(fake, 1), claude.start_token(fake, 2) }
+  local starts = claude.wait_for_starts(fake, 2)
+  local tokens = {}
+  for number = 1, 2 do
+    local session = child.lua_get(('_G.copies[%d].session_id()'):format(number))
+    for index, start in ipairs(starts) do
+      if claude.words_after(start.argv, '--session-id')[1] == session then
+        tokens[number] = claude.start_token(fake, index)
+      end
+    end
+  end
+  return tokens
 end
 
 --- Tells the child's Claude home a permission wait, as the hook relay does,
