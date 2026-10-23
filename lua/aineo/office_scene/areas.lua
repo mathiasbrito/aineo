@@ -1,4 +1,5 @@
---- Where the areas of a placed piece lie on the canvas. Pure.
+--- Where the areas of a placed piece lie on the canvas, and writing text
+--- into them. Pure.
 
 local M = {}
 
@@ -20,6 +21,21 @@ function M.on_canvas(placed, piece, name)
     width = area.width,
     height = area.height,
   }
+end
+
+--- Writes `text` on the text row `row` from the cell `column`, unless the row
+--- is below the plan: the rows under it are the status list's, which nothing
+--- else writes on.
+---
+---@param canvas aineo.office_scene.Canvas
+---@param drawing aineo.office_scene.Drawing
+---@param place { column: integer, row: integer }
+---@param text string
+---@param style aineo.office_scene.TextStyle
+function M.write_text_above_the_list(canvas, drawing, place, text, style)
+  if place.row < drawing.plan_height then
+    canvas.write_text(place.column, place.row, text, style)
+  end
 end
 
 return M
