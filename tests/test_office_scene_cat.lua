@@ -411,7 +411,7 @@ T['the cat']['follows no one by a name other than someone_walking'] = function()
   eq(cat_cells[25], '2,0')
 end
 
-T['the cat']['leaves a mess that angers the agents near it and that an idle agent cleans up'] = function()
+T['the cat']['leaves a mess that an idle agent grumbles at and then cleans up'] = function()
   local stage = stage_with_a_cat(
     '# plan\n \n d.d.d.c....ah\n',
     {
@@ -461,7 +461,7 @@ T['the cat']['leaves a mess that angers the agents near it and that an idle agen
     scene.agent_cell(picture, 13, 1, scene.SECOND_AGENT),
     scene.agent_cell(picture, 13, 1, YELLOW),
     scene.group_at(picture, 6, 0),
-  }, { { '6,0', '12,0' }, '2,0', '4,0', scene.solid(scene.FLOOR) })
+  }, { { '12,0', '4,0' }, '2,0', '4,0', scene.solid(scene.FLOOR) })
 end
 
 --- How many cells of the picture's only row are drawn in `colour`.
