@@ -457,6 +457,22 @@ T['kept_tabs()']['gives back the sessions in their order and the current place']
   eq(tabs.kept_tabs(state, '/work/project'), { sessions = { SECOND, FIRST, THIRD }, current = 2 })
 end
 
+T['kept_tabs()']['gives back the session each tab claims, under the session of that tab'] = function()
+  local tabs = require('aineo.tabs')
+  local state = fixture.directory('t141-kept-claims')
+
+  tabs.keep_tabs(
+    state,
+    '/work/project',
+    { sessions = { FIRST, SECOND }, current = 1, claims = { [SECOND] = THIRD } }
+  )
+
+  eq(
+    tabs.kept_tabs(state, '/work/project'),
+    { sessions = { FIRST, SECOND }, current = 1, claims = { [SECOND] = THIRD } }
+  )
+end
+
 --- The file that keeps the list of `folder` under `state`, as the home
 --- names it.
 ---
@@ -578,6 +594,39 @@ T['kept_tabs()']['reads none from a file that is no list'][1] = function(name)
   eq(tabs.kept_tabs(state, '/work/project'), nil)
 end
 
+--- What a kept list's `claims` may hold that keeps none of its claims, or
+--- some: each list is read all the same, with the claims that are a session
+--- id claimed under a session of the list.
+local MISSHAPEN_CLAIMS = {
+  { 'a word', nil },
+  { 7, nil },
+  { { 1, 2 }, nil },
+  { { [FIRST] = 'not a session id', [SECOND] = THIRD }, { [SECOND] = THIRD } },
+  { { [THIRD] = SECOND }, nil },
+  { { [FIRST] = 42 }, nil },
+}
+
+T['kept_tabs()']['reads the list, with no claim of another shape than a session id under a session of it'] =
+  MiniTest.new_set({ parametrize = MISSHAPEN_CLAIMS })
+
+T['kept_tabs()']['reads the list, with no claim of another shape than a session id under a session of it'][1] = function(
+  claims,
+  kept_claims
+)
+  local tabs = require('aineo.tabs')
+  local state = fixture.directory('t141-kept-misshapen-claims')
+  write_list_file(
+    state,
+    '/work/project',
+    vim.json.encode({ sessions = { FIRST, SECOND }, current = 2, claims = claims })
+  )
+
+  eq(
+    { pcall(tabs.kept_tabs, state, '/work/project') },
+    { true, { sessions = { FIRST, SECOND }, current = 2, claims = kept_claims } }
+  )
+end
+
 T['kept_tabs()']['reads none when no file is kept'] = function()
   local tabs = require('aineo.tabs')
 
@@ -612,6 +661,21 @@ T['kept_tabs()']['reads none, and raises nothing, for arguments that are no path
 end
 
 T['keep_tabs()'] = MiniTest.new_set()
+
+T['keep_tabs()']['writes no claim kept_tabs() would not read back'] = function()
+  local tabs = require('aineo.tabs')
+  local state = fixture.directory('t141-keep-misshapen-claims')
+
+  tabs.keep_tabs(state, '/work/project', {
+    sessions = { FIRST, SECOND },
+    current = 1,
+    claims = { [FIRST] = 'not a session id', [SECOND] = FIRST },
+  })
+
+  local written =
+    vim.json.decode(table.concat(vim.fn.readfile(list_file_of(state, '/work/project'))))
+  eq(written.claims, nil)
+end
 
 T['keep_tabs()']['raises an error naming the file, and leaves the kept list as it was, when the replacement fails'] = function()
   local tabs = require('aineo.tabs')
@@ -1161,6 +1225,34 @@ T['list_of_tabs()']['puts the place at the first tab when none is current, or th
   eq(current_has_no_session, { sessions = { FIRST }, current = 1 })
 end
 
+T['list_of_tabs()']['keeps the session each tab claims, under the session of that tab'] = function()
+  local tabs = require('aineo.tabs')
+
+  local list = tabs.list_of_tabs({
+    { session = FIRST, claimed = THIRD, current = false },
+    { session = SECOND, current = true },
+  })
+
+  eq(list, { sessions = { FIRST, SECOND }, current = 2, claims = { [FIRST] = THIRD } })
+end
+
+T['list_of_tabs()']['keeps no claim of a session a tab of the list shows, nor one a tab before it claims'] = function()
+  local tabs = require('aineo.tabs')
+
+  local list = tabs.list_of_tabs({
+    { session = FIRST, claimed = SECOND, current = false },
+    { session = SECOND, claimed = THIRD, current = false },
+    { session = THIRD, current = true },
+  })
+  local claimed_twice = tabs.list_of_tabs({
+    { session = FIRST, claimed = THIRD, current = true },
+    { session = SECOND, claimed = THIRD, current = false },
+  })
+
+  eq(list, { sessions = { FIRST, SECOND, THIRD }, current = 3 })
+  eq(claimed_twice, { sessions = { FIRST, SECOND }, current = 1, claims = { [FIRST] = THIRD } })
+end
+
 T['list_of_tabs()']['gives nothing when no tab has a session'] = function()
   local tabs = require('aineo.tabs')
 
@@ -1229,6 +1321,18 @@ T['tabs_to_reopen()']['gives at most 20 sessions, and the ones left over, in the
 
   eq(list, { sessions = vim.list_slice(sessions, 1, 20), current = 20 })
   eq(left, { sessions[21], sessions[22] })
+end
+
+T['tabs_to_reopen()']['gives the claims of the sessions it reopens, and none of those left over'] = function()
+  local tabs = require('aineo.tabs')
+  local state = fixture.directory('t141-reopen-claims')
+  local sessions = vim.tbl_map(numbered_session, vim.fn.range(1, 21))
+  local claims = { [sessions[2]] = numbered_session(30), [sessions[21]] = numbered_session(31) }
+  tabs.keep_tabs(state, '/work/project', { sessions = sessions, current = 1, claims = claims })
+
+  local list = tabs.tabs_to_reopen(state, '/work/project', sessions[1])
+
+  eq(list.claims, { [sessions[2]] = numbered_session(30) })
 end
 
 T['tabs_to_reopen()']['leaves none over for a list of 20'] = function()

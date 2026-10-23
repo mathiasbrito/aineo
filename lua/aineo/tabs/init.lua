@@ -291,9 +291,11 @@ end
 
 --- The list of `placed`, the editor's tabs in the order of their places: the
 --- session of each tab that has one, a session two tabs show listed once, at
---- the lower place (no two tabs of a list show one session); and the place of
+--- the lower place (no two tabs of a list show one session); the place of
 --- the tab flagged current, or of the one that shows its session first, else
---- the first. What `keep_tabs()` keeps. Nil when no tab has a session.
+--- the first; and, under the session of each tab that claims one, the session
+--- it claims, unless the list holds it or a tab before it claims it. What
+--- `keep_tabs()` keeps. Nil when no tab has a session.
 ---
 ---@param placed aineo.tabs.PlacedTab[]
 ---@return aineo.tabs.TabList|nil
@@ -303,9 +305,12 @@ function M.list_of_tabs(placed)
 end
 
 --- Keeps `tab_list` as the list of the tabs of `folder`: the sessions of its
---- tabs in the order of the tabs' places, and the place of the tab that is
---- current. It goes into a file of its own under `state_directory`, readable
---- by the user alone, written whole or not at all. The session id kept for
+--- tabs in the order of the tabs' places, the place of the tab that is
+--- current, and the session each tab claims, under its session (a claim of
+--- a session the list holds or a tab before it claims, of another shape than
+--- a session id, or under a session the list lacks, is not kept). It goes
+--- into a file of its own under `state_directory`, readable by the user
+--- alone, written whole or not at all. The session id kept for
 --- the folder is another file and stays as it is. Only a list `kept_tabs()`
 --- would give back is written.
 ---
@@ -323,7 +328,8 @@ function M.keep_tabs(state_directory, folder, tab_list)
 end
 
 --- The list kept for the tabs of `folder` by `keep_tabs()`: its sessions in
---- the same order, and its current place. Nil when none is kept: no file, an
+--- the same order, its current place, and its claims, those a list keeps
+--- (`keep_tabs()`) and none other. Nil when none is kept: no file, an
 --- unreadable one, one that is not a non-empty list of distinct session ids
 --- (each a lower-case version-4 UUID, since each becomes an argument to
 --- `--resume`, and no two tabs showing one session) with a place in it. A
@@ -347,10 +353,11 @@ M.MAX_REOPENED_TABS = 20
 --- The tabs a Neovim reopens in `folder`: the list kept for it
 --- (`kept_tabs()`) when it holds `kept_session`, the session kept for the
 --- folder as the one the next start lands in, cut to its first
---- `MAX_REOPENED_TABS` sessions with its place kept within them; and the
---- sessions cut off, in order (none for a short list). Nil when no list is
---- kept, the list lacks that session, or none is kept for the folder: one tab
---- then opens on the kept session, as before the list was kept.
+--- `MAX_REOPENED_TABS` sessions with its place kept within them and the
+--- claims of those sessions; and the sessions cut off, in order (none for a
+--- short list). Nil when no list is kept, the list lacks that session, or
+--- none is kept for the folder: one tab then opens on the kept session, as
+--- before the list was kept.
 ---
 --- Raises nothing.
 ---
@@ -366,7 +373,16 @@ function M.tabs_to_reopen(state_directory, folder, kept_session)
   end
   local reopened = vim.list_slice(list.sessions, 1, M.MAX_REOPENED_TABS)
   local left = vim.list_slice(list.sessions, M.MAX_REOPENED_TABS + 1)
-  return { sessions = reopened, current = math.min(list.current, #reopened) }, left
+  local claims = {}
+  for _, session in ipairs(reopened) do
+    claims[session] = list.claims and list.claims[session]
+  end
+  return {
+    sessions = reopened,
+    current = math.min(list.current, #reopened),
+    claims = next(claims) and claims or nil,
+  },
+    left
 end
 
 --- Has Neovim draw aineo's tab line while the user's 'tabline' is empty; a
