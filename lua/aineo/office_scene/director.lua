@@ -37,7 +37,7 @@ local M = {}
 
 --- The spot a character that has no place yet is put on when its first step
 --- names none.
-local ENTRANCE = 'door'
+local ENTRANCE = named_spots.ENTRANCE
 
 --- How many steps an agent begins in one update; the rest it begins in the
 --- updates after, so that an activity of steps that take no time cannot hold
@@ -128,9 +128,10 @@ local function start_step(context, performer, step, time)
 end
 
 --- The way to a spot named `spot_name` for the performer: to the spot of the
---- name nearest by walking; or, when the plan has no spot of that name and the
---- performer has no place yet, to a floor cell, so that a character is drawn
---- in a room too small to hold the spot.
+--- name nearest by walking; or, when the plan has no such spot that can be
+--- walked to, or the other characters have them all, and the performer has no
+--- place yet, to a free floor cell, so that a character is drawn in a room too
+--- small to hold the spot or its agents. A performer that has a place keeps it.
 ---
 ---@param context aineo.office_scene.DirectorContext
 ---@param performer aineo.office_scene.Performer
@@ -144,7 +145,7 @@ local function route_to_spot(context, performer, spot_name, even_if_taken)
     named_spots.choose(context, spot_name, performer, even_if_taken),
     performer
   )
-  if route or why ~= spots.UNREACHABLE or performer.column then
+  if route or performer.column then
     return route, why
   end
   return spots.route(context.layout, named_spots.choose_free_floor_cell(context), performer)

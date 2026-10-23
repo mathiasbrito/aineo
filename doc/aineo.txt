@@ -4105,13 +4105,16 @@ random time between the two numbers when it has two) the next step begins; the
 last step lasts until the agent's activity changes, or, when it has
 `for_seconds`, until they are over (see below). An agent whose step names
 a spot that other agents have keeps the spot it stands on and looks again
-every second; an agent that has no place yet is not drawn until a spot is
-free. When the plan has no spot of the name, as in a room too small for the
-desks, an agent that has no place yet is put on a floor cell where no
-character stands and plays the step there, so that it is always drawn. A spot
-that cannot be walked to leaves the agent where it is and its activity goes
-on. An agent first appears at the first spot of its first
-step without walking there, or at the spot `door` when the step has no `at`.
+every second. An agent that has no place yet, whose step names a spot that
+other agents have, or that the plan lacks (as in a room too small for the
+desks), or that cannot be walked to, is put on the free floor cell nearest the
+spot `door` (the one the random source picks when the plan has no door) and
+plays the step there, so that it is always drawn; it is not drawn only when a
+character stands on every floor cell, and then it is put on a cell as soon as
+one is free. An agent that has a place keeps it: a spot that cannot be walked
+to leaves it where it is and its activity goes on. An agent first appears at
+the first spot of its first step without walking there, or at the spot `door`
+when the step has no `at`.
 A step's `effect` shows over the pose's. When the office is resized, each
 agent keeps its activity and its step, at the spot of the same name and
 number in the new plan.
@@ -4151,8 +4154,8 @@ stands.
 A pose whose art has frames, or whose `rises` lifts it, begins at its first
 frame when the agent takes the pose. A pose with `screen` shows that piece in
 the `screen` area of the agent's own monitor, the one nearest to the agent's
-`desk` spot (the n-th piece of the plan with a `screen` area for the agent with
-the n-th place, in a plan without `desk` spots). `holding` draws a piece at
+`desk` spot (in a plan without `desk` spots, the n-th piece of the plan with a
+`screen` area for the agent with the n-th place). `holding` draws a piece at
 the `hand` area of the first layer that has one, mirrored with that layer and
 as the piece's own `faces` says.
 

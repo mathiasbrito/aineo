@@ -21,6 +21,9 @@ local OWN_DESK = 'desk'
 --- The name of a floor cell drawn at random when a character goes there.
 M.ANYWHERE = 'anywhere'
 
+--- The name of the spot where the characters that arrive come in.
+M.ENTRANCE = 'door'
+
 --- The name of the cells beside agents.
 local NEXT_TO_AN_AGENT = 'next_to_an_agent'
 
@@ -79,12 +82,12 @@ local function cells_characters_stand_on(world)
 end
 
 --- The first of `keys`, from the one at `index` on and round again, that is
---- not in `occupied`; the one at `index` when all are.
+--- not in `occupied`; nil when all are.
 ---
 ---@param keys integer[]
 ---@param index integer
 ---@param occupied table<integer, true>
----@return integer
+---@return integer|nil
 local function first_free_key_from(keys, index, occupied)
   for offset = 0, #keys - 1 do
     local key = keys[(index - 1 + offset) % #keys + 1]
@@ -92,7 +95,7 @@ local function first_free_key_from(keys, index, occupied)
       return key
     end
   end
-  return keys[index]
+  return nil
 end
 
 --- A spot on a floor cell that is no spot of the plan.
@@ -114,19 +117,48 @@ local function spot_on_cell(name, key, width)
 end
 
 --- The floor cell the random source picks, or the first one after it that is
---- not in `avoided`, as the one open spot.
+--- not in `avoided`, as the one open spot; no spot, and no number drawn, when
+--- all are avoided.
 ---
 ---@param world aineo.office_scene.SpotWorld
 ---@param avoided table<integer, true> cells as `row * width + column`
 ---@return aineo.office_scene.SpotChoice
 local function floor_cell_choice(world, avoided)
   local keys = walkable_keys(world.layout)
-  if #keys == 0 then
+  if not first_free_key_from(keys, 1, avoided) then
     return { open = {}, any = false }
   end
   local drawn = math.floor(world.random() * #keys) + 1
   local key = first_free_key_from(keys, drawn, avoided)
   return { open = { spot_on_cell(M.ANYWHERE, key, world.layout.width) }, any = true }
+end
+
+--- The floor cell, of those not in `avoided`, nearest the first spot of the
+--- name `anchor_name`, counting cells across and down; the cell the random
+--- source picks when the plan has no such spot. No spot when all are avoided.
+---
+---@param world aineo.office_scene.SpotWorld
+---@param avoided table<integer, true> cells as `row * width + column`
+---@param anchor_name string
+---@return aineo.office_scene.SpotChoice
+local function free_floor_cell_nearest(world, avoided, anchor_name)
+  local anchor = (world.layout.spots[anchor_name] or {})[1]
+  if not anchor then
+    return floor_cell_choice(world, avoided)
+  end
+  local width = world.layout.width
+  local nearest_key, fewest_cells = nil, math.huge
+  for _, key in ipairs(walkable_keys(world.layout)) do
+    local cells = math.abs(key % width - anchor.column)
+      + math.abs(math.floor(key / width) - anchor.row)
+    if not avoided[key] and cells < fewest_cells then
+      nearest_key, fewest_cells = key, cells
+    end
+  end
+  if not nearest_key then
+    return { open = {}, any = false }
+  end
+  return { open = { spot_on_cell(M.ANYWHERE, nearest_key, width) }, any = true }
 end
 
 --- The desks of the plan no agent has.
@@ -255,14 +287,15 @@ function M.availability(world, name, character, even_if_taken)
   return { free = #choice.open, any = choice.any }
 end
 
---- The floor cell, where no character stands, that the random source picks:
---- where a character goes whose step names a spot the plan lacks and who has
---- no place yet.
+--- The floor cell, where no character stands, nearest the door: where a
+--- character with no place yet goes whose step names a spot the plan lacks or
+--- the other characters have taken. Without a door in the plan, the cell the
+--- random source picks. None when a character stands on every floor cell.
 ---
 ---@param world aineo.office_scene.SpotWorld
 ---@return aineo.office_scene.SpotChoice
 function M.choose_free_floor_cell(world)
-  return floor_cell_choice(world, cells_characters_stand_on(world))
+  return free_floor_cell_nearest(world, cells_characters_stand_on(world), M.ENTRANCE)
 end
 
 --- The spots named `name` that `character` may go to, and whether there are

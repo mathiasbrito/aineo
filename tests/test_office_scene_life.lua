@@ -250,7 +250,7 @@ T['two players']['do not take along an agent in a state the game does not name']
   eq(where_the_two_are(stage)[1], '0,0')
 end
 
-T['two players']['do not take along an agent that has no place on the plan yet'] = function()
+T['two players']['take along an agent that stands on a floor cell for want of a spot'] = function()
   local pack = scene.people_pack('# plan\n \n a...p.q.\n', {
     a = { spot = 'aside' },
     p = { spot = 'table' },
@@ -268,7 +268,7 @@ T['two players']['do not take along an agent that has no place on the plan yet']
 
   stage.advance(both_idle, 3)
 
-  eq(where_the_two_are(stage), { '0,0', 'nowhere' })
+  eq(where_the_two_are(stage), { '4,0', '6,0' })
 end
 
 T['two players']['start their game once the second agent is there, the first having looked again'] = function()
