@@ -13,6 +13,8 @@ local M = {}
 ---@field report_tool? string the name of aineo's report tool, as Claude Code calls it (`mcp__<server>__<tool>`); none when the office is told of none
 ---@field commands? aineo.office_states.CommandClasses the classes of shell commands (`office.commands`); none when the office is told of none, and every command is then a command run
 ---@field triggers? aineo.office_states.Trigger[] the pack's triggers, tried in order whenever a tool call starts; none when the pack has none
+---@field clock? fun(): number the time in seconds, on a clock that only grows, which limits the triggers of one call to 20 ms; none, and they are not limited
+---@field on_slow_triggers? fun() called, once, when the triggers of a call were given up for taking too long
 
 --- The kinds of signal beyond the transcript's (`aineo.transcript.SignalKind`)
 --- that the office gives the tracker: a session that starts or ends, and an
@@ -42,6 +44,20 @@ local function count_running_subagents(records)
   end, records)
 end
 
+--- `action` as a function that runs it the first time and does nothing after.
+---
+---@param action? fun()
+---@return fun()
+local function once(action)
+  local done = false
+  return function()
+    if not done and action then
+      done = true
+      action()
+    end
+  end
+end
+
 --- A tracker that knows the main agent, standing, and every other agent once a
 --- signal names it.
 ---
@@ -58,6 +74,11 @@ function M.new_tracker(options)
     report_tool = options.report_tool,
     commands = options.commands,
     triggers = options.triggers,
+    trigger_budget = options.clock and {
+      clock = options.clock,
+      seconds = timing.TRIGGER_SECONDS,
+      on_late = once(options.on_slow_triggers),
+    } or nil,
   }
 
   ---@type aineo.office_states.Record[]
