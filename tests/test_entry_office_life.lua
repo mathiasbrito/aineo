@@ -2,6 +2,7 @@ local MiniTest = require('mini.test')
 local claude_session = dofile('tests/helpers/claude_session.lua')
 local entry = dofile('tests/helpers/entry.lua')
 local entry_tabs = dofile('tests/helpers/entry_tabs.lua')
+local fake_transcript = dofile('tests/helpers/fake_transcript.lua')
 local office_cells = dofile('tests/helpers/office_cells.lua')
 local office_child = dofile('tests/helpers/office_child.lua')
 local stand_in = dofile('tests/helpers/office_stand_in.lua')
@@ -77,6 +78,21 @@ local function deliver_report(status, summary)
   )
 end
 
+--- The recorded turn, whose first five lines end with a call that runs.
+local RECORDED_TURN = fake_transcript.lines_of('turn-with-a-command-2.1.308.jsonl')
+
+--- Writes `lines` as the transcript of the session the child's Claude Code
+--- runs, where Claude Code keeps it.
+---
+---@param lines string[]
+local function write_transcript(lines)
+  local session = child.lua_get([[require('aineo.claude').session_id()]])
+  local directory = child.lua_get([[vim.env.CLAUDE_CONFIG_DIR]])
+  local path = vim.fs.joinpath(directory, 'projects', 'office-life', session .. '.jsonl')
+  vim.fn.mkdir(vim.fs.dirname(path), 'p')
+  fake_transcript.append(path, lines)
+end
+
 --- Whether the office shows.
 ---
 ---@return boolean
@@ -130,6 +146,21 @@ T['the office of a tab']['shows by itself once the cursor has stayed out of the 
   eq(
     vim.wait(PATIENCE_MS, function()
       return shows()
+    end, 20),
+    true
+  )
+end
+
+T['the office of a tab']['that shows by itself acts out what the session does, as the one shown on request does'] = function()
+  open_layout('office-life-idle-follows', { office = { idle_ms = 300 } })
+  write_transcript(vim.list_slice(RECORDED_TURN, 1, 5))
+
+  office_child.enter_the_left_window(child)
+  vim.wait(PATIENCE_MS, shows, 20)
+
+  eq(
+    vim.wait(PATIENCE_MS, function()
+      return office_cells.is_typing(child)
     end, 20),
     true
   )

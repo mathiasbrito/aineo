@@ -37,8 +37,9 @@ end
 
 --- Makes the office the child's `_G.office`, with the layout's right column as
 --- its right side, and the settings `settings_source` (the source of a table)
---- gives. What the office tells the user through `vim.notify()` is
---- `_G.told`.
+--- gives. The office follows the transcript at `_G.transcript_path`, none by
+--- default (`M.follow_transcript()`). What the office tells the user through
+--- `vim.notify()` is `_G.told`.
 ---
 ---@param child table
 ---@param settings_source? string the source of the table the office's `settings()` returns, `{ pack = 'default', pieces = {} }` by default
@@ -66,6 +67,9 @@ function M.make_office(child, settings_source, more_options_source)
       settings = function()
         return settings
       end,
+      transcript = function()
+        return _G.transcript_path
+      end,
     }, loadstring('return ' .. more_options_source)()))
   ]],
     {
@@ -73,6 +77,15 @@ function M.make_office(child, settings_source, more_options_source)
       more_options_source or '{}',
     }
   )
+end
+
+--- Has the office of `make_office()` follow the transcript at `path` the
+--- next time it starts following.
+---
+---@param child table
+---@param path string
+function M.follow_transcript(child, path)
+  child.lua('_G.transcript_path = ...', { path })
 end
 
 --- The source of the office's option `schedule_after` that keeps each wait
