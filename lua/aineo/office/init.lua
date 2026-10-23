@@ -132,6 +132,14 @@ function M.new_office(options)
     return seconds + microseconds / 1e6
   end
 
+  --- The time on the wall outside the office, in the local time zone, at the
+  --- moment `wall_clock` says.
+  ---
+  ---@return aineo.office_scene.WallTime
+  local function wall_time()
+    return os.date('*t', math.floor(wall_clock())) --[[@as aineo.office_scene.WallTime]]
+  end
+
   --- When, by `wall_clock`, each agent's permission wait was told, until the
   --- transcript shows the agent went on; given to the tracker whenever the
   --- office starts running (`hand_over_kept_waits()`), so that a hand raised
@@ -464,6 +472,7 @@ function M.new_office(options)
       width = area.width,
       height = area.height,
       state_labels = state_labels(),
+      clock = wall_time,
     })
     if not made then
       vim.notify(('aineo: the office cannot show: %s'):format(stage), vim.log.levels.ERROR)

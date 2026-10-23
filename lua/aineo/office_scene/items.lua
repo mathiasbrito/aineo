@@ -18,6 +18,7 @@ M.RANK = { on_the_floor = 0, seated = 1, piece = 2, standing = 3 }
 ---@field height integer cells, the status list's rows among them
 ---@field plan_height integer cells, the rows of the plan: the height less the status list's rows
 ---@field now number seconds
+---@field wall_time? aineo.office_scene.WallTime the time on the wall outside the office; none, and the pieces that show it show their art alone
 
 ---@class aineo.office_scene.Item
 ---@field depth integer the pixel row it stands on; the deeper is in front
