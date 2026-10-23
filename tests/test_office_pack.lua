@@ -44,6 +44,36 @@ local T = MiniTest.new_set({
   },
 })
 
+T['find()'] = MiniTest.new_set()
+
+T['find()']['lists the packs of the folders, by name, each with the folder it is in'] = function()
+  local root = pack_root()
+  local first = files.write_pack(vim.fs.joinpath(root, 'one'), 'beta')
+  local second = files.write_pack(vim.fs.joinpath(root, 'two'), 'alpha')
+
+  eq(office_pack.find({ first, second }), {
+    { name = 'alpha', directory = vim.fs.joinpath(second, 'alpha') },
+    { name = 'beta', directory = vim.fs.joinpath(first, 'beta') },
+  })
+end
+
+T['find()']['lists a pack of two folders once, as the first folder has it'] = function()
+  local root = pack_root()
+  local first = files.write_pack(vim.fs.joinpath(root, 'one'), 'small')
+  local second = files.write_pack(vim.fs.joinpath(root, 'two'), 'small')
+
+  eq(office_pack.find({ first, second }), {
+    { name = 'small', directory = vim.fs.joinpath(first, 'small') },
+  })
+end
+
+T['find()']['passes over a folder that is missing and a folder that holds no pack.lua'] = function()
+  local root = pack_root()
+  local folder = files.write_pack(root, 'empty', { ['pack.lua'] = false })
+
+  eq(office_pack.find({ folder, vim.fs.joinpath(root, 'nothing') }), {})
+end
+
 T['load()'] = MiniTest.new_set()
 
 T['load()']['gives the pack’s name, description and author'] = function()

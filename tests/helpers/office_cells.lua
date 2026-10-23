@@ -31,6 +31,41 @@ function M.window(child)
   end)()]])
 end
 
+--- The names of the highlight groups the office's extmarks use, as a list
+--- without a name twice.
+---
+---@param child table
+---@return string[]
+function M.groups_shown(child)
+  return child.lua_get(
+    [[(function(window)
+      local namespace = vim.api.nvim_create_namespace('aineo.office')
+      local buffer = vim.api.nvim_win_get_buf(window)
+      local seen, groups = {}, {}
+      for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(buffer, namespace, 0, -1, { details = true })) do
+        local group = mark[4].hl_group
+        if not seen[group] then
+          seen[group] = true
+          table.insert(groups, group)
+        end
+      end
+      return groups
+    end)(...)]],
+    { M.window(child) }
+  )
+end
+
+--- Whether any highlight group the office uses has `fragment` in its name.
+---
+---@param child table
+---@param fragment string
+---@return boolean
+function M.shows_colour(child, fragment)
+  return vim.iter(M.groups_shown(child)):any(function(group)
+    return group:find(fragment, 1, true) ~= nil
+  end)
+end
+
 --- The number of handles of the kind `kind` (`'timer'`, `'fs_event'`) open in
 --- the child.
 ---

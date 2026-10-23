@@ -19,6 +19,7 @@
 local actions = require('aineo.entry.actions')
 local errors = require('aineo.entry.errors')
 local explaining = require('aineo.entry.explaining')
+local office_check = require('aineo.entry.office_check')
 local places = require('aineo.entry.places')
 local reopening = require('aineo.entry.reopening')
 
@@ -31,6 +32,8 @@ M.jump_to_tab = actions.jump_to_tab
 M.running_sessions_here = places.running_sessions_here
 M.forgo_tab_reopening = reopening.forgo_tab_reopening
 M.tell_error = errors.tell_error
+M.check_office_pack = office_check.check
+M.office_pack_names = office_check.pack_names
 M.explain = explaining.explain
 M.explain_selection = explaining.explain_selection
 M.clear_explanations = explaining.clear_explanations

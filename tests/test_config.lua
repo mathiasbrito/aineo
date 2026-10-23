@@ -19,6 +19,8 @@ local DEFAULTS = {
     issues_prompt = 'Some issues were found in this code, can you check and propose a fix if the issue holds:',
   },
   office = {
+    pack = 'default',
+    pieces = {},
     commands = {
       tests = {
         'make test',
@@ -583,6 +585,69 @@ end
 
 T['lua_pattern_problem()']['says what is wrong with a pattern that repeats twice'] = function()
   eq(type(config.lua_pattern_problem('.-.-x')), 'string')
+end
+
+T['resolve_config()']['takes the office’s pack from either source, the default pack by default'] = function()
+  local from_global = config.resolve_config({ office = { pack = 'harbour' } }, nil)
+  local from_setup = config.resolve_config(
+    { office = { pack = 'harbour' } },
+    { office = { pack = { 'harbour', 'default' } } }
+  )
+
+  eq(from_global.office.pack, 'harbour')
+  eq(from_setup.office.pack, { 'harbour', 'default' })
+  eq(config.resolve_config(nil, nil).office.pack, 'default')
+end
+
+T['resolve_config()']['refuses an office pack that is no name and no list of names'] =
+  MiniTest.new_set({
+    parametrize = { { '' }, { {} }, { { '' } }, { { 1 } }, { 5 }, { false } },
+  })
+
+T['resolve_config()']['refuses an office pack that is no name and no list of names']['as office.pack'] = function(
+  pack
+)
+  expect.error(function()
+    config.resolve_config({ office = { pack = pack } }, nil)
+  end, 'office%.pack: expected a name, or a list of names')
+end
+
+T['resolve_config()']['takes the art files of the office’s pieces from either source, none by default'] = function()
+  local from_global =
+    config.resolve_config({ office = { pieces = { desk = '/my/desk.txt' } } }, nil)
+  local from_setup = config.resolve_config(
+    { office = { pieces = { desk = '/my/desk.txt' } } },
+    { office = { pieces = { door = '/my/door.txt' } } }
+  )
+
+  eq(from_global.office.pieces, { desk = '/my/desk.txt' })
+  eq(from_setup.office.pieces, { door = '/my/door.txt' })
+  eq(config.resolve_config(nil, nil).office.pieces, {})
+end
+
+T['resolve_config()']['refuses office pieces that are no table of names and files'] =
+  MiniTest.new_set({
+    parametrize = {
+      { 'desk.txt' },
+      { { 'desk.txt' } },
+      { { desk = 5 } },
+      { { desk = '' } },
+      { false },
+    },
+  })
+
+T['resolve_config()']['refuses office pieces that are no table of names and files']['as office.pieces'] = function(
+  pieces
+)
+  expect.error(function()
+    config.resolve_config({ office = { pieces = pieces } }, nil)
+  end, 'office%.pieces: expected a table of piece names and art files')
+end
+
+T['resolve_config()']['lists an office key no setting knows'] = function()
+  local _, unknown_keys = config.resolve_config({ office = { packs = 'x', pack = 'default' } }, nil)
+
+  eq(unknown_keys, { 'office.packs' })
 end
 
 T['resolve_config()']['lists each unknown key once, in sorted order'] = function()
