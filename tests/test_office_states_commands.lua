@@ -138,6 +138,65 @@ T['a command']['starts, for a match that must start it, after the assignments'] 
   eq(state_while_running('CI=1 DEBUG=1 make test', commands), 'running_tests')
 end
 
+T['a command']['is split at each separator, so a match that must start a part sees each part'] = function()
+  local commands = { tests = { { lua_pattern = '^make test' } } }
+
+  eq(state_while_running('echo a && make test', commands), 'running_tests')
+  eq(state_while_running('echo a || make test', commands), 'running_tests')
+  eq(state_while_running('echo a; make test', commands), 'running_tests')
+  eq(state_while_running('echo a | make test', commands), 'running_tests')
+  eq(state_while_running('echo a\nmake test', commands), 'running_tests')
+end
+
+T['a command']['is not classed by the body of a heredoc, whatever words it holds'] = function()
+  local commit = 'git commit -m "$(cat <<\'EOF\'\nThe whole suite ran green (make test).\nEOF\n)"'
+  local pull_request =
+    'gh pr create --title t --body "$(cat <<\'EOF\'\nRan pytest -k follower.\nEOF\n)"'
+
+  eq(state_while_running(commit, COMMANDS), 'committing')
+  eq(state_while_running(pull_request, COMMANDS), 'committing')
+end
+
+T['a command']['is classed by what follows the end of a heredoc'] = function()
+  local command = 'cat <<EOF > notes\nmake test\nEOF\ngit push'
+
+  eq(state_while_running(command, COMMANDS), 'committing')
+end
+
+T['a command']['is classed by the command a heredoc is fed to, not its body'] = function()
+  eq(state_while_running('cat <<EOF > notes\nmake test\nEOF', COMMANDS), 'reading')
+end
+
+T['a command']['ends a heredoc at its word, quoted or not, tabs stripped by <<-'] =
+  MiniTest.new_set({
+    parametrize = {
+      { "cat <<'EOF'\nmake test\nEOF\ngit push" },
+      { 'cat <<"EOF"\nmake test\nEOF\ngit push' },
+      { 'cat <<-EOF\n\tmake test\n\tEOF\ngit push' },
+      { 'cat << EOF\nmake test\nEOF\ngit push' },
+      { 'cat <<END_OF_TEXT\nmake test\nEND_OF_TEXT\ngit push' },
+    },
+  })
+
+T['a command']['ends a heredoc at its word, quoted or not, tabs stripped by <<-'][''] = function(
+  command
+)
+  eq(state_while_running(command, COMMANDS), 'committing')
+end
+
+T['a command']['is not classed by what follows a heredoc that never ends'] = function()
+  eq(state_while_running('cat <<EOF\nmake test\n', COMMANDS), 'reading')
+end
+
+T['a command']['takes the here-string <<< and a shift as no heredoc'] = function()
+  eq(state_while_running('cat <<< x\nmake test', COMMANDS), 'running_tests')
+  eq(state_while_running('echo $((1<<3))\nmake test', COMMANDS), 'running_tests')
+end
+
+T['a command']['is classed by quoted text, as bash -c runs it'] = function()
+  eq(state_while_running('bash -c "make test"', COMMANDS), 'running_tests')
+end
+
 T['a command']['is classed by a segment that is not its first'] = function()
   eq(state_while_running('echo starting && make test', COMMANDS), 'running_tests')
 end
