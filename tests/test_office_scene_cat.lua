@@ -453,4 +453,17 @@ T['the cat']['does not move for ever two cats that take each other’s seat'] = 
   end)
 end
 
+T['the cat']['has no desk of its own, the spot desk being the agents’'] = function()
+  local stage = stage_with_a_cat(
+    '# plan\n \n d...s...\n',
+    { d = { spot = 'desk', sitting = true }, s = { spot = 'seat', sitting = true } },
+    8,
+    { sit_at_a_desk = { who = 'cat', during = { 'always' }, steps = { { at = 'desk' } } } }
+  )
+
+  stage.advance({}, 0)
+
+  eq(where_the_cat_is(stage, 8), 'nowhere')
+end
+
 return T
