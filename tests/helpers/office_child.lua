@@ -68,7 +68,7 @@ function M.make_office(child, settings_source, more_options_source)
         return settings
       end,
       transcript = function()
-        return _G.transcript_path
+        return _G.transcript_path, _G.transcript_since
       end,
     }, loadstring('return ' .. more_options_source)()))
   ]],
@@ -79,13 +79,16 @@ function M.make_office(child, settings_source, more_options_source)
   )
 end
 
---- Has the office of `make_office()` follow the transcript at `path` the
---- next time it starts following.
+--- Has the office of `make_office()` follow the transcript at `path` the next
+--- time it starts following, as a tab that began following the session at
+--- `since` (seconds since 1970) does; with none, the transcript is followed as
+--- it is.
 ---
 ---@param child table
 ---@param path string
-function M.follow_transcript(child, path)
-  child.lua('_G.transcript_path = ...', { path })
+---@param since? number
+function M.follow_transcript(child, path, since)
+  child.lua('_G.transcript_path, _G.transcript_since = ...', { path, since })
 end
 
 --- The source of the office's option `schedule_after` that keeps each wait

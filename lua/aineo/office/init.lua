@@ -96,7 +96,7 @@ end
 ---@field settings? fun(): aineo.office.Settings what the user set for the office, asked each time it shows; the default pack when not given
 ---@field random? fun(count: integer): integer a whole number from 1 to `count`, which picks one of several packs the settings name; the first when not given
 ---@field wall_clock? fun(): number the time in seconds since 1970, which the stamps of the transcript's lines are on; the system's when not given
----@field transcript? fun(): string|nil the path of the transcript of the session the office acts out, asked each time the office starts following it (each show, and each return to its tab page); none or nil, and it follows none
+---@field transcript? fun(): string|nil, number|nil the path of the transcript of the session the office acts out, asked each time the office starts following it (each show, and each return to its tab page), and when the tab began following that session, in seconds since 1970, which lets the follower go on in the session its transcript says was continued in another (`aineo.transcript`'s `follow()`); none or nil, and it follows none
 ---@field preview_seconds_per_state? number how long `preview()` shows each state, in seconds; 9 when not given
 ---@field schedule_after? fun(milliseconds: integer, callback: fun()): fun() calls `callback`, on the main loop, once `milliseconds` have passed, and returns what cancels the wait; the idle countdown waits through it; a timer of the editor's loop when not given
 
@@ -110,6 +110,7 @@ end
 ---@field permission_wait fun(agent: string) tells the office the agent, `main` or a subagent's id, waits for the user to answer a permission prompt, until its next line in the transcript; it is kept, and handed over each time the office starts running unless the transcript shows the agent went on since
 ---@field report_arrived fun(report: aineo.office.Report) keeps the report as a card the office draws in its bottom right corner until the cursor enters the right side, and starts the idle countdown again; keeps nothing when the cursor is in the right side and the office is hidden, where the Report shows it
 ---@field session_changed fun() tells the office the session it acts out is another now: the agents of the old session leave, its permission waits are forgotten, and an office that is running follows the transcript `options.transcript` names now at once; one that is hidden or paused follows it when it next starts
+---@field follows_session fun(session: string): boolean whether `session` is one of the sessions of the chain the office followed last: the session of the transcript it was given and those it went on in; false before it has followed any
 ---@field show_now fun() shows the office over the right side at once, and does nothing when it shows
 ---@field preview fun(pack?: string) shows the pack, or the one the settings name, over the right side with every state of the vocabulary acted out in turn, each named, in place of the office that shows, which stays when the pack cannot be shown; the preview follows no transcript
 ---@field reload fun() shows the office again with what the settings name now, when it shows, and does nothing when it is hidden, previews a pack or has no right side; a pack that cannot be shown is told, and the office that shows stays
@@ -170,6 +171,12 @@ function M.new_office(options)
   --- is up again.
   ---@type table<string, number>
   local waits_kept = {}
+
+  --- The sessions of the chain the office followed last, as a set: kept when
+  --- the office stops following, so that a permission wait of a session it
+  --- followed is known while it is hidden.
+  ---@type table<string, true>
+  local followed_sessions = {}
 
   --- Whether `let_go()` has been called: the office counts no more.
   local has_been_let_go = false
@@ -324,12 +331,16 @@ function M.new_office(options)
       end,
     })
     local went_on_at = {}
-    local path = options.transcript and options.transcript()
+    local path, since
+    if options.transcript then
+      path, since = options.transcript()
+    end
     if not path then
       return tracker, nil, went_on_at
     end
     local follower = require('aineo.transcript').follow({
       path = path,
+      since = since,
       on_signal = function(signal)
         if signal.kind == 'session_continued' then
           if not signal.replayed then
@@ -343,6 +354,10 @@ function M.new_office(options)
         tracker.take(signal, options.clock())
       end,
     })
+    followed_sessions = {}
+    for _, session in ipairs(follower.sessions) do
+      followed_sessions[session] = true
+    end
     return tracker, follower, went_on_at
   end
 
@@ -735,6 +750,10 @@ function M.new_office(options)
     if open and open.tracker then
       open.tracker.take({ agent = agent, kind = 'permission_asked' }, options.clock())
     end
+  end
+
+  function office.follows_session(session)
+    return followed_sessions[session] == true
   end
 
   function office.report_arrived(report)
