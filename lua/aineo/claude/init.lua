@@ -1301,12 +1301,13 @@ local function is_start_in_another_process(running, told)
   return own_pid ~= nil and told.pid ~= own_pid
 end
 
---- `value` when it is the text of an absolute path; else nil.
+--- `value` when it is the text of an absolute path, one that starts with `/`
+--- (`~/x` and `~user/x` are not: nothing expands them); else nil.
 ---
 ---@param value any
 ---@return string?
 local function absolute_path_or_nil(value)
-  if type(value) == 'string' and value ~= '' and vim.fn.isabsolutepath(value) == 1 then
+  if type(value) == 'string' and vim.startswith(value, '/') then
     return value
   end
 end
