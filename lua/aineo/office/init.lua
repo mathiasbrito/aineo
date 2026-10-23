@@ -78,6 +78,7 @@ local NO_RIGHT_SIDE = "aineo: the office has no right side of aineo's layout to 
 
 ---@class aineo.office.Office
 ---@field follow_session fun(transcript_path: string|nil) follows the transcript of the session whose file is `transcript_path` while the office shows, or none
+---@field permission_wait fun(agent: string) tells the office the agent, `main` or a subagent's id, waits for the user to answer a permission prompt, until its next line in the transcript; while the office is hidden, nothing is kept
 ---@field report_arrived fun(report: aineo.office.Report) keeps the report as a card the office draws in its bottom right corner until the cursor enters the right side, and starts the idle countdown again; keeps nothing when the cursor is in the right side, where the Report shows it
 ---@field show_now fun() shows the office over the right side at once, and does nothing when it shows
 ---@field let_go fun() closes the office, stops its timer and its watch, and forgets the session
@@ -543,6 +544,13 @@ function M.new_office(options)
     idle_time_has_passed = false
     countdown.stop()
     show_over(area)
+  end
+
+  function office.permission_wait(agent)
+    local open = showing
+    if open and open.tracker then
+      open.tracker.take({ agent = agent, kind = 'permission_asked' }, options.clock())
+    end
   end
 
   function office.report_arrived(report)
