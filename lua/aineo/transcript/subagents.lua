@@ -101,6 +101,8 @@ function M.follow_subagents(options)
   local running_count = 0
   ---@type table<string, true> the subagents that were over when first seen, or are now
   local over = {}
+  ---@type table<string, true> the subagents the folder held when the follower started
+  local present_at_start = {}
 
   ---@param id string
   ---@return string
@@ -115,7 +117,8 @@ function M.follow_subagents(options)
   end
 
   --- Starts the subagent `id`, whose transcript is `past` when it was there
-  --- before the follower started.
+  --- before the follower started, even if the subagent is admitted later,
+  --- when a slot frees.
   ---
   ---@param id string
   ---@param past boolean
@@ -134,7 +137,8 @@ function M.follow_subagents(options)
     })
   end
 
-  --- Ends the subagent `id` after the last lines it wrote.
+  --- Ends the subagent `id` after the last lines it wrote, and tells so unless
+  --- a callback stopped the follower meanwhile.
   ---
   ---@param id string
   local function leave(id)
@@ -144,7 +148,9 @@ function M.follow_subagents(options)
     over[id] = true
     follower.read_to_end()
     follower.stop()
-    options.on_signal({ agent = id, kind = 'subagent_finished' })
+    if not stopped then
+      options.on_signal({ agent = id, kind = 'subagent_finished' })
+    end
   end
 
   --- Looks at the folder: starts the subagents it holds that are new and
@@ -157,13 +163,16 @@ function M.follow_subagents(options)
       if stopped then
         return
       end
+      if past then
+        present_at_start[id] = true
+      end
       if running[id] and is_over(meta_path(id)) then
         leave(id)
       elseif not running[id] and not over[id] and running_count < MAX_RUNNING_SUBAGENTS then
         if is_over(meta_path(id)) then
           over[id] = true
         else
-          arrive(id, past)
+          arrive(id, present_at_start[id] == true)
         end
       end
     end
