@@ -85,47 +85,6 @@ local function card_text(report, dot, cells)
   return text_module.cut_to_cells(text, cells)
 end
 
---- The byte of `text` that the character `index` begins, with `index` from 0.
----
----@param text string
----@param index integer
----@return integer
-local function byte_of(text, index)
-  return vim.str_byteindex(text, 'utf-32', index)
-end
-
---- `row` with `cells` cells of it, from the cell `first`, replaced by `text`
---- drawn in `group`. The row has a character to each cell, and `text` as many
---- cells as `cells`.
----
----@param row aineo.office_scene.PictureRow
----@param first integer the first cell replaced, from 0
----@param cells integer
----@param text string
----@param group string
----@return aineo.office_scene.PictureRow
-local function with_text_over(row, first, cells, text, group)
-  local from = byte_of(row.text, first)
-  local to = byte_of(row.text, first + cells)
-  local moved_by = #text - (to - from)
-  local runs = {}
-  for _, run in ipairs(row.runs) do
-    if run.from < from then
-      table.insert(runs, { from = run.from, to = math.min(run.to, from), group = run.group })
-    end
-  end
-  table.insert(runs, { from = from, to = from + #text, group = group })
-  for _, run in ipairs(row.runs) do
-    if run.to > to then
-      table.insert(
-        runs,
-        { from = math.max(run.from, to) + moved_by, to = run.to + moved_by, group = run.group }
-      )
-    end
-  end
-  return { text = row.text:sub(1, from) .. text .. row.text:sub(to + 1), runs = runs }
-end
-
 --- Whether the dot of `report` shows at `now`: always, but for a report that
 --- cannot go on, whose dot shows for a half second and then hides for one.
 ---
@@ -190,7 +149,7 @@ function M.new_cards()
       local cells = vim.fn.strdisplaywidth(line.text)
       if index >= 1 and cells + 2 * MARGIN_CELLS <= options.width then
         local first = options.width - MARGIN_CELLS - cells
-        rows[index] = with_text_over(rows[index], first, cells, line.text, line.group)
+        rows[index] = text_module.put_over(rows[index], first, cells, line.text, line.group)
       end
     end
     return vim.tbl_extend('force', picture, { rows = rows })
