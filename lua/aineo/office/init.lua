@@ -203,9 +203,18 @@ function M.new_office(options)
   end
 
   --- Closes the office once the current event is over: a window cannot be
-  --- closed from the autocommand that enters it.
+  --- closed from the autocommand that enters it. When the cursor is in the
+  --- office's own window, it goes first to the window the office covers, so
+  --- that it ends in the right side and not in the window it came from.
   local function close_soon()
     vim.schedule(function()
+      local open = showing
+      if open and vim.api.nvim_get_current_win() == open.float.window then
+        local covered = float_module.window_under(open.float, open.area)
+        if covered then
+          vim.api.nvim_set_current_win(covered)
+        end
+      end
       close()
       settle()
     end)
