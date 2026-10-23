@@ -1,6 +1,6 @@
 about: A window; the sky outside follows the time of day (sky_night, sky_dawn, sky_day, sky_dusk).
 colours: A = night_low, M = slate
-anchor: 0, 12
+anchor: 12, 12
 area sky: 1, 1, 22 x 10
 ---
 MMMMMMMMMMMMMMMMMMMMMMMM

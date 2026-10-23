@@ -221,6 +221,12 @@ T['the default pack']['has the pieces the scene looks for by name'] = function()
   end
 end
 
+T['the default pack']['has the window first among the decorations of the wall, which show the sky'] = function()
+  local decorations = default.load_pack().floor.legend['*']
+
+  eq({ decorations.decorations[1], decorations.shows }, { 'window', 'sky' })
+end
+
 T['the default pack']['gives each live piece the area the scene draws into'] = function()
   local pieces = default.load_pack().pieces
   local areas = {
@@ -229,6 +235,7 @@ T['the default pack']['gives each live piece the area the scene draws into'] = f
     wall_clock = 'time',
     wall_calendar = 'date',
     window = 'sky',
+    desk = 'name',
     printer = 'page',
   }
 
