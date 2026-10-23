@@ -533,6 +533,38 @@ T['follow()']['delivers nothing more and reads nothing more once stopped from it
   eq(#reads.opened, 1)
 end
 
+T['follow()']['delivers none of the other calls of a line once stopped from the callback of its first'] = function()
+  local path = vim.fs.joinpath(fixture.directory('office_transcript'), 'session.jsonl')
+  fake_transcript.append_text(path, '')
+  local calls = {}
+  local follower
+  follower = transcript.follow({
+    path = path,
+    on_signal = function(signal)
+      table.insert(calls, signal.call)
+      follower.stop()
+    end,
+  })
+  table.insert(started_followers, follower)
+  local two_calls = vim.json.encode({
+    type = 'assistant',
+    message = {
+      content = {
+        { type = 'tool_use', id = 'first', name = 'Bash', input = {} },
+        { type = 'tool_use', id = 'second', name = 'Bash', input = {} },
+      },
+    },
+  })
+
+  fake_transcript.append(path, { two_calls })
+  vim.wait(PATIENCE_MS, function()
+    return #calls > 0
+  end, 10)
+  vim.wait(QUIET_MS)
+
+  eq(calls, { 'first' })
+end
+
 T['follow()']['stops delivering and releases its watch once stopped'] = function()
   local watches_before = open_handles('fs_event')
   local following = follow_new_transcript()
