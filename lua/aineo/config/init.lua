@@ -112,20 +112,25 @@ local function is_find_picker(value)
   return vim.list_contains(FIND_PICKERS, value)
 end
 
+--- Whether `value` is the name of a pack: letters, digits, `_` and `-`,
+--- nothing that leads to another folder.
+---
+---@param value any
+---@return boolean
+local function is_pack_name(value)
+  return type(value) == 'string' and value:match('^[%w_-]+$') ~= nil
+end
+
 --- Whether `value` names a pack of the office, or lists names for one to be
---- picked at random: a non-empty string, or a non-empty list of them.
+--- picked at random: a name, or a non-empty list of them.
 ---
 ---@param value any
 ---@return boolean
 local function is_office_pack(value)
   if type(value) == 'string' then
-    return value ~= ''
+    return is_pack_name(value)
   end
-  return vim.islist(value)
-    and #value > 0
-    and vim.iter(value):all(function(name)
-      return type(name) == 'string' and name ~= ''
-    end)
+  return vim.islist(value) and #value > 0 and vim.iter(value):all(is_pack_name)
 end
 
 --- Whether `value` names art files for pieces of the office: a table of
@@ -253,7 +258,7 @@ local SETTINGS = {
     name = 'office.pack',
     default = 'default',
     validator = is_office_pack,
-    expected = 'a name, or a list of names',
+    expected = 'a name of letters, digits, _ and -, or a list of names',
   },
   {
     name = 'office.pieces',

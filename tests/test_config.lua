@@ -628,7 +628,18 @@ end
 
 T['resolve_config()']['refuses an office pack that is no name and no list of names'] =
   MiniTest.new_set({
-    parametrize = { { '' }, { {} }, { { '' } }, { { 1 } }, { 5 }, { false } },
+    parametrize = {
+      { '' },
+      { {} },
+      { { '' } },
+      { { 1 } },
+      { 5 },
+      { false },
+      { 'a/b' },
+      { '../x' },
+      { 'a b' },
+      { { 'ok', 'a/b' } },
+    },
   })
 
 T['resolve_config()']['refuses an office pack that is no name and no list of names']['as office.pack'] = function(
@@ -636,7 +647,7 @@ T['resolve_config()']['refuses an office pack that is no name and no list of nam
 )
   expect.error(function()
     config.resolve_config({ office = { pack = pack } }, nil)
-  end, 'office%.pack: expected a name, or a list of names')
+  end, 'office%.pack: expected a name of letters, digits, _ and %-, or a list of names')
 end
 
 T['resolve_config()']['takes the art files of the office’s pieces from either source, none by default'] = function()
