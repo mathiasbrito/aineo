@@ -100,6 +100,31 @@ T['a figure']['is mirrored when it faces the other way than its art'] = function
   )
 end
 
+T['a figure']['at the last column shows what lies on the stage, mirrored or not'] = function()
+  local people = people_with({ looking = { art = { 'lookleft' } } })
+  local function last_cells(facing)
+    local pack = scene.people_pack(
+      '# plan\n \n a......s\n',
+      { a = { spot = 'aside' }, s = { spot = 'seat' } },
+      {
+        characters = people,
+        activities = {
+          stand = { steps = { { at = 'aside' } } },
+          play = { steps = { { at = 'seat', pose = 'looking', facing = facing } } },
+        },
+        states = { standing = 'stand', working = 'play' },
+      },
+      TWO_CELL_ART
+    )
+    local stage = scene.stage_of(pack, 8, 1)
+    stage.advance(scene.agents_in('working'), 0)
+    return vim.list_slice(scene.row_groups(stage.picture(), 0, 8), 7, 8)
+  end
+
+  eq(last_cells('right'), { scene.solid(BLUE), scene.solid(scene.AGENT) })
+  eq(last_cells('left'), { scene.solid(scene.FLOOR), scene.solid(scene.AGENT) })
+end
+
 T['a figure']['has every layer of its pose mirrored with it'] = function()
   local people = people_with({ reaching = { art = { 'person', 'arm' } } })
 
