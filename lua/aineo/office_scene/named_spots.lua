@@ -18,7 +18,7 @@ local M = {}
 local OWN_DESK = 'desk'
 
 --- The name of a floor cell drawn at random when a character goes there.
-local ANYWHERE = 'anywhere'
+M.ANYWHERE = 'anywhere'
 
 --- The name of the cells beside agents.
 local NEXT_TO_AN_AGENT = 'next_to_an_agent'
@@ -38,6 +38,7 @@ local NEXT_TO_AN_AGENT = 'next_to_an_agent'
 ---@field places_taken table<integer, true> the places the agents have
 ---@field things aineo.office_scene.Things what lies on the floor
 ---@field agents { id: string, place: integer, state: string, column?: number, row?: number, path: aineo.office_scene.Cell[] }[] the agents
+---@field cats? { id: string, column?: number, row?: number }[] the cats
 
 ---@type table<aineo.office_scene.FloorLayout, integer[]>
 local walkable_keys_of = setmetatable({}, { __mode = 'k' })
@@ -56,6 +57,40 @@ local function walkable_keys(layout)
   return walkable_keys_of[layout]
 end
 
+--- The cells, as `row * width + column`, the characters stand on.
+---
+---@param world aineo.office_scene.SpotWorld
+---@return table<integer, true>
+local function cells_characters_stand_on(world)
+  local occupied = {}
+  for _, group in ipairs({ world.agents, world.cats or {} }) do
+    for _, other in ipairs(group) do
+      if other.column then
+        local column, row = math.floor(other.column + 0.5), math.floor(other.row + 0.5)
+        occupied[row * world.layout.width + column] = true
+      end
+    end
+  end
+  return occupied
+end
+
+--- The first of `keys`, from the one at `index` on and round again, that is
+--- not in `occupied`; the one at `index` when all are.
+---
+---@param keys integer[]
+---@param index integer
+---@param occupied table<integer, true>
+---@return integer
+local function first_free_key_from(keys, index, occupied)
+  for offset = 0, #keys - 1 do
+    local key = keys[(index - 1 + offset) % #keys + 1]
+    if not occupied[key] then
+      return key
+    end
+  end
+  return keys[index]
+end
+
 --- A spot on a floor cell that is no spot of the plan.
 ---
 ---@param name string
@@ -72,6 +107,22 @@ local function spot_on_cell(name, key, width)
     sitting = false,
     facing = 'right',
   }
+end
+
+--- The floor cell the random source picks, or the first one after it that is
+--- not in `avoided`, as the one open spot.
+---
+---@param world aineo.office_scene.SpotWorld
+---@param avoided table<integer, true> cells as `row * width + column`
+---@return aineo.office_scene.SpotChoice
+local function floor_cell_choice(world, avoided)
+  local keys = walkable_keys(world.layout)
+  if #keys == 0 then
+    return { open = {}, any = false }
+  end
+  local drawn = math.floor(world.random() * #keys) + 1
+  local key = first_free_key_from(keys, drawn, avoided)
+  return { open = { spot_on_cell(M.ANYWHERE, key, world.layout.width) }, any = true }
 end
 
 --- The desks of the plan no agent has.
@@ -171,12 +222,22 @@ end
 ---@param even_if_taken boolean whether the spots other characters have are open too
 ---@return aineo.office_scene.SpotAvailability
 function M.availability(world, name, character, even_if_taken)
-  if name == ANYWHERE then
+  if name == M.ANYWHERE then
     local cells = #walkable_keys(world.layout)
     return { free = cells, any = cells > 0 }
   end
   local choice = M.choose(world, name, character, even_if_taken)
   return { free = #choice.open, any = choice.any }
+end
+
+--- The floor cell, where no character stands, that the random source picks:
+--- where a character goes whose step names a spot the plan lacks and who has
+--- no place yet.
+---
+---@param world aineo.office_scene.SpotWorld
+---@return aineo.office_scene.SpotChoice
+function M.choose_free_floor_cell(world)
+  return floor_cell_choice(world, cells_characters_stand_on(world))
 end
 
 --- The spots named `name` that `character` may go to, and whether there are
@@ -189,13 +250,8 @@ end
 ---@param even_if_taken boolean whether the spots other characters have are open too
 ---@return aineo.office_scene.SpotChoice
 function M.choose(world, name, character, even_if_taken)
-  if name == ANYWHERE then
-    local keys = walkable_keys(world.layout)
-    if #keys == 0 then
-      return { open = {}, any = false }
-    end
-    local key = keys[math.floor(world.random() * #keys) + 1]
-    return { open = { spot_on_cell(name, key, world.layout.width) }, any = true }
+  if name == M.ANYWHERE then
+    return floor_cell_choice(world, {})
   end
   if name == OWN_DESK then
     local own = spots_called(world, name, character)[character.place]
