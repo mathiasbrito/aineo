@@ -96,6 +96,21 @@ T['a frame']['leaves out decorations before furniture when it places too many pi
   eq(told, { 701 })
 end
 
+T['a frame']['leaves out decorations that show something before furniture too'] = function()
+  local pack = scene.people_pack(
+    CROWDED_PLAN,
+    vim.tbl_extend('force', CROWDED_LEGEND, {
+      ['*'] = { decorations = { 'first' }, shows = 'time' },
+    })
+  )
+  local told, stage = stage_telling(pack, 50, 60)
+
+  stage.advance({}, 0)
+
+  eq(scene.group_at(stage.picture(), 0, 0), scene.solid(scene.FLOOR))
+  eq(told, { 701 })
+end
+
 --- The art, besides the pack's usual, of the pieces that matter most.
 local MATTERS_MOST_ART = {
   ['art/dial.txt'] = 'colours: B = blue\nanchor: 0, 1\narea time: 0, 0, 1 x 1\n---\nB\nB\n',
