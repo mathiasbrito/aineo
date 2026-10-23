@@ -160,11 +160,12 @@ end
 ---@field write_entry fun()
 ---@field release_claim fun()
 ---@field panes_session fun(): string? the session the tab's panes follow
+---@field claimed_session fun(): string? the session the tab's panes follow by a claim of it; nil while they follow its own Claude terminal's
 ---@field runs_session fun(id: string): boolean whether the tab's Claude Code runs the session `id`
 ---@field start_token fun(): string? see `aineo.claude.Session`'s `start_token()`
 ---@field start_in_new_tab fun() what `:Aineo tab new` does once the tab page exists
 ---@field start_on_session fun(listed: aineo.claude.ListedSession, sessions: aineo.claude.ListedSession[]) what a pick of `\S` does once the tab page exists: starts Claude Code on that session
----@field open_on_session fun(id: string) what reopening the folder's tabs does for each tab once its tab page exists: starts Claude Code on the session `id`, resumed or attached to where it runs in the background, in a layout of its own
+---@field open_on_session fun(id: string, kept_claim: string?) what reopening the folder's tabs does for each tab once its tab page exists: starts Claude Code on the session `id`, resumed or attached to where it runs in the background, in a layout of its own, and takes up `kept_claim`, the claim the folder's list kept for it, as `open_on_session()` says
 ---@field session_id fun(): string? the session the tab's Claude Code follows, nil before it has started
 ---@field session_name fun(): string? the name of the session the tab's Claude terminal shows (`b:aineo_session_name`), nil before it has one
 ---@field is_busy fun(): boolean whether the Claude Code on the tab's terminal is busy
@@ -423,7 +424,8 @@ local function make_tab(homes, key, callbacks)
 
   --- Makes the panes follow `id` as a claim of it, a session the tab's own
   --- Claude terminal does not run (`follow_session()` told a claim's, which
-  --- moves nothing), and writes the entry.
+  --- moves nothing), writes the entry, and keeps the folder's list of tabs,
+  --- which keeps the claim (`folder_tabs.keep_folder_tabs()`).
   ---
   ---@param id string
   local function follow_claimed_session(id)
@@ -431,6 +433,7 @@ local function make_tab(homes, key, callbacks)
     set_panes_session(id)
     claimed_by_id = id
     write_entry()
+    folder_tabs.keep_folder_tabs()
   end
 
   --- What the tab does with a switch of a Claude Code it does not run, from
@@ -1526,13 +1529,27 @@ local function make_tab(homes, key, callbacks)
 
   --- Starts Claude Code on the session `id` (`claude_terminal_resuming()`) in
   --- a layout opened around it, as the first open does for the kept session:
-  --- what the reopening of the folder's tabs does for each tab.
+  --- what the reopening of the folder's tabs does for each tab. With
+  --- `kept_claim`, the session the tab claimed when the list was kept: while a
+  --- Claude Code process aineo started runs it (`aineo.mcp`'s
+  --- `is_session_running()`; the tab's own has not started yet), the tab
+  --- claims it again once its Claude Code starts on `id`
+  --- (`claim_session()`); else its Claude Code resumes `kept_claim` in place of
+  --- `id`, and that is the tab's own session from then on.
   ---
   ---@param id string
-  local function open_on_session(id)
+  ---@param kept_claim? string
+  local function open_on_session(id, kept_claim)
     opened_from_list = true
     local config = resolved_config()
+    local state_directory = places.kept_places().state_directory
+    if kept_claim and not require('aineo.mcp').is_session_running(state_directory, kept_claim) then
+      id, kept_claim = kept_claim, nil
+    end
     open_layout_around(config, claude_terminal_resuming(config, id))
+    if kept_claim then
+      claim_session(kept_claim)
+    end
   end
 
   --- What `:Aineo new` does: a new Claude Code session. When Claude Code
@@ -1791,6 +1808,9 @@ local function make_tab(homes, key, callbacks)
   tab.panes_session = function()
     return panes_session
   end
+  tab.claimed_session = function()
+    return claimed_by_id
+  end
   tab.runs_session = runs_session
   tab.start_token = function()
     return homes.claude.start_token()
@@ -1803,9 +1823,9 @@ local function make_tab(homes, key, callbacks)
       start_session_on(listed, sessions)
     end)
   end
-  tab.open_on_session = function(id)
+  tab.open_on_session = function(id, kept_claim)
     start_in_new_tab(function()
-      open_on_session(id)
+      open_on_session(id, kept_claim)
     end)
   end
   tab.session_id = function()
