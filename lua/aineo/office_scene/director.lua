@@ -161,7 +161,8 @@ local function begin_step(context, performer, index, time)
 end
 
 --- Looks again for a spot of the step the performer waits for, when it is
---- time, and goes to it when there is one.
+--- time, and goes to it when there is one; when the spots of the name are
+--- gone, the step goes on where the performer stands.
 ---
 ---@param context aineo.office_scene.DirectorContext
 ---@param performer aineo.office_scene.Performer
@@ -171,18 +172,19 @@ local function look_again(context, performer, now)
     return
   end
   local step = performer.activity.steps[performer.step_index]
-  local route = spots.route(
+  local route, why = spots.route(
     context.layout,
     named_spots.choose(context, step.at, performer, step.even_if_taken),
     performer
   )
   if route then
     holding.take_route(context, performer, route)
-    performer.looks_again_at = nil
-    start_step(context, performer, step, now)
-  else
+  elseif why == spots.TAKEN then
     wait_for_a_spot(performer, now)
+    return
   end
+  performer.looks_again_at = nil
+  start_step(context, performer, step, now)
 end
 
 --- When the performer's step ended, if it has by `time`.
@@ -255,7 +257,7 @@ local function finish_step(context, performer, step, time)
   if step.remove then
     context.things.remove_at(step.remove, column, row)
   end
-  if step.leave and context.layout.is_walkable(column, row) then
+  if step.leave then
     local thing = context.things.leave(step.leave, column, row)
     if thing then
       reactions.send_cleaner_to(context, thing, time, performer, make_play)
@@ -364,6 +366,22 @@ local function bring_up_to(context, performer, now)
     end
   end
   performer.clock = now
+end
+
+--- Has a performer that a new layout left on its way to a spot the layout
+--- does not have begin its step again where it stands.
+---
+---@param context aineo.office_scene.DirectorContext
+---@param performer aineo.office_scene.Performer
+local function resume_step(context, performer)
+  local lost_its_way = performer.activity
+    and performer.column
+    and #performer.path == 0
+    and performer.arrived_at == nil
+    and performer.looks_again_at == nil
+  if lost_its_way then
+    begin_step(context, performer, performer.step_index, performer.clock)
+  end
 end
 
 --- Brings the cat up to `now`: it picks the activity of its life when it has
@@ -492,9 +510,11 @@ function M.new_director(pack, layout, random)
     context.taken = {}
     for _, performer in pairs(known) do
       relocation.move_into_layout(context, performer)
+      resume_step(context, performer)
     end
     for _, cat in ipairs(context.cats) do
       relocation.move_into_layout(context, cat)
+      resume_step(context, cat)
     end
     placed = vim.tbl_filter(function(performer)
       return performer.column ~= nil
