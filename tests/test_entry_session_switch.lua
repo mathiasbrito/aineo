@@ -1,6 +1,7 @@
 local MiniTest = require('mini.test')
 local claude_session = dofile('tests/helpers/claude_session.lua')
 local entry = dofile('tests/helpers/entry.lua')
+local entry_tabs = dofile('tests/helpers/entry_tabs.lua')
 local fixture = dofile('tests/helpers/fixture.lua')
 local git_repo = dofile('tests/helpers/git_repo.lua')
 local mcp_messages = dofile('tests/helpers/mcp_messages.lua')
@@ -646,8 +647,8 @@ end
 
 T['a session another Claude Code process starts'] = MiniTest.new_set()
 
-T['a session another Claude Code process starts']['under the tab’s start token is followed, and its process’s reports reach the tab’s Report'] = function()
-  local _, _, _, state_home = in_repository('session-switch-forked')
+T['a session another Claude Code process starts']['under the tab’s start token is followed as a claim, and its process’s reports reach the tab’s Report'] = function()
+  local _, _, state, state_home = in_repository('session-switch-forked')
   local fake = fake_running_hooks('session-switch-forked')
   local started_on = open_until_ready(fake)
   local forked = { XDG_STATE_HOME = state_home }
@@ -667,12 +668,20 @@ T['a session another Claude Code process starts']['under the tab’s start token
   }))
   relay:send(mcp_messages.recorded('tools/call'))
 
+  local tab_entry = entry_tabs.entries(state, child.v.servername)[entry_tabs.FIRST_TAB]
   eq({
     followed = followed_session(),
+    listed = { tab_entry.session, tab_entry.own },
+    claimant = child.lua_get(
+      "require('aineo.mcp').session_claimant(vim.fn.stdpath('state'), ...)",
+      { OTHER_SESSION_ID }
+    ),
     answer = vim.tbl_get(mcp_relay.decoded(relay:next_line()), 'result', 'content', 1, 'text'),
     report = child.lua_get(REPORT_LINES),
   }, {
-    followed = OTHER_SESSION_ID,
+    followed = started_on,
+    listed = { OTHER_SESSION_ID, false },
+    claimant = child.v.servername,
     answer = 'Delivered to the Agent Report.',
     report = { shown('Refactor the parser') },
   })

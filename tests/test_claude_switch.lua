@@ -1390,7 +1390,7 @@ T['a session switch']['is not made by a SessionStart of another session with no 
   })
 end
 
-T['a session switch']['is made by a SessionStart of another session that another process ran under the start’s token'] = function()
+T['a session switch']['is not made by a SessionStart of another session that another process ran under the start’s token, which is told as a session elsewhere'] = function()
   local fake = claude.fake('switch-other-process', 'ready')
   claude.start_noting_switches(child, fake, kept_in('switch-other-process-state'))
   local started_on = first_session_id(fake)
@@ -1403,9 +1403,14 @@ T['a session switch']['is made by a SessionStart of another session that another
     hook_input('SessionStart', OTHER_SESSION_ID, 'resume')
   )
 
-  eq({ claude.wait_for_session_switches(child, 1), claude.followed_session_id(child) }, {
-    { { id = OTHER_SESSION_ID, source = 'resume', left = started_on } },
-    OTHER_SESSION_ID,
+  eq({
+    elsewhere = claude.wait_for_sessions_elsewhere(child, 1),
+    switches = child.lua_get('_G.session_switches'),
+    followed = claude.followed_session_id(child),
+  }, {
+    elsewhere = { { id = OTHER_SESSION_ID, source = 'resume' } },
+    switches = {},
+    followed = started_on,
   })
 end
 
@@ -1443,7 +1448,7 @@ local function start_with_a_child_of_claude_code(name)
   return fake, first_session_id(fake), child_pid
 end
 
-T['a session switch']['is made by a SessionStart of another session from a process the start’s Claude Code started'] = function()
+T['a session switch']['is not made by a SessionStart of another session from a process the start’s Claude Code started, which is told as a session elsewhere'] = function()
   local fake, started_on, child_pid = start_with_a_child_of_claude_code('switch-claude-child')
   local own_pid = claude.wait_for_starts(fake, 1)[1].pid
   claude.run_session_hook(
@@ -1465,13 +1470,35 @@ T['a session switch']['is made by a SessionStart of another session from a proce
 
   eq({
     parent = vim.api.nvim_get_proc(child_pid).ppid,
-    switches = claude.wait_for_session_switches(child, 1),
+    elsewhere = claude.wait_for_sessions_elsewhere(child, 1),
+    switches = child.lua_get('_G.session_switches'),
     followed = claude.followed_session_id(child),
   }, {
     parent = own_pid,
-    switches = { { id = OTHER_SESSION_ID, source = 'resume', left = started_on } },
-    followed = OTHER_SESSION_ID,
+    elsewhere = { { id = OTHER_SESSION_ID, source = 'resume' } },
+    switches = {},
+    followed = started_on,
   })
+end
+
+T['a session switch']['tells a session elsewhere once, however many SessionStart hooks of it another process runs'] = function()
+  local fake = claude.fake('switch-elsewhere-once', 'ready')
+  claude.start_noting_switches(child, fake, kept_in('switch-elsewhere-once-state'))
+
+  local again = hook_input('SessionStart', OTHER_SESSION_ID, 'compact')
+
+  claude.run_session_hook_elsewhere(
+    child,
+    fake,
+    1,
+    'SessionStart',
+    hook_input('SessionStart', OTHER_SESSION_ID, 'resume')
+  )
+  claude.run_session_hook_elsewhere(child, fake, 1, 'SessionStart', again)
+  claude.run_session_hook_elsewhere(child, fake, 1, 'SessionStart', again)
+  claude.wait_for_deliveries(child)
+
+  eq(child.lua_get('_G.sessions_elsewhere'), { { id = OTHER_SESSION_ID, source = 'resume' } })
 end
 
 T['a session switch']['is not made by a SessionStart alone of the start’s own Claude Code, which a program in claude.cmd runs as its child'] = function()
