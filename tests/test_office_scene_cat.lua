@@ -232,7 +232,10 @@ T['the cat']['follows an agent who is on the move, and goes back to its life whe
     }
   )
 
-  local cat_cells = cat_cells_every_tenth_second(stage, scene.agents_in('working'), 21, 3)
+  local cat_cells
+  MiniTest.expect.no_error(function()
+    cat_cells = cat_cells_every_tenth_second(stage, scene.agents_in('working'), 21, 3)
+  end)
 
   eq(
     { cat_cells[5], cat_cells[22], cat_cells[25], cat_cells[31] },

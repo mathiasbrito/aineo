@@ -146,9 +146,6 @@ local function spots_called(world, name, character)
   if known then
     return known(world, character)
   end
-  if character.cleaning and character.cleaning.name == name then
-    return { character.cleaning.spot }
-  end
   local called = vim.list_slice(world.layout.spots[name] or {})
   return vim.list_extend(called, world.things.spots_named(name))
 end
