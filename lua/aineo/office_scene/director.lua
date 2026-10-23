@@ -5,13 +5,11 @@
 --- step's pose, and stays for the step's time before the next step begins. The
 --- last step lasts until the agent's activity changes.
 
+local roles = require('aineo.office_scene.roles')
 local spots = require('aineo.office_scene.spots')
 local walking = require('aineo.office_scene.walking')
 
 local M = {}
-
---- The id of the main agent; every other agent is a subagent.
-local MAIN_AGENT = 'main'
 
 --- The spot a character that has no place yet is put on when its first step
 --- names none.
@@ -48,21 +46,6 @@ local ENTRANCE = 'door'
 ---@field layout aineo.office_scene.FloorLayout
 ---@field random fun(): number a number from 0 up to, not including, 1
 ---@field taken table<aineo.office_scene.Spot, string> the id of the character that has each spot taken
-
---- The activity `agent` plays: the one a trigger chose when the pack has it,
---- otherwise its state's, otherwise standing's.
----
----@param pack aineo.office_pack.Pack
----@param agent aineo.office_states.Agent
----@return string|nil name
----@return table|nil activity
-local function activity_of(pack, agent)
-  local name = agent.activity
-  if not (name and pack.activities[name]) then
-    name = pack.state_activity[agent.state] or pack.state_activity.standing
-  end
-  return name, pack.activities[name]
-end
 
 --- How long a step lasts: its `for_seconds`, or a time between its two
 --- numbers.
@@ -203,7 +186,7 @@ end
 local function new_performer(agent, now)
   return {
     id = agent.id,
-    kind = agent.id == MAIN_AGENT and 'agent' or 'subagent',
+    kind = roles.kind_of(agent),
     clock = now,
     path = {},
     step_index = 1,
@@ -230,7 +213,7 @@ function M.new_director(pack, layout, random)
     local present = {}
     placed = {}
     for index, agent in ipairs(agents) do
-      local name, activity = activity_of(pack, agent)
+      local name, activity = roles.activity_of(pack, agent)
       local performer = known[agent.id] or new_performer(agent, now)
       known[agent.id] = performer
       performer.index = index
