@@ -1920,6 +1920,56 @@ T['explaining code']['says nothing while the configuration is wrong'] = function
   eq(health.section(report, 'Explain code'), {})
 end
 
+T['the office'] = MiniTest.new_set()
+
+T['the office']["is fine when 'termguicolors' is on, and says when it shows by itself"] = function()
+  start_with({ autostart = false, office = { idle_ms = 90000 } })
+  child.o.termguicolors = true
+
+  local report = health.report(child)
+
+  eq(health.section(report, 'Office'), {
+    "- ✅ OK 'termguicolors' is on: the office draws its pixels",
+    '- the office shows by itself after 90 s without the cursor in the right side (office.idle_ms), and for :Aineo office and \\O: :help |aineo-office|',
+  })
+end
+
+T['the office']["is an error when 'termguicolors' is off: it does not show, and says why"] = function()
+  start_with({ autostart = false })
+  child.o.termguicolors = false
+
+  local report = health.report(child)
+
+  eq(
+    health.section(report, 'Office')[1],
+    "- ❌ ERROR 'termguicolors' is off, so the office does not show"
+  )
+end
+
+T['the office']['says it shows only when asked to when office.idle_ms is false'] = function()
+  start_with({ autostart = false, office = { idle_ms = false } })
+  child.o.termguicolors = true
+
+  local report = health.report(child)
+
+  eq(
+    health.section(report, 'Office')[2],
+    '- the office shows only for :Aineo office and \\O (office.idle_ms is false): :help |aineo-office|'
+  )
+end
+
+T['the office']['still checks the colours while the configuration is wrong'] = function()
+  start_with({ autostart = false, office = { idle_ms = 0 } })
+  child.o.termguicolors = true
+
+  local report = health.report(child)
+
+  eq(
+    health.section(report, 'Office'),
+    { "- ✅ OK 'termguicolors' is on: the office draws its pixels" }
+  )
+end
+
 T['the autostart'] = MiniTest.new_set()
 
 T['the autostart']['has no record when aineo did not load at startup'] = function()
