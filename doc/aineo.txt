@@ -3291,6 +3291,62 @@ explain.issues_prompt	A non-empty string. Default: `'Some issues were
 			issues are marked (|aineo-explain-mark|), before the
 			line for each issue.
 
+                                                *aineo-config-office.commands*
+office.commands		A table of the classes `tests`, `committing`,
+			`searching` and `reading`, each a list of matches.
+			Default: the four lists below.
+			How the office (|aineo-office|) tells what a shell
+			command does. A command is split at `&&`, `||`, `;`,
+			`|` and new lines; the `cd` parts and the assignments
+			a part starts with (`DEBUG=1 make test`) are passed
+			over, and so is the body of a heredoc (the text a
+			command is fed, such as a commit message), but not
+			quoted text (`bash -c "make test"` runs a test). The
+			first class, in the order above, that any part
+			matches names the command; a command of no class is
+			just a command run. A class left out has no match.
+			A match is one of:
+			- plain words, such as `'make test'`: they match a
+			  part that holds them as whole words, in that order
+			  (`'docker'` matches `sudo docker up`, not
+			  `dockerfile`);
+			- a glob, a string with `*` (any run of characters)
+			  or `?` (any one character) in it, matching a whole
+			  part (`'cat *.md'`);
+			- `{ lua_pattern = '^make%s+test' }`, a Lua pattern
+			  found anywhere in a part. Lua cannot be stopped
+			  while it matches, and a pattern's cost grows with
+			  each repetition (`*`, `+`, `-`) in it, so a pattern
+			  may repeat once at most and must be one Lua reads
+			  whole; any other is refused with an error naming
+			  `office.commands`.
+			Only the first 4096 bytes of a command are read, and
+			1024 by a Lua pattern.
+
+                                         *aineo-config-office.commands.tests*
+office.commands.tests	Default: `'make test'`, `'make test_file'`,
+			`'npm test'`, `'pytest'`, `'go test'`, `'cargo test'`,
+			`'busted'`, `'mix test'`, `'rspec'`
+			Commands that run tests.
+
+                                    *aineo-config-office.commands.committing*
+office.commands.committing
+			Default: `'git commit'`, `'git push'`,
+			`'gh pr create'`
+			Commands that commit or share work.
+
+                                     *aineo-config-office.commands.searching*
+office.commands.searching
+			Default: `'rg'`, `'grep'`, `'git grep'`, `'find'`,
+			`'fd'`, `'ag'`, `'ack'`
+			Commands that search.
+
+                                       *aineo-config-office.commands.reading*
+office.commands.reading
+			Default: `'cat'`, `'head'`, `'tail'`, `'less'`,
+			`'bat'`, `'sed -n'`
+			Commands that read.
+
 ==============================================================================
 7. SEND                                                           *aineo-send*
 

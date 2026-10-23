@@ -40,13 +40,15 @@ local NO_RIGHT_SIDE = "aineo: the office has no right side of aineo's layout to 
 ---@field right_side fun(): aineo.layout.Area|nil the screen cells the layout's right side takes now, nil when it shows none
 ---@field pack_folders string[] the `aineo-office` folders the office's packs are searched in
 ---@field clock fun(): number the time in seconds, from any origin, that only grows
+---@field commands? aineo.office_states.CommandClasses the classes of shell commands that tell what an agent running one does (`office.commands`); none, and every command is a command run
+---@field report_tool? string the name of aineo's report tool, as Claude Code calls it; none, and no call is a report
+
 ---@field settings? fun(): aineo.office.Settings what the user set for the office, asked each time it shows; the default pack when not given
 ---@field random? fun(count: integer): integer a whole number from 1 to `count`, which picks one of several packs the settings name; the first when not given
 
 ---@class aineo.office.Settings
 ---@field pack string|string[] the pack to draw, or packs to pick one from at random each time
 ---@field pieces table<string, string> art files of the user's own, by the name of the piece each replaces
-
 ---@class aineo.office.Office
 ---@field follow_session fun(transcript_path: string|nil) follows the transcript of the session whose file is `transcript_path` while the office shows, or none
 ---@field show_now fun() shows the office over the right side at once, and does nothing when it shows
@@ -131,13 +133,18 @@ function M.new_office(options)
   ---@return aineo.office_states.Tracker tracker
   ---@return aineo.transcript.Follower|nil follower
   local function follow_transcript()
-    local tracker = office_states.new_tracker()
+    local tracker = office_states.new_tracker({
+      commands = options.commands,
+      report_tool = options.report_tool,
+    })
     if not transcript_path then
       return tracker, nil
     end
     local follower = transcript.follow({
       path = transcript_path,
-      on_signal = tracker.take,
+      on_signal = function(signal)
+        tracker.take(signal, options.clock())
+      end,
     })
     return tracker, follower
   end
@@ -286,7 +293,8 @@ function M.new_office(options)
     local screen = screen_module.new_screen(float.buffer)
     local tracker, follower = follow_transcript()
     local function draw()
-      stage.advance(tracker.agents(), options.clock())
+      local now = options.clock()
+      stage.advance(tracker.agents(now), now)
       screen.paint(stage.picture())
     end
     local open = {

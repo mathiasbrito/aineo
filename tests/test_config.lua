@@ -13,11 +13,30 @@ local DEFAULTS = {
   changes = { graph_limit = 1000 },
   tabs = { padding = 2, always_show = true },
   find = { picker = 'auto' },
-  office = { pack = 'default', pieces = {} },
   explain = {
     model = 'sonnet',
     timeout_ms = 180000,
     issues_prompt = 'Some issues were found in this code, can you check and propose a fix if the issue holds:',
+  },
+  office = {
+    pack = 'default',
+    pieces = {},
+    commands = {
+      tests = {
+        'make test',
+        'make test_file',
+        'npm test',
+        'pytest',
+        'go test',
+        'cargo test',
+        'busted',
+        'mix test',
+        'rspec',
+      },
+      committing = { 'git commit', 'git push', 'gh pr create' },
+      searching = { 'rg', 'grep', 'git grep', 'find', 'fd', 'ag', 'ack' },
+      reading = { 'cat', 'head', 'tail', 'less', 'bat', 'sed -n' },
+    },
   },
 }
 
@@ -405,6 +424,167 @@ T['resolve_config()']['returns an unknown key of the setup() options too'] = fun
   local _, unknown_keys = config.resolve_config(nil, { autostrat = false })
 
   eq(unknown_keys, { 'autostrat' })
+end
+
+T['resolve_config()']["takes the classes of commands from either source, the plan's four by default"] = function()
+  local from_global =
+    config.resolve_config({ office = { commands = { tests = { 'just check' } } } }, nil)
+  local from_setup = config.resolve_config(
+    { office = { commands = { tests = { 'just check' } } } },
+    { office = { commands = { reading = { 'cat' } } } }
+  )
+
+  eq(from_global.office.commands, { tests = { 'just check' } })
+  eq(from_setup.office.commands, { reading = { 'cat' } })
+  eq(config.resolve_config(nil, nil).office, DEFAULTS.office)
+end
+
+T['resolve_config()']['takes a class of commands that has no match, and one with a glob and a Lua pattern'] = function()
+  local commands = {
+    tests = {},
+    reading = { 'cat *.md', { lua_pattern = '^less%s' } },
+  }
+
+  local resolved = config.resolve_config({ office = { commands = commands } }, nil)
+
+  eq(resolved.office.commands, commands)
+end
+
+T['resolve_config()']['refuses classes of commands that are not a table of lists of matches'] =
+  MiniTest.new_set({
+    parametrize = {
+      { 'make test' },
+      { { 'make test' } },
+      { { building = { 'make' } } },
+      { { tests = 'make test' } },
+      { { tests = { '' } } },
+      { { tests = { 5 } } },
+      { { tests = { {} } } },
+      { { tests = { { lua_pattern = 5 } } } },
+      { { tests = { { lua_pattern = '[' } } } },
+      { { tests = { { lua_pattern = '^make', glob = 'x' } } } },
+      { false },
+    },
+  })
+
+T['resolve_config()']['refuses classes of commands that are not a table of lists of matches']['as office.commands'] = function(
+  commands
+)
+  expect.error(function()
+    config.resolve_config({ office = { commands = commands } }, nil)
+  end, 'office%.commands: expected')
+end
+
+--- Lua patterns the setting refuses: Lua cannot read them whole, or they hold
+--- more than one repetition (`*`, `+`, `-`) and could take seconds.
+local REFUSED_PATTERNS = {
+  { '[' },
+  { 'a[' },
+  { 'test[' },
+  { 'make [' },
+  { '[^' },
+  { '[a-' },
+  { 'a%' },
+  { 'test%' },
+  { 'a%b' },
+  { 'a%bx' },
+  { 'a%f' },
+  { 'a%fx' },
+  { 'a%f[' },
+  { 'test(' },
+  { 'te(st' },
+  { 'test)' },
+  { '(a))' },
+  { 'a%1' },
+  { '(a)%2' },
+  { '(a%1)' },
+  { '%0' },
+  { '.-.-x' },
+  { '^a.*b.*c' },
+  { '%d+%.%d+' },
+  { 'a*b+' },
+}
+
+T['resolve_config()']['refuses a Lua pattern of the commands that Lua cannot read whole, or that repeats twice'] =
+  MiniTest.new_set({
+    parametrize = REFUSED_PATTERNS,
+  })
+
+T['resolve_config()']['refuses a Lua pattern of the commands that Lua cannot read whole, or that repeats twice']['as office.commands'] = function(
+  pattern
+)
+  expect.error(function()
+    config.resolve_config(
+      { office = { commands = { tests = { { lua_pattern = pattern } } } } },
+      nil
+    )
+  end, 'office%.commands: expected')
+end
+
+--- Lua patterns the setting takes.
+local ACCEPTED_PATTERNS = {
+  { '^make%s+test' },
+  { 'make test$' },
+  { '^cat%s[%w_-]+' },
+  { '[]]' },
+  { '[^]]' },
+  { '[%]]' },
+  { '%[x%]' },
+  { '(%w+)' },
+  { '()' },
+  { '(a)%1' },
+  { '%b()' },
+  { '%f[%w]make' },
+  { 'a?b?c?' },
+  { '[%w%-]*' },
+  { '$a' },
+  { 'a$b' },
+  { '*a' },
+  { '+' },
+}
+
+T['resolve_config()']['takes a Lua pattern of the commands that Lua reads whole and that repeats once at most'] =
+  MiniTest.new_set({
+    parametrize = ACCEPTED_PATTERNS,
+  })
+
+T['resolve_config()']['takes a Lua pattern of the commands that Lua reads whole and that repeats once at most']['as office.commands'] = function(
+  pattern
+)
+  local commands = { tests = { { lua_pattern = pattern } } }
+
+  local resolved = config.resolve_config({ office = { commands = commands } }, nil)
+
+  eq(resolved.office.commands, commands)
+end
+
+T['resolve_config()']['says what is wrong with a Lua pattern of the commands'] = function()
+  expect.error(function()
+    config.resolve_config(
+      { office = { commands = { tests = { { lua_pattern = 'test%' } } } } },
+      nil
+    )
+  end, 'office%.commands: expected.*the pattern ends with')
+  expect.error(function()
+    config.resolve_config(
+      { office = { commands = { tests = { { lua_pattern = '.-.-x' } } } } },
+      nil
+    )
+  end, 'office%.commands: expected.*repeat')
+end
+
+T['lua_pattern_problem()'] = MiniTest.new_set()
+
+T['lua_pattern_problem()']['says nothing of a pattern Lua reads whole that repeats once at most'] = function()
+  eq(config.lua_pattern_problem('^make%s+test'), nil)
+end
+
+T['lua_pattern_problem()']['says what is wrong with a pattern Lua cannot read'] = function()
+  eq(type(config.lua_pattern_problem('test%')), 'string')
+end
+
+T['lua_pattern_problem()']['says what is wrong with a pattern that repeats twice'] = function()
+  eq(type(config.lua_pattern_problem('.-.-x')), 'string')
 end
 
 T['resolve_config()']['takes the office’s pack from either source, the default pack by default'] = function()

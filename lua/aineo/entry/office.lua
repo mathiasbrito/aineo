@@ -6,6 +6,8 @@
 --- Loading it loads no other home: `aineo.office` is required when an office
 --- is first made.
 
+local settings = require('aineo.entry.settings')
+
 local M = {}
 
 --- The office of each tab that has asked for one, by the tab.
@@ -45,16 +47,13 @@ local function transcript_of(session_id)
   return nil
 end
 
---- The settings of the office: `office.pack` and `office.pieces` of aineo's
---- configuration, resolved from `vim.g.aineo` and the options
---- `require('aineo').setup()` recorded (`aineo.config`'s `resolve_config()`),
---- each time the office is asked for. Raises its error naming the setting
---- that is wrong.
+--- The settings of the office, `office.*` of aineo's configuration
+--- (`aineo.entry.settings`), read each time the office is asked for. Raises
+--- the error naming the setting that is wrong.
 ---
 ---@return aineo.office.Settings
 function M.settings()
-  local config = require('aineo.config')
-  return (config.resolve_config(vim.g.aineo, config.recorded_setup_options())).office
+  return settings.resolved().office
 end
 
 --- The folders packs are in: the `aineo-office` folders of 'runtimepath'.
@@ -86,6 +85,8 @@ local function office_of(tab)
       end,
       settings = M.settings,
       random = random_pick,
+      commands = settings.resolved().office.commands,
+      report_tool = require('aineo.mcp').report_tool_name(),
     })
   end
   return offices[tab]
