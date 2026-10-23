@@ -249,6 +249,24 @@ T['a pack with something wrong']['takes a pose of the pack it is based on for on
   })
 end
 
+T['a pack with something wrong']['takes a pose of the pack it is based on for one that is like itself'] = function()
+  local folder, text = pack_with_child({
+    characters = { agent = { poses = { sitting = { like = 'sitting' } } } },
+  })
+
+  local pack, problems = load_pack('child', folder)
+
+  eq(pack.agent.poses.sitting, { art = { 'person' }, sitting = true })
+  eq(told(problems), {
+    {
+      'child',
+      'pack.lua',
+      files.line_of(text, 'characters'),
+      'characters.agent.poses.sitting is like itself',
+    },
+  })
+end
+
 T['a pack with something wrong']['takes an activity of the pack it is based on for one with a problem'] = function()
   local folder, text = pack_with_child({ activities = { work = {} } })
 
