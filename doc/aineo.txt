@@ -4099,8 +4099,11 @@ last step lasts until the agent's activity changes, or, when it has
 `for_seconds`, until they are over (see below). An agent whose step names
 a spot that other agents have keeps the spot it stands on and looks again
 every second; an agent that has no place yet is not drawn until a spot is
-free. A spot that cannot be walked to leaves the agent where it is and its
-activity goes on. An agent first appears at the first spot of its first
+free. When the plan has no spot of the name, as in a room too small for the
+desks, an agent that has no place yet is put on a floor cell where no
+character stands and plays the step there, so that it is always drawn. A spot
+that cannot be walked to leaves the agent where it is and its activity goes
+on. An agent first appears at the first spot of its first
 step without walking there, or at the spot `door` when the step has no `at`.
 A step's `effect` shows over the pose's. When the office is resized, each
 agent keeps its activity and its step, at the spot of the same name and

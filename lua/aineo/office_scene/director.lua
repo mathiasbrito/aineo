@@ -127,6 +127,29 @@ local function start_step(context, performer, step, time)
   end
 end
 
+--- The way to a spot named `spot_name` for the performer: to the spot of the
+--- name nearest by walking; or, when the plan has no spot of that name and the
+--- performer has no place yet, to a floor cell, so that a character is drawn
+--- in a room too small to hold the spot.
+---
+---@param context aineo.office_scene.DirectorContext
+---@param performer aineo.office_scene.Performer
+---@param spot_name string
+---@param even_if_taken boolean|nil
+---@return aineo.office_scene.Route|nil route
+---@return string|nil why
+local function route_to_spot(context, performer, spot_name, even_if_taken)
+  local route, why = spots.route(
+    context.layout,
+    named_spots.choose(context, spot_name, performer, even_if_taken),
+    performer
+  )
+  if route or why ~= spots.UNREACHABLE or performer.column then
+    return route, why
+  end
+  return spots.route(context.layout, named_spots.choose_free_floor_cell(context), performer)
+end
+
 --- Begins step `index` of the performer's activity at `time`.
 ---
 ---@param context aineo.office_scene.DirectorContext
@@ -149,11 +172,7 @@ local function begin_step(context, performer, index, time)
   local spot_name = step.at or (not performer.column and ENTRANCE) or nil
   local route, why
   if spot_name then
-    route, why = spots.route(
-      context.layout,
-      named_spots.choose(context, spot_name, performer, step.even_if_taken),
-      performer
-    )
+    route, why = route_to_spot(context, performer, spot_name, step.even_if_taken)
   end
   if route then
     holding.take_route(context, performer, route)
