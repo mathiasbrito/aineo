@@ -58,6 +58,16 @@ local function rise_of(pose, layers, character, now)
   return items.round(pose.rises[frame % #pose.rises + 1])
 end
 
+--- Whether a piece of art is drawn mirrored for an agent that faces left, or
+--- not: art is mirrored when the agent faces the other way than it does.
+---
+---@param facing_left boolean
+---@param piece aineo.office_pack.Piece
+---@return boolean
+local function is_mirrored(facing_left, piece)
+  return facing_left ~= (piece.faces == 'left')
+end
+
 --- Paints the prop the pose holds at the hand area of the first layer that
 --- has one, mirrored with the layers when the character faces left.
 ---
@@ -65,7 +75,7 @@ end
 ---@param drawing aineo.office_scene.Drawing
 ---@param pose aineo.office_pack.Pose
 ---@param layers aineo.office_pack.Piece[]
----@param placement { column: integer, row: integer, colours: table<string, string>, mirrored: boolean } where the layers are painted: the pixel their anchors stand on
+---@param placement { column: integer, row: integer, colours: table<string, string>, facing_left: boolean } where the layers are painted: the pixel their anchors stand on, and the way the agent faces
 local function paint_prop(canvas, drawing, pose, layers, placement)
   local prop = pose.holding and drawing.pack.pieces[pose.holding]
   local layer = vim.iter(layers):find(function(candidate)
@@ -76,13 +86,15 @@ local function paint_prop(canvas, drawing, pose, layers, placement)
   end
   local hand = layer.areas.hand
   local across = hand.column - layer.anchor.column
-  local column = placement.mirrored and placement.column - across or placement.column + across
+  local layer_mirrored = is_mirrored(placement.facing_left, layer)
+  local column = layer_mirrored and placement.column - across or placement.column + across
   canvas.paint_art(prop, {
     frame = 1,
     column = column,
     row = placement.row - layer.anchor.row + hand.row,
     colours = placement.colours,
-    mirrored = placement.mirrored,
+    mirrored = is_mirrored(placement.facing_left, prop),
+    clip = items.plan_area(drawing),
   })
 end
 
@@ -110,14 +122,15 @@ local function item_of(canvas, drawing, character, pose)
           column = items.round(character.column),
           row = feet_row - lift,
           colours = colours_named,
-          mirrored = facing_left ~= (layer.faces == 'left'),
+          mirrored = is_mirrored(facing_left, layer),
+          clip = items.plan_area(drawing),
         })
       end
       paint_prop(canvas, drawing, pose, layers, {
         column = items.round(character.column),
         row = feet_row - lift,
         colours = colours_named,
-        mirrored = facing_left,
+        facing_left = facing_left,
       })
     end,
   }
@@ -200,6 +213,9 @@ local function write_effect(canvas, drawing, character)
   local place = PLACES[effect.place] or PLACES.above
   local column, row =
     place(items.round(character.column), math.floor(top_pixel / 2), #vim.str_utf_pos(text))
+  if row >= drawing.plan_height then
+    return
+  end
   canvas.write_text(
     column,
     row,
