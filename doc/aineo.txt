@@ -2766,32 +2766,41 @@ moves you to that tab instead and claims nothing.
 			subagent arriving as it delegates, subagents at work
 			as it waits, and everyone idle for the random life.
 			The pack is the one named, or, with no name, the one
-			`office.pack` names (the first of a list); one that is
+			`office.pack` names (the first of a list). One that is
 			not found is told, with one error, and not replaced by
-			the default pack. The preview follows no transcript
-			and watches no file, calls no Claude and spends no
-			token; it takes the place of the office that shows and
-			closes as the office does, when the cursor enters the
-			right side (|aineo-office|). Like `:Aineo office`, it
-			acts on the aineo tab of the current tab page and
-			makes none, and it shows nothing, and tells you why,
-			with 'termguicolors' off or 'ambiwidth' `double`.
+			the default pack; the office that shows then stays as
+			it is. The preview follows no transcript and watches
+			no file, calls no Claude and spends no token; it takes
+			the place of the office that shows and closes as the
+			office does, when the cursor enters the right side
+			(|aineo-office|). Like `:Aineo office`, it acts on the
+			aineo tab of the current tab page and makes none, and
+			it shows nothing, and tells you why, with
+			'termguicolors' off or 'ambiwidth' `double`.
 
                                                            *:Aineo-office-new*
 :Aineo office new {name}
 			Makes the office pack {name} as a copy of the default
 			pack, in `aineo-office/{name}/` of Neovim's
 			configuration directory (|stdpath()|), with {name} as
-			the pack's name, and tells you where it is. Set
-			`office.pack` to {name} to draw it, and use
-			`:Aineo office check` and
+			the pack's name, each file writable by you, and tells
+			you where it is. Set `office.pack` to {name} to draw
+			it, and use `:Aineo office check` and
 			`:Aineo office preview` while you change it
-			(|aineo-office-packs|). It refuses, with one error,
-			a folder of that name that exists, which it leaves
-			as it is, a name that any pack found has (`default`
-			among them, which every pack falls back to), and one
-			that is not letters, digits, `_` and `-`. It needs
-			no aineo tab.
+			(|aineo-office-packs|).
+			It refuses, with one error, a folder of that name that
+			exists, which it leaves as it is; a name that any pack
+			found has, whatever the case of its letters (`default`
+			among them, which every pack falls back to, and
+			`Default`, which a disk that ignores case reads as
+			it); a name that is not letters, digits, `_` and `-`;
+			and a default pack that holds a link, since a pack is
+			made of files. A copy that fails is removed. When the
+			configuration directory did not exist as Neovim
+			started, it is not on 'runtimepath' yet: the pack is
+			made there, and `:Aineo office check` and
+			`office.pack` find it after a restart. It needs no
+			aineo tab.
 
 When an action fails — `claude.cmd` is not executable, say — aineo tells you
 once, with one error message starting with `aineo:`, and opens nothing.
