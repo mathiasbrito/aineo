@@ -86,13 +86,46 @@ local function transcript_of(tab)
   return named or transcript_found_for(session_id)
 end
 
+--- The pack `:Aineo office pack` chose for this Neovim, which stands in
+--- place of the setting `office.pack`; `nil` until it chose one.
+---@type string|nil
+local chosen_pack
+
 --- The settings of the office, `office.*` of aineo's configuration
---- (`aineo.entry.settings`), read each time the office is asked for. Raises
+--- (`aineo.entry.settings`), read each time the office is asked for, with
+--- `office.pack` replaced by the pack `M.use_pack()` chose, if it did. Raises
 --- the error naming the setting that is wrong.
 ---
 ---@return aineo.office.Settings
 function M.settings()
-  return settings.resolved().office
+  local office_settings = settings.resolved().office
+  if chosen_pack then
+    return vim.tbl_extend('force', office_settings, { pack = chosen_pack })
+  end
+  return office_settings
+end
+
+--- Makes every office draw the pack `name` from now on in this Neovim, in
+--- place of the setting `office.pack`; an office that shows is shown again
+--- with it. Nothing is kept past this Neovim. The caller has checked that the
+--- pack can be used.
+---
+---@param name string
+function M.use_pack(name)
+  chosen_pack = name
+  for _, office in pairs(offices) do
+    office.reload()
+  end
+end
+
+--- The pack the offices draw and where that comes from: the names the
+--- setting `office.pack` gives, or the one pack `M.use_pack()` chose.
+---
+---@return string[] names
+---@return boolean from_command whether `M.use_pack()` chose it
+function M.pack_in_use()
+  local pack = M.settings().pack
+  return type(pack) == 'table' and pack or { pack }, chosen_pack ~= nil
 end
 
 --- The name of the pack the setting `office.pack` names, the first when it
