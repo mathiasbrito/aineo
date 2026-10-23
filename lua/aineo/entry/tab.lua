@@ -17,15 +17,7 @@ local run_pane = require('aineo.entry.run_pane')
 
 local M = {}
 
---- aineo's configuration, resolved from `vim.g.aineo` and the options
---- `require('aineo').setup()` recorded (`aineo.config`'s `resolve_config()`).
---- Raises its error naming the setting that is wrong.
----
----@return table
-local function resolved_config()
-  local config = require('aineo.config')
-  return (config.resolve_config(vim.g.aineo, config.recorded_setup_options()))
-end
+local resolved_config = require('aineo.entry.settings').resolved
 
 --- The wall clock now, in microseconds: when a tab of this Neovim was last
 --- used, as its entry in the list of running editors keeps it.

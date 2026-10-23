@@ -8,6 +8,8 @@
 --- Loading it loads no other home: `aineo.office` is required when an office
 --- is first made.
 
+local settings = require('aineo.entry.settings')
+
 local M = {}
 
 --- The office of each tab that has asked for one, by the tab.
@@ -89,6 +91,8 @@ local function office_of(tab)
       clock = function()
         return vim.uv.hrtime() / 1e9
       end,
+      commands = settings.resolved().office.commands,
+      report_tool = require('aineo.mcp').report_tool_name(),
     })
   end
   return offices[tab]
