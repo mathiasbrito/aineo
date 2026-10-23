@@ -33,7 +33,7 @@ The host measurement (orchestrator, 2026-10-24) showed three things: the claim o
 - **Widened beyond the brief's file list:** `aineo.claude` (the tab cannot tell another process's session from its own without the claude home saying so) and `aineo.tabs` (the list format; `claude-tabs/` was named). Both declared in the commits.
 - **"The tab's own session stays recorded too"** was read as: the list records both the own session and the claim; when a dead claim is resumed as the tab's own, the former own session stays among the folder's sessions, where `\S` lists it — it is not kept in the list.
 - **No confirmation guard** on following a session elsewhere: T120's guard came from routing it through `follow_switch_once_confirmed()`, no test pinned it, and a confirmation that comes later leaves the panes on the claim (`follow_confirmed_start()`).
-- **A session only a Claude Code started outside aineo runs** has no process record and reads as not running: the tab resumes it (a limit in the help, as the brief's "a live process aineo knows" says).
+- **A session only a Claude Code started outside aineo runs** had no process record and read as not running in the first round, so the tab resumed it; the fix round reads Claude Code's own registry as well (A611, below).
 
 ## Tests and mutants
 
@@ -70,12 +70,39 @@ Mutants, each a literal edit run from a pristine copy on the tests that target i
 | M22 | `running.followed = id` deleted from the claude home's `follow_switch` | killed, assertion |
 | M23 | `claim(id)` deleted from `follow_session_elsewhere` | killed, assertion (office fork, entry fork) |
 
+## Fix round (review of PR #357; A610–A613)
+
+- **A610 (finding 1, high):** a kept claim no process runs was resumed in place of the tab's own session even when Claude Code had no conversation for it here; the fresh session then took the claimed session's draft, Report and base. Now `open_on_session` resumes it only when its transcript is in this folder's Claude project folder (`places.folder_transcript()`, the rule the office used, moved to `entry/places.lua` and shared), else drops the claim and resumes the own session. Red first: the reviewer's P1 as a case (a crash red on `readfile` first, then rewritten to assert the draft's presence, red by assertion: resumed THIRD, the draft moved, the folder kept a fresh id). The PR's dead-claim case now plants a transcript (P1b).
+- **A611 (findings 2, 4):** "running" is `places.is_session_running()`: aineo's record (not one whose process has an unpaired `SessionEnd` of its session — the measured 61657 shape), or Claude Code's own registry (`aineo.claude`'s new `is_session_registered(config_directory, session)`, file `claude/registry.lua`): `sessions/<digits>.json` only, fields `sessionId`, `pid`, `procStart`; a number pid; the start `ps -p <pid> -o lstart=` prints with `TZ=UTC` must equal `procStart` (measured on the host, Claude Code 2.1.310: 10 of 10 running entries matched in UTC, 0 of 10 in local time), which also covers an ended pid. `status` and `cwd` are not used. aineo's own records keep no process start, so pid reuse is not guarded there (not cheap). Tests write registry files under the test's `CLAUDE_CONFIG_DIR` only.
+- **A612:** the help says claiming another session, or switching to the tab's own, ends a claim. **A613:** the help states the effects while a fork's claim holds (Send, Visual Send, `\S`, `:Aineo new` refused; the own terminal's `/clear`/`/resume` leaves the panes) and the one-time re-claim after upgrading from v0.2.74. Findings 3, 7, 8 are in the limits.
+
+Seen red in the round: the P1 case; the registry's first case (no function); the ended-process and reused-pid registry cases; the no-`ps` case (`ENOENT` raised out of the reader); the ended-session record case; the registry claim case (resumed THIRD a second time). The 2 s bound on `ps` cannot be made red with a real `ps` and is not pinned. Arrived green: the no-start/key-file and misshapen registry cases (MR1–MR4, MR7), the other-session-ended record case (MP2).
+
+| # | Edit | Result |
+|---|---|---|
+| MA1 | `if vim.fn.filereadable(places.folder_transcript(kept_claim)) == 1 then` → `if true then` | killed, assertion |
+| MA2 | the same → `if false then` | killed, assertion |
+| MA3 | `kept_claim = nil` after the transcript check deleted | killed, assertion |
+| MA4 | `or require('aineo.claude').is_session_registered(…)` deleted from `places.is_session_running` | killed, assertion |
+| MA5 | the `aineo.mcp` half deleted from it | killed, assertion |
+| MR1 | `name:match('^%d+%.json$')` → `name:match('^%d+%.')` (reads `.key`) | killed, assertion |
+| MR2 | → `name:match('%.json$')` | killed, assertion |
+| MR3 | `if decoded and type(entry) == 'table'` → `if decoded` | killed, assertion |
+| MR4 | `pcall(vim.json.decode, X)` → `true, vim.json.decode(X)` | killed, assertion (through `pcall` in the case) |
+| MR5 | `process_start(entry.pid) == squeezed(entry.procStart)` → `true` | killed, assertion (4, on the final file) |
+| MR6 | the signal-0 check deleted | survived: `ps` prints nothing for an ended pid; the check was removed |
+| MR7 | `type(entry.pid) == 'number' and` deleted | killed, assertion |
+| MR8 | `pcall(vim.system, …)` → `true, vim.system(…)` | killed, assertion (the no-`ps` case, whose red was the `ENOENT` raised) |
+| MP1 | `and not ended_its_session(running.record)` deleted | killed, assertion |
+| MP2 | `and event.session == record.session` deleted | killed, assertion |
+
 ## Open threads
 
-- A tab cut off by a reopening (past 20 tabs, or not tried after a failure) loses its claim: `keep_folder_tabs(untried)` keeps sessions only.
-- A claimed session started in another folder and resumed as the tab's own (its process gone) is resumed in the tab's folder, where Claude Code may find no conversation; the dead-session hand-over then gives the tab a new session.
+- A tab cut off by a reopening (past 20 tabs, or not tried after a failure) loses its claim; a reopening takes over a claim another Neovim made meanwhile (help limits).
+- Finding 3 (a background host spawned with a tab's hooks running another client's session) and finding 8 (a wrapped `claude.cmd` whose first `SessionStart` was lost) are limits, not measured with the real CLI.
+- The default for a session nobody is known to run is A611's: resume when the transcript is here (A610).
 - T143 (the claim carries the Input) and T144 (`claude attach`, measured first) follow, one packet at a time (A609).
 
 ## Commits
 
-*Recorded after the merge.* The branch's commits before the rebase onto `dev` (these hashes will not resolve once it lands): 6dd481e (the list keeps claims), 79d1353 (`is_session_running`), a167c90 (D117), e83dc04 (D116), and the commit of this note.
+*Recorded after the merge.*
