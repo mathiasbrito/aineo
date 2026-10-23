@@ -3,88 +3,150 @@ local MiniTest = require('mini.test')
 local eq = MiniTest.expect.equality
 
 local office_pack = require('aineo.office_pack')
-local office_scene = require('aineo.office_scene')
+local office_states = require('aineo.office_states')
+local default = dofile('tests/helpers/office_default.lua')
 
---- The default pack, loaded from the `aineo-office` folders on 'runtimepath',
---- where aineo's own checkout puts it.
----
----@return aineo.office_pack.Pack
-local function default_pack()
-  local pack, problem = office_pack.load({
-    name = 'default',
-    folders = vim.api.nvim_get_runtime_file('aineo-office', true),
-  })
-  return assert(pack, problem)
+--- The folders the default pack is searched in: those of 'runtimepath', where
+--- the checkout puts `aineo-office`.
+local function folders()
+  return vim.api.nvim_get_runtime_file('aineo-office', true)
 end
 
---- The group drawing the cell at `column` of the row `row`, both from 0, in
---- a picture where every cell is a pixel pair of three bytes.
+--- The names of the states of the vocabulary: the four parents and the 24
+--- states, sorted.
 ---
----@param picture aineo.office_scene.Picture
----@param column integer
----@param row integer
----@return string|nil group
-local function group_at(picture, column, row)
-  local from = 3 * column
-  local found = vim.iter(picture.rows[row + 1].runs):find(function(run)
-    return run.from <= from and from < run.to
-  end)
-  return found and found.group
+---@return string[]
+local function state_names()
+  local names = vim.tbl_map(function(state)
+    return state.name
+  end, office_states.vocabulary())
+  table.sort(names)
+  return names
 end
 
---- The picture of the default office `width` by 18 cells with the main agent
---- in `state`.
+--- The `pack.lua` of the default pack, read as data and never run.
 ---
----@param width integer
----@param state string
----@return aineo.office_scene.Picture
-local function picture_of(width, state)
-  local stage = office_scene.new_stage({ pack = default_pack(), width = width, height = 18 })
-  stage.advance({ { id = 'main', state = state } }, 0)
-  return stage.picture()
+---@return table
+local function description()
+  local path = vim.fs.joinpath(folders()[1], 'default', 'pack.lua')
+  local data, problems = office_pack.parse_table_literal(table.concat(vim.fn.readfile(path), '\n'))
+  assert(data, vim.inspect(problems))
+  return data
 end
 
 local T = MiniTest.new_set()
 
 T['the default pack'] = MiniTest.new_set()
 
-T['the default pack']['gives every state of the vocabulary, and nothing else, an activity'] = function()
-  local names = vim.tbl_map(function(state)
-    return state.name
-  end, require('aineo.office_states').vocabulary())
-  local keys = vim.tbl_keys(default_pack().state_activity)
+T['the default pack']['maps every state of the vocabulary, and nothing else, to an activity of its own'] = function()
+  local keys = vim.tbl_keys(description().states)
 
-  table.sort(names)
   table.sort(keys)
 
-  eq(keys, names)
+  eq(keys, state_names())
+end
+
+T['the default pack']['gives every state of the vocabulary, and nothing else, an activity'] = function()
+  local keys = vim.tbl_keys(default.load_pack().state_activity)
+
+  table.sort(keys)
+
+  eq(keys, state_names())
 end
 
 T['the default pack']['has no problem when it is checked'] = function()
-  local problems = office_pack.check({
-    name = 'default',
-    folders = vim.api.nvim_get_runtime_file('aineo-office', true),
-  })
-
-  eq(problems, {})
+  eq(office_pack.check({ name = 'default', folders = folders() }), {})
 end
 
 T['the default pack']['loads from the aineo-office folder of the checkout'] = function()
-  local pack = default_pack()
+  local pack = default.load_pack()
 
   eq(pack.name, 'default')
-  eq(pack.state_activity.working, 'work_at_the_desk')
-  eq(pack.state_activity.idle, 'stand_by_the_desk')
+  eq(pack.state_activity.working, 'write_code')
+  eq(pack.state_activity.thinking, 'think_at_the_whiteboard')
+  eq(pack.state_activity.idle, 'rest_on_the_sofa')
 end
 
-T['the default pack']['has the art for every piece its poses, effects and legend name'] = function()
-  local pack = default_pack()
+T['the default pack']['plays a different activity in each state a scene of the mock tells apart'] = function()
+  local pack = default.load_pack()
+  local told_apart = {
+    'arriving',
+    'getting_a_task',
+    'thinking',
+    'planning',
+    'reading',
+    'searching',
+    'writing_code',
+    'running_a_command',
+    'running_tests',
+    'background_job',
+    'on_the_web',
+    'delegating',
+    'waiting_for_subagents',
+    'needs_permission',
+    'asking_you',
+    'reporting',
+    'committing',
+    'compacting',
+    'error',
+    'interrupted',
+    'done',
+    'asleep',
+    'leaving',
+  }
+  local seen = {}
+
+  for _, state in ipairs(told_apart) do
+    seen[pack.state_activity[state]] = (seen[pack.state_activity[state]] or 0) + 1
+  end
+
+  eq(vim.tbl_count(seen), #told_apart)
+end
+
+T['the default pack']['has a spot in its plan, or one aineo knows, for every spot its activities go to'] = function()
+  local pack = default.load_pack()
+  local known =
+    { anywhere = true, an_empty_desk = true, an_idle_agents_desk = true, next_to_an_agent = true }
+  local names = vim.deepcopy(known)
+  for name in pairs(pack.things) do
+    names[name] = true
+  end
+  for _, entry in pairs(pack.floor.legend) do
+    names[entry.spot or ''] = true
+    for _, piece in ipairs(entry.decorations or {}) do
+      names[piece] = true
+    end
+  end
+  local lacking = {}
+
+  for name, activity in pairs(pack.activities) do
+    for _, step in ipairs(activity.steps) do
+      if step.at and not names[step.at] then
+        lacking[name] = step.at
+      end
+    end
+  end
+
+  eq(lacking, {})
+end
+
+T['the default pack']['has the art for every piece its poses, screens, effects, legend and things name'] = function()
+  local pack = default.load_pack()
   local named = {}
-  for _, pose in pairs(pack.agent.poses) do
-    vim.list_extend(named, pose.art)
+  for _, kind in ipairs({ 'agent', 'cat' }) do
+    for _, pose in pairs(pack[kind] and pack[kind].poses or {}) do
+      vim.list_extend(named, pose.art)
+      table.insert(named, pose.screen)
+      table.insert(named, pose.holding)
+    end
   end
   for _, entry in pairs(pack.floor.legend) do
     table.insert(named, entry.piece)
+    table.insert(named, entry.in_use)
+    vim.list_extend(named, entry.decorations or {})
+  end
+  for _, thing in pairs(pack.things) do
+    table.insert(named, thing.piece)
   end
 
   local missing = vim.tbl_filter(function(name)
@@ -94,129 +156,81 @@ T['the default pack']['has the art for every piece its poses, effects and legend
   eq(missing, {})
 end
 
-T['the default pack']['has an effect for every pose that shows one'] = function()
-  local pack = default_pack()
+T['the default pack']['has an effect for every pose and step that shows one'] = function()
+  local pack = default.load_pack()
+  local missing = {}
 
-  for _, pose in pairs(pack.agent.poses) do
-    eq(pose.effect == nil or pack.effects[pose.effect] ~= nil, true)
+  for _, kind in ipairs({ 'agent', 'cat' }) do
+    for name, pose in pairs(pack[kind] and pack[kind].poses or {}) do
+      if pose.effect and not pack.effects[pose.effect] then
+        table.insert(missing, name)
+      end
+    end
   end
-end
-
-T['the default pack']['has a spot in its plan for every spot its activities go to'] = function()
-  local pack = default_pack()
-  local spots_in_plan = {}
-  for _, entry in pairs(pack.floor.legend) do
-    spots_in_plan[entry.spot or ''] = true
-  end
-
-  for _, activity in pairs(pack.activities) do
+  for name, activity in pairs(pack.activities) do
     for _, step in ipairs(activity.steps) do
-      eq(spots_in_plan[step.at], true)
+      if step.effect and not pack.effects[step.effect] then
+        table.insert(missing, name)
+      end
     end
+  end
+
+  eq(missing, {})
+end
+
+T['the default pack']['names at most 64 colours, so that a frame has at most 4,096 pixel pairs'] = function()
+  eq(vim.tbl_count(default.load_pack().colours) <= 64, true)
+end
+
+T['the default pack']["keeps every effect one cell a character whatever 'ambiwidth' says"] = function()
+  local pack = default.load_pack()
+  local wide = {}
+  local original = vim.o.ambiwidth
+
+  for _, setting in ipairs({ 'single', 'double' }) do
+    vim.o.ambiwidth = setting
+    for name, effect in pairs(pack.effects) do
+      for _, text in ipairs(effect.text) do
+        if vim.fn.strdisplaywidth(text) ~= vim.fn.strchars(text) then
+          wide[name] = setting
+        end
+      end
+    end
+  end
+  vim.o.ambiwidth = original
+
+  eq(wide, {})
+end
+
+T['the default pack']['draws a cat, the agents and the subagents'] = function()
+  local pack = default.load_pack()
+
+  eq({ pack.agent ~= nil, pack.subagent ~= nil, pack.cat ~= nil }, { true, true, true })
+end
+
+T['the default pack']['has the pieces the scene looks for by name'] = function()
+  local pieces = default.load_pack().pieces
+
+  for _, name in ipairs({ 'sky_night', 'sky_dawn', 'sky_day', 'sky_dusk', 'printed_page' }) do
+    eq({ name, pieces[name] ~= nil }, { name, true })
   end
 end
 
-T['the default office'] = MiniTest.new_set()
+T['the default pack']['gives each live piece the area the scene draws into'] = function()
+  local pieces = default.load_pack().pieces
+  local areas = {
+    whiteboard = 'plan',
+    monitor = 'screen',
+    wall_clock = 'time',
+    wall_calendar = 'date',
+    window = 'sky',
+    printer = 'page',
+  }
 
-T['the default office']['shows a standing agent beside its desk, head over the floor'] = function()
-  local picture = picture_of(54, 'standing')
-
-  eq(vim.startswith(group_at(picture, 18, 10), 'AineoOfficePixel_a6e3a1_'), true)
-  eq(vim.startswith(group_at(picture, 31, 10), 'AineoOfficePixel_a6e3a1_'), false)
-end
-
-T['the default office']['shows a working agent seated at its desk, its head over the desk'] = function()
-  local picture = picture_of(54, 'working')
-
-  eq(vim.startswith(group_at(picture, 31, 10), 'AineoOfficePixel_a6e3a1_'), true)
-  eq(vim.startswith(group_at(picture, 18, 10), 'AineoOfficePixel_a6e3a1_'), false)
-end
-
-T['the default office']['hides a seated agent’s body behind the top of the desk'] = function()
-  local picture = picture_of(54, 'working')
-
-  eq(group_at(picture, 31, 13), 'AineoOfficePixel_b4875a_7a5634')
-end
-
---- How many cells of the row `row` of `picture` are drawn in a group whose
---- name starts with `prefix`, when every cell is a pixel pair of three bytes.
----
----@param picture aineo.office_scene.Picture
----@param row integer from 0
----@param prefix string
----@return integer
-local function cells_in_groups_starting_with(picture, row, prefix)
-  local cells = 0
-  for _, run in ipairs(picture.rows[row + 1].runs) do
-    if vim.startswith(run.group, prefix) then
-      cells = cells + (run.to - run.from) / 3
-    end
+  for name, area in pairs(areas) do
+    eq({ name, area, vim.tbl_get(pieces, name, 'areas', area) ~= nil }, { name, area, true })
   end
-  return cells
-end
-
-T['the default office']['puts a monitor on each desk the width holds, 40 columns to a desk'] =
-  MiniTest.new_set({
-    parametrize = { { 54, 12 }, { 93, 12 }, { 94, 24 }, { 100, 24 }, { 134, 36 } },
-  })
-
-T['the default office']['puts a monitor on each desk the width holds, 40 columns to a desk']['width'] = function(
-  width,
-  monitor_cells
-)
-  local picture = picture_of(width, 'standing')
-
-  eq(cells_in_groups_starting_with(picture, 10, 'AineoOfficePixel_45475a_'), monitor_cells)
-end
-
---- The picture of the default office 54 cells wide whose main agent was
---- standing at time 0 and is working, so walking to its desk, at `now`.
----
----@param now number seconds
----@return aineo.office_scene.Picture
-local function walking_picture_at(now)
-  local stage = office_scene.new_stage({ pack = default_pack(), width = 54, height = 18 })
-  stage.advance({ { id = 'main', state = 'standing' } }, 0)
-  stage.advance({ { id = 'main', state = 'working' } }, now)
-  return stage.picture()
-end
-
---- The character at `column` of the row `row` of `picture`, both from 0.
----
----@param picture aineo.office_scene.Picture
----@param row integer
----@param column integer
----@return string
-local function character_at(picture, row, column)
-  return vim.fn.strcharpart(picture.rows[row + 1].text, column, 1)
-end
-
-T['the default office']['has a door on the wall, its frame and its panels'] = function()
-  local picture = picture_of(54, 'standing')
-
-  eq(group_at(picture, 2, 0), 'AineoOfficePixel_6b4f3f_6b4f3f')
-  eq(group_at(picture, 4, 3), 'AineoOfficePixel_8b6a4f_8b6a4f')
-end
-
-T['the default office']['has desks whose top is wood over a darker edge'] = function()
-  local picture = picture_of(54, 'standing')
-
-  eq(group_at(picture, 30, 13), 'AineoOfficePixel_b4875a_7a5634')
-end
-
-T['the default office']['shows a walking agent’s legs apart, and the other pair of legs a fifth of a second on'] = function()
-  eq(group_at(walking_picture_at(0.1), 15, 15), 'AineoOfficePixel_303446_749f71')
-  eq(group_at(walking_picture_at(0.3), 20, 15), 'AineoOfficePixel_749f71_749f71')
-end
-
-T['the default office']['changes the dots over a typing agent every quarter of a second'] = function()
-  local stage = office_scene.new_stage({ pack = default_pack(), width = 54, height = 18 })
-  stage.advance({ { id = 'main', state = 'working' } }, 0)
-  local first = character_at(stage.picture(), 9, 32)
-  stage.advance({ { id = 'main', state = 'working' } }, 0.5)
-  local later = character_at(stage.picture(), 9, 32)
-
-  eq({ first, later }, { '▀', '.' })
+  eq(vim.tbl_get(pieces, 'monitor', 'areas', 'query') ~= nil, true)
 end
 
 return T

@@ -1,23 +1,30 @@
 --- Reads what the office shows in a child Neovim, for the suites of the
 --- office window and of the entry point: the office's window, the cells of the
 --- picture it draws and whether the main agent of the default pack stands or
---- sits and types.
+--- sits and types or rests.
 ---
 --- A cell is read from the office's buffer: the character at a column of a
 --- line, and the highlight group an extmark of the office's namespace gives
---- it. The default pack's plan fixes where the main agent is: while it stands
---- beside its desk its head is over `STANDING_HEAD`, and while it sits at its
---- desk and types the dots of its effect rise over `TYPING_DOTS`.
+--- it. The default pack's plan fixes where the main agent is, by its spot:
+--- `HEADS` says where its head is over.
 
 local M = {}
 
---- The cell the main agent's head is over while it stands beside its desk: a
---- row and a column of the picture, from 0.
-M.STANDING_HEAD = { row = 10, column = 18 }
+--- The cell the main agent's head is over where it is at each spot of the
+--- default pack's plan the tests look for: a row and a column of the picture,
+--- from 0. At a spot in the wall's aisle the agent stands, its head over the
+--- spot; at its desk or on the sofa it sits, its head lower.
+M.HEADS = {
+  beside_desk = { row = 8, column = 22 },
+  whiteboard = { row = 8, column = 28 },
+  file_cabinet = { row = 8, column = 34 },
+  desk = { row = 15, column = 22 },
+  sofa = { row = 15, column = 54 },
+}
 
---- The cell the dots of typing rise over while the main agent sits at its
---- desk: the row above its head and the column of its seat.
-M.TYPING_DOTS = { row = 9, column = 31 }
+--- How many columns either side of a head the agent may be drawn at, the arms
+--- and the way it faces moving it a little.
+local HEAD_LEEWAY = 2
 
 --- The window of the office: the child's only floating window, or `vim.NIL`.
 ---
@@ -150,22 +157,44 @@ function M.is_bean(child, row, column)
   return group ~= nil and vim.startswith(group, 'AineoOfficePixel_a6e3a1_')
 end
 
---- Whether the main agent stands beside its desk: its head is over
---- `STANDING_HEAD`.
+--- Whether the main agent is at the spot `spot` of `HEADS`: a cell of the
+--- first agent's colour within `HEAD_LEEWAY` columns of its head's.
+---
+---@param child table
+---@param spot string
+---@return boolean
+function M.is_at(child, spot)
+  local head = M.HEADS[spot]
+  for column = head.column - HEAD_LEEWAY, head.column + HEAD_LEEWAY do
+    if M.is_bean(child, head.row, column) then
+      return true
+    end
+  end
+  return false
+end
+
+--- Whether the main agent stands in the aisle beside its desk.
 ---
 ---@param child table
 ---@return boolean
 function M.is_standing(child)
-  return M.is_bean(child, M.STANDING_HEAD.row, M.STANDING_HEAD.column)
+  return M.is_at(child, 'beside_desk')
 end
 
---- Whether the main agent sits and types: the dots of its effect show over
---- `TYPING_DOTS`.
+--- Whether the main agent sits at its desk to type.
 ---
 ---@param child table
 ---@return boolean
 function M.is_typing(child)
-  return (M.cell_at(child, M.TYPING_DOTS.row, M.TYPING_DOTS.column)) == '.'
+  return M.is_at(child, 'desk')
+end
+
+--- Whether the main agent rests on the first seat of the sofa.
+---
+---@param child table
+---@return boolean
+function M.is_on_the_sofa(child)
+  return M.is_at(child, 'sofa')
 end
 
 return M
