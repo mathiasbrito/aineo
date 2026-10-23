@@ -70,25 +70,39 @@ local LAST_SPOT = {
   { 'leaving', 'door' },
 }
 
---- A stage of the space station `size` big with the main agent in `state`,
---- playing `activity` when one is given, advanced through `seconds` in quarter
---- seconds, and the name of the spot of the plan nearest to the agent.
+--- A stage of the space station `size` big with `agents`, advanced through
+--- `seconds` in quarter seconds, and the name of the spot of the plan nearest
+--- to the first agent.
 ---
 ---@param size integer[]
----@param state string
+---@param agents aineo.office_states.Agent[]
 ---@param seconds number
----@param activity? string
 ---@return string nearest the name of the spot nearest to the agent, 'nowhere' when it is not drawn
-local function spot_of_agent_after(size, state, seconds, activity)
+local function spot_of_first_agent_after(size, agents, seconds)
   local pack = default.load_pack(PACK)
   local spots = default.spots(pack, size[1], size[2] - LIST_ROWS)
   local stage = default.stage(pack, size[1], size[2])
-  local agents = { { id = 'main', state = state, activity = activity } }
   for time = 0, seconds, 0.25 do
     stage.advance(agents, time)
   end
   local place = default.where_is(default.pixels(stage.picture(), size[1]), default.AGENT_COLOURS[1])
   return place and default.nearest_spot(spots, place) or 'nowhere'
+end
+
+--- The same for the main agent alone, in `state`, playing `activity` when one
+--- is given.
+---
+---@param size integer[]
+---@param state string
+---@param seconds number
+---@param activity? string
+---@return string nearest
+local function spot_of_agent_after(size, state, seconds, activity)
+  return spot_of_first_agent_after(
+    size,
+    { { id = 'main', state = state, activity = activity } },
+    seconds
+  )
 end
 
 --- The cases of `pairs_of_state_and_spot` in each of `sizes`: the size, the
@@ -256,6 +270,13 @@ T['the trigger']['has an agent that it names the transmission for go to the comm
   eq(spot_of_agent_after(size, 'committing', 20, 'send_a_transmission'), 'comms_console')
 end
 
+T['the trigger']['has an agent that runs a push go to the comms console, from the tracker to the stage'] = function()
+  local story = office_signals.tell({ triggers = default.load_pack(PACK).triggers })
+  story.started('a', 'Bash', { command = 'git push origin main' })
+
+  eq(spot_of_first_agent_after(MEDIUM, story.agents_after(0), 20), 'comms_console')
+end
+
 T['the trigger']['leaves a commit that is no push at the desk'] = function()
   eq(spot_of_agent_after(MEDIUM, 'committing', 20), 'desk')
 end
@@ -377,6 +398,41 @@ end
 
 T['an agent sending a transmission']['shows no signal arcs when it commits at its desk'] = function()
   eq(text_while_playing('committing', nil, 5):find(')', 1, true), nil)
+end
+
+--- The runs of one letter in the plan laid out `size` big that are narrower
+--- than the narrowest the piece the letter stands for can be drawn: each as
+--- `letter at column,row over length`.
+---
+---@param pack aineo.office_pack.Pack
+---@param size integer[]
+---@return string[]
+local function runs_narrower_than_their_stretched_piece(pack, size)
+  local narrow = {}
+  for row_index, text in ipairs(default.laid_out_rows(pack, size[1], size[2] - LIST_ROWS)) do
+    local column = 1
+    while column <= #text do
+      local letter = text:sub(column, column)
+      local length = 1
+      while text:sub(column + length, column + length) == letter do
+        length = length + 1
+      end
+      local entry = pack.floor.legend[letter]
+      local piece = entry and entry.piece and pack.pieces[entry.piece]
+      if piece and piece.stretch and length < piece.width then
+        table.insert(
+          narrow,
+          ('%s at %d,%d over %d'):format(letter, column - 1, row_index - 1, length)
+        )
+      end
+      column = column + length
+    end
+  end
+  return narrow
+end
+
+T['the plan']['stretches no piece beyond the run of cells it is laid over'] = function(size)
+  eq(runs_narrower_than_their_stretched_piece(default.load_pack(PACK), size), {})
 end
 
 T['the office'] = MiniTest.new_set({
