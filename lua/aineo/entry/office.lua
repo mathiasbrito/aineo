@@ -101,9 +101,9 @@ function M.note_transcript(tab, session_id, path)
 end
 
 --- When, in seconds since 1970, each tab began following the session it shows:
---- its office was made, its Claude Code started, or its session switched
---- (`M.began_following()`). The follower looks for the continuation the tab's
---- own resume wrote from then on.
+--- its Claude Code started, or its session switched (`M.began_following()`);
+--- none before the first start, and the follower then looks for no
+--- continuation. It looks for the one the tab's own resume wrote from then on.
 ---@type table<aineo.entry.Tab, number>
 local began_following_at = setmetatable({}, { __mode = 'k' })
 
@@ -182,7 +182,6 @@ end
 ---@return aineo.office.Office
 local function office_of(tab)
   if not offices[tab] then
-    began_following_at[tab] = began_following_at[tab] or os.time()
     offices[tab] = require('aineo.office').new_office({
       right_side = tab.homes.layout.right_column_area,
       pack_folders = M.pack_folders,

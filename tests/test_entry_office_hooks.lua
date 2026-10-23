@@ -390,7 +390,7 @@ end
 
 T['the moment the tab began following its session'] = MiniTest.new_set()
 
-T['the moment the tab began following its session']['is the moment its office was made, as the office asks for the transcript'] = function()
+T['the moment the tab began following its session']['is the moment its Claude Code started, as the office asks for the transcript'] = function()
   open_layout_at('office-since-made', 1767225600)
 
   local _, since = stand_in.transcript_asked(child)
@@ -406,18 +406,6 @@ T['the moment the tab began following its session']['is the moment of its latest
   local _, since = stand_in.transcript_asked(child)
 
   eq(since, 1767226100)
-end
-
-T['the moment the tab began following its session']['is the moment of its latest start of Claude Code'] = function()
-  open_layout_at('office-since-start', 1767225600)
-  child.lua('_G.fake_now = 1767226300')
-  child.lua(END_TERMINALS)
-
-  child.cmd('Aineo new')
-  claude_session.wait_for_status(child, 'ready')
-  local _, since = stand_in.transcript_asked(child)
-
-  eq(since, 1767226300)
 end
 
 T['a claimed session'] = MiniTest.new_set()
@@ -542,6 +530,16 @@ T['a permission wait']['reaches the office when it is of the session the tab’s
   tell_permission_wait(claimed, vim.NIL)
 
   eq(child.lua_get('_G.taken'), { 'permission_asked' })
+end
+
+T['a permission wait']['reaches an office that does not follow the session yet when it is of the session the tab’s panes follow, a claim'] = function()
+  local claimed = claimed_session_numbered(5)
+  open_layout_with_stand_in_offices('office-wait-claim-hidden')
+  child.cmd('Aineo claim ' .. claimed)
+
+  tell_permission_wait(claimed, vim.NIL)
+
+  eq(stand_in.told(child).waits, { 'main' })
 end
 
 T['a permission wait']['does not reach the office when it is of a session outside the chain the office follows'] = function()
