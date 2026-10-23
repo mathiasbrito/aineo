@@ -69,6 +69,44 @@ T['the sky']['is the sky of the hour of the wall clock, in the glass only'][''] 
   eq(glass_at(hour), scene.solid(colour))
 end
 
+T['the sky']['is the sky of the hour too in a window that is one of a run of decorations'] = function()
+  local pack = scene.people_pack(
+    '# plan\n \n WWW...\n',
+    { W = { decorations = { 'window' }, shows = 'sky' } },
+    nil,
+    SKY_ART
+  )
+  local stage = scene.stage_of(pack, 6, 2, {
+    clock = function()
+      return { hour = 12, min = 0, month = 10, day = 23 }
+    end,
+  })
+
+  stage.advance({}, 0)
+
+  eq(scene.group_at(stage.picture(), 1, 0), scene.solid(DAY))
+end
+
+T['the sky']['is not drawn in a decoration that has no glass'] = function()
+  local pack = scene.people_pack(
+    '# plan\n \n WWW...\n',
+    { W = { decorations = { 'plain' }, shows = 'sky' } },
+    nil,
+    vim.tbl_extend('force', SKY_ART, {
+      ['art/plain.txt'] = 'colours: F = brown\nanchor: 0, 1\n---\nFFF\nFFF\n',
+    })
+  )
+  local stage = scene.stage_of(pack, 6, 2, {
+    clock = function()
+      return { hour = 12, min = 0, month = 10, day = 23 }
+    end,
+  })
+
+  stage.advance({}, 0)
+
+  eq(scene.group_at(stage.picture(), 1, 0), scene.solid('#885500'))
+end
+
 T['the sky']['leaves the frame of the window as it is, though the pack’s sky is wider than the glass'] = function()
   local art = vim.deepcopy(SKY_ART)
   art['art/sky_day.txt'] = 'colours: A = green\nanchor: 0, 1\n---\nAAA\nAAA\n'
