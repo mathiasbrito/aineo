@@ -9,6 +9,8 @@
 --- clock into what the agent shows.
 
 local calls = require('aineo.office_states.calls')
+local clues = require('aineo.office_states.clues')
+local tasks = require('aineo.office_states.tasks')
 local timing = require('aineo.office_states.timing')
 local triggers = require('aineo.office_states.triggers')
 
@@ -24,7 +26,13 @@ local UNNAMED_CALL = ''
 ---@class aineo.office_states.OpenCall
 ---@field state string the state of an agent while the call runs
 ---@field activity? string the activity a trigger of the pack names for the call
+---@field clue? string what the call looks for on the web
 ---@field order integer how many calls the agent had started when this one did
+
+--- How the agent's last test run ended.
+---@class aineo.office_states.TestVerdict
+---@field passed boolean whether the run's result was no error
+---@field at number when the result was heard, on the caller's clock
 
 --- A state that a signal brings and the clock ends.
 ---@class aineo.office_states.Event
@@ -42,6 +50,9 @@ local UNNAMED_CALL = ''
 ---@field id string
 ---@field open_calls table<string, aineo.office_states.OpenCall> the tool calls that started and have not finished, by call id
 ---@field started_calls integer how many tool calls the agent has started
+---@field tasks aineo.office_states.Task[] the tasks its calls of the task tools left
+---@field test_verdict? aineo.office_states.TestVerdict how its last test run ended, until it starts another
+---@field reported_at? number when it last called aineo's report tool, as heard now rather than read from the past
 ---@field background_jobs integer how many background jobs it started that have not reported back
 ---@field thinking boolean whether the model is at work on what it was given: a prompt, a thought or a result, since the last call started
 ---@field turn_ended boolean whether its last turn ended and nothing began since
@@ -74,6 +85,7 @@ function M.new(id)
     id = id,
     open_calls = {},
     started_calls = 0,
+    tasks = {},
     background_jobs = 0,
     thinking = false,
     turn_ended = false,
@@ -136,6 +148,19 @@ local function bring_event(record, hearing, state, lasts)
   record.event = { state = state, since = hearing.now, lasts = lasts }
 end
 
+--- How a test run ended, as the result of its call says; none for a result
+--- read from the past, which is not happening now.
+---
+---@param signal aineo.transcript.Signal a `tool_finished` signal
+---@param hearing aineo.office_states.Hearing
+---@return aineo.office_states.TestVerdict|nil
+local function verdict_of_result(signal, hearing)
+  if hearing.replayed then
+    return nil
+  end
+  return { passed = not signal.failed, at = hearing.now }
+end
+
 ---@param record aineo.office_states.Record
 local function end_turn(record)
   record.open_calls = {}
@@ -153,6 +178,7 @@ local HEARS = {
     if record.open_calls[id] then
       return
     end
+    record.tasks = tasks.after_call(record.tasks, signal.tool, signal.input or {})
     local state = calls.state_of_call(signal, hearing.settings)
     record.started_calls = record.started_calls + 1
     record.open_calls[id] = {
@@ -163,10 +189,17 @@ local HEARS = {
         hearing.settings.triggers or {},
         hearing.settings.trigger_budget
       ),
+      clue = clues.of_call(signal.tool, signal.input or {}),
       order = record.started_calls,
     }
     if state == 'background_job' then
       record.background_jobs = record.background_jobs + 1
+    end
+    if state == 'running_tests' then
+      record.test_verdict = nil
+    end
+    if state == 'reporting' and not hearing.replayed then
+      record.reported_at = hearing.now
     end
   end,
 
@@ -178,7 +211,9 @@ local HEARS = {
     end
     record.open_calls[id] = nil
     record.thinking = true
-    if signal.failed and call.state ~= 'running_tests' then
+    if call.state == 'running_tests' then
+      record.test_verdict = verdict_of_result(signal, hearing)
+    elseif signal.failed then
       bring_event(record, hearing, 'error', timing.ERROR_SECONDS)
     end
   end,
@@ -286,9 +321,11 @@ function M.is_known_only_by_permission(record)
   return not record.known and record.id ~= M.MAIN and not record.finished
 end
 
+--- The call `record` started last of those still running.
+---
 ---@param record aineo.office_states.Record
 ---@return aineo.office_states.OpenCall|nil
-local function latest_open_call(record)
+function M.latest_open_call(record)
   local latest = nil
   for _, call in pairs(record.open_calls) do
     if not latest or call.order > latest.order then
@@ -331,7 +368,7 @@ function M.fact_state(record, running_subagents)
   if record.finished or record.session_ended then
     return 'leaving'
   end
-  local call = latest_open_call(record)
+  local call = M.latest_open_call(record)
   local activity = call and call.activity
   if waits_for_subagents(record, call, running_subagents) then
     return 'waiting_for_subagents', activity

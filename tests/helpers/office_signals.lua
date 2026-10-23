@@ -27,6 +27,8 @@ M.SETTLE = 1.3
 ---@field state fun(id?: string): string|nil the state of the agent `id` (the main agent by default) just after the last signal
 ---@field state_after fun(seconds: number, id?: string): string|nil the state of the agent `id` that many seconds after the last signal
 ---@field activity fun(id?: string): string|nil the activity a trigger chose for the agent `id` just after the last signal
+---@field details fun(id?: string): aineo.office_states.AgentDetails|table the details of the agent `id` just after the last signal; an empty table when the tracker gives none
+---@field details_after fun(seconds: number, id?: string): aineo.office_states.AgentDetails|table the same, that many seconds after the last signal
 ---@field agents_after fun(seconds: number): aineo.office_states.Agent[] every agent that many seconds after the last signal
 ---@field started fun(call: string, tool: string, input?: table) the main agent starts the tool call `call`
 ---@field finished fun(call: string, failed?: boolean) the main agent's tool call `call` finishes
@@ -90,6 +92,15 @@ function M.tell(options)
   function story.activity(id)
     local agent = agent_after(M.SETTLE, id)
     return agent and agent.activity
+  end
+
+  function story.details_after(seconds, id)
+    local agent = agent_after(seconds, id)
+    return agent and agent.details or {}
+  end
+
+  function story.details(id)
+    return story.details_after(M.SETTLE, id)
   end
 
   function story.agents_after(seconds)
