@@ -6,6 +6,7 @@ local finder = require('aineo.office_pack.finder')
 local literal = require('aineo.office_pack.literal')
 local loader = require('aineo.office_pack.loader')
 local problems = require('aineo.office_pack.problems')
+local starter = require('aineo.office_pack.starter')
 local state_list = require('aineo.office_pack.state_list')
 
 local M = {}
@@ -13,6 +14,7 @@ local M = {}
 M.find = finder.find
 M.load = loader.load
 M.check = loader.check
+M.start_from_default = starter.start_from_default
 M.describe_states = state_list.describe
 M.describe_problem = problems.describe
 M.warning_of = problems.warning_of
