@@ -115,6 +115,10 @@ local USAGE = 'aineo: :Aineo takes one of ' .. table.concat(SUBCOMMANDS, ', ')
 --- What `:Aineo claim` tells the user when it is given more than one word.
 local CLAIM_USAGE = 'aineo: :Aineo claim takes at most one Claude session id'
 
+--- What `:Aineo office` tells the user when it is given a word, or words,
+--- that it does not take.
+local OFFICE_USAGE = 'aineo: :Aineo office takes check, and the name of a pack'
+
 --- What `:Aineo tab` tells the user when it is given no word, another word
 --- than `new` or `close`, or more than one.
 local TAB_USAGE = 'aineo: :Aineo tab takes new, close, or the number of a tab to move to'
@@ -132,6 +136,9 @@ local function usage(words)
   end
   if words[1] == 'tab' then
     return TAB_USAGE
+  end
+  if words[1] == 'office' then
+    return OFFICE_USAGE
   end
   local subcommand_words = SUBCOMMAND_WORDS[words[1]]
   if not subcommand_words then
@@ -191,6 +198,12 @@ local function offered_words(typed)
   end
   if #typed == 2 and typed[2] == 'tab' then
     return tab_words()
+  end
+  if #typed == 2 and typed[2] == 'office' then
+    return { 'check' }
+  end
+  if #typed == 3 and typed[2] == 'office' and typed[3] == 'check' then
+    return require('aineo.entry').office_pack_names()
   end
   if #typed == 2 and typed[2] ~= RANGE_SUBCOMMAND then
     return SUBCOMMAND_WORDS[typed[2]] or {}
@@ -757,6 +770,12 @@ vim.api.nvim_create_user_command('Aineo', function(command)
     run_action(argument)
     return
   end
+  if command.fargs[1] == 'office' and command.fargs[2] == 'check' and #command.fargs <= 3 then
+    run(function()
+      require('aineo.entry').check_office_pack(command.fargs[3])
+    end)
+    return
+  end
   if command.fargs[1] == 'claim' and #command.fargs == 2 then
     run(function()
       require('aineo.entry').claim_in_current_tab(command.fargs[2])
@@ -775,5 +794,5 @@ end, {
   range = true,
   bar = true,
   complete = complete_subcommand,
-  desc = 'aineo: send, open, report, input, claude, claude-numbers, sessions, new, pane agent|changes|terminal|run|explorer, run shell, claim [id], tab new|close|{n}, diff close, find, zoom or zoom full, [range]explain [issues] [tools] [new]|clear, office',
+  desc = 'aineo: send, open, report, input, claude, claude-numbers, sessions, new, pane agent|changes|terminal|run|explorer, run shell, claim [id], tab new|close|{n}, diff close, find, zoom or zoom full, [range]explain [issues] [tools] [new]|clear, office [check [name]]',
 })
