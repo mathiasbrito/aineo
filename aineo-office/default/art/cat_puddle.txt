@@ -1,0 +1,6 @@
+about: What the cat left on the floor: a puddle.
+colours: A = gold
+anchor: 0, 1
+---
+.AAAA.
+AAAAAA

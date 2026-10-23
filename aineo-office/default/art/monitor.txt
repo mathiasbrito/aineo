@@ -1,0 +1,15 @@
+about: A monitor on a desk. Its owner's pose gives its screen; a web search writes its clue in the query area.
+colours: F = iron, z = screen
+anchor: 0, 8
+area query: 1, 1, 10 x 2
+area screen: 1, 1, 10 x 4
+---
+FFFFFFFFFFFF
+FzzzzzzzzzzF
+FzzzzzzzzzzF
+FzzzzzzzzzzF
+FzzzzzzzzzzF
+FFFFFFFFFFFF
+.....FF.....
+....FFFF....
+............

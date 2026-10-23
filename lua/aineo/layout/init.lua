@@ -46,6 +46,13 @@ local zoom = require('aineo.layout.zoom')
 
 ---@alias aineo.layout.Role 'claude'|'report'|'input'
 
+--- A rectangle of the screen, in cells counted from the top left of the editor, from 0.
+---@class aineo.layout.Area
+---@field row integer the first row
+---@field col integer the first column
+---@field width integer
+---@field height integer
+
 ---@alias aineo.layout.Pane 'agent'|'changes'|'terminal'|'run'|'explorer'
 
 ---@class aineo.layout.LineNumbers
@@ -65,6 +72,7 @@ local zoom = require('aineo.layout.zoom')
 ---@field toggle_zoom fun()
 ---@field toggle_full_zoom fun()
 ---@field input_buffer fun(): integer|nil
+---@field right_column_area fun(): aineo.layout.Area|nil
 ---@field let_go? fun() only on a layout `M.new()` made: removes its handlers and wipes its Input
 
 --- Makes a layout: its state, and the functions that act on it, and the
@@ -2475,6 +2483,47 @@ local function make_layout(input_name, group_name)
   ---@return integer|nil buffer
   function M.input_buffer()
     return state.buffers.input
+  end
+
+  --- The rows a window's own status line takes under `'laststatus'`: one
+  --- under 1, which gives a status line to each of two windows or more, as
+  --- the layout's tab page has, and under 2; none under 0 and 3, whose one
+  --- status line spans the screen and belongs to no window.
+  ---
+  ---@return integer rows
+  local function status_line_rows()
+    return (vim.o.laststatus == 1 or vim.o.laststatus == 2) and 1 or 0
+  end
+
+  --- The screen rectangle the right column's windows take now, their winbars
+  --- and status lines included: all of the column, whichever pane it shows,
+  --- and with a window of the column zoomed (`M.toggle_zoom()`) too, whose
+  --- column still spans the same cells. `nil` when the column has no window,
+  --- when the current tab page is not the layout's, whose cells these are not,
+  --- and while a window is zoomed over the whole tab page (`M.toggle_full_zoom()`),
+  --- which leaves the column's windows a line or a column each.
+  ---
+  ---@return aineo.layout.Area|nil area
+  function M.right_column_area()
+    local windows = column_windows()
+    local full_zoomed = state.full_zoom and vim.api.nvim_win_is_valid(state.full_zoom.window)
+    if
+      #windows == 0
+      or full_zoomed
+      or vim.api.nvim_win_get_tabpage(windows[1]) ~= vim.api.nvim_get_current_tabpage()
+    then
+      return nil
+    end
+    local top, left, bottom, right = math.huge, math.huge, 0, 0
+    for _, window in ipairs(windows) do
+      local info = vim.fn.getwininfo(window)[1]
+      local window_bottom = info.winrow - 1 + info.winbar + info.height + status_line_rows()
+      top = math.min(top, info.winrow - 1)
+      left = math.min(left, info.wincol - 1)
+      bottom = math.max(bottom, window_bottom)
+      right = math.max(right, info.wincol - 1 + info.width)
+    end
+    return { row = top, col = left, width = right - left, height = bottom - top }
   end
 
   --- Lets the layout go, as its tab page closes: removes its handlers, by

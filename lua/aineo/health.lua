@@ -220,8 +220,8 @@ end
 
 --- Reports, when `command` gives Claude Code a `--settings`, whether aineo
 --- can add its hooks to them — its session hooks, its `SubagentStart`
---- hook and its `PostToolUse` hook — read from the editor's working
---- directory as a start of Claude Code reads them
+--- hook, its `PostToolUse` hook and its `PermissionRequest` hook — read from
+--- the editor's working directory as a start of Claude Code reads them
 --- (`aineo.claude`'s `given_settings_verdict()`): a warning naming
 --- why when it cannot.
 ---
@@ -234,7 +234,7 @@ local function check_claude_settings(command)
   if verdict.problem then
     vim.health.warn(
       "claude.cmd's --settings cannot take aineo's hooks: " .. verdict.problem,
-      "Claude Code starts with them as they are, without aineo's hooks, so a session switch inside it is not followed, its subagents are not told of announce_work, and the branches and worktrees its Bash tool makes are not caught by the PostToolUse hook: :help aineo-config-claude.cmd"
+      "Claude Code starts with them as they are, without aineo's hooks, so a session switch inside it is not followed, its subagents are not told of announce_work, and the branches and worktrees its Bash tool makes are not caught by the PostToolUse hook, and the office does not see a permission prompt wait (PermissionRequest hook): :help aineo-config-claude.cmd"
     )
     return
   end
@@ -347,6 +347,7 @@ local PREFIX_KEYS = {
   { key = 'f', plug = '<Plug>(aineo-find)', mode = 'n' },
   { key = 'z', plug = '<Plug>(aineo-zoom)', mode = 'n' },
   { key = 'Z', plug = '<Plug>(aineo-zoom-full)', mode = 'n' },
+  { key = 'O', plug = '<Plug>(aineo-office)', mode = 'n' },
   { key = 's', plug = '<Plug>(aineo-send)', mode = 'x' },
   { key = 'v', plug = '<Plug>(aineo-explain)', mode = 'n' },
   { key = 'V', plug = '<Plug>(aineo-explain-tools)', mode = 'n' },
@@ -997,6 +998,45 @@ local function check_explain(resolved_config)
   )
 end
 
+--- Reports whether the office can draw ('termguicolors' on, an error when off,
+--- and an error when 'ambiwidth' is `double`: it does not show then) and when
+--- it shows by itself, from `office.idle_ms`; the
+--- second only while the configuration is valid.
+---
+---@param resolved_config table|nil the configuration, `nil` when it is wrong
+local function check_office(resolved_config)
+  vim.health.start('Office')
+  if vim.o.termguicolors then
+    vim.health.ok("'termguicolors' is on: the office draws its pixels")
+  else
+    vim.health.error(
+      "'termguicolors' is off, so the office does not show",
+      "Set 'termguicolors' in your configuration, as a terminal that draws true colours allows: :help aineo-office"
+    )
+  end
+  if vim.o.ambiwidth == 'double' then
+    vim.health.error(
+      "'ambiwidth' is double, so the office does not show",
+      "Set 'ambiwidth' to single: the office draws half blocks, which 'ambiwidth' double makes two cells wide: :help aineo-office"
+    )
+  end
+  if not resolved_config then
+    return
+  end
+  local idle_ms = resolved_config.office.idle_ms
+  if idle_ms then
+    vim.health.info(
+      ('the office shows by itself after %g s without the cursor in the right side (office.idle_ms), and for :Aineo office and \\O: :help |aineo-office|'):format(
+        idle_ms / 1000
+      )
+    )
+  else
+    vim.health.info(
+      'the office shows only for :Aineo office and \\O (office.idle_ms is false): :help |aineo-office|'
+    )
+  end
+end
+
 --- Reports what the autostart decided when the editor started, and why, from
 --- aineo's record (`startup_record()`), with the error an open that failed
 --- met when the record holds it as text.
@@ -1040,6 +1080,7 @@ function M.check()
   check_tab_line(resolved_config)
   check_find(resolved_config)
   check_explain(resolved_config)
+  check_office(resolved_config)
   check_autostart()
   name_limits()
 end

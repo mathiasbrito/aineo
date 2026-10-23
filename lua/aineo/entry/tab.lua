@@ -9,6 +9,7 @@ local errors = require('aineo.entry.errors')
 local explorer = require('aineo.entry.explorer')
 local folder_tabs = require('aineo.entry.folder_tabs')
 local links = require('aineo.entry.links')
+local offices = require('aineo.entry.office')
 local places = require('aineo.entry.places')
 local prompt = require('aineo.entry.prompt')
 local registry = require('aineo.entry.registry')
@@ -16,15 +17,7 @@ local run_pane = require('aineo.entry.run_pane')
 
 local M = {}
 
---- aineo's configuration, resolved from `vim.g.aineo` and the options
---- `require('aineo').setup()` recorded (`aineo.config`'s `resolve_config()`).
---- Raises its error naming the setting that is wrong.
----
----@return table
-local function resolved_config()
-  local config = require('aineo.config')
-  return (config.resolve_config(vim.g.aineo, config.recorded_setup_options()))
-end
+local resolved_config = require('aineo.entry.settings').resolved
 
 --- The wall clock now, in microseconds: when a tab of this Neovim was last
 --- used, as its entry in the list of running editors keeps it.
@@ -241,6 +234,9 @@ local function make_tab(homes, key, callbacks)
       working_directory = places.kept_places().working_directory,
       with_home_expanded = links.with_home_expanded,
       open_file = links.open_file,
+      on_report_received = function(report)
+        offices.report_arrived(tab, report)
+      end,
     })
     report_environment_given = true
   end
@@ -688,7 +684,10 @@ local function make_tab(homes, key, callbacks)
   --- (`aineo.mcp`), the state directory of `kept_places()`, the editor's
   --- address and program for the session hooks, and the callbacks that make
   --- the panes follow the session (`replacement_callbacks()`,
-  --- `follow_confirmed_start()`). With `new_session` the start is on a new
+  --- `follow_confirmed_start()`), and those that tell the tab's office where
+  --- its session's transcript is written and that an agent waits for the
+  --- user (`aineo.entry.office`'s `note_transcript()` and
+  --- `take_permission_wait()`). With `new_session` the start is on a new
   --- session id.
   ---
   ---@param config table the resolved configuration
@@ -718,6 +717,12 @@ local function make_tab(homes, key, callbacks)
       on_terminal_replaced = replacement.on_terminal_replaced,
       on_session_ready = follow_confirmed_start,
       on_session_switched = replacement.on_session_switched,
+      on_transcript = function(session_id, path)
+        offices.note_transcript(tab, session_id, path)
+      end,
+      on_permission_wait = function(session_id, agent_id)
+        offices.take_permission_wait(tab, session_id, agent_id)
+      end,
     }
   end
 
@@ -1651,7 +1656,7 @@ local function make_tab(homes, key, callbacks)
   local function leave_as_it_is() end
 
   --- Lets the tab's homes go as its tab page has closed, at once: its claim
-  --- is let go, Input's draft is saved first (`aineo.draft`'s `let_go()`),
+  --- and its office are let go, Input's draft is saved first (`aineo.draft`'s `let_go()`),
   --- then the layout, the shell, the changes pane, the Report and the
   --- explorer are let go, the shell after the layout, whose handlers must
   --- not see its wipe; the first tab's explorer too, which makes its buffer
@@ -1664,6 +1669,9 @@ local function make_tab(homes, key, callbacks)
     is_released = true
     let_each_go({
       release_claim,
+      function()
+        offices.let_go(tab)
+      end,
       homes.draft.let_go or leave_as_it_is,
       homes.layout.let_go or leave_as_it_is,
       homes.shell.let_go or leave_as_it_is,

@@ -1,0 +1,6 @@
+about: The legs of a standing agent.
+colours: S = agent_shade
+anchor: 3, 1
+---
+SS...SS
+SS...SS

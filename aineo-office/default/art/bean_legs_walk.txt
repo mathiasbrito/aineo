@@ -1,0 +1,10 @@
+about: The legs of a walking agent, two frames.
+colours: S = agent_shade
+anchor: 4, 1
+seconds per frame: 0.1667
+---
+.SS...SS.
+SS.....SS
+---
+..SS.SS..
+..SS.SS..

@@ -1,0 +1,16 @@
+about: The body of an agent sitting behind a desk: only what the desk leaves showing.
+colours: B = agent, L = agent_light, S = agent_shade
+anchor: 5, 11
+---
+...LLBBB...
+.LLLBBBBBS.
+LLBBBBBBBBS
+LBBBBBBBBBS
+BBBBBBBBBBS
+BBBBBBBBBBS
+BBBBBBBBBBS
+BBBBBBBBBBS
+SBBBBBBBBSS
+...........
+...........
+...........

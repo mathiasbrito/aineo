@@ -11,9 +11,10 @@ CONTENTS                                                      *aineo-contents*
   6. Configuration .................................. |aineo-configuration|
   7. Send .................................................... |aineo-send|
   8. The Agent Report ...................................... |aineo-report|
-  9. The autostart ...................................... |aineo-autostart|
- 10. Health check ........................................ |aineo-health|
- 11. Limits .............................................. |aineo-limits|
+  9. The office ........................................ |aineo-office|
+ 10. The autostart ..................................... |aineo-autostart|
+ 11. Health check ........................................ |aineo-health|
+ 12. Limits .............................................. |aineo-limits|
 
 ==============================================================================
 1. INTRODUCTION                                                        *aineo*
@@ -52,6 +53,8 @@ whole height, and gives the heights back when pressed again (|aineo-zoom|).
 `\Z` zooms the window the cursor is in to the whole tab page, every other
 window shrinking to a sliver, and gives the sizes back when pressed again
 (|aineo-zoom-full|).
+`\O` shows the office over the right column, an animation of your Claude Code
+at work (|aineo-office|).
 In Visual mode, in Input, `\s` sends the selection alone and removes it from
 Input (|aineo-v_\s|).
 
@@ -2711,6 +2714,30 @@ moves you to that tab instead and claims nothing.
 			buffer shows, and stops the request that runs for it,
 			if any.
 
+                                                               *:Aineo-office*
+:Aineo office		Shows the office over the right side of the layout, at
+			once (|aineo-office|). It acts on the aineo tab of
+			the current tab page and makes none: with no aineo
+			tab it tells you, with one warning, so. Asked while
+			the office shows, it does nothing. With
+			'termguicolors' off, or 'ambiwidth' `double`, it shows
+			nothing and tells you, with one warning, why
+			(|aineo-office|). `\O` and, in
+			Terminal mode and in Insert mode, `<C-\>O` do the
+			same (|aineo-keys|).
+
+                                                         *:Aineo-office-check*
+:Aineo office check [name]
+			Checks an office pack and lists what is wrong with it
+			in the quickfix list, each problem at the file and
+			line it is on (|aineo-office-check|). The pack is the
+			one named, or, with no name, the one `office.pack`
+			names (the first of a list), with the art files of
+			`office.pieces` over its pieces. A pack with no
+			problem is told so, once, and no list opens. It needs
+			no aineo tab. With any other word it tells you, with
+			one error, what it takes.
+
 When an action fails — `claude.cmd` is not executable, say — aineo tells you
 once, with one error message starting with `aineo:`, and opens nothing.
 
@@ -2858,6 +2885,10 @@ you turn the prefix off, or when a prefix key is yours: >lua
 			Does what `:Aineo zoom full` does
 			(|:Aineo-zoom-full|).
 
+                                                        *<Plug>(aineo-office)*
+<Plug>(aineo-office)
+			Does what `:Aineo office` does (|:Aineo-office|).
+
 Prefix keys ~
                                                                   *aineo-keys*
 Once the editor has started, aineo maps the prefix (|aineo-config-prefix|)
@@ -2909,6 +2940,8 @@ and `\vm` in Visual mode too:
 \z		|<Plug>(aineo-zoom)|
                                                                     *aineo-\Z*
 \Z		|<Plug>(aineo-zoom-full)|
+                                                                    *aineo-\O*
+\O		|<Plug>(aineo-office)|
                                                                     *aineo-\v*
 \v		|<Plug>(aineo-explain)|
                                                                     *aineo-\V*
@@ -3017,6 +3050,8 @@ twin's keys.
 <C-\>z		|<Plug>(aineo-zoom)|
                                                                 *aineo-<C-\>Z*
 <C-\>Z		|<Plug>(aineo-zoom-full)|
+                                                                *aineo-<C-\>O*
+<C-\>O		|<Plug>(aineo-office)|
 
 Send has no twin: it acts on a selection or on the line of Normal mode.
 `:Aineo claim` has no key of its own, so no twin either.
@@ -3107,8 +3142,8 @@ claude.cmd		A list of at least one string. Default: `{ 'claude' }`
 			exits 1. A `--settings` in it, inline JSON or a file
 			(named from the directory Claude Code starts in), is
 			kept whole: aineo adds its session hooks, its
-			`SubagentStart` hook and its `PostToolUse` hook
-			after the hooks it gives,
+			`SubagentStart` hook, its `PostToolUse` hook and its
+			`PermissionRequest` hook after the hooks it gives,
 			writes the result to a file only you can read and
 			write, in Neovim's own temporary
 			directory, which Neovim removes when it exits, and
@@ -3219,6 +3254,34 @@ find.picker		One of `'auto'`, `'snacks'`, `'fzf-lua'`,
 			each search, with one warning, that the picker is
 			missing. None of them is a dependency of aineo.
 
+                           *aineo-config-office* *aineo-config-office.idle_ms*
+office.idle_ms		A whole number of at least 1, or `false`. Default:
+			`180000`
+			How many milliseconds the cursor stays out of the
+			right side of the layout before the office shows by
+			itself (|aineo-office|). `false` turns that off: the
+			office then shows only when you ask for it. Read each
+			time the countdown starts, so a change counts at once.
+
+                                                    *aineo-config-office.pack*
+office.pack		A pack's name, or a list of names. Default:
+			`'default'`
+			A name is letters, digits, `_` and `-`.
+			The pack the office draws (|aineo-office-packs|). A
+			list is a choice made again each time the office
+			shows, at random among the names. A pack aineo does
+			not find, or cannot use, gives way to the default
+			pack, with a warning.
+
+                                                  *aineo-config-office.pieces*
+office.pieces		A table of piece names to art files. Default: `{}`
+			Art files of your own that replace pieces of the
+			pack, whatever it is: `{ desk = '~/art/desk.txt' }`
+			draws that file where the pack draws its piece
+			`desk`. A file is read and checked as the pack's own
+			(|aineo-office-art|), and left out, with a warning
+			naming it, when it has a problem.
+
                                                        *aineo-config-explain*
                                                  *aineo-config-explain.model*
 explain.model		A non-empty string. Default: `'sonnet'`
@@ -3240,6 +3303,62 @@ explain.issues_prompt	A non-empty string. Default: `'Some issues were
 			The words that open the message `\s` sends when
 			issues are marked (|aineo-explain-mark|), before the
 			line for each issue.
+
+                                                *aineo-config-office.commands*
+office.commands		A table of the classes `tests`, `committing`,
+			`searching` and `reading`, each a list of matches.
+			Default: the four lists below.
+			How the office (|aineo-office|) tells what a shell
+			command does. A command is split at `&&`, `||`, `;`,
+			`|` and new lines; the `cd` parts and the assignments
+			a part starts with (`DEBUG=1 make test`) are passed
+			over, and so is the body of a heredoc (the text a
+			command is fed, such as a commit message), but not
+			quoted text (`bash -c "make test"` runs a test). The
+			first class, in the order above, that any part
+			matches names the command; a command of no class is
+			just a command run. A class left out has no match.
+			A match is one of:
+			- plain words, such as `'make test'`: they match a
+			  part that holds them as whole words, in that order
+			  (`'docker'` matches `sudo docker up`, not
+			  `dockerfile`);
+			- a glob, a string with `*` (any run of characters)
+			  or `?` (any one character) in it, matching a whole
+			  part (`'cat *.md'`);
+			- `{ lua_pattern = '^make%s+test' }`, a Lua pattern
+			  found anywhere in a part. Lua cannot be stopped
+			  while it matches, and a pattern's cost grows with
+			  each repetition (`*`, `+`, `-`) in it, so a pattern
+			  may repeat once at most and must be one Lua reads
+			  whole; any other is refused with an error naming
+			  `office.commands`.
+			Only the first 4096 bytes of a command are read, and
+			1024 by a Lua pattern.
+
+                                         *aineo-config-office.commands.tests*
+office.commands.tests	Default: `'make test'`, `'make test_file'`,
+			`'npm test'`, `'pytest'`, `'go test'`, `'cargo test'`,
+			`'busted'`, `'mix test'`, `'rspec'`
+			Commands that run tests.
+
+                                    *aineo-config-office.commands.committing*
+office.commands.committing
+			Default: `'git commit'`, `'git push'`,
+			`'gh pr create'`
+			Commands that commit or share work.
+
+                                     *aineo-config-office.commands.searching*
+office.commands.searching
+			Default: `'rg'`, `'grep'`, `'git grep'`, `'find'`,
+			`'fd'`, `'ag'`, `'ack'`
+			Commands that search.
+
+                                       *aineo-config-office.commands.reading*
+office.commands.reading
+			Default: `'cat'`, `'head'`, `'tail'`, `'less'`,
+			`'bat'`, `'sed -n'`
+			Commands that read.
 
 ==============================================================================
 7. SEND                                                           *aineo-send*
@@ -3342,7 +3461,9 @@ aineo starts Claude Code with five additions of its own:
   system prompt nor what aineo appends to it. It contacts no editor. And
   a `PostToolUse` hook for `Bash` calls of git, run in the background,
   which tells the editor of a worktree or branch the call made
-  (|aineo-changes-hook|).
+  (|aineo-changes-hook|). And a `PermissionRequest` hook, run in the
+  background, which tells the editor that an agent waits for your answer
+  to a permission prompt, and decides nothing (|aineo-office-hooks|).
   aineo puts nothing else in `--settings`, and adds them after the hooks
   of a `--settings` in `claude.cmd`, passing the two together in a file
   only you can read (|aineo-config-claude.cmd|);
@@ -3650,7 +3771,489 @@ layout opened, for the editor's life; each new Claude Code starts in the
 working directory of its own moment.
 
 ==============================================================================
-9. THE AUTOSTART                                             *aineo-autostart*
+9. THE OFFICE                                                   *aineo-office*
+
+The office is a screensaver for your tab's Claude Code: an animated office
+that covers the right side of the layout, the whole column and its full
+height, whatever the column shows. Your Claude Code is a jelly bean at a
+desk. It stands beside the desk while nothing runs, and sits behind it and
+types, dots rising over its head, while a tool call runs.
+
+The office shows by itself once the cursor has stayed out of the right side of
+the layout for `office.idle_ms` (|aineo-config-office.idle_ms|), three minutes
+by default, and only while the layout shows a right side to cover: with the
+right column closed or zoomed away, it waits, and shows when the column comes
+back if the time has passed. The cursor entering the right side stops the
+countdown, leaving it starts it again, and so does a report coming in or
+entering a tab page. While the office is hidden, that countdown is the one
+timer it holds, and it reads nothing.
+
+`:Aineo office` (|:Aineo-office|), `\O` and `<Plug>(aineo-office)` show it at
+once. The cursor entering any window the office covers closes it: a click on
+it, `<C-w>w` reaching the right column, `\r`, `\i`, `\g` and the other keys
+that move to a window of the right column. Moving to Claude's window or to a
+file leaves it as it is. When the office opens, the cursor stays in the
+window it was in.
+
+What the office knows comes from the files Claude Code writes: the transcript
+of the session, `projects/<folder>/<session id>.jsonl` under
+`$CLAUDE_CONFIG_DIR`, or under `~/.claude` when that is not set, and, in the
+folder `<session id>/subagents` beside it, the transcript and the meta file
+of each subagent. The office reads the end of the transcript when it opens,
+and each line added while it shows; a subagent that runs when it opens, or
+starts while it shows, is followed until its meta file says it finished or
+the user stopped it. A transcript cut short or replaced by another is read
+again from its end. It calls no Claude, sends nothing to its terminal, makes
+no MCP call or network request, writes nothing and spends no token. While it
+shows, one timer draws 12 frames a second, one file watch follows the
+transcript, one the subagents' folder and one each subagent it follows, 64 at
+most; where the system gives no file
+watch, or the file or folder is not there yet, aineo looks at it every half
+second instead. Closing the office stops all of them. A session with no
+transcript yet shows its agent standing, and the office follows the file
+from its first line once Claude Code writes it.
+
+The office draws two pixels to a cell, with half blocks, in the colours of
+the art, so it needs `'termguicolors'` and `'ambiwidth'` left `single` (which
+`double` makes the half blocks two cells wide). With either wrong the office
+does not show: `:Aineo office` and `\O` tell you why, once, the countdown says
+nothing, and `:checkhealth aineo` reports it as an error.
+
+Each tab page has an office of its own, that follows its own session. Leaving
+the tab page stops its frames and its file watches, and entering it starts
+them again, the scene catching up with what the session did meanwhile. In a
+window smaller than 60 columns by 24 rows the office draws one line saying so
+in place of the scene.
+
+                                                          *aineo-office-cards*
+Report cards ~
+A report no longer closes the office. The reporting agent's walk to the
+printer comes from the transcript; the report itself shows as a card in the
+bottom right corner of the office, above the status list: a dot, the status
+and the summary on one line, cut to the office's width. The newest card is at
+the bottom; three show at most, and a line `+N more` above them counts the
+older ones. A card is coloured by its report's status:
+|hl-AineoOfficeCardDone| for `done`, |hl-AineoOfficeCardProgress| for
+`started` and `progress`, and |hl-AineoOfficeCardProblem| for `blocked` and
+`failed`, whose dot also blinks. The cards are kept until the cursor enters
+the right side, where the Report shows every report; a report that comes in
+while the cursor is there, and the office is hidden, leaves none.
+
+                                                    *hl-AineoOfficeCardDone*
+AineoOfficeCardDone     a `done` card, linked to `DiagnosticOk`
+                                                *hl-AineoOfficeCardProgress*
+AineoOfficeCardProgress a `started` or `progress` card, linked to
+                        `DiagnosticInfo`
+                                                 *hl-AineoOfficeCardProblem*
+AineoOfficeCardProblem  a `blocked` or `failed` card, linked to
+                        `DiagnosticError`
+                                                    *hl-AineoOfficeCardMore*
+AineoOfficeCardMore     the line `+N more`, linked to `Comment`
+
+From 24 rows tall, the last five rows of the office are its status list: a
+rule, then a line for each agent, up to four, with a dot in the agent's
+colour, its name and what it is doing (the activity's `label`, or the
+state's own words), each cut to the cells it has, a character that is not one
+cell wide shown as `?`; when there are more agents than lines, the last line
+counts the rest. The floor plan is cut to the rows above, and nothing but the
+list is painted on its rows.
+
+What a pack can ask of a frame is bounded. A plan places at most 2000 pieces,
+and the pieces together paint at most sixteen times the pixels of the plan's
+area; when it places more, aineo leaves out first the decorations, then the
+furniture, and last the pieces that stand on a spot, show something, have a
+screen or have art for when they are in use, the last the plan reads first,
+and says so once each time the office shows. A piece is painted only where it
+lies on the plan. An agent begins at most eight steps in one update, the rest
+in the updates after, and looking for a spot stops at the nearest.
+
+The art is a pack: a folder `aineo-office/<name>/` on 'runtimepath' with
+`pack.lua`, a description in the subset of a Lua table that aineo reads and
+never runs, `floor.txt`, the floor plan drawn as text, and `art/*.txt`, the
+pieces of pixel art. aineo's own pack is `aineo-office/default/`, the one the
+office draws.
+
+`:Aineo office check` (|:Aineo-office-check|) lists what is wrong with a
+pack. How a pack is chosen, found and written is told next.
+
+                                                         *aineo-office-packs*
+Packs ~
+A pack is a folder `aineo-office/<name>/` on 'runtimepath': in a plugin, as
+lazy.nvim's `{ 'someone/aineo-office-harbour' }` brings one, or in your own
+configuration, `~/.config/nvim/aineo-office/<name>/`. Its name is its
+folder's, and `pack.lua` says it too. `office.pack`
+(|aineo-config-office.pack|) chooses the pack, and `office.pieces`
+(|aineo-config-office.pieces|) replaces single pieces of it.
+
+A pack is `based_on` another, the default pack when it says nothing: what it
+leaves out it takes from that pack, name by name. A pack of its own art, its
+floor and a few activities can leave the rest to the default.
+
+A pack's name is letters, digits, `_` and `-`. A pack reads its own files
+only: `floor.plan` and the art files must lie in the pack's folder, a link
+to a file of the folder is followed and one to a file outside it is told, and
+a file that is no regular file, such as a FIFO, is told and never opened.
+`office.pieces` names your own files, anywhere.
+
+What is wrong with a pack is told with its file and line, all at once, by
+`:Aineo office check`, and once, when the office shows, in one warning that
+names the first problem of each file. A piece, an effect, a pose, an activity
+or a state with a problem is left out, so that the one of its name in the
+pack it is based on shows through. A pack that cannot be used at all - no
+`pack.lua` that is data, no floor, no agent that stands and walks, no activity
+for standing - gives way to the default pack. The checks: every value is what
+its field says; names are lowercase words joined by `_`; art rows are of one
+width and use the letters of their header, with colours the pack has; a
+floor's letters are in its legend; every spot can be walked to from the door;
+the text of an effect is one cell to a character on your screen; every
+name a field gives (a piece, a pose, an effect, an activity, a thing, a
+state) exists, in the pack or the pack it is based on; and an activity whose
+steps go to a spot the floor lacks is told never to play.
+
+                                                       *aineo-office-pack-lua*
+pack.lua ~
+`pack.lua` returns a table, written in the subset of Lua that aineo reads as
+data and never runs: `return`, tables with named fields (`name = 'tiny'`),
+keys in brackets (`['*'] = ...`) and lists, strings in quotes or in long
+brackets, numbers, `true`, `false` and comments. A call, an operator,
+`function` or a name in a value is a problem at its line, and nothing of the
+file runs. A list item wins over a key of its number, as in Lua. A file is
+read to 256 KiB.
+
+Field	Default	Means ~
+`format`	required	`1`, the version of the pack format
+`name`	required	the pack's name, its folder's
+`about`, `author`	`''`	one sentence, and who made it
+`based_on`	`'default'`	a pack's name; `false` for none
+`colours`	`{}`	`#rrggbb` by name, at most 64 names
+`text_colours`	highlight groups	by role: `name`, `status`,
+		`thought`, `warning`; each `#rrggbb` or a highlight
+		group's name (`Comment`, `Normal`, `Special`, `WarningMsg`)
+`characters`	the agent's	`agent`, `subagent` and `cat`
+`effects`	`{}`	text a character shows
+`floor`	required	the plan, its colours and its legend
+`activities`	`{}`	what characters do
+`things`	`{}`	what an activity leaves behind
+`states`	the parent's	the activity for each state
+`triggers`	`{}`	custom matches, before a state's activity
+
+                                                     *aineo-office-characters*
+Characters and poses ~
+`characters` holds `agent`, `subagent` and `cat`. A character has `colours`,
+a list of `#rrggbb` it takes in turn (one grey when it gives none), `poses`,
+by name, and `like`, another kind it takes the poses and colours of unless it
+gives its own. A subagent that is like nothing is like the agent; a pack that
+names no cat has none; `how_many` is the cat's number, `1` by default.
+
+The agent needs poses `standing` and `walking`: the engine uses them between
+steps. A pose has `art`, a list of pieces drawn bottom first, or `like`,
+another pose whose fields it takes unless it gives its own, up to 8 poses
+deep; and `sitting` (drawn seated, its feet hidden behind what stands in
+front), `effect`, `screen` (what the character's own monitor shows), `holding`
+(a prop at the art's `hand` area) and `rises` (pixels it rises by, one number
+for each frame).
+
+                                                        *aineo-office-effects*
+Effects ~
+An effect is text a character shows: `text`, a list of frames, each of
+characters one cell wide on your screen; `colour`, a role of `text_colours`, a
+`#rrggbb` or a highlight group, `'status'` by default; `place`: `above`,
+`above_left`, `above_right` or `beside`, `'above'` by default;
+`seconds_per_frame`, `0.25`; and `bold`, `false`.
+
+                                                            *aineo-office-art*
+Art files ~
+`art/<piece>.txt` holds one piece of pixel art, named by the file. A header of
+`field: value` lines, a line `---`, then the frames of the piece, separated by
+lines `---`. A row is one character to a pixel, `.` is transparent, and all
+rows are of one width; a cell of the picture is two pixels tall.
+>
+    about: A desk with a drawer.
+    colours: W = wood, D = dark_wood
+    anchor: 0, 3
+    area name: 1, 2, 10 x 2
+    ---
+    WWWWWWWWWWWW
+    DDDDDDDDDDDD
+    .D........D.
+    .D........D.
+<
+Header field	Means ~
+`about`	what the piece is
+`colours`	each letter and its colour: a name from `colours`, or
+		`agent`, `agent_light`, `agent_shade`, `agent_blush`, the
+		character's own; required for each letter used
+`anchor`	`column, row` of the pixel that stands on the cell the piece
+		is placed at, counted from 0; the bottom left by default
+`faces`	`right` (the default) or `left`: the way the art faces
+`stretch`	`columns 3-20`: columns, counted from 1, that repeat to
+		stretch the piece to the width the plan draws; none by
+		default
+`area <name>`	`column, row, width x height`, in pixels from 0, where aineo
+		draws: `screen`, `hand`, `name`, `plan`, `time`, `date`,
+		`sky`, `page` or `query`
+`seconds per frame`	how long each frame shows, `0.25` by default
+
+An art file is read to 256 KiB, 400 pixels wide, 200 tall and 64 frames; of a
+pack's art files the first 500, by name, are read and the rest told. The
+files of a pack and of the packs it is based on are read up to 2 MiB together,
+the files over that told once and left out, so that the pack it is based on
+shows through. A pack is read once and kept: the office reads it again only
+when one of its files, or the folders it looked in, changed.
+
+                                                          *aineo-office-floor*
+The floor plan ~
+`floor` in `pack.lua` has `plan`, the file (`'floor.txt'`), `floor_colour`
+and `wall_colour`, names from `colours`, and `legend`, what each letter of
+the plan is. `floor.txt` draws the plan, one character to a cell, a cell one
+pixel wide and two tall.
+>
+    # Comment lines start with # and come first.
+    # The next line marks with ~ the columns that repeat to fill the width.
+      ~~
+     ####
+     D..#
+    ~..s.
+<
+The first line after the comments marks with `~` one block of columns that
+repeat to fill the width; the first character of every row is the marker
+column and is not part of the plan: `~` there marks one block of rows that
+repeat to fill the height, a space a row that does not. A piece or a spot in
+a repeated block repeats with it, so one desk becomes a room of desks. `.` is
+floor to walk on, `#` wall, a space floor nobody walks on, and any other
+character a letter of the legend. A row shorter than the widest is read as
+ending in spaces. A plan is read to 400 cells wide and 200 rows.
+
+A legend entry has:
+`piece`	the piece standing there, its bottom left corner on the cell; a
+	run of the letter on one row stretches a piece that stretches to
+	the run
+`spot`	a place characters go to, by name; `door` is where they come in and
+	go out, `desk` each agent's own
+`sitting`	a character at the spot is seated (`false`)
+`facing`	`left` or `right` (`'right'`)
+`walk_over`	the piece lies on the floor and is walked over (`false`)
+`in_use`	the art the piece shows in its place while a character stands
+	on the spot nearest to the piece or walks over it
+`decorations`	for a run of the letter: pieces placed left to right, as
+	many as fit, in this order of preference, each with a spot of
+	its own name on the first floor row below it
+`from_width`	the piece shows only when the office is at least so many
+	columns wide
+`shows`	live content aineo draws into the piece's area of that name
+	(|aineo-office-live|); for a run of `decorations`, into each
+	decoration that has such an area
+
+                                                           *aineo-office-live*
+Live content ~
+A piece with `shows` is drawn as its art says, and aineo draws into its area
+of that name, and nowhere else:
+`time`	`07:05`, from the clock, as far as the area holds
+`date`	`Oct 03`, the same
+`sky`	the pack's piece `sky_night`, `sky_dawn`, `sky_day` or `sky_dusk`
+	for the hour of the clock (night from 21 to 5, dawn until 8, day
+	until 17, dusk until 21), from the area's top left and cut to the
+	area; a pack without the piece draws no sky
+`plan`	the main agent's tasks, from `TodoWrite` or `TaskCreate` and
+	`TaskUpdate`, a row each: `✓ ` before the ones done, `○ ` before the
+	others, cut to the area's width; from the first task not done when
+	there are more tasks than rows. A task deleted is left out, and a
+	creation whose result is an error takes no number. `TaskUpdate` names
+	a task by the number Claude Code gave it, which the transcript does
+	not carry: aineo counts the creations it has read, so when the part
+	of the transcript it reads at the start begins after some of them,
+	an update can tick another row or none
+`printing`	the pack's piece `printed_page`, coming out of the top of the
+	area a pixel row at a time for four seconds after any agent calls
+	the report tool; a pack without the piece prints nothing
+`name`	the name of the agent whose desk it is, cut to the area's
+	width: the desk of the agent at a `desk` spot is the piece that shows
+	names over that spot, and a desk nobody has, or whose spot the width
+	cut off, stays blank; a plan without `desk` spots gives the n-th
+	such piece to the agent with the n-th place
+A monitor besides writes what its agent looks up on the web into its `query`
+area while the agent is on the web (the query of a search, the host of an
+address it fetches, and only when that has the shape of a host; never the
+rest of it), and a `✓` (green) or `✗` (red) at the top left of its `screen`
+area for three seconds after a test run. A character that is not one cell
+wide, a combining mark among them, or is a control character, shows as `?`.
+Nothing is written below the plan: the rows under it are the status list's.
+
+                                                     *aineo-office-activities*
+Activities, things and states ~
+`activities` says what characters do, by name. An activity has `steps`, in
+order, and `about`, `label`, `who` (`'agents'` or `'cat'`), `during` (the
+states, `always` among them, in which it may be picked at random), `chance`
+(a weight, `1`) and `players` (how many play it together, `1`). A step has
+`at` (the spot it is at), `pose` (`'standing'`), `for_seconds` (a number, or
+two for a random time between them), `facing`, `effect`, `even_if_taken`,
+`the_one_moved_plays` (an activity), `leave` and `remove` (a thing) and
+`follow`. Spots aineo knows without a legend: `anywhere`, `an_empty_desk`,
+`an_idle_agents_desk`, `next_to_an_agent` and `next_to_the_cat`, and each
+thing's name.
+
+How an agent plays an activity: it takes the steps in order. For a step it
+goes to the nearest spot called `at` that no other agent has taken, walking
+the shortest way over floor (`.`), spots and pieces with `walk_over`, never
+over a wall, a space or a piece that stands on the floor, and takes the
+step's `pose`, facing the spot's way or the step's `facing`. A spot called
+`desk` is the agent's own. An agent has a place from its arrival to its
+leaving, the lowest number no other agent has, and its desk, its monitor and
+its colour go by it: the agent with the first place has the first desk, the
+first monitor and the first colour. After `for_seconds` from its arrival (a
+random time between the two numbers when it has two) the next step begins; the
+last step lasts until the agent's activity changes, or, when it has
+`for_seconds`, until they are over (see below). An agent whose step names
+a spot that other agents have keeps the spot it stands on and looks again
+every second. An agent that has no place yet, whose step names a spot that
+other agents have, or that the plan lacks (as in a room too small for the
+desks), or that cannot be walked to, is put on the free floor cell nearest the
+spot `door` (the one the random source picks when the plan has no door) and
+plays the step there, so that it is always drawn; it is not drawn only when a
+character stands on every floor cell, and then it is put on a cell as soon as
+one is free. An agent that has a place keeps it: a spot that cannot be walked
+to leaves it where it is and its activity goes on. An agent first appears at
+the first spot of its first step without walking there, or at the spot `door`
+when the step has no `at`.
+A step's `effect` shows over the pose's. When the office is resized, each
+agent keeps its activity and its step, at the spot of the same name and
+number in the new plan.
+
+When the last step of an activity has `for_seconds` and they are over while
+the agent's state goes on, the agent plays another activity: one whose
+`during` names its state, picked at random in proportion to its `chance`
+(`1` unless it says), never the one the agent has just played, and only one it
+can play now. It can play an activity when the plan has as many free spots as
+`players` for its first step with a spot and a spot for each step after, when
+the others that must play it are free, and, for a step that follows someone,
+when someone is on the move. An activity with `players = 2` takes along
+another agent, picked at random among the free ones in a state its `during`
+names (not in a game, upset, sent to clean, or doing this very activity
+now): both begin it together, each at a spot of its own of the name, and
+each step lasts the same time for both; with no such agent it is not picked.
+When one player leaves it, called away by its state, sent to clean or leaving
+the office, it ends for the others too: two play it, or none. An agent with
+nothing to pick keeps its last pose and looks again every second. When the
+agent's state changes, what it picked at random is dropped for what the new
+state asks for.
+
+A step's `at` may name a spot aineo knows without a legend: `anywhere` is a
+floor cell the random source picks; `an_empty_desk` a desk of the plan no
+agent has; `an_idle_agents_desk` the desk of another agent in the state `idle`
+who is away from it; `next_to_an_agent` a cell beside another agent who stands
+still; `next_to_the_cat` a cell beside a cat that stands still, facing it,
+which then keeps its pose and its place until the agent's step is over; and
+a thing's name is the cell where a thing of that name lies. With
+`even_if_taken` a step goes to the nearest spot of its name, taken or not:
+the character that has it is moved when the one coming arrives, and plays the
+activity `the_one_moved_plays` names, or, when the step names none, looks for
+another spot of the name and, finding none, is done with its step. A chain of
+characters moved one by another stops at the fourth, who is left where it
+stands.
+
+A pose whose art has frames, or whose `rises` lifts it, begins at its first
+frame when the agent takes the pose. A pose with `screen` shows that piece in
+the `screen` area of the agent's own monitor, the one nearest to the agent's
+`desk` spot (in a plan without `desk` spots, the n-th piece of the plan with a
+`screen` area for the agent with the n-th place). `holding` draws a piece at
+the `hand` area of the first layer that has one, mirrored with that layer and
+as the piece's own `faces` says.
+
+`things` says what an activity leaves behind: `piece`, and optionally
+`upsets_agents_within` (cells), `upset_agents_play` and `cleaned_up_by` (an
+activity each). A step with `leave` lays that thing on the floor at the
+character's feet as the step ends, and a step with `remove` takes away the
+thing of that name on the cell the character stands on as it ends; a step
+that never ends leaves and removes nothing. A thing is drawn under what stands
+on its cell. When one is left, the agents at most `upsets_agents_within` cells
+from it, in a straight line, play `upset_agents_play`, and the idle agent (the
+state `idle`) nearest to it plays `cleaned_up_by` instead; with no idle agent
+the thing waits until one is. Both are interludes: when they are over, or when
+the agent's state changes, the agent goes back to what its state asks for. At
+most 64 things lie at a time, and a resize drops those on cells the new plan
+cannot be walked on.
+
+`characters.cat` draws a cat, `how_many` of them (at most 4), once the pack
+has activities with `who = 'cat'`. The cat has no state: it plays those
+activities at random, as agents do, the ones whose `during` names `always`.
+It takes no place among the agents, so it has no desk, no monitor and no row
+in the status list, and its colour goes by its number among the cats. A cat's
+step may `follow = 'someone_walking'`, the only name there is: the cat trails
+the nearest character on the move for `for_seconds` or until it stops. A cat
+needs at least one activity with a spot to come into the office: it is placed
+by that, and a cat whose every activity follows someone is never placed. A cat
+that takes a seat an agent is on, with `even_if_taken`, angers the agent and
+the agent leaves, if the pack says so by `the_one_moved_plays`.
+
+`states` maps the name of a state to an activity; a state it leaves out takes
+its parent's.
+
+                                                       *aineo-office-triggers*
+Triggers ~
+`triggers` is a list, tried in order whenever a tool call starts, before the
+activity of the state. Each has `when`, the call it matches, and `play`, the
+activity it plays while the call runs. `when` holds `tool`, `agent` (`main` or
+`subagent`) and any of `command`, `description`, `file_path`, `url`, `query`,
+`subagent_type`, `pattern`, `path`, `status`, `summary` and `task`. A value of
+plain words matches a value that contains them as whole words, `'docker'`
+matches `sudo docker compose up` and not `dockerfile`; a value with `*` or `?`
+is a glob over the whole value; `{ lua_pattern = '^make%s+test' }` is a Lua
+pattern, which may hold at most one repetition item (`*`, `+`, `-` or `?`,
+after a character, a class or a set) so that no match can take long; a
+pattern Lua rejects, or with more, is a problem at its line. A trigger costs a
+string match on a call already read: a pack and the packs it is based on
+hold at most 64 triggers together, the rest told and left out, and the
+triggers of one call are tried for 20 ms at most, the rest of them skipped
+and told once each time the office shows.
+>lua
+    triggers = {
+      { when = { tool = 'Bash', command = 'docker' },
+        play = 'tend_the_rack' },
+    }
+<
+                                                         *aineo-office-check*
+Checking a pack ~
+`:Aineo office check [name]` (|:Aineo-office-check|) puts every problem of a
+pack in the quickfix list as `file:line: problem`, the file's whole path in
+the list, so `:cnext` goes to it.
+
+The office shows the main agent and its subagents, and shows when you ask
+for it, not by itself. It stays over the right column as the screen
+or a window is resized, and closes when the layout shows no right column, as
+under `\Z`; it makes its colours again after a colorscheme. It does not
+pause for a tab page you leave or return to.
+It follows the transcript Claude Code's `SessionStart` hook names; when no
+hook ran, it looks for the session's transcript in `projects/` under Claude
+Code's configuration directory, and when none is there, it waits for the file
+Claude Code makes in the folder named after the directory Neovim started in.
+
+                                                          *aineo-office-hooks*
+Two of the hooks aineo gives the Claude Code it starts in `--settings`
+(|aineo-report|) serve the office:
+- the `SessionStart` hook, which also tells the editor when Claude Code
+  switches session (|aineo-claude-session|), passes on the path of the
+  transcript that Claude Code names in its input. A session whose hook
+  never ran, as in a folder Claude Code does not trust yet, has its
+  transcript looked for in `projects/` when the office shows;
+- the `PermissionRequest` hook, which Claude Code runs in the background as
+  it is about to ask you to allow a tool. It tells the editor which agent
+  asks, the main one or the subagent whose `agent_id` the input names, and
+  in which tab. It prints nothing and so decides nothing: the prompt stays
+  yours to answer. It starts a headless `nvim` for about 20 ms per prompt,
+  which Claude Code does not wait for, and ends itself after 6 seconds
+  whatever the editor does, one held at a prompt say. In the permission
+  mode `dontAsk`, where Claude Code denies a call without a prompt, it
+  tells nothing.
+A wait the office is told while it is hidden, or while its tab page is left,
+is kept: the agent raises its hand when the office shows, or the tab page is
+entered, unless the transcript shows the agent has gone on since, as when you
+answered in Claude's terminal. It is kept for 64 agents at most.
+The hook was recorded on Claude Code 2.1.308; aineo knows no lowest version
+that runs it. Claude Code runs no `PermissionRequest` hook for a sandboxed
+command's network request, so the office shows no wait for that prompt.
+
+==============================================================================
+10. THE AUTOSTART                                            *aineo-autostart*
 
 A bare, interactive `nvim` opens the layout and starts Claude Code by itself,
 in the directory Neovim started in. Two scheduled callbacks after |VimEnter|,
@@ -3680,7 +4283,7 @@ nothing opens. `--cmd`, `-t` and `-q` alone still autostart.
 (|aineo-health|).
 
 ==============================================================================
-10. HEALTH CHECK                                                *aineo-health*
+11. HEALTH CHECK                                                *aineo-health*
 
 `:checkhealth aineo` reads the configuration and the editor's state and
 reports on them. It starts no Claude session, opens no layout and maps no
@@ -3704,13 +4307,14 @@ Claude Code ~
   process it starts that leaves the group, by starting a session or a
   group of its own, is not killed and can outlive the check.
   When `claude.cmd` gives a `--settings`, whether aineo can add its
-  hooks to it, the session hooks, the `SubagentStart` hook and the
-  `PostToolUse` hook, read from the editor's working directory as a start
-  reads it (|aineo-config-claude.cmd|): a warning naming why it cannot —
+  hooks to it, the session hooks, the `SubagentStart` hook, the
+  `PostToolUse` hook and the `PermissionRequest` hook, read from the
+  editor's working directory as a start reads it
+  (|aineo-config-claude.cmd|): a warning naming why it cannot —
   the file missing, not a regular file or unreadable, settings that are
   not valid JSON or hold no object, `hooks` that are not an object, a
-  `SessionStart`, `SessionEnd`, `SubagentStart` or `PostToolUse` entry
-  that is not a list, or
+  `SessionStart`, `SessionEnd`, `SubagentStart`, `PostToolUse` or
+  `PermissionRequest` entry that is not a list, or
   no value after the flag. Whether aineo can write the file it passes
   them in is not checked.
 
@@ -3815,7 +4419,7 @@ Limits ~
 The check passes when it shows no error; warnings are advice.
 
 ==============================================================================
-11. LIMITS                                                      *aineo-limits*
+12. LIMITS                                                      *aineo-limits*
 
 The explorer ~
 A folder git ignores whole, such as `node_modules/`, shows as one folder

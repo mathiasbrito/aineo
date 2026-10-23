@@ -20,14 +20,17 @@
 ---
 --- As the deliverer — `-l <this file> --deliver <editor address> <start
 --- token> <event> <session id> <source or reason> <hook time> <session left>
---- <new session> <working directory> <Claude Code's pid>`, the hook time
---- being `vim.uv.hrtime()` as the hook began, a monotonic clock every
---- process on the host shares, by which the editor tells the order the hooks
---- ran in whatever order their deliverers reach it, the two sessions empty
---- when the hook completed no switch, and the pid empty when the hook's
---- command gave none of digits — it sends the editor one RPC notification
+--- <new session> <working directory> <Claude Code's pid> <transcript path>`,
+--- the hook time being `vim.uv.hrtime()` as the hook began, a monotonic
+--- clock every process on the host shares, by which the editor tells the
+--- order the hooks ran in whatever order their deliverers reach it, the two
+--- sessions empty when the hook completed no switch, the pid empty when the
+--- hook's command gave none of digits, and the transcript path empty when
+--- the input names none — it sends the editor one RPC notification
 --- calling `require('aineo.claude').receive_session_event(event, session id,
---- source or reason, start token, hook time, pid)` there. For a switch, it
+--- source or reason, start token, hook time, pid, transcript path)` there.
+--- The transcript path is the input's `transcript_path`, the file Claude
+--- Code writes the session's transcript in. For a switch, it
 --- then sends each other editor that follows the session left by a claim, and its
 --- claimant, a notification of the switch (`notify_followers()`), and, when
 --- its own editor could not be reached, keeps the new session for the
@@ -51,7 +54,22 @@
 --- call of `announce_work` reaches it, waiting for its answer
 --- (`tell_made_work()`). Any other call, and any failure, tells nothing; the
 --- hook writes nothing on stdout or stderr and exits 0, and ends itself after
---- `TOOL_USE_LIFETIME_MS` whatever the editor does (`end_after()`).
+--- `BACKGROUND_HOOK_LIFETIME_MS` whatever the editor does (`end_after()`).
+---
+--- As aineo's `PermissionRequest` hook, which Claude Code runs in the
+--- background as a permission prompt is about to show, with the event
+--- `PermissionRequest`, it records nothing and starts no deliverer: it tells
+--- the editor, waiting for its answer, that the agent of the input waits for
+--- the user — the input's `session_id` and, when a subagent asks, its
+--- `agent_id` (`tell_permission_wait()`), and nothing when the input's
+--- `permission_mode` is `dontAsk`, which shows no prompt. It decides
+--- nothing: it writes nothing on stdout or stderr, whatever it was given,
+--- exits 0, and ends itself after `BACKGROUND_HOOK_LIFETIME_MS` as the
+--- `PostToolUse` hook does. Its own server socket is stopped first, so that
+--- ending itself leaves none in the temporary directory.
+---
+--- Every hook reads its input from a pipe of the event loop and waits for it
+--- to end at most `BACKGROUND_HOOK_LIFETIME_MS` (`stdin_text()`).
 ---
 --- It runs only when it is the script `-l` runs (`arg[0]`, `:h lua-args`):
 --- loaded inside an editor, by `require` or `dofile`, it does nothing.
@@ -82,12 +100,46 @@ local CONFIRMATION = 'return 0'
 --- The Lua an editor runs to take a switch of a Claude Code it does not run.
 local RECEIVE_FOLLOWED_SWITCH = "require('aineo.mcp').receive_followed_switch(...)"
 
---- The hook's input, read from stdin, when it is a JSON object with a string
---- `session_id`; else nil.
+--- How long a hook run in the background (`PostToolUse`, `PermissionRequest`)
+--- may run before it ends itself, exit 0, whatever the editor does: Claude
+--- Code enforces no timeout on a hook run in the background, and an editor
+--- held at a hit-enter prompt never answers. It is also how long any hook
+--- waits for its input to end (`stdin_text()`).
+local BACKGROUND_HOOK_LIFETIME_MS = 6000
+
+--- All of stdin, read through a pipe of the event loop so that the wait for
+--- its end is bounded by `BACKGROUND_HOOK_LIFETIME_MS`, a blocking read
+--- not being: nil when stdin has not ended by then, or cannot be read.
+--- A stdin that is not a pipe (a file) is read whole at once.
+---
+---@return string?
+local function stdin_text()
+  local pipe = assert(vim.uv.new_pipe(false))
+  if not pcall(pipe.open, pipe, 0) then
+    pipe:close()
+    return io.read('*a')
+  end
+  local chunks, ended = {}, false
+  pipe:read_start(function(failure, chunk)
+    if failure or not chunk then
+      ended = true
+      pipe:read_stop()
+    else
+      table.insert(chunks, chunk)
+    end
+  end)
+  vim.wait(BACKGROUND_HOOK_LIFETIME_MS, function()
+    return ended
+  end, 5)
+  return ended and table.concat(chunks) or nil
+end
+
+--- The hook's input, read from stdin (`stdin_text()`), when it is a JSON
+--- object with a string `session_id`; else nil.
 ---
 ---@return table?
 local function hook_input()
-  local read, input = pcall(vim.json.decode, io.read('*a'), { luanil = { object = true } })
+  local read, input = pcall(vim.json.decode, stdin_text() or '', { luanil = { object = true } })
   if read and type(input) == 'table' and type(input.session_id) == 'string' then
     return input
   end
@@ -165,6 +217,7 @@ local function start_deliverer(place, hook)
       switch.new,
       place.working_directory or '',
       (place.claude_pid or ''):match('^%d+$') or '',
+      type(hook.input.transcript_path) == 'string' and hook.input.transcript_path or '',
     },
     detached = true,
   }, function() end)
@@ -230,11 +283,8 @@ local TOOL_USE_EVENT = 'PostToolUse'
 --- How long the hook waits for git to resolve the base of work made.
 local BASE_RESOLUTION_MS = 3000
 
---- How long the `PostToolUse` hook may run before it ends itself, exit 0,
---- whatever the editor does: Claude Code enforces no timeout on a hook run
---- in the background, and an editor held at a hit-enter prompt never
---- answers.
-local TOOL_USE_LIFETIME_MS = 6000
+--- The event of aineo's hook as a permission prompt is about to show.
+local PERMISSION_EVENT = 'PermissionRequest'
 
 --- Ends this process, exit 0 and nothing written, `milliseconds` from now,
 --- whatever it is waiting on then.
@@ -343,6 +393,24 @@ local function made_work(place, input)
   return { worktree = top, branches = { { name = name, base = base } }, by_hook = true }
 end
 
+--- Connects to the editor at `address`, as `notify()` does, runs `lua` with
+--- `arguments` there as a request, waits for its answer, and closes the
+--- connection. Does nothing when the editor cannot be reached, or ends
+--- before it answers.
+---
+---@param address string
+---@param lua string
+---@param arguments any[]
+local function ask_editor(address, lua, arguments)
+  local mode = address:match('^[^/]+:%d+$') and 'tcp' or 'pipe'
+  local connected, channel = pcall(vim.fn.sockconnect, mode, address, { rpc = true })
+  if not connected then
+    return
+  end
+  pcall(vim.rpcrequest, channel, 'nvim_exec_lua', lua, arguments)
+  pcall(vim.fn.chanclose, channel)
+end
+
 --- Tells the editor at `place.address` the work the `Bash` call of `input`
 --- made (`made_work()`), as an agent's announcement reaches it, waiting
 --- for its answer, and closes the connection; tells nothing when the call
@@ -353,21 +421,53 @@ end
 ---@param input table
 local function tell_made_work(place, input)
   local work = made_work(place, input)
-  if not work then
-    return
+  if work then
+    ask_editor(place.address, RECEIVE_WORK, { work, place.start_token })
   end
-  local mode = place.address:match('^[^/]+:%d+$') and 'tcp' or 'pipe'
-  local connected, channel = pcall(vim.fn.sockconnect, mode, place.address, { rpc = true })
-  if not connected then
-    return
-  end
-  pcall(vim.rpcrequest, channel, 'nvim_exec_lua', RECEIVE_WORK, { work, place.start_token })
-  pcall(vim.fn.chanclose, channel)
 end
 
+--- The Lua the editor runs for a permission wait, its arguments the start
+--- token, the session and the subagent that asks: `aineo.claude`'s
+--- `receive_permission_wait()`.
+local RECEIVE_PERMISSION_WAIT = "return require('aineo.claude').receive_permission_wait(...)"
+
+--- The permission mode in which Claude Code denies a call that would ask,
+--- showing no prompt, though it runs the `PermissionRequest` hooks.
+local NO_PROMPT_MODE = 'dontAsk'
+
+--- Tells the editor at `place.address` that the agent of the
+--- `PermissionRequest` `input` waits for the user, waiting for its answer
+--- and closing the connection: the start token, the input's `session_id`,
+--- and its `agent_id` when a subagent asks (else `vim.NIL`). Tells nothing
+--- when the input's `permission_mode` is `NO_PROMPT_MODE`: no prompt is
+--- shown, so no one waits. Run in the background of Claude Code, so the wait
+--- holds no tool call.
+---
+---@param place aineo.claude.HookPlace
+---@param input table
+local function tell_permission_wait(place, input)
+  if input.permission_mode == NO_PROMPT_MODE then
+    return
+  end
+  local subagent = type(input.agent_id) == 'string' and input.agent_id or vim.NIL
+  ask_editor(
+    place.address,
+    RECEIVE_PERMISSION_WAIT,
+    { place.start_token, input.session_id, subagent }
+  )
+end
+
+--- The function that tells the editor what the hook of each event run in
+--- the background read (`BACKGROUND_HOOK_LIFETIME_MS`), by event.
+---@type table<string, fun(place: aineo.claude.HookPlace, input: table)>
+local BACKGROUND_HOOKS = {
+  [TOOL_USE_EVENT] = tell_made_work,
+  [PERMISSION_EVENT] = tell_permission_wait,
+}
+
 if arg[1] == DELIVER then
-  local address, start_token, event, session_id, cause, ran, left, new, working_directory, pid =
-    unpack(arg, 2, 11)
+  local address, start_token, event, session_id, cause, ran, left, new, working_directory, pid, transcript_path =
+    unpack(arg, 2, 12)
   local editor = notify(address, RECEIVE_SESSION_EVENT, {
     event,
     session_id,
@@ -375,6 +475,7 @@ if arg[1] == DELIVER then
     start_token,
     tonumber(ran) or vim.NIL,
     tonumber(pid) or vim.NIL,
+    (transcript_path or '') ~= '' and transcript_path or vim.NIL,
   })
   local followers = {}
   if (left or '') ~= '' and (new or '') ~= '' then
@@ -406,10 +507,14 @@ local place = {
 local event = arg[3]
 local ran = vim.uv.hrtime()
 local input = hook_input()
-if input and event == TOOL_USE_EVENT then
-  end_after(TOOL_USE_LIFETIME_MS)
+local background_hook = BACKGROUND_HOOKS[event]
+if input and background_hook then
+  -- The lifetime ends this process with os.exit(), which would leave the
+  -- server socket this Neovim made in the temporary directory.
+  pcall(vim.fn.serverstop, vim.v.servername)
+  end_after(BACKGROUND_HOOK_LIFETIME_MS)
   -- Whatever fails here is the hook's alone: the agent's call went on.
-  pcall(tell_made_work, place, input)
+  pcall(background_hook, place, input)
 elseif input then
   local hook = { event = event, input = input, ran = ran }
   -- A record that cannot be written leaves the report server the session it

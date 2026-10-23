@@ -1,0 +1,8 @@
+about: A low table in front of a sofa.
+colours: D = dark_wood, W = wood
+anchor: 0, 3
+---
+WWWWWWWWWWWWWW
+DDDDDDDDDDDDDD
+.D..........D.
+.D..........D.

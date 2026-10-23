@@ -1,0 +1,20 @@
+about: The arms and seat of a three-seat sofa, in front of the agents who sit on it.
+colours: A = sofa_arm, B = sofa_cushion, F = iron
+anchor: 0, 15
+---
+............................................
+............................................
+............................................
+............................................
+............................................
+.AA......................................AA.
+AAAA....................................AAAA
+AAAA....................................AAAA
+AAAA....................................AAAA
+AAAA....................................AAAA
+AAAA....................................AAAA
+AAAABBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBAAAA
+AAAABBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+.FF......................................FF.
+............................................

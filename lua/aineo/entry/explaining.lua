@@ -5,15 +5,7 @@
 
 local M = {}
 
---- aineo's configuration, resolved from `vim.g.aineo` and the options
---- `require('aineo').setup()` recorded (`aineo.config`'s `resolve_config()`).
---- Raises its error naming the setting that is wrong.
----
----@return table
-local function resolved_config()
-  local config = require('aineo.config')
-  return (config.resolve_config(vim.g.aineo, config.recorded_setup_options()))
-end
+local resolved_config = require('aineo.entry.settings').resolved
 
 --- Whether `buffer` holds a file: it has a name and an empty `'buftype'`,
 --- which none of aineo's own panes has.

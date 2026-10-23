@@ -1,0 +1,11 @@
+about: A desk; the agent sits behind it.
+colours: D = dark_wood, W = wood
+anchor: 0, 2
+area name: 3, 3, 20 x 2
+---
+WWWWWWWWWWWWWWWWWWWWWWWWWW
+DDDDDDDDDDDDDDDDDDDDDDDDDD
+.DD....................DD.
+.DD....................DD.
+.DD....................DD.
+.DD....................DD.

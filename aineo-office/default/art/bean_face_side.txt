@@ -1,0 +1,13 @@
+about: The face of an agent: side.
+colours: k = ink, p = agent_blush, w = shine
+anchor: 3, 8
+---
+.wk...wk
+.kk...kk
+.kk...kk
+pp....pp
+..k...k.
+...kkk..
+........
+........
+........

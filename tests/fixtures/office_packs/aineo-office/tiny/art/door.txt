@@ -1,0 +1,13 @@
+about: A door.
+colours: D = dark_wood, W = wood
+---
+DDDDDD
+DWWWWD
+DWWWWD
+DWWWWD
+DWWWWD
+DWWWWD
+DWWWWD
+DWWWWD
+DWWWWD
+DWWWWD

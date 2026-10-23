@@ -1,0 +1,19 @@
+about: A printer on a stand; a page comes out of it when an agent reports.
+colours: D = dark_wood, F = iron, L = silver, W = white, d = door_panel, g = green, k = ink, w = shine
+anchor: 0, 11
+area page: 3, 5, 8 x 4
+---
+...WWWWWWWW...
+.FFFFFFFFFFFF.
+FLLLLLLLLLLLLF
+FLLLLLLLLLLgLF
+FkkkkkkkkkkkkF
+FLLLLLLLLLLLLF
+DDDDDDDDDDDDDD
+DddddddddddddD
+DddddwwwwddddD
+DddddddddddddD
+DddddddddddddD
+DddddwwwwddddD
+DddddddddddddD
+D............D

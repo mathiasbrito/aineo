@@ -1,0 +1,13 @@
+about: A whiteboard on the wall; it stretches to the width the plan draws.
+colours: F = board_frame, w = board
+stretch: columns 2-5
+area plan: 1, 1, 4 x 6
+---
+FFFFFF
+FwwwwF
+FwwwwF
+FwwwwF
+FwwwwF
+FwwwwF
+FwwwwF
+FFFFFF

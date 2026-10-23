@@ -34,8 +34,21 @@ local TOOL_USE_EVENT = 'PostToolUse'
 local TOOL_USE_MATCHER = 'Bash'
 local TOOL_USE_CONDITION = 'Bash(git *)'
 
+--- The Claude Code hook event that runs when a permission prompt is about to
+--- show, for any tool. aineo's hook for it runs in the background (`async`)
+--- with no matcher: the relay tells the editor that an agent waits for the
+--- user and prints nothing, so that it decides nothing (`aineo.claude`'s
+--- `receive_permission_wait()`).
+local PERMISSION_EVENT = 'PermissionRequest'
+
 --- Every event aineo gives a hook for.
-local HOOKED_EVENTS = { 'SessionStart', 'SessionEnd', SUBAGENT_START_EVENT, TOOL_USE_EVENT }
+local HOOKED_EVENTS = {
+  'SessionStart',
+  'SessionEnd',
+  SUBAGENT_START_EVENT,
+  TOOL_USE_EVENT,
+  PERMISSION_EVENT,
+}
 
 --- The flag that gives Claude Code settings, and the prefix of its spelling
 --- joined to its value in one word.
@@ -103,10 +116,11 @@ end
 --- with no matcher, so that it runs whatever the event's source or reason,
 --- that runs the hook relay (`relay_command()`) and is stopped after
 --- `HOOK_TIMEOUT_SECONDS`; one for `TOOL_USE_EVENT`, for git's `Bash` calls
---- alone, in the background, that runs the hook relay too; and, when
---- `settings` give a subagent context, one for `SUBAGENT_START_EVENT`, with
---- no matcher, so that it runs for every subagent whatever its type, that
---- prints it (`subagent_context_command()`).
+--- alone, in the background, that runs the hook relay too; one for
+--- `PERMISSION_EVENT`, for every tool, in the background, that runs it as
+--- well; and, when `settings` give a subagent context, one for
+--- `SUBAGENT_START_EVENT`, with no matcher, so that it runs for every
+--- subagent whatever its type, that prints it (`subagent_context_command()`).
 ---
 ---@param settings aineo.claude.Settings
 ---@param start_token string
@@ -130,6 +144,16 @@ local function hook_entries(settings, start_token)
         timeout = HOOK_TIMEOUT_SECONDS,
         async = true,
         ['if'] = TOOL_USE_CONDITION,
+      },
+    },
+  }
+  entries[PERMISSION_EVENT] = {
+    hooks = {
+      {
+        type = 'command',
+        command = relay_command(settings, start_token, PERMISSION_EVENT),
+        timeout = HOOK_TIMEOUT_SECONDS,
+        async = true,
       },
     },
   }
@@ -432,8 +456,9 @@ end
 --- `session_words` pick: `settings.cmd`, then `session_words`, then aineo's
 --- arguments (`claude_arguments()`), among them `--settings` with a
 --- `SessionStart` and a `SessionEnd` hook that tell the editor of each,
---- naming `start_token`, and, when `settings.subagent_context` is given, a
---- `SubagentStart` hook that prints it (`hook_entries()`): inline when
+--- naming `start_token`, a `PostToolUse` and a `PermissionRequest` hook that
+--- do so in the background, and, when `settings.subagent_context` is given,
+--- a `SubagentStart` hook that prints it (`hook_entries()`): inline when
 --- `settings.cmd` gives no `--settings`.
 --- A `--settings` of `settings.cmd`, in a file or inline, gets aineo's hooks
 --- after its own, nothing of it dropped, and is written to a new file only

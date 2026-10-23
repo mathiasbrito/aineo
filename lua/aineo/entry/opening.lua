@@ -5,6 +5,7 @@
 local closing = require('aineo.entry.closing')
 local explorer = require('aineo.entry.explorer')
 local folder_tabs = require('aineo.entry.folder_tabs')
+local offices = require('aineo.entry.office')
 local registry = require('aineo.entry.registry')
 local routing = require('aineo.entry.routing')
 local one_tab = require('aineo.entry.tab')
@@ -41,7 +42,8 @@ local tab_page_handlers_made = false
 --- closes closes the tab (`close_tabs_of_closed_pages()`); a tab page the user
 --- enters and is still in once the event loop has turned is seen
 --- (`aineo.tabs`' `mark_seen()`), so that aineo's own pass through a tab page
---- marks none.
+--- marks none; and its office is made, which counts the user's idleness from
+--- then on (`aineo.entry.office`'s `watch()`).
 ---
 ---@param tab aineo.entry.Tab
 local function hold_tab(tab)
@@ -52,6 +54,7 @@ local function hold_tab(tab)
   tabs.show_tabline_once()
   registry.last_used_tab = tab
   folder_tabs.keep_folder_tabs()
+  offices.watch(tab)
   if not tab_page_handlers_made then
     tab_page_handlers_made = true
     local group = vim.api.nvim_create_augroup('aineo.tabs', {})

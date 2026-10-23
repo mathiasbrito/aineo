@@ -1,0 +1,28 @@
+about: The office door, closed.
+colours: O = door_frame, d = door_panel, e = door_inset, y = yellow
+anchor: 0, 21
+---
+OOOOOOOOOO
+OddddddddO
+OdeeeeeedO
+OdeeeeeedO
+OdeeeeeedO
+OdeeeeeedO
+OdeeeeeedO
+OdeeeeeedO
+OdeeeeeedO
+OdeeeeeedO
+OddddddddO
+OddddddddO
+OddddddyyO
+OddddddddO
+OdeeeeeedO
+OdeeeeeedO
+OdeeeeeedO
+OdeeeeeedO
+OdeeeeeedO
+OdeeeeeedO
+OdeeeeeedO
+OdeeeeeedO
+OddddddddO
+OddddddddO
