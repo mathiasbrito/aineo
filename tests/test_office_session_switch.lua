@@ -135,6 +135,73 @@ T['a switch of the session']['has the office act out the new transcript before i
   )
 end
 
+--- A `continued-in` line of the session `from` that names `to`, as Claude Code
+--- writes it.
+---
+---@param from string
+---@param to string
+---@return string
+local function continued_in_line(from, to)
+  return vim.json.encode({
+    type = 'continued-in',
+    timestamp = '2026-01-01T00:00:03.000Z',
+    sessionId = from,
+    continuedInSessionId = to,
+  })
+end
+
+--- Two sessions of the form Claude Code gives, and the transcript of each in
+--- the case's own directory.
+local FIRST = '11111111-1111-4111-8111-111111111111'
+local SECOND = '22222222-2222-4222-8222-222222222222'
+
+T['a continuation of the session'] = MiniTest.new_set()
+
+T['a continuation of the session']['has the office that follows the old transcript go on in the new one, once its line is written'] = function()
+  local first, second = transcript_of(FIRST), transcript_of(SECOND)
+  fake_transcript.append(first, TURN_WITH_A_CALL_RUNNING)
+  fake_transcript.append(second, RECORDED_TURN)
+  open_office()
+  name_transcript(first)
+  child.lua([[_G.office.show_now()]])
+  eq(
+    wait_until(function()
+      return office_cells.is_typing(child)
+    end),
+    true
+  )
+
+  fake_transcript.append(first, { continued_in_line(FIRST, SECOND) })
+
+  eq(
+    wait_until(function()
+      return office_cells.is_on_the_sofa(child)
+    end),
+    true
+  )
+end
+
+T['a continuation of the session']['asks again which transcript to follow only once for a chain that ends in a loop'] = function()
+  local first, second = transcript_of(FIRST), transcript_of(SECOND)
+  fake_transcript.append(first, { continued_in_line(FIRST, SECOND) })
+  fake_transcript.append(second, { continued_in_line(SECOND, FIRST) })
+  open_office()
+  office_child.make_office(
+    child,
+    nil,
+    [[{ transcript = function()
+      _G.asked = (_G.asked or 0) + 1
+      return _G.asked <= 20 and _G.transcript_path or nil
+    end }]]
+  )
+  name_transcript(first)
+
+  child.lua([[_G.office.show_now()]])
+  vim.wait(1000)
+
+  eq(child.lua_get('_G.asked'), 1)
+end
+
 T['a switch of the session']['has the agents of the old session leave'] = function()
   local old, new = transcript_of('old-agents'), transcript_of('new-agents')
   fake_transcript.append(old, TURN_WITH_A_CALL_RUNNING)
