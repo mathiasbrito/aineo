@@ -92,6 +92,92 @@ T['the status list']['is shown on a stage as short as the office is shown at'] =
   eq(text_at(picture, 19, 0, 40), ('─'):rep(40))
 end
 
+T['the status list']['is not built on by a plan taller than the rows above it'] = function()
+  local plan = '# plan\n \n' .. (' ....\n'):rep(21) .. ' a...\n'
+  local pack = scene.people_pack(plan, { a = { spot = 'aside' } })
+  local stage = scene.stage_of(pack, 30, 24)
+
+  stage.advance(scene.agents_in('standing'), 0)
+  local picture = stage.picture()
+
+  eq(scene.agent_cell(picture, 30, 24), 'nowhere')
+  eq(text_at(picture, 19, 0, 30), ('─'):rep(30))
+end
+
+T['the status list']['is not built on by a block of rows that does not fit above it'] = function()
+  local plan = '# plan\n \n' .. ('~....\n'):rep(22) .. ' a...\n'
+  local pack = scene.people_pack(plan, { a = { spot = 'aside' } })
+  local stage = scene.stage_of(pack, 30, 24)
+
+  stage.advance(scene.agents_in('standing'), 0)
+
+  eq(scene.agent_cell(stage.picture(), 30, 24), 'nowhere')
+end
+
+T['the status list']['is not walked onto by an agent whose only way round is below the plan'] = function()
+  local plan = '# plan\n \n a..#....s.\n' .. (' ...#......\n'):rep(20) .. ' ..........\n'
+  local pack = scene.people_pack(plan, {
+    a = { spot = 'aside' },
+    s = { spot = 'seat', sitting = true },
+  })
+  local watched = scene.watch(pack, 10, 24)
+  watched.cell_at(scene.agents_in('standing'), 0)
+
+  eq(watched.cell_at(scene.agents_in('working'), 10), '0,0')
+end
+
+T['the status list']['is not painted over by a piece that hangs below the plan'] = function()
+  local hang = 'colours: R = red\nanchor: 0, 0\n---\n' .. ('R\n'):rep(10)
+  local plan = '# plan\n \n' .. (' ....\n'):rep(18) .. ' H...\n'
+  local pack = scene.people_pack(plan, { H = { piece = 'hang' } }, nil, { ['art/hang.txt'] = hang })
+  local stage = scene.stage_of(pack, 30, 24)
+
+  stage.advance({}, 0)
+
+  eq(scene.group_at(stage.picture(), 0, 20), scene.solid(scene.FLOOR))
+end
+
+T['the status list']['is not written over by the effect of an agent that sank onto it'] = function()
+  local pack = scene.people_pack(
+    '# plan\n \n' .. (' ' .. ('.'):rep(30) .. '\n'):rep(18) .. ' ' .. ('.'):rep(29) .. 's\n',
+    { s = { spot = 'seat' } },
+    {
+      characters = {
+        agent = {
+          colours = { scene.AGENT },
+          poses = {
+            standing = { art = { 'person' } },
+            walking = { art = { 'person' } },
+            sunk = { art = { 'person' }, rises = { -6 }, effect = 'dots' },
+          },
+        },
+      },
+      effects = { dots = { text = { '.' } } },
+      activities = { play = { steps = { { at = 'seat', pose = 'sunk' } } } },
+      states = { standing = 'play', working = 'play' },
+    }
+  )
+  local stage = scene.stage_of(pack, 30, 24)
+
+  stage.advance(scene.agents_in('working'), 0)
+
+  eq(text_at(stage.picture(), 20, 29, 1), ' ')
+end
+
+T['the status list']['is never wider than the stage, whatever width the characters of a label have'] = function()
+  local picture = picture_of(25, { { id = 'ｗｉｄｅ', state = 'working' } }, {
+    activities = {
+      stand = { steps = { { at = 'aside' } } },
+      work = {
+        label = 'コーヒーを飲んでいるところです',
+        steps = { { at = 'seat' } },
+      },
+    },
+  })
+
+  eq(vim.fn.strdisplaywidth(picture.rows[22].text), 40)
+end
+
 T['the status list']['gives the rows it takes in the picture, none when it is left out'] = function()
   eq(picture_of(25, {}).status_list_height, 5)
   eq(picture_of(24, {}).status_list_height, 5)
