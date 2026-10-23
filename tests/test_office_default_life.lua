@@ -161,6 +161,75 @@ T['an idle agent']['pets the cat, standing right beside it'] = function()
   eq(closest_while_petting <= 16, true)
 end
 
+--- The pack with the cat's whole life and only the activities of idle
+--- agents `wanted` names.
+---
+---@param wanted string[]
+---@return aineo.office_pack.Pack
+local function pack_with_the_cats_life_and(wanted)
+  local pack = default.load_pack()
+  for name, activity in pairs(pack.activities) do
+    if activity.during and activity.who ~= 'cat' and not vim.list_contains(wanted, name) then
+      pack.activities[name] = nil
+    end
+  end
+  return pack
+end
+
+--- How many quarter seconds from the moment an agent stands still beside the
+--- cat the cat is surely still held, the agent petting it for at least two
+--- seconds.
+local QUARTER_SECONDS_SURELY_PETTING = 6
+
+--- How many pixels apart the middle of the one idle agent of an office with
+--- the cat's whole life and the middle of the cat are in each quarter second,
+--- over 900 s, in which the agent has stood still under the label 'pets the
+--- cat' for no more than `QUARTER_SECONDS_SURELY_PETTING`.
+---
+---@return number[] distances
+local function pixels_apart_while_petting()
+  local stage = default.stage(
+    pack_with_the_cats_life_and({ 'pet_the_cat', 'water_the_corner_plant' }),
+    ROOM[1],
+    ROOM[2]
+  )
+  local agents = default.agents(1, 'idle')
+  local distances, before, standing_for = {}, nil, 0
+  for step = 0, 4 * 900 do
+    stage.advance(agents, step / 4)
+    local picture = stage.picture()
+    local pixels = default.pixels(picture, ROOM[1])
+    local agent = default.where_is(pixels, default.AGENT_COLOURS[1])
+    local cat = default.where_is(pixels, default.CAT_COLOUR)
+    local label = table.concat(default.text_rows(picture, ROOM[2] - LIST_ROWS + 2), '\n')
+    local stands_still = agent ~= nil
+      and before ~= nil
+      and agent.column == before.column
+      and agent.bottom == before.bottom
+    local pets = label:find('pets the cat', 1, true) ~= nil
+    standing_for = (stands_still and pets) and standing_for + 1 or 0
+    if standing_for > 0 and standing_for <= QUARTER_SECONDS_SURELY_PETTING and cat then
+      table.insert(distances, math.abs(agent.column - cat.column))
+    end
+    before = agent
+  end
+  return distances
+end
+
+--- The most pixels apart an agent's middle and the cat's may be for the agent
+--- to be beside the cat.
+local MOST_PIXELS_BESIDE = 16
+
+T['an idle agent']['has the cat beside it for as long as it surely pets it'] = function()
+  local distances = pixels_apart_while_petting()
+
+  local too_far = vim.tbl_filter(function(distance)
+    return distance > MOST_PIXELS_BESIDE
+  end, distances)
+
+  eq({ #distances > 20, #too_far }, { true, 0 })
+end
+
 T['two idle agents'] = MiniTest.new_set()
 
 T['two idle agents']['play table tennis together, each at an end of the table'] = function()
