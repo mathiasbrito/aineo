@@ -13,6 +13,7 @@ local M = {}
 ---@field width integer cells
 ---@field height integer cells
 ---@field random? fun(): number the source of the random times of steps: a number from 0 up to, not including, 1; `math.random` when not given
+---@field clock? fun(): aineo.office_scene.WallTime the time on the wall outside the office, asked for each picture; none, and the pieces that show it show their art alone
 ---@field state_labels? table<string, string> what the status list says of each state, in words; the state's name where not given
 
 ---@class aineo.office_scene.Stage
@@ -31,6 +32,7 @@ function M.new_stage(options)
   vim.validate('options.height', options.height, 'number')
   vim.validate('options.random', options.random, 'function', true)
   vim.validate('options.state_labels', options.state_labels, 'table', true)
+  vim.validate('options.clock', options.clock, 'function', true)
 
   local pack = options.pack
   local width, height = options.width, options.height
@@ -68,6 +70,7 @@ function M.new_stage(options)
       plan_height = plan_height,
       agents = agents_shown,
       state_labels = options.state_labels or {},
+      wall_time = options.clock and options.clock(),
       now = now,
     })
   end
