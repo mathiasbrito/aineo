@@ -4,6 +4,7 @@
 --- and a piece laid on the floor is under everything that stands on it.
 
 local items = require('aineo.office_scene.items')
+local poses = require('aineo.office_scene.poses')
 local stretch = require('aineo.office_scene.stretch')
 
 local M = {}
@@ -52,6 +53,34 @@ local function piece_shown(drawing, placed)
   return piece
 end
 
+--- Paints what the pose of the agent who owns the monitor `placed` says the
+--- screen shows, into the monitor's screen area only.
+---
+---@param canvas aineo.office_scene.Canvas
+---@param drawing aineo.office_scene.Drawing
+---@param placed aineo.office_scene.PlacedPiece
+---@param monitor aineo.office_pack.Piece the art the monitor is drawn in
+local function paint_screen(canvas, drawing, placed, monitor)
+  local area = monitor.areas.screen
+  local owner = vim.iter(drawing.characters):find(function(character)
+    return character.index == placed.owner_index
+  end)
+  local pose = owner and poses.of(drawing.pack, owner)
+  local content = pose and pose.screen and drawing.pack.pieces[pose.screen]
+  if not (area and content) then
+    return
+  end
+  local left = placed.column - monitor.anchor.column + area.column
+  local top = 2 * placed.row + 1 - monitor.anchor.row + area.row
+  canvas.paint_art(content, {
+    frame = items.frame_after(content, math.max(0, drawing.now - owner.pose_since)),
+    column = left + content.anchor.column,
+    row = top + content.anchor.row,
+    colours = drawing.pack.colours,
+    clip = { column = left, row = top, width = area.width, height = area.height },
+  })
+end
+
 --- The items for the pieces the plan places that lie on the canvas.
 ---
 ---@param canvas aineo.office_scene.Canvas
@@ -72,6 +101,7 @@ function M.items(canvas, drawing)
             row = 2 * placed.row + 1,
             colours = drawing.pack.colours,
           })
+          paint_screen(canvas, drawing, placed, piece)
         end,
       })
     end
