@@ -181,12 +181,39 @@ function M.is_standing(child)
   return M.is_at(child, 'beside_desk')
 end
 
---- Whether the main agent sits at its desk to type.
+--- The cell the first monitor of the default pack's plan shows the second
+--- pixel of its screen in: a row and a column of the picture, from 0. The
+--- screens of typing light it in every frame but the first of the code's; the
+--- blinking cursor of an agent that only sits never does.
+local SCREEN_CELL = { row = 16, column = 31 }
+
+--- The colour of the monitor's screen when nothing is drawn on it.
+local DARK_SCREEN = '181825'
+
+--- How long the screen of typing is waited for to light, in milliseconds: more
+--- than the frame in which it is dark.
+local SCREEN_PATIENCE_MS = 250
+
+--- Whether the monitor of the main agent's desk shows a pixel of what is typed.
+---
+---@param child table
+---@return boolean
+local function is_screen_lit(child)
+  local _, group = M.cell_at(child, SCREEN_CELL.row, SCREEN_CELL.column)
+  local top = group and group:match('^AineoOfficePixel_(%x+)_')
+  return top ~= nil and top ~= DARK_SCREEN
+end
+
+--- Whether the main agent sits at its desk and types: its screen lights with
+--- what it types, which an agent that only sits does not show.
 ---
 ---@param child table
 ---@return boolean
 function M.is_typing(child)
   return M.is_at(child, 'desk')
+    and vim.wait(SCREEN_PATIENCE_MS, function()
+      return is_screen_lit(child)
+    end, 20)
 end
 
 --- Whether the main agent rests on the first seat of the sofa.
