@@ -104,6 +104,68 @@ T['the cat']['plays an activity of its own life, with no agent in the office'] =
   eq(where_the_cat_is(stage, 8), '4,0')
 end
 
+--- A stage of an aisle with a cat asleep on the seat and an idle agent that,
+--- a second after it arrives, goes to the spot `visit_spot`.
+---
+---@param visit_spot string
+---@param with_a_cat boolean
+---@return aineo.office_scene.Stage
+local function stage_of_a_visit_to_the_cat(visit_spot, with_a_cat)
+  local activities = {
+    stand = { steps = { { at = 'aside', for_seconds = 1 } } },
+    visit = { during = { 'idle' }, steps = { { at = visit_spot } } },
+  }
+  if with_a_cat then
+    activities.nap = {
+      who = 'cat',
+      during = { 'always' },
+      steps = { { at = 'seat', pose = 'sitting' } },
+    }
+  end
+  return stage_with_a_cat(AISLE, AISLE_LEGEND, 8, activities)
+end
+
+T['the cat']['is visited by an agent that goes next to the cat, on the cell beside it'] = function()
+  local stage = stage_of_a_visit_to_the_cat('next_to_the_cat', true)
+  local crew = scene.agents_in('idle')
+  stage.advance(crew, 0)
+
+  stage.advance(crew, 3)
+
+  eq(scene.agent_cell(stage.picture(), 8, 1), '3,0')
+end
+
+T['the cat']['is not visited when the office has no cat'] = function()
+  local stage = stage_of_a_visit_to_the_cat('next_to_the_cat', false)
+  local crew = scene.agents_in('idle')
+  stage.advance(crew, 0)
+
+  stage.advance(crew, 3)
+
+  eq(scene.agent_cell(stage.picture(), 8, 1), '0,0')
+end
+
+T['the cat']['is not visited while it is on the move'] = function()
+  local legend = { a = { spot = 'aside' }, f = { spot = 'far' } }
+  local stage = stage_with_a_cat('# plan\n \n aa' .. ('.'):rep(39) .. 'f\n', legend, 42, {
+    stand = { steps = { { at = 'aside', for_seconds = 2 } } },
+    visit = { during = { 'idle' }, steps = { { at = 'next_to_the_cat' } } },
+    stroll = {
+      who = 'cat',
+      during = { 'always' },
+      steps = { { at = 'aside', for_seconds = 0.5 }, { at = 'far' } },
+    },
+  })
+  local crew = scene.agents_in('idle')
+  stage.advance(crew, 0)
+  stage.advance(crew, 1)
+  stage.advance(crew, 2)
+
+  stage.advance(crew, 2.5)
+
+  eq(scene.agent_cell(stage.picture(), 42, 1), '0,0')
+end
+
 T['the cat']['takes no place among the agents: they keep their desks and colours'] = function()
   local stage = stage_with_a_cat(
     '# plan\n \n d...s...\n',

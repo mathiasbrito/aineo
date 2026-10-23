@@ -105,8 +105,13 @@ end
 
 T['the default pack']['has a spot in its plan, or one aineo knows, for every spot its activities go to'] = function()
   local pack = default.load_pack()
-  local known =
-    { anywhere = true, an_empty_desk = true, an_idle_agents_desk = true, next_to_an_agent = true }
+  local known = {
+    anywhere = true,
+    an_empty_desk = true,
+    an_idle_agents_desk = true,
+    next_to_an_agent = true,
+    next_to_the_cat = true,
+  }
   local names = vim.deepcopy(known)
   for name in pairs(pack.things) do
     names[name] = true

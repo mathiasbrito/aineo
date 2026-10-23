@@ -5,7 +5,8 @@
 --- has the first desk of the plan, the agent with the second place the second.
 --- `anywhere` is a floor cell at random; `an_empty_desk` a desk no agent has;
 --- `an_idle_agents_desk` the desk of another agent in the state `idle`;
---- `next_to_an_agent` a cell beside another agent who stands still. A thing
+--- `next_to_an_agent` a cell beside another agent who stands still,
+--- `next_to_the_cat` a cell beside a cat that stands still. A thing
 --- that lies on the floor is a spot of its own name. Any other name is every
 --- spot of the name, and the character may go to the ones no
 --- other character has taken.
@@ -23,6 +24,9 @@ M.ANYWHERE = 'anywhere'
 --- The name of the cells beside agents.
 local NEXT_TO_AN_AGENT = 'next_to_an_agent'
 
+--- The name of the cells beside cats.
+local NEXT_TO_THE_CAT = 'next_to_the_cat'
+
 ---@class aineo.office_scene.SpotChoice
 ---@field open aineo.office_scene.Spot[] the spots the character may go to
 ---@field any boolean whether the plan has a spot of the name, taken or not
@@ -38,7 +42,7 @@ local NEXT_TO_AN_AGENT = 'next_to_an_agent'
 ---@field places_taken table<integer, true> the places the agents have
 ---@field things aineo.office_scene.Things what lies on the floor
 ---@field agents { id: string, place: integer, state: string, column?: number, row?: number, path: aineo.office_scene.Cell[] }[] the agents
----@field cats? { id: string, column?: number, row?: number }[] the cats
+---@field cats? { id: string, column?: number, row?: number, path: aineo.office_scene.Cell[] }[] the cats
 
 ---@type table<aineo.office_scene.FloorLayout, integer[]>
 local walkable_keys_of = setmetatable({}, { __mode = 'k' })
@@ -151,21 +155,22 @@ local function idle_agents_desks(world, character)
   return found
 end
 
---- The cells beside agents, other than `character`, who stand still, each
---- facing the agent.
+--- The cells beside the `beside` characters, other than `character`, who
+--- stand still, each facing the one it is beside.
 ---
 ---@param world aineo.office_scene.SpotWorld
 ---@param character { id: string }
+---@param beside { id: string, column?: number, row?: number, path: aineo.office_scene.Cell[] }[]
+---@param name string the name of the spots found
 ---@return aineo.office_scene.Spot[]
-local function cells_beside_agents(world, character)
+local function cells_beside(world, character, beside, name)
   local layout, found = world.layout, {}
-  for _, agent in ipairs(world.agents) do
-    if agent.id ~= character.id and agent.column and #agent.path == 0 then
-      local column, row = math.floor(agent.column + 0.5), math.floor(agent.row + 0.5)
+  for _, other in ipairs(beside) do
+    if other.id ~= character.id and other.column and #other.path == 0 then
+      local column, row = math.floor(other.column + 0.5), math.floor(other.row + 0.5)
       for _, across in ipairs({ -1, 1 }) do
         if layout.is_walkable(column + across, row) then
-          local spot =
-            spot_on_cell(NEXT_TO_AN_AGENT, row * layout.width + column + across, layout.width)
+          local spot = spot_on_cell(name, row * layout.width + column + across, layout.width)
           spot.facing = across < 0 and 'right' or 'left'
           table.insert(found, spot)
         end
@@ -173,6 +178,24 @@ local function cells_beside_agents(world, character)
     end
   end
   return found
+end
+
+--- The cells beside agents, other than `character`, who stand still.
+---
+---@param world aineo.office_scene.SpotWorld
+---@param character { id: string }
+---@return aineo.office_scene.Spot[]
+local function cells_beside_agents(world, character)
+  return cells_beside(world, character, world.agents, NEXT_TO_AN_AGENT)
+end
+
+--- The cells beside cats that stand still.
+---
+---@param world aineo.office_scene.SpotWorld
+---@param character { id: string }
+---@return aineo.office_scene.Spot[]
+local function cells_beside_cats(world, character)
+  return cells_beside(world, character, world.cats or {}, NEXT_TO_THE_CAT)
 end
 
 --- The spots, besides the plan's own, that aineo knows by name, each found
@@ -183,6 +206,7 @@ local KNOWN_SPOTS = {
   an_empty_desk = empty_desks,
   an_idle_agents_desk = idle_agents_desks,
   next_to_an_agent = cells_beside_agents,
+  next_to_the_cat = cells_beside_cats,
 }
 
 --- The spots named `name`, whoever has them: those of the plan, and the
