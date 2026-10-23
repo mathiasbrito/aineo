@@ -109,14 +109,16 @@ function M.watch(path, on_change)
     ticker:start(POLL_MS, POLL_MS, check_soon)
   end
 
-  --- Watches the path by file-system event if it exists and the system can
-  --- make one, else by looking every `POLL_MS`.
+  --- Watches the path by file-system event if it is a regular file or a
+  --- folder and the system can make one, else by looking every `POLL_MS`. A
+  --- named pipe or a device is not given an event: making one opens it, which
+  --- holds the editor until something writes to the pipe.
   local function arm()
     close_handle(events)
     events = nil
     local stat = vim.uv.fs_stat(path)
     armed_identity = M.identity_of(stat)
-    if stat then
+    if stat and (stat.type == 'file' or stat.type == 'directory') then
       local handle = assert(vim.uv.new_fs_event())
       if handle:start(path, {}, check_soon) then
         events = handle
