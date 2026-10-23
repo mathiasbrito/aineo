@@ -4,6 +4,8 @@ local eq = MiniTest.expect.equality
 
 local bounded = dofile('tests/helpers/bounded.lua')
 local fixture = dofile('tests/helpers/fixture.lua')
+local office_pack = require('aineo.office_pack')
+local office_pack_files = dofile('tests/helpers/office_pack_files.lua')
 
 --- How long a run that must not hang may last, in milliseconds.
 local LIMIT_MS = 20000
@@ -146,6 +148,76 @@ T['an art file']['of 100 000 rows of other widths is told once, not for every ro
 
   eq(run.finished, true)
   eq(vim.trim(run.stdout), '2')
+end
+
+T['the files of a pack'] = MiniTest.new_set()
+
+--- The smallest pack with `count` art files of 80 000 pixels each, named so
+--- that they come after its own.
+---
+---@param directory string
+---@param count integer
+---@return string folder
+local function pack_with_large_art(directory, count)
+  local row = ('A'):rep(400)
+  local art = 'colours: A = ink\n---\n' .. (row .. '\n'):rep(200)
+  local extra = {}
+  for index = 1, count do
+    extra[('art/z%02d.txt'):format(index)] = art
+  end
+  return office_pack_files.write_pack(directory, 'small', extra)
+end
+
+T['the files of a pack'] = MiniTest.new_set()
+
+T['the files of a pack']['are read up to 2 MiB together, the rest told once and left out'] = function()
+  local folder = pack_with_large_art(fixture.directory('bounds_budget'), 40)
+
+  local pack, problems = office_pack.load({
+    name = 'small',
+    folders = { folder },
+    state_names = { 'standing', 'working', 'resting', 'idle' },
+  })
+
+  eq(#problems, 1)
+  eq(
+    problems[1].message,
+    'the files of the pack and the packs it is based on are more than 2 MiB together'
+  )
+  eq(pack.pieces.person ~= nil, true)
+  eq(vim.tbl_count(pack.pieces) < 40, true)
+  eq(vim.tbl_count(pack.pieces) > 20, true)
+end
+
+T['the files of a pack']['of a chain of packs are read up to 2 MiB together'] = function()
+  local root = fixture.directory('bounds_budget_chain')
+  local row = ('A'):rep(400)
+  local art = 'colours: A = ink\n---\n' .. (row .. '\n'):rep(200)
+  local folder
+  for index = 0, 5 do
+    local extra = {}
+    for piece = 1, 8 do
+      extra[('art/p%d_%02d.txt'):format(index, piece)] = art
+    end
+    extra['pack.lua'] = office_pack_files.pack_text({
+      name = 'p' .. index,
+      based_on = index > 0 and ('p' .. (index - 1)) or false,
+    })
+    folder = office_pack_files.write_pack(root, 'p' .. index, extra)
+  end
+
+  local pack, problems = office_pack.load({
+    name = 'p5',
+    folders = { folder },
+    state_names = { 'standing', 'working', 'resting', 'idle' },
+  })
+
+  eq(#problems >= 1, true)
+  eq(
+    problems[1].message,
+    'the files of the pack and the packs it is based on are more than 2 MiB together'
+  )
+  eq(pack.name, 'p5')
 end
 
 T['a picture'] = MiniTest.new_set()
