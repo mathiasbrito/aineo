@@ -256,4 +256,61 @@ T['an agent']['appears once a spot it had none for is let go'] = function()
   eq({ before, scene.agent_cell(stage.picture(), 8, 1, scene.SECOND_AGENT) }, { 'nowhere', '0,0' })
 end
 
+T['a step']['counts its time from the agent’s arrival, not from when its walk began'] = function()
+  local pack = scene.people_pack('# plan\n \n a......s\n', AISLE_LEGEND, {
+    activities = {
+      stand = { steps = { { at = 'aside' } } },
+      play = { steps = { { at = 'seat', for_seconds = 1 }, { at = 'aside' } } },
+    },
+    states = { standing = 'stand', working = 'play' },
+  })
+  local watched = scene.watch(pack, 8, 1)
+  watched.cell_at(scene.agents_in('standing'), 0)
+
+  eq({
+    watched.cell_at(scene.agents_in('working'), 0.01),
+    watched.cell_at(scene.agents_in('working'), 1.2),
+  }, { '0,0', '7,0' })
+end
+
+T['a step']['puts an agent whose first step names no spot at the spot called door'] = function()
+  local pack = scene.people_pack('# plan\n \n ...d....\n', { d = { spot = 'door' } }, {
+    activities = {
+      stand = { steps = { { pose = 'standing' } } },
+      work = { steps = { { pose = 'standing' } } },
+    },
+  })
+  local stage = scene.stage_of(pack, 8, 1)
+
+  stage.advance(scene.agents_in('standing'), 0)
+
+  eq(scene.agent_cell(stage.picture(), 8, 1), '3,0')
+end
+
+T['a step']['faces the way the spot it walked to says, when that is left'] = function()
+  local pack = scene.people_pack(
+    '# plan\n \n a...s...\n',
+    { a = { spot = 'aside' }, s = { spot = 'seat', facing = 'left' } },
+    {
+      characters = POINTING_PEOPLE,
+      activities = {
+        stand = { steps = { { at = 'aside' } } },
+        play = { steps = { { at = 'seat', pose = 'pointing' } } },
+      },
+      states = { standing = 'stand', working = 'play' },
+    }
+  )
+  local stage = scene.stage_of(pack, 8, 1)
+  stage.advance(scene.agents_in('standing'), 0)
+  stage.advance(scene.agents_in('working'), 0.1)
+
+  stage.advance(scene.agents_in('working'), 2)
+
+  eq(vim.list_slice(scene.row_groups(stage.picture(), 0, 8), 4, 6), {
+    scene.solid('#0000ff'),
+    scene.solid(scene.AGENT),
+    scene.solid(scene.FLOOR),
+  })
+end
+
 return T

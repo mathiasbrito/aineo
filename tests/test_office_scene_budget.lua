@@ -36,7 +36,7 @@ T['a frame']['paints the first pieces of the plan and not those beyond the cap o
   local red, floor = scene.solid('#ff0000'), scene.solid(scene.FLOOR)
 
   eq({ scene.group_at(picture, 0, 0), scene.group_at(picture, 79, 0) }, { red, red })
-  eq({ scene.group_at(picture, 0, 59), scene.group_at(picture, 79, 59) }, { floor, floor })
+  eq({ scene.group_at(picture, 79, 24), scene.group_at(picture, 0, 25) }, { red, floor })
 end
 
 T['a frame']['of the largest office, full of pieces, costs less than the time between frames'] = function()
