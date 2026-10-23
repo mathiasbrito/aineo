@@ -2,6 +2,8 @@
 --- marks repeat to fill the width and the height, what each cell is, and
 --- where the plan's letters put pieces and spots.
 
+local use_spot = require('aineo.office_scene.use_spot')
+
 local M = {}
 
 local WALL = '#'
@@ -16,6 +18,10 @@ local PLAIN_CELLS = { [WALL] = true, [FLOOR] = true, [UNWALKED_FLOOR] = true }
 ---@field column integer the cell its bottom left corner stands on, from 0
 ---@field row integer
 ---@field columns? integer the width in cells a piece that stretches is stretched to
+---@field walk_over? boolean whether the piece lies on the floor, under the characters
+---@field in_use? string the piece that shows in its place while a character is at its spot
+---@field used_at? aineo.office_scene.Spot the spot nearest to a piece that has `in_use` art
+---@field shows? string the live content drawn into the piece's area of that name
 
 ---@class aineo.office_scene.Spot
 ---@field column integer
@@ -122,6 +128,7 @@ end
 ---@field texts string[] the laid out rows
 ---@field pieces aineo.office_scene.PlacedPiece[]
 ---@field spots table<string, aineo.office_scene.Spot[]>
+---@field spot_order aineo.office_scene.Spot[] every spot, in the order they were made
 ---@field walkable table<integer, table<integer, true>> the cells characters walk on, by row and column from 0
 
 --- Marks the cell at `column` of `row` as one characters walk on.
@@ -143,6 +150,7 @@ end
 local function add_spot(layout, name, spot)
   layout.spots[name] = layout.spots[name] or {}
   table.insert(layout.spots[name], spot)
+  table.insert(layout.spot_order, spot)
   mark_walkable(layout, spot.column, spot.row)
 end
 
@@ -211,15 +219,23 @@ end
 ---@param length integer
 local function place_piece(layout, entry, column, row, length)
   local piece = layout.pack.pieces[entry.piece]
+  local function placed_at(placed_column, columns)
+    return {
+      piece = entry.piece,
+      column = placed_column,
+      row = row,
+      columns = columns,
+      walk_over = entry.walk_over,
+      in_use = entry.in_use,
+      shows = entry.shows,
+    }
+  end
   if piece and piece.stretch then
-    table.insert(
-      layout.pieces,
-      { piece = entry.piece, column = column, row = row, columns = length }
-    )
+    table.insert(layout.pieces, placed_at(column, length))
     return
   end
   for offset = 0, length - 1 do
-    table.insert(layout.pieces, { piece = entry.piece, column = column + offset, row = row })
+    table.insert(layout.pieces, placed_at(column + offset))
   end
 end
 
@@ -251,6 +267,18 @@ local function place_run(layout, entry, column, row, length)
   end
 end
 
+--- Gives each placed piece that has `in_use` art the spot it is used from.
+---
+---@param layout aineo.office_scene.Layout
+local function assign_use_spots(layout)
+  for _, placed in ipairs(layout.pieces) do
+    local piece = layout.pack.pieces[placed.piece]
+    if placed.in_use and piece then
+      placed.used_at = use_spot.nearest_to(placed, piece, layout.spot_order)
+    end
+  end
+end
+
 --- Lays the floor of `pack` out `width` cells wide and `height` rows tall.
 ---
 ---@param pack aineo.office_pack.Pack
@@ -263,8 +291,15 @@ function M.lay_out(pack, width, height)
   local texts = vim.tbl_map(function(plan_row)
     return lay_out_row(plan_row, floor.repeated_columns, width)
   end, rows_laid_out(floor.rows, floor.repeated_rows, height, width))
-  local layout =
-    { pack = pack, width = width, texts = texts, pieces = {}, spots = {}, walkable = {} }
+  local layout = {
+    pack = pack,
+    width = width,
+    texts = texts,
+    pieces = {},
+    spots = {},
+    spot_order = {},
+    walkable = {},
+  }
   for row_index, text in ipairs(texts) do
     local row = row_index - 1
     walls[row] = {}
@@ -285,6 +320,7 @@ function M.lay_out(pack, width, height)
       column = column + length
     end
   end
+  assign_use_spots(layout)
   return {
     width = width,
     is_wall = function(column, row)

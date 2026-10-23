@@ -1,10 +1,15 @@
 --- The pieces the floor plan places, as items to paint: walls' decoration,
---- desks, doors and the rest, stretched to the width the plan draws them.
+--- desks, doors and the rest, stretched to the width the plan draws them. A
+--- piece with `in_use` art shows it while a character is at the piece's spot,
+--- and a piece laid on the floor is under everything that stands on it.
 
 local items = require('aineo.office_scene.items')
 local stretch = require('aineo.office_scene.stretch')
 
 local M = {}
+
+--- The depth of a piece laid on the floor: above no cell of the canvas.
+local ON_THE_FLOOR = -1
 
 --- Whether any row of `piece`, placed with its anchor on the cell row `row`,
 --- lies on a canvas `height` cells tall.
@@ -18,6 +23,35 @@ local function is_on_canvas(piece, row, height)
   return top < 2 * height and top + piece.height > 0
 end
 
+--- Whether a character is at the spot the placed piece is used from, standing
+--- on it or walking over it.
+---
+---@param placed aineo.office_scene.PlacedPiece
+---@param characters aineo.office_scene.Character[]
+---@return boolean
+local function is_in_use(placed, characters)
+  local spot = placed.used_at
+  return spot ~= nil
+    and vim.iter(characters):any(function(character)
+      return items.round(character.column) == spot.column and items.round(character.row) == spot.row
+    end)
+end
+
+--- The piece to draw for `placed`: its `in_use` art while it is in use, its
+--- own otherwise, stretched to the width the plan draws it.
+---
+---@param drawing aineo.office_scene.Drawing
+---@param placed aineo.office_scene.PlacedPiece
+---@return aineo.office_pack.Piece|nil
+local function piece_shown(drawing, placed)
+  local name = is_in_use(placed, drawing.characters) and placed.in_use or placed.piece
+  local piece = drawing.pack.pieces[name]
+  if piece and placed.columns then
+    return stretch.to_width(piece, placed.columns)
+  end
+  return piece
+end
+
 --- The items for the pieces the plan places that lie on the canvas.
 ---
 ---@param canvas aineo.office_scene.Canvas
@@ -26,14 +60,11 @@ end
 function M.items(canvas, drawing)
   local made = {}
   for _, placed in ipairs(drawing.layout.pieces) do
-    local piece = drawing.pack.pieces[placed.piece]
-    if piece and placed.columns then
-      piece = stretch.to_width(piece, placed.columns)
-    end
+    local piece = piece_shown(drawing, placed)
     if piece and is_on_canvas(piece, placed.row, drawing.height) then
       table.insert(made, {
-        depth = 2 * placed.row + 1,
-        rank = items.RANK.piece,
+        depth = placed.walk_over and ON_THE_FLOOR or 2 * placed.row + 1,
+        rank = placed.walk_over and items.RANK.on_the_floor or items.RANK.piece,
         paint = function()
           canvas.paint_art(piece, {
             frame = items.frame_after(piece, drawing.now),
