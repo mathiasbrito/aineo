@@ -1,7 +1,7 @@
 # 2026-10-23 — T126 office transcript follower
 
 **Author:** the repository's maintainer, with Claude — implementer agent (`neovim-claude-code-integrator`)
-**Branch:** `feature/t126-office-transcript` · **Pull request:** into `feature/t123-office`
+**Branch:** `feature/t126-office-transcript-linear` (the commits of `feature/t126-office-transcript`, PR #327, replayed linearly on the integration branch after T124, T127 and T128; #327 is replaced) · **Pull request:** into `feature/t123-office`
 
 A regular packet of the office screensaver (T123; D26 applies). The skeleton's follower read one file that existed. This packet makes `aineo.transcript` the whole state source of the plan's §2: every signal, a file that is not there yet, cut or replaced, a tail with no whole line, a poll where no file event can be made, and the session's subagents.
 
@@ -109,7 +109,7 @@ The attack and test-integrity review of PR #327 found, and this round fixed, eac
 - **A subagent admitted after the cap** frees a slot replays its past (the ids present at the first look are remembered); **`subagent_finished` is not delivered after a stop**.
 - **Pins:** the changed T124 timer case counts repeating timers only (M1; the settle timer made two on its own); a pass reads at most a megabyte (M3); the half-second look stops once the waited-for file appears (M4); D1 and D1b die by assertion (a case stops its followers after 500 opens and 1000 signals, and a burst yields, so a follower that never advances fails the case and does not hang).
 - **Fixtures** re-copied from scrubber v4; the recordings case counts 15 prompts and one `background_done`, and the recorded notice is read as one. **The folder rule** replaces each character, as OF1 words it, not each byte (a path with an accented letter).
-- **Merge** of `origin/feature/t123-office` (T124, T127): the office cases that expect the agent to stand until a call starts began with the recorded turn's prompt, which T127's tracker takes for the start of work; they now begin before the prompt.
+- **Replayed on T124, T127 and T128.** The office cases that expect the agent to stand until a call starts began with the recorded turn's prompt, which T127's tracker takes for the start of work; they now begin before the prompt. The transcript precedence A579 gives the second to land is wired: the path the `SessionStart` hook named (T128), else an existing regular file of the session's id in any folder of `projects/`, else the path the folder rule names. The hook-first order was pinned by T128's cases (the mutant that puts it second dies by assertion); the existing-file-before-rule order by a new case that writes the rule's file after an existing one and expects the office to keep following the existing one (the mutant that returns the rule's path first dies by assertion).
 
 Mutants of the round, each run alone on the head, killed by assertion: M1 (`test_office`), M3, M4, D1, D1b, D1c, P1 (the raise not caught: `pcall` removed), P2 (told every time), P3 (the call's id in the message), W5 (the type guard of the watch), E2 (a pipe taken as the transcript), E3 (the byte rule), S6, S12 (past = at the start only), S14 (finished after a stop); the whole table above re-run on the final tree, all killed by assertion, none by hang. M2 (the sort of the folder's listing) is equivalent on this host (APFS lists in order) and is not pinned.
 
