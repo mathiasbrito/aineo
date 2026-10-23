@@ -4114,12 +4114,15 @@ can play now. It can play an activity when the plan has as many free spots as
 `players` for its first step with a spot and a spot for each step after, when
 the others that must play it are free, and, for a step that follows someone,
 when someone is on the move. An activity with `players = 2` takes along
-another agent, picked at random among those in a state its `during` names,
-who leaves what it was doing: both begin it together, each at a spot of its
-own of the name, and each step lasts the same time for both; with no such
-agent it is not picked. An agent with nothing to pick keeps its last pose and
-looks again every second. When the agent's state changes, what it picked at
-random is dropped for what the new state asks for.
+another agent, picked at random among the free ones in a state its `during`
+names (not in a game, upset, sent to clean, or doing this very activity
+now): both begin it together, each at a spot of its own of the name, and
+each step lasts the same time for both; with no such agent it is not picked.
+When one player leaves it, called away by its state, sent to clean or leaving
+the office, it ends for the others too: two play it, or none. An agent with
+nothing to pick keeps its last pose and looks again every second. When the
+agent's state changes, what it picked at random is dropped for what the new
+state asks for.
 
 A step's `at` may name a spot aineo knows without a legend: `anywhere` is a
 floor cell the random source picks; `an_empty_desk` a desk of the plan no
