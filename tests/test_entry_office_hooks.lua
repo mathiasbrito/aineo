@@ -58,13 +58,21 @@ local function open_layout(name)
 end
 
 --- Runs `lua` in the child, then waits until the callbacks scheduled by then
---- have run, as the hook relay's notifications are handled.
+--- have run, and those they scheduled in turn, as the hook relay's
+--- notifications are handled.
 ---
 ---@param lua string
 ---@param arguments? any[]
 local function run_and_settle(lua, arguments)
   child.lua(lua, arguments or {})
-  child.lua('_G.settled = false; vim.schedule(function() _G.settled = true end)')
+  child.lua([[
+    _G.settled = false
+    vim.schedule(function()
+      vim.schedule(function()
+        _G.settled = true
+      end)
+    end)
+  ]])
   vim.wait(claude_session.PATIENCE_MS, function()
     return child.lua_get('_G.settled')
   end, 20)
@@ -182,6 +190,88 @@ end
 local function open_layout_with_stand_in_offices(name)
   stand_in.install(child)
   open_layout(name)
+end
+
+--- A session of the form Claude Code gives that the tab switches to, one for
+--- each case: the session a start last followed is kept for the folder, and
+--- the cases share the folder's state.
+---
+---@param number integer the case's own number
+---@return string
+local function new_session_numbered(number)
+  return ('1f1c5b0e-7a3d-4d52-8f0b-6d2e9a7c%04d'):format(number)
+end
+
+--- Tells the child's Claude home, as the hook relay does when the session
+--- Claude Code runs switches to `new` (a `/resume`, say): the `SessionEnd`
+--- of the session followed, then the `SessionStart` of `new`, the tab's own
+--- start token with both.
+---
+---@param new string
+local function tell_switch_to(new)
+  run_and_settle(
+    [[
+      local claude = require('aineo.claude')
+      local left, new = ...
+      claude.receive_session_event('SessionEnd', left, 'resume', claude.start_token(), 1, nil, nil)
+      claude.receive_session_event('SessionStart', new, 'resume', claude.start_token(), 2, nil, nil)
+    ]],
+    { tab_session(), new }
+  )
+end
+
+T['a switch of the tab’s session'] = MiniTest.new_set()
+
+T['a switch of the tab’s session']['is told to the office of the tab'] = function()
+  local new_session = new_session_numbered(1)
+  open_layout_with_stand_in_offices('office-switch')
+
+  tell_switch_to(new_session)
+
+  eq(tab_session(), new_session)
+  eq(stand_in.told(child).session_changed, 1)
+end
+
+T['a switch of the tab’s session']['is not told to the office by a hook of the session the tab runs, which names no transcript'] = function()
+  open_layout_with_stand_in_offices('office-switch-same')
+
+  run_and_settle([[
+    local claude = require('aineo.claude')
+    claude.receive_session_event('SessionStart', claude.session_id(), 'compact', claude.start_token(), nil, nil, nil)
+  ]])
+
+  eq(stand_in.told(child).session_changed, 0)
+end
+
+T['a switch of the tab’s session']['is told again when a hook then names another transcript for the session the tab runs now'] = function()
+  local new_session = new_session_numbered(3)
+  open_layout_with_stand_in_offices('office-switch-path')
+  tell_switch_to(new_session)
+
+  tell_transcript(new_session, '/named/by/the/hook.jsonl')
+
+  eq(stand_in.told(child).session_changed, 2)
+end
+
+T['a switch of the tab’s session']['is not told again when a hook names a transcript for a session the tab does not run'] = function()
+  local new_session = new_session_numbered(4)
+  open_layout_with_stand_in_offices('office-switch-path-other')
+  tell_switch_to(new_session)
+
+  tell_transcript(OTHER_SESSION, '/named/by/the/hook.jsonl')
+
+  eq(stand_in.told(child).session_changed, 1)
+end
+
+T['a switch of the tab’s session']['is not told again when a hook names the transcript the office follows already'] = function()
+  local new_session = new_session_numbered(5)
+  open_layout_with_stand_in_offices('office-switch-path-twice')
+  tell_switch_to(new_session)
+  tell_transcript(new_session, '/named/by/the/hook.jsonl')
+
+  tell_transcript(new_session, '/named/by/the/hook.jsonl')
+
+  eq(stand_in.told(child).session_changed, 2)
 end
 
 T['a permission wait'] = MiniTest.new_set()
