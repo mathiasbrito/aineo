@@ -191,6 +191,27 @@ T['showing the office']['gives the scene the words of the vocabulary for its sta
   eq(child.lua_get([[_G.state_labels.error]]), 'hit an error')
 end
 
+T['showing the office']['gives the scene the time on the wall, from the wall clock it was given'] = function()
+  open_office(
+    nil,
+    nil,
+    [[{ wall_clock = function() return os.time({ year = 2026, month = 10, day = 3, hour = 7, min = 5 }) end }]]
+  )
+  child.lua([[
+    local office_scene = require('aineo.office_scene')
+    local new_stage = office_scene.new_stage
+    office_scene.new_stage = function(options)
+      _G.wall_time = options.clock()
+      return new_stage(options)
+    end
+  ]])
+
+  child.lua([[_G.office.show_now()]])
+
+  local wall_time = child.lua_get([[_G.wall_time]])
+  eq({ wall_time.hour, wall_time.min, wall_time.month, wall_time.day }, { 7, 5, 10, 3 })
+end
+
 T['showing the office']['is a scratch buffer of its own that no one edits, wiped with the window'] = function()
   open_office()
   child.lua([[_G.office.show_now()]])
