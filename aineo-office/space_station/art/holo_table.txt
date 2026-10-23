@@ -1,0 +1,28 @@
+about: A holo-table: a projected grid stands over a console; the session's tasks are written on the grid.
+colours: T = steel_blue, c = cyan_dim, k = holo_dark, g = blue_dim, w = cyan_glow, E = cyan_dim, v = visor, A = alloy, P = steel_blue, a = amber_glow, d = panel, F = panel_light
+anchor: 0, 19
+stretch: columns 7-8
+area plan: 2, 2, 12 x 10
+---
+.TTTTTTTTTTTTTT.
+wccccccccccccccw
+cgkkkgkkkgkkkgkc
+cgkkkgkkkgkkkgkc
+cggggggggggggggc
+cgkkkgkkkgkkkgkc
+cgkkkgkkkgkkkgkc
+cgkkkgkkkgkkkgkc
+cggggggggggggggc
+cgkkkgkkkgkkkgkc
+cgkkkgkkkgkkkgkc
+cgkkkgkkkgkkkgkc
+cggggggggggggggc
+wccccccccccccccw
+.EEEEEEEEEEEEEE.
+..vvvvvvvvvvvv..
+AAAAAAAAAAAAAAAA
+PPPPPPPPPPPPPPPP
+PPcPaPddddPaPcPP
+PPPPPPPPPPPPPPPP
+.FF..........FF.
+.FF..........FF.

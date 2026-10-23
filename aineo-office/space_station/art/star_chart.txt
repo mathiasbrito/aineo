@@ -1,0 +1,18 @@
+about: A star chart in a frame: stars joined by faint lines.
+colours: F = steel_blue, k = space_deep, l = cyan_dim, s = star_white, a = amber_glow
+anchor: 0, 13
+---
+FFFFFFFFFFFFFF
+FkkkkkkkkkkkkF
+FkkkllalkkkkkF
+FkkskkkklklskF
+FkkkkkkkkslkkF
+FkkkkkkkklkkkF
+FkkkkkkklkkkkF
+FkkkklllskkkkF
+FkkkslllllkkkF
+FkkkkkkkkkskkF
+FkkkkkkkkkkkkF
+FFFFFFFFFFFFFF
+..............
+..............

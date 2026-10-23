@@ -1,0 +1,24 @@
+about: A hydroponics rack: three trays of sprouts, each under a violet grow light.
+colours: F = steel_blue, V = violet_glow, T = tray, f = frond, g = sprout, P = panel_light, d = panel, a = amber_glow
+anchor: 0, 17
+---
+FVVVVVVVVVVF
+F.gg.gg.gg.F
+Fgf.gf.gf..F
+F.f..f..f..F
+FTTTTTTTTTTF
+FVVVVVVVVVVF
+F.gg.gg.gg.F
+Fgf.gf.gf..F
+F.f..f..f..F
+FTTTTTTTTTTF
+FVVVVVVVVVVF
+F.gg.gg.gg.F
+Fgf.gf.gf..F
+F.f..f..f..F
+FTTTTTTTTTTF
+FFFFFFFFFFFF
+FPddddPPPaPF
+FFFFFFFFFFFF
+.FF......FF.
+.FF......FF.

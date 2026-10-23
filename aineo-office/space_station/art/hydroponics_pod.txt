@@ -1,0 +1,16 @@
+about: A hydroponics pod: a glass dome over a green sprout, on a lit base.
+colours: F = steel_blue, g = sprout, f = frond, P = panel_light, a = amber_glow, d = cyan_glow
+anchor: 0, 9
+---
+..FFFF..
+.F.gf.F.
+F.fgg.gF
+F.gffg.F
+F..gf..F
+.F.ff.F.
+..FFFF..
+.PPPPPP.
+.PaPPPd.
+..PPPP..
+..F..F..
+........

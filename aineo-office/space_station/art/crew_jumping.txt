@@ -1,0 +1,17 @@
+about: The body of a crew member that jumps; its pose lifts it a tick at a time.
+colours: B = agent, L = agent_light, S = agent_shade, A = alloy, c = cyan_glow, a = amber_glow
+anchor: 5, 11
+seconds per frame: 0.08333
+---
+...LLBBB...
+..LLBBBBBS.
+.LLBBBBBBBS
+cLBBBBBBBBS
+LBBBBBBBBBS
+LBBBBBBBBBS
+LBBBBBBBBBS
+.AAAAAAAAA.
+LBBcBBBaBBS
+.SSSSSSSSS.
+...........
+...........

@@ -3870,8 +3870,9 @@ in the updates after, and looking for a spot stops at the nearest.
 The art is a pack: a folder `aineo-office/<name>/` on 'runtimepath' with
 `pack.lua`, a description in the subset of a Lua table that aineo reads and
 never runs, `floor.txt`, the floor plan drawn as text, and `art/*.txt`, the
-pieces of pixel art. aineo's own pack is `aineo-office/default/`, the one the
-office draws.
+pieces of pixel art. aineo's own packs are `aineo-office/default/`, the one
+the office draws, and `aineo-office/space_station/`, a starship bridge based
+on it that `office.pack` (|aineo-config-office.pack|) can name in its place.
 
 `:Aineo office check` (|:Aineo-office-check|) lists what is wrong with a
 pack. How a pack is chosen, found and written is told next.

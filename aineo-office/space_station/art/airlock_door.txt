@@ -1,0 +1,26 @@
+about: An airlock door: two leaves meet at a seam, a hazard stripe along the sill.
+colours: F = steel_blue, P = panel_light, s = visor, w = cyan_dim, d = panel, h = amber_dim, k = visor, l = red_dim
+anchor: 0, 19
+---
+FFFFFFFFF
+FFFFlFFFF
+FPPPsPPPF
+FPPPsPPPF
+FPwwswwPF
+FPwwswwPF
+FPwwswwPF
+FPPPsPPPF
+FPPPsPPPF
+FPPPsPPPF
+FdddsdddF
+FPPPsPPPF
+FPPPsPPPF
+FPPPsPPPF
+FPPPsPPPF
+FdddsdddF
+FPPPsPPPF
+FhkhshkhF
+FkhkskhkF
+FPPPsPPPF
+FFFFFFFFF
+FFFFFFFFF

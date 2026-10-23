@@ -1,0 +1,13 @@
+about: An arm holding a data slate.
+colours: B = agent, L = cyan_dim, W = alloy_light
+anchor: 0, 8
+---
+.......WWWW
+.......WLLW
+......BWWWW
+......BWLLW
+.......WWWW
+...........
+...........
+...........
+...........

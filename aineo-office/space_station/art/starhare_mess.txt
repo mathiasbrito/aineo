@@ -1,0 +1,6 @@
+about: What the starhare left on the floor: a glowing dropping.
+colours: v = violet_glow, w = violet_dim
+anchor: 0, 1
+---
+.vv.
+wvvw
