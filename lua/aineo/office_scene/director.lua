@@ -26,6 +26,7 @@ local ENTRANCE = 'door'
 ---@field facing string 'left' or 'right'
 ---@field pose string the pose it holds
 ---@field pose_since number when it took the pose, on the stage's clock
+---@field at_a_seat boolean whether it stands at a spot where characters sit
 ---@field effect? string the effect its step names, shown in place of its pose's
 
 ---@class aineo.office_scene.Performer : aineo.office_scene.Character
@@ -99,6 +100,7 @@ local function arrive(performer, step, time)
   performer.effect = step.effect
   performer.arrived_at = time
   performer.pose_since = time
+  performer.at_a_seat = performer.spot ~= nil and performer.spot.sitting
 end
 
 --- Sends the performer to the spot `route` leads to, and has it walk the way.
@@ -130,6 +132,7 @@ local function begin_step(context, performer, index, time)
   performer.step_seconds = seconds_of(step.for_seconds, context.random)
   performer.arrived_at = nil
   performer.effect = nil
+  performer.at_a_seat = false
   performer.path = {}
   local spot_name = step.at or (not performer.column and ENTRANCE) or nil
   local route = spot_name and spots.route(context.layout, spot_name, performer, context.taken)
