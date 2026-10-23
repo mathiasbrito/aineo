@@ -109,11 +109,25 @@ Each applied to a pristine copy, run alone on the test file of its unit, restore
 
 Also killed: the tracker not listing `details` (fifteen cases), `clues.of_call` returning `input.file_path` (five), a board that invents a task (the no-details case), a printer that falls back to its own art (the no-page case), `abs` of the printed height (a report yet to come), a monitor writing `web` for no clue (the nothing-looked-up case).
 
+## The review round (A591)
+
+The review of the pull request (attack and test integrity) found seven things; each was built test first on the same branch.
+
+1. **The web clue** keeps a host only when it matches `^[%w.%-\128-\255]+$` or `^%[[%x:.]+%]$` and is at most 253 bytes; sixteen hostile addresses (credentials with a slash, `data:`, `javascript:`, `;jsessionid=`, a backslash path, an escape, a bad port, a 50,000-byte host…) give no clue, eight legitimate forms keep their host (parametrized cases in `test_office_states_details`; 14 of the 16 red first, two nil by nature).
+2. **Tasks follow Claude Code's rules:** `TaskUpdate` to `deleted` marks the task (it keeps its slot, so the numbers after it hold) and the board leaves it out; a `TaskCreate` whose result is an error is dropped (the reviewer's measured diff, adapted to the file's style). The help states the numbering limit.
+3. **The cell cut:** a character is one cell when `a` plus it measures two, so a combining mark is shown as `?` and a row keeps its width (five cases red: café, Thai, Devanagari, a variation selector). A NUL, which ends a string for the measuring functions, is replaced by `?` first (found while pinning; one case red).
+4. **Cost:** the cut reads at most four bytes a cell; a picture of the 220×80 office with twenty 1 MiB clues and twenty 1 MiB task subjects must take under 10 ms (red before, green after).
+5. **Nothing is written below the plan:** the board, the monitor's clue and verdict and the time and date write through `areas.write_text_above_the_list`; four cases with pieces hanging over the status list (red first), two more for the sky and the printed page (pins, killed by MX8 and MX9).
+6. **Pins:** MX2 (a creation heard started twice), MX3 (an area of odd height), MX8, MX9, each killed by an assertion.
+7. **'ambiwidth' `double`:** the office does not show, `:Aineo office` and `\O` say why once, the idle countdown says nothing, and `:checkhealth aineo` reports an error (`aineo.office`'s show check and the health section only; three cases red first).
+
+Mutants of the round, each a literal edit on a pristine copy, all killed by an assertion: MX2, MX3, MX8, MX9; the host shape (length, shape, IPv6, non-ASCII bytes: 4); tasks (deleted branch, failed-create drop, drop without failure, the board's filter: 5); the cut (the byte bound, the display width of `a` plus the character, the NUL replacement: 3); the list rows (the row guard removed: 4 cases); 'ambiwidth' (the office, the health check). One equivalent: the guard `place.row < plan_height` as `<=` (the row at `plan_height` is the status list's rule, which overwrites the whole row). The first-round mutants were re-run on the new head, all killed.
+
 ## Open threads
 
 - T133 draws `sky_night`, `sky_dawn`, `sky_day`, `sky_dusk`, `printed_page` and the globe screen piece; T134's help should keep the names of `aineo-office-live`.
 - The task numbers of `TaskUpdate` rest on the tracker hearing every `TaskCreate` (above).
-- Frame cost of the new painters was not measured at 220×80 with a pack that uses all of them; each paints a clipped area or a few cells.
+- The frame cost of the new painters is measured: a picture of the 220×80 office with 1 MiB clues and subjects on twenty monitors and two boards takes under 10 ms (`test_office_scene_live_cost`).
 
 ## Commits
 
