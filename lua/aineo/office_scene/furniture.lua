@@ -78,7 +78,10 @@ local function paint_screen(canvas, drawing, placed, monitor)
     column = left + content.anchor.column,
     row = top + content.anchor.row,
     colours = drawing.pack.colours,
-    clip = { column = left, row = top, width = area.width, height = area.height },
+    clip = items.common_to(
+      { column = left, row = top, width = area.width, height = area.height },
+      items.plan_area(drawing)
+    ),
   })
 end
 
@@ -114,7 +117,7 @@ function M.items(canvas, drawing)
   local made = {}
   for _, placed in ipairs(drawing.layout.pieces) do
     local piece = piece_shown(drawing, placed)
-    if piece and is_on_canvas(piece, placed.row, drawing.height) then
+    if piece and is_on_canvas(piece, placed.row, drawing.plan_height) then
       table.insert(made, {
         depth = placed.walk_over and ON_THE_FLOOR or 2 * placed.row + 1,
         rank = placed.walk_over and items.RANK.on_the_floor or items.RANK.piece,
@@ -124,6 +127,7 @@ function M.items(canvas, drawing)
             column = placed.column,
             row = 2 * placed.row + 1,
             colours = drawing.pack.colours,
+            clip = items.plan_area(drawing),
           })
           paint_screen(canvas, drawing, placed, piece)
           write_live_text(canvas, drawing, placed, piece)
