@@ -3914,8 +3914,12 @@ Header field	Means ~
 		`sky`, `page` or `query`
 `seconds per frame`	how long each frame shows, `0.25` by default
 
-An art file is read to 256 KiB, 400 pixels wide, 200 tall and 64 frames; a
-pack holds at most 500 pieces.
+An art file is read to 256 KiB, 400 pixels wide, 200 tall and 64 frames; of a
+pack's art files the first 500, by name, are read and the rest told. The
+files of a pack and of the packs it is based on are read up to 2 MiB together,
+the files over that told once and left out, so that the pack it is based on
+shows through. A pack is read once and kept: the office reads it again only
+when one of its files, or the folders it looked in, changed.
 
                                                           *aineo-office-floor*
 The floor plan ~
