@@ -111,6 +111,7 @@ end
 ---@field report_arrived fun(report: aineo.office.Report) keeps the report as a card the office draws in its bottom right corner until the cursor enters the right side, and starts the idle countdown again; keeps nothing when the cursor is in the right side and the office is hidden, where the Report shows it
 ---@field show_now fun() shows the office over the right side at once, and does nothing when it shows
 ---@field preview fun(pack?: string) shows the pack, or the one the settings name, over the right side with every state of the vocabulary acted out in turn, each named, in place of the office that shows, which stays when the pack cannot be shown; the preview follows no transcript
+---@field reload fun() shows the office again with what the settings name now, when it shows, and does nothing when it is hidden, previews a pack or has no right side; a pack that cannot be shown is told, and the office that shows stays
 ---@field let_go fun() closes the office, stops its timer and its watch, and forgets the session
 
 --- Makes the office of one tab.
@@ -705,6 +706,14 @@ function M.new_office(options)
     countdown.stop()
     if not show_over(area, { pack = pack }, close) then
       settle()
+    end
+  end
+
+  function office.reload()
+    local open = showing
+    local area = options.right_side()
+    if open and not open.preview and area then
+      show_over(area, nil, close)
     end
   end
 

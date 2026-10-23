@@ -135,7 +135,10 @@ end
 T['Aineo office check']['is offered after office, with the names of the packs found after check'] = function()
   add_pack('alt')
 
-  eq(child.fn.getcompletion('Aineo office ', 'cmdline'), { 'check', 'states', 'preview', 'new' })
+  eq(
+    child.fn.getcompletion('Aineo office ', 'cmdline'),
+    { 'check', 'states', 'preview', 'new', 'pack' }
+  )
   eq(
     child.fn.getcompletion('Aineo office check ', 'cmdline'),
     { 'alt', 'default', 'space_station' }
