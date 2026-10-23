@@ -114,6 +114,11 @@ function M.new_office(options)
   ---@type fun()
   local settle
 
+  --- Starts the frame timer and the follower; assigned below, after the
+  --- functions it needs.
+  ---@type fun(open: table)
+  local start_running
+
   local cards = cards_module.new_cards()
 
   --- Why the office cannot show over `area` now: the editor draws no true
@@ -130,8 +135,10 @@ function M.new_office(options)
     end
   end
 
-  --- What exists while the office shows; nil while it is hidden.
-  ---@type { float: aineo.office.Float, timer: uv.uv_timer_t, group: integer, follower: aineo.transcript.Follower|nil, stage: aineo.office_scene.Stage, screen: aineo.office.Screen, area: aineo.layout.Area, refresh_colours: fun() }|nil
+  --- What exists while the office shows; nil while it is hidden. Its timer,
+  --- tracker and follower are nil while the office is paused, as it is while
+  --- its tab page is left.
+  ---@type { float: aineo.office.Float, group: integer, pack: aineo.office_pack.Pack, stage: aineo.office_scene.Stage, screen: aineo.office.Screen, area: aineo.layout.Area, refresh_colours: fun(), draw: fun(), timer: uv.uv_timer_t|nil, tracker: aineo.office_states.Tracker|nil, follower: aineo.transcript.Follower|nil }|nil
   local showing = nil
 
   local office = {}
@@ -160,6 +167,24 @@ function M.new_office(options)
     end
   end
 
+  --- Stops the frame timer and the follower of `open`, if they run.
+  ---
+  ---@param open table what exists while the office shows
+  local function stop_running(open)
+    local timer = open.timer
+    open.timer = nil
+    if timer and not timer:is_closing() then
+      timer:stop()
+      timer:close()
+    end
+    local follower = open.follower
+    open.follower = nil
+    open.tracker = nil
+    if follower then
+      follower.stop()
+    end
+  end
+
   --- Closes the office if it shows: stops its frame timer and its follower,
   --- removes its autocommands and closes its window. Does nothing when it is
   --- hidden.
@@ -169,13 +194,7 @@ function M.new_office(options)
       return
     end
     showing = nil
-    if not open.timer:is_closing() then
-      open.timer:stop()
-      open.timer:close()
-    end
-    if open.follower then
-      open.follower.stop()
-    end
+    stop_running(open)
     pcall(vim.api.nvim_del_augroup_by_id, open.group)
     float_module.close(open.float)
   end
@@ -271,6 +290,22 @@ function M.new_office(options)
         follow_right_side(open)
       end,
     })
+    vim.api.nvim_create_autocmd('TabLeave', {
+      group = open.group,
+      callback = function()
+        if is_in_current_tab_page(open) then
+          stop_running(open)
+        end
+      end,
+    })
+    vim.api.nvim_create_autocmd('TabEnter', {
+      group = open.group,
+      callback = function()
+        if is_in_current_tab_page(open) and not open.timer then
+          start_running(open)
+        end
+      end,
+    })
     vim.api.nvim_create_autocmd('ColorScheme', {
       group = open.group,
       callback = function()
@@ -322,6 +357,16 @@ function M.new_office(options)
     return timer
   end
 
+  --- Starts what runs while the office shows and is not paused: the tracker
+  --- of the agents' states fed by the follower of the transcript, and the
+  --- frame timer.
+  ---
+  ---@param open table what exists while the office shows
+  function start_running(open)
+    open.tracker, open.follower = follow_transcript(open.pack)
+    open.timer = start_frames(open.draw)
+  end
+
   --- Records the transcript to follow from the next `show_now()`; one that
   --- shows already goes on following the file it began with.
   ---
@@ -360,29 +405,31 @@ function M.new_office(options)
     end
     local float = float_module.open(area)
     local screen = screen_module.new_screen(float.buffer)
-    local tracker, follower = follow_transcript(pack)
     cards_module.define_groups()
-    local function draw()
-      local now = options.clock()
-      stage.advance(tracker.agents(now), now)
-      screen.paint(cards.overlay(stage.picture(), {
-        width = vim.api.nvim_win_get_width(float.window),
-        now = now,
-      }))
-    end
     local open = {
       float = float,
       group = vim.api.nvim_create_augroup('aineo.office.' .. float.buffer, { clear = true }),
-      follower = follower,
-      timer = start_frames(draw),
+      pack = pack,
       stage = stage,
       screen = screen,
       area = area,
       refresh_colours = refresh_colours,
     }
+    open.draw = function()
+      if not open.tracker then
+        return
+      end
+      local now = options.clock()
+      stage.advance(open.tracker.agents(now), now)
+      screen.paint(cards.overlay(stage.picture(), {
+        width = vim.api.nvim_win_get_width(float.window),
+        now = now,
+      }))
+    end
+    start_running(open)
     watch_the_screen(open)
     showing = open
-    draw_frame(draw)
+    draw_frame(open.draw)
   end
 
   --- The settings the user gave the office, or the default when it was given
