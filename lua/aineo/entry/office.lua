@@ -3,8 +3,9 @@
 --- hands it what it is not to reach for — the layout's right side, the folders
 --- packs are in, the clock, the settings and the transcript of the tab's
 --- session — and shows it when asked. It keeps the transcript path the tab's
---- `SessionStart` hooks name, tells the office the tab's permission waits and
---- the reports its Report took, and lets it go when the tab closes.
+--- `SessionStart` hooks name, tells the office the tab's permission waits,
+--- the reports its Report took and each change of the session the tab runs
+--- or of that session's transcript, and lets it go when the tab closes.
 ---
 --- Loading it loads no other home: `aineo.office` is required when an office
 --- is first made.
@@ -34,18 +35,6 @@ end
 --- then by session (`M.note_transcript()`).
 ---@type table<aineo.entry.Tab, table<string, string>>
 local named_transcripts = setmetatable({}, { __mode = 'k' })
-
---- Notes that Claude Code writes the transcript of the session `session_id`
---- of `tab` in `path`, as its `SessionStart` hook named it: the path the
---- office follows for that session from then on, in place of a search for it.
----
----@param tab aineo.entry.Tab
----@param session_id string
----@param path string
-function M.note_transcript(tab, session_id, path)
-  named_transcripts[tab] = named_transcripts[tab] or {}
-  named_transcripts[tab][session_id] = path
-end
 
 --- The transcript Claude Code writes for the session `session_id`:
 --- `projects/<folder>/<session id>.jsonl` under its configuration directory.
@@ -90,6 +79,25 @@ end
 --- place of the setting `office.pack`; `nil` until it chose one.
 ---@type string|nil
 local chosen_pack
+
+--- Notes that Claude Code writes the transcript of the session `session_id`
+--- of `tab` in `path`, as its `SessionStart` hook named it: the path the
+--- office follows for that session from then on, in place of a search for it.
+--- When that changes the transcript of the session the tab runs
+--- (`transcript_of()`), the office is told (`M.session_changed()`), so that
+--- it follows the path named.
+---
+---@param tab aineo.entry.Tab
+---@param session_id string
+---@param path string
+function M.note_transcript(tab, session_id, path)
+  local before = transcript_of(tab)
+  named_transcripts[tab] = named_transcripts[tab] or {}
+  named_transcripts[tab][session_id] = path
+  if transcript_of(tab) ~= before then
+    M.session_changed(tab)
+  end
+end
 
 --- The settings of the office, `office.*` of aineo's configuration
 --- (`aineo.entry.settings`), read each time the office is asked for, with
@@ -225,6 +233,18 @@ function M.take_permission_wait(tab, session_id, agent_id)
   local office = offices[tab]
   if office and session_id == tab.session_id() then
     office.permission_wait(agent_id or 'main')
+  end
+end
+
+--- Tells the office `tab` has, if it has one, that the session the tab runs
+--- is another now: the office acts out the transcript the tab names from
+--- then on (`aineo.office`'s `session_changed()`).
+---
+---@param tab aineo.entry.Tab
+function M.session_changed(tab)
+  local office = offices[tab]
+  if office then
+    office.session_changed()
   end
 end
 

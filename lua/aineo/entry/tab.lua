@@ -647,6 +647,9 @@ local function make_tab(homes, key, callbacks)
   --- and is not followed now. Every other switch goes to
   --- `follow_switch_once_confirmed()`.
   ---
+  --- Every switch is told to the tab's office first (`aineo.entry.office`'s
+  --- `session_changed()`), whatever the panes do with it.
+  ---
   --- The note is the new id, not a flag, and each start has its own: a
   --- handler that raised before its switch was told leaves the note set, and
   --- a later switch of the same start told with the source `startup` — a
@@ -665,6 +668,7 @@ local function make_tab(homes, key, callbacks)
         homes.layout.follow_claude_terminal(terminal)
       end,
       on_session_switched = function(id, source, left)
+        offices.session_changed(tab)
         if id == replacing_session and source == 'startup' then
           replacing_session = nil
           hand_over_dead_session(left, id, working_directory)
