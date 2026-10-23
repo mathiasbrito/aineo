@@ -38,6 +38,12 @@ local DEFAULT_SETTINGS = { pack = 'default', pieces = {}, idle_ms = false }
 local NEEDS_TRUE_COLOUR =
   "aineo: the office needs 'termguicolors' to draw its pixels, and it is off, so it does not show"
 
+--- What `show_now()` tells the user, as a warning, when the editor draws the
+--- half blocks two cells wide ('ambiwidth' `double`): a picture of one cell a
+--- pixel would be twice as wide as the window.
+local NEEDS_SINGLE_CELL_BLOCKS =
+  "aineo: the office needs 'ambiwidth' to be single to draw its half blocks one cell wide, and it is double, so it does not show"
+
 --- The most agents whose permission waits an office keeps.
 local MOST_WAITS_KEPT = 64
 
@@ -174,13 +180,17 @@ function M.new_office(options)
   local cards = cards_module.new_cards()
 
   --- Why the office cannot show over `area` now: the editor draws no true
-  --- colours, or the layout shows no right side; nil when it can.
+  --- colours, draws the half blocks two cells wide, or the layout shows no
+  --- right side; nil when it can.
   ---
   ---@param area aineo.layout.Area|nil the right side now
   ---@return string|nil
   local function why_it_cannot_show(area)
     if not vim.o.termguicolors then
       return NEEDS_TRUE_COLOUR
+    end
+    if vim.o.ambiwidth == 'double' then
+      return NEEDS_SINGLE_CELL_BLOCKS
     end
     if not area then
       return NO_RIGHT_SIDE

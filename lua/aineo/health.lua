@@ -998,8 +998,9 @@ local function check_explain(resolved_config)
   )
 end
 
---- Reports whether the office can draw ('termguicolors' on, an error when off:
---- it does not show) and when it shows by itself, from `office.idle_ms`; the
+--- Reports whether the office can draw ('termguicolors' on, an error when off,
+--- and an error when 'ambiwidth' is `double`: it does not show then) and when
+--- it shows by itself, from `office.idle_ms`; the
 --- second only while the configuration is valid.
 ---
 ---@param resolved_config table|nil the configuration, `nil` when it is wrong
@@ -1011,6 +1012,12 @@ local function check_office(resolved_config)
     vim.health.error(
       "'termguicolors' is off, so the office does not show",
       "Set 'termguicolors' in your configuration, as a terminal that draws true colours allows: :help aineo-office"
+    )
+  end
+  if vim.o.ambiwidth == 'double' then
+    vim.health.error(
+      "'ambiwidth' is double, so the office does not show",
+      "Set 'ambiwidth' to single: the office draws half blocks, which 'ambiwidth' double makes two cells wide: :help aineo-office"
     )
   end
   if not resolved_config then
