@@ -1,0 +1,25 @@
+about: A floor lamp.
+colours: A = gold, T = steel, y = yellow
+anchor: 0, 20
+---
+.AAA.
+AAAAA
+AAAAA
+.yyy.
+..T..
+..T..
+..T..
+..T..
+..T..
+..T..
+..T..
+..T..
+..T..
+..T..
+..T..
+..T..
+..T..
+..T..
+.TTT.
+TTTTT
+.....

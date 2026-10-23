@@ -1,19 +1,28 @@
 about: The office door, closed.
-colours: O = door_frame, d = door_panel, e = door_inset, y = brass
+colours: O = door_frame, d = door_panel, e = door_inset, y = yellow
+anchor: 0, 21
 ---
-OOOOOOOO
-OddddddO
-OdeeeedO
-OdeeeedO
-OdeeeedO
-OddddddO
-OddddyyO
-OddddddO
-OdeeeedO
-OdeeeedO
-OdeeeedO
-OddddddO
-OddddddO
-OdeeeedO
-OddddddO
-OOOOOOOO
+OOOOOOOOOO
+OddddddddO
+OdeeeeeedO
+OdeeeeeedO
+OdeeeeeedO
+OdeeeeeedO
+OdeeeeeedO
+OdeeeeeedO
+OdeeeeeedO
+OdeeeeeedO
+OddddddddO
+OddddddddO
+OddddddyyO
+OddddddddO
+OdeeeeeedO
+OdeeeeeedO
+OdeeeeeedO
+OdeeeeeedO
+OdeeeeeedO
+OdeeeeeedO
+OdeeeeeedO
+OdeeeeeedO
+OddddddddO
+OddddddddO

@@ -1,0 +1,15 @@
+about: A wall calendar; the date is written in its date area.
+colours: A = floor, R = red, k = ink
+anchor: 0, 9
+area date: 1, 4, 6 x 2
+---
+RkRRRRkR
+RRRRRRRR
+AAAAAAAA
+AAAAAAAA
+AAAAAAAA
+AAAAAAAA
+AAAAAAAA
+AAAAAAAA
+AAAAAAAA
+AAAAAAAA

@@ -1,9 +1,10 @@
 about: A desk; the agent sits behind it.
-colours: W = wood, D = dark_wood
+colours: D = dark_wood, W = wood
+anchor: 0, 2
 ---
-WWWWWWWWWWWWWWWWWWWWWWWWWWWW
-DDDDDDDDDDDDDDDDDDDDDDDDDDDD
-.DD......................DD.
-.DD......................DD.
-.DD......................DD.
-.DD......................DD.
+WWWWWWWWWWWWWWWWWWWWWWWWWW
+DDDDDDDDDDDDDDDDDDDDDDDDDD
+.DD....................DD.
+.DD....................DD.
+.DD....................DD.
+.DD....................DD.

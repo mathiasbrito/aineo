@@ -1,0 +1,5 @@
+about: The face of an agent: back.
+colours: B = agent
+anchor: 0, 0
+---
+.

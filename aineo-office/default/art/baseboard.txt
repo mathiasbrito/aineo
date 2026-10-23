@@ -1,0 +1,7 @@
+about: The strip along the foot of the wall, stretched to the length of the plan's run of it.
+colours: A = baseboard
+anchor: 0, 1
+stretch: columns 1-1
+---
+A
+A
