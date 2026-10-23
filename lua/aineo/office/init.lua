@@ -54,6 +54,12 @@ local SETTINGS_UNREADABLE = 'aineo: the office cannot read its settings: %s'
 local SLOW_TRIGGERS =
   'aineo: matching the office pack’s triggers took too long; the triggers after the slow one are skipped'
 
+--- What is told, once each time the office shows, when the pack's plan places
+--- more pieces than a frame can paint: the pack's name and how many of its
+--- pieces are left out.
+local LEFT_OUT =
+  'aineo: the office pack “%s” places more pieces than a frame can paint; %d of them are left out'
+
 --- The most problems of a pack a warning lists.
 local MOST_PROBLEMS_LISTED = 5
 
@@ -467,12 +473,19 @@ function M.new_office(options)
     end
     warn_of(name, problems)
     local refresh_colours = colours.follow_highlights(pack)
+    local told_of_left_out = false
     local made, stage = pcall(require('aineo.office_scene').new_stage, {
       pack = pack,
       width = area.width,
       height = area.height,
       state_labels = state_labels(),
       clock = wall_time,
+      on_left_out = function(count)
+        if not told_of_left_out then
+          told_of_left_out = true
+          vim.notify(LEFT_OUT:format(name, count), vim.log.levels.WARN)
+        end
+      end,
     })
     if not made then
       vim.notify(('aineo: the office cannot show: %s'):format(stage), vim.log.levels.ERROR)

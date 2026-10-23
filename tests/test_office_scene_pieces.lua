@@ -82,6 +82,21 @@ T['a piece in use']['keeps its own art for an agent in its spot’s column on an
   eq(scene.group_at(stage.picture(), 1, 0), scene.solid(RED))
 end
 
+T['a piece in use']['is used from the spot made first of two that are as near'] = function()
+  local pack = scene.people_pack('# plan\n \n ....*C.b..\n ..........\n', {
+    ['*'] = { decorations = { 'first' } },
+    C = { piece = 'left', in_use = 'right' },
+    b = { spot = 'bench' },
+  }, {
+    activities = { stand = { steps = { { at = 'first' } } } },
+  })
+  local stage = scene.stage_of(pack, 10, 2)
+
+  stage.advance(scene.agents_in('standing'), 0)
+
+  eq(scene.group_at(stage.picture(), 5, 0), scene.solid(BLUE))
+end
+
 T['a piece in use']['shows its in_use art while an agent walks over the spot'] = function()
   local stage = scene.stage_of(door_pack(), 4, 2)
   stage.advance(scene.agents_in('working'), 0)
