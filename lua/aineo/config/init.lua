@@ -2,11 +2,18 @@
 --- state: it keeps the options `require('aineo').setup()` records, and
 --- resolves the configuration from the sources it is handed.
 
-local lua_pattern = require('aineo.config.lua_pattern')
-
 local M = {}
 
-M.lua_pattern_problem = lua_pattern.problem
+--- What is wrong with the Lua pattern `pattern` as a match of a class of
+--- commands: Lua cannot read it whole, or it repeats (`*`, `+`, `-`) more than
+--- once. `nil` when nothing is. The walk that tells is loaded when first
+--- asked, so that starting the editor loads only this file.
+---
+---@param pattern string
+---@return string|nil problem
+function M.lua_pattern_problem(pattern)
+  return require('aineo.config.lua_pattern').problem(pattern)
+end
 
 local recorded_setup_options = {}
 
@@ -125,7 +132,7 @@ end
 
 --- Whether `value` is the classes of shell commands: a table of at most the
 --- four classes, each a list of matches, the Lua patterns among them read
---- whole by Lua and repeating once at most (`lua_pattern.problem()`).
+--- whole by Lua and repeating once at most (`M.lua_pattern_problem()`).
 ---
 --- When a Lua pattern is what is wrong, the second result says how.
 ---
@@ -145,7 +152,7 @@ local function is_command_classes(value)
       return false
     end
     for _, match in ipairs(matches) do
-      local problem = type(match) == 'table' and lua_pattern.problem(match.lua_pattern)
+      local problem = type(match) == 'table' and M.lua_pattern_problem(match.lua_pattern)
       if problem then
         return false, ("the Lua pattern '%s': %s"):format(match.lua_pattern, problem)
       end
