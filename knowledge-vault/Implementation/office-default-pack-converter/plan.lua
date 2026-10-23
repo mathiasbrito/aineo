@@ -115,7 +115,7 @@ function M.lay_lounge(rows, column)
   for at = column, column + 49 do
     put(rows[10], at, 'r')
   end
-  put(rows[10], sofa + 15, 't')
+  put(rows[9], sofa + 15, 't')
   put(rows[9], column + 50, 'L')
 end
 

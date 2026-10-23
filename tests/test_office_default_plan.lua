@@ -3,6 +3,7 @@ local MiniTest = require('mini.test')
 local eq = MiniTest.expect.equality
 
 local default = dofile('tests/helpers/office_default.lua')
+local floor_layout = require('aineo.office_scene.floor_layout')
 
 local SMALL, MEDIUM, LARGE = { 60, 24 }, { 100, 40 }, { 220, 80 }
 
@@ -133,6 +134,32 @@ T['the plan']['has every decoration, the fish tank among them, on the wall of a 
     counts.poster,
     counts.fish_tank,
   }, { 1, 1, 1, 1, 1, 1 })
+end
+
+T['the plan']['stretches no piece beyond the run of cells it is laid over'] = MiniTest.new_set({
+  parametrize = { { { 60, 24 } }, { { 100, 40 } }, { { 157, 78 } }, { LARGE }, { { 320, 120 } } },
+})
+
+T['the plan']['stretches no piece beyond the run of cells it is laid over']['size'] = function(size)
+  local pack = default.load_pack()
+
+  local too_wide = vim
+    .iter(floor_layout.lay_out(pack, size[1], size[2] - 5).pieces)
+    :filter(function(placed)
+      local piece = pack.pieces[placed.piece]
+      return piece.stretch ~= nil and placed.columns ~= nil and piece.width > placed.columns
+    end)
+    :map(function(placed)
+      return ('%s at %d,%d over %d columns'):format(
+        placed.piece,
+        placed.column,
+        placed.row,
+        placed.columns
+      )
+    end)
+    :totable()
+
+  eq(too_wide, {})
 end
 
 T['the plan']['has no window where the wall is too narrow for it'] = function()
