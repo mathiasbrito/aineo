@@ -416,11 +416,11 @@ return {
     },
     read_from_the_cabinet = {
       about = 'Stands at the file cabinet and reaches into a drawer, which opens.',
-      steps = { { at = 'file_cabinet', effect = 'reading_glyph', pose = 'reaching' } },
+      steps = { { at = 'file_cabinet', pose = 'reaching', effect = 'reading_glyph' } },
     },
     search_the_cabinet = {
       about = 'Opens the drawers of the file cabinet one after another.',
-      steps = { { at = 'file_cabinet', effect = 'searching_glyph', pose = 'reaching' } },
+      steps = { { at = 'file_cabinet', pose = 'reaching', effect = 'searching_glyph' } },
     },
     write_code = {
       about = 'Sits at its desk and types fast; code fills its screen.',
@@ -436,7 +436,7 @@ return {
     },
     keep_a_job_running = {
       about = 'Sits at its desk while a job runs in the background, a spinner over its head.',
-      steps = { { at = 'desk', effect = 'job_spinner', pose = 'typing_command' } },
+      steps = { { at = 'desk', pose = 'typing_command', effect = 'job_spinner' } },
     },
     browse_the_web = {
       about = 'Sits at its desk looking something up; the monitor shows a browser, and what it looks up.',
@@ -470,11 +470,11 @@ return {
     },
     report_at_the_printer = {
       about = 'Walks to the printer and waits there while a page prints.',
-      steps = { { at = 'printer', facing = 'left', pose = 'glancing' } },
+      steps = { { at = 'printer', pose = 'glancing', facing = 'left' } },
     },
     commit_changes = {
       about = 'Sits at its desk typing a command, "git" blinking over its head.',
-      steps = { { at = 'desk', effect = 'committing_words', pose = 'typing_command' } },
+      steps = { { at = 'desk', pose = 'typing_command', effect = 'committing_words' } },
     },
     tidy_up_the_notes = {
       about = 'Sits at its desk and tidies its papers into a stack.',
@@ -522,14 +522,14 @@ return {
       label = 'stretches',
       during = { 'idle' },
       chance = 3,
-      steps = { { for_seconds = { 1.5, 2.5 }, pose = 'stretching' } },
+      steps = { { pose = 'stretching', for_seconds = { 1.5, 2.5 } } },
     },
     yawn = {
       about = 'Yawns, its arms over its head.',
       label = 'yawns',
       during = { 'idle' },
       chance = 3,
-      steps = { { for_seconds = { 1.4, 2.2 }, pose = 'yawning' } },
+      steps = { { pose = 'yawning', for_seconds = { 1.4, 2.2 } } },
     },
     spin_in_the_chair = {
       about = 'Goes to its desk and turns round in its chair, front, side and back.',
@@ -546,28 +546,28 @@ return {
       label = 'looks out of the window',
       during = { 'idle' },
       chance = 2,
-      steps = { { at = 'window', for_seconds = { 2.5, 4 }, pose = 'looking_out' } },
+      steps = { { at = 'window', pose = 'looking_out', for_seconds = { 2.5, 4 } } },
     },
     read_a_book_on_the_sofa = {
       about = 'Sits on the sofa and reads a book.',
       label = 'reads a book on the sofa',
       during = { 'idle' },
       chance = 2,
-      steps = { { at = 'sofa', for_seconds = { 3, 5 }, pose = 'reading_a_book' } },
+      steps = { { at = 'sofa', pose = 'reading_a_book', for_seconds = { 3, 5 } } },
     },
     water_the_snake_plant = {
       about = 'Goes to the snake plant on the wall and waters it.',
       label = 'waters the plant',
       during = { 'idle' },
       chance = 2,
-      steps = { { at = 'snake_plant', for_seconds = { 2, 3 }, pose = 'watering' } },
+      steps = { { at = 'snake_plant', pose = 'watering', for_seconds = { 2, 3 } } },
     },
     water_the_corner_plant = {
       about = 'Goes to the plant in the corner and waters it.',
       label = 'waters the plant',
       during = { 'idle' },
       chance = 1,
-      steps = { { at = 'corner_plant', for_seconds = { 2, 3 }, pose = 'watering' } },
+      steps = { { at = 'corner_plant', pose = 'watering', for_seconds = { 2, 3 } } },
     },
     throw_a_paper_ball_in_the_bin = {
       about = 'Goes to the bin, throws a paper ball in an arc, and cheers when it lands in.',
@@ -594,7 +594,7 @@ return {
       label = 'chats at the water cooler',
       during = { 'idle' },
       chance = 2,
-      steps = { { at = 'water_cooler', for_seconds = { 2.5, 4 }, pose = 'drinking' } },
+      steps = { { at = 'water_cooler', pose = 'drinking', for_seconds = { 2.5, 4 } } },
     },
     doodle_on_the_whiteboard = {
       about = 'Goes to the whiteboard and doodles on it with the marker.',
@@ -615,14 +615,14 @@ return {
       label = 'tidies the desk',
       during = { 'idle' },
       chance = 2,
-      steps = { { at = 'desk', for_seconds = { 2, 3 }, pose = 'tidying_the_desk' } },
+      steps = { { at = 'desk', pose = 'tidying_the_desk', for_seconds = { 2, 3 } } },
     },
     nap_on_the_sofa = {
       about = 'Curls up on the sofa for a nap, "z Z" rising.',
       label = 'naps on the sofa',
       during = { 'idle' },
       chance = 1,
-      steps = { { at = 'sofa', for_seconds = { 3, 4.5 }, pose = 'sleeping' } },
+      steps = { { at = 'sofa', pose = 'sleeping', for_seconds = { 3, 4.5 } } },
     },
     play_table_tennis = {
       about = 'Two idle agents go to the table-tennis table, one at each end, and play a rally.',
@@ -630,21 +630,21 @@ return {
       during = { 'idle' },
       chance = 1,
       players = 2,
-      steps = { { at = 'table_tennis', for_seconds = { 6, 10 }, pose = 'playing_table_tennis' } },
+      steps = { { at = 'table_tennis', pose = 'playing_table_tennis', for_seconds = { 6, 10 } } },
     },
     drum_its_fingers = {
       about = 'Sits at its desk drumming its fingers.',
       label = 'drums its fingers',
       during = { 'waiting', 'waiting_for_subagents' },
       chance = 3,
-      steps = { { at = 'desk', for_seconds = { 1.5, 3 }, pose = 'drumming' } },
+      steps = { { at = 'desk', pose = 'drumming', for_seconds = { 1.5, 3 } } },
     },
     look_at_its_watch = {
       about = 'Looks at its watch, where it stands.',
       label = 'looks at its watch',
       during = { 'waiting', 'waiting_for_subagents' },
       chance = 2,
-      steps = { { for_seconds = { 1.4, 2.2 }, pose = 'looking_at_the_watch' } },
+      steps = { { pose = 'looking_at_the_watch', for_seconds = { 1.4, 2.2 } } },
     },
     pace_beside_the_desk = {
       about = 'Paces to the left of its desk and to the right and back.',
@@ -663,14 +663,14 @@ return {
       label = 'glances at the door',
       during = { 'waiting', 'waiting_for_subagents' },
       chance = 2,
-      steps = { { facing = 'left', for_seconds = { 1.2, 2 }, pose = 'glancing' } },
+      steps = { { pose = 'glancing', facing = 'left', for_seconds = { 1.2, 2 } } },
     },
     tap_a_foot = {
       about = 'Taps its foot beside its desk.',
       label = 'taps its foot',
       during = { 'waiting', 'waiting_for_subagents' },
       chance = 2,
-      steps = { { at = 'beside_desk', for_seconds = { 1.5, 2.5 }, pose = 'tapping_a_foot' } },
+      steps = { { at = 'beside_desk', pose = 'tapping_a_foot', for_seconds = { 1.5, 2.5 } } },
     },
     drum_its_fingers_and_wait = {
       about = 'Drums its fingers at its desk while it waits for an answer.',
@@ -719,7 +719,7 @@ return {
     grumble = {
       about = 'Is upset by what the cat left near it: "#@!" over its head.',
       label = 'is upset by what the cat left',
-      steps = { { for_seconds = 2.5, pose = 'grumbling' } },
+      steps = { { pose = 'grumbling', for_seconds = 2.5 } },
     },
     clean_up_the_mess = {
       about = 'The idle agent nearest to the mess goes to it, cleans it up, and goes to the bin.',
@@ -762,7 +762,7 @@ return {
       who = 'cat',
       during = { 'always' },
       chance = 3,
-      steps = { { for_seconds = { 2.5, 4 }, pose = 'washing' } },
+      steps = { { pose = 'washing', for_seconds = { 2.5, 4 } } },
     },
     sleep_on_a_seat = {
       about = 'The cat curls up asleep on a free seat of the sofa, for a long time: cats are lazy.',
@@ -770,7 +770,7 @@ return {
       who = 'cat',
       during = { 'always' },
       chance = 5,
-      steps = { { at = 'sofa', for_seconds = { 60, 180 }, pose = 'sleeping_on_a_seat' } },
+      steps = { { at = 'sofa', pose = 'sleeping_on_a_seat', for_seconds = { 60, 180 } } },
     },
     jump_on_an_empty_desk = {
       about = 'The cat jumps on a desk nobody sits at and sits there.',
@@ -778,7 +778,7 @@ return {
       who = 'cat',
       during = { 'always' },
       chance = 2,
-      steps = { { at = 'an_empty_desk', for_seconds = { 2, 4 }, pose = 'sitting_on_a_desk' } },
+      steps = { { at = 'an_empty_desk', pose = 'sitting_on_a_desk', for_seconds = { 2, 4 } } },
     },
     sit_on_a_keyboard = {
       about = 'The cat sits on the desk of an idle agent who is away from it.',
@@ -786,7 +786,7 @@ return {
       who = 'cat',
       during = { 'always' },
       chance = 2,
-      steps = { { at = 'an_idle_agents_desk', for_seconds = { 3, 5 }, pose = 'sitting_on_a_desk' } },
+      steps = { { at = 'an_idle_agents_desk', pose = 'sitting_on_a_desk', for_seconds = { 3, 5 } } },
     },
     rub_against_legs = {
       about = 'The cat goes to an agent who stands still and rubs against its legs.',
@@ -794,7 +794,7 @@ return {
       who = 'cat',
       during = { 'always' },
       chance = 2,
-      steps = { { at = 'next_to_an_agent', for_seconds = { 2, 3 }, pose = 'rubbing' } },
+      steps = { { at = 'next_to_an_agent', pose = 'rubbing', for_seconds = { 2, 3 } } },
     },
     follow_someone = {
       about = 'The cat trails an agent that walks.',
@@ -802,7 +802,7 @@ return {
       who = 'cat',
       during = { 'always' },
       chance = 2,
-      steps = { { follow = 'someone_walking', for_seconds = { 3, 5 }, pose = 'walking' } },
+      steps = { { pose = 'walking', for_seconds = { 3, 5 }, follow = 'someone_walking' } },
     },
     stare_at_the_fish = {
       about = 'The cat sits in front of the fish tank and stares at the fish.',
@@ -810,7 +810,7 @@ return {
       who = 'cat',
       during = { 'always' },
       chance = 2,
-      steps = { { at = 'fish_tank', for_seconds = { 3, 5 }, pose = 'standing' } },
+      steps = { { at = 'fish_tank', pose = 'standing', for_seconds = { 3, 5 } } },
     },
     leave_a_mess = {
       about = 'The cat goes somewhere on the floor, sits, and leaves a mess that angers the agents near it.',
