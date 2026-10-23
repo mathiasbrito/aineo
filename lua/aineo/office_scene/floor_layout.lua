@@ -175,26 +175,30 @@ local function add_spot(layout, name, spot)
   mark_walkable(layout, spot.column, spot.row)
 end
 
---- Places the decorations of `names`, left to right from `column` of `row`,
+--- Places the decorations of `entry`, left to right from `column` of `row`,
 --- in the order given, as many as fit in the `length` cells of the run: one
 --- that does not fit in what is left is passed over. Each gets a spot of its
---- own name on the first floor row below it.
+--- own name on the first floor row below it, and shows the live content the
+--- entry says in its area of that name, if it has one.
 ---
 ---@param layout aineo.office_scene.Layout
----@param names string[]
+---@param entry table the legend entry of the run's letter, which has `decorations`
 ---@param column integer from 0
 ---@param row integer from 0
 ---@param length integer
-local function decorate(layout, names, column, row, length)
+local function decorate(layout, entry, column, row, length)
   local left = length
   local next_column = column
-  for _, name in ipairs(names) do
+  for _, name in ipairs(entry.decorations) do
     local piece = layout.pack.pieces[name]
     if piece and piece.width <= left then
-      table.insert(
-        layout.pieces,
-        { piece = name, column = next_column, row = row, decoration = true }
-      )
+      table.insert(layout.pieces, {
+        piece = name,
+        column = next_column,
+        row = row,
+        shows = entry.shows,
+        decoration = true,
+      })
       add_spot(layout, name, {
         column = next_column,
         row = first_floor_row_below(layout.texts, row, next_column),
@@ -275,7 +279,7 @@ end
 local function place_run(layout, entry, column, row, length)
   if shows_at(entry, layout.width) then
     if entry.decorations then
-      decorate(layout, entry.decorations, column, row, length)
+      decorate(layout, entry, column, row, length)
     elseif entry.piece then
       place_piece(layout, entry, column, row, length)
     end
