@@ -4038,9 +4038,31 @@ A legend entry has:
 	its own name on the first floor row below it
 `from_width`	the piece shows only when the office is at least so many
 	columns wide
-`shows`	live content aineo draws into the piece's area of that name:
-	`time` (`07:05`) and `date` (`Oct 03`) are written, as far as the
-	area holds; `sky`, `plan` and `printing` are not drawn yet
+`shows`	live content aineo draws into the piece's area of that name
+	(|aineo-office-live|)
+
+                                                           *aineo-office-live*
+Live content ~
+A piece with `shows` is drawn as its art says, and aineo draws into its area
+of that name, and nowhere else:
+`time`	`07:05`, from the clock, as far as the area holds
+`date`	`Oct 03`, the same
+`sky`	the pack's piece `sky_night`, `sky_dawn`, `sky_day` or `sky_dusk`
+	for the hour of the clock (night from 21 to 5, dawn until 8, day
+	until 17, dusk until 21), from the area's top left and cut to the
+	area; a pack without the piece draws no sky
+`plan`	the main agent's tasks, from `TodoWrite` or `TaskCreate` and
+	`TaskUpdate`, a row each: `✓ ` before the ones done, `○ ` before the
+	others, cut to the area's width; from the first task not done when
+	there are more tasks than rows
+`printing`	the pack's piece `printed_page`, coming out of the top of the
+	area a pixel row at a time for four seconds after any agent calls
+	the report tool; a pack without the piece prints nothing
+A monitor besides writes what its agent looks up on the web into its `query`
+area while the agent is on the web (the query of a search, the host of an
+address it fetches, never the rest of it), and a `✓` (green) or `✗` (red) at
+the top left of its `screen` area for three seconds after a test run. A
+character that is not one cell wide, or is a control character, shows as `?`.
 
                                                      *aineo-office-activities*
 Activities, things and states ~

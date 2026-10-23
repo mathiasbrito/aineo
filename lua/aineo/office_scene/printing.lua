@@ -31,13 +31,15 @@ local function seconds_since_latest_report(agents, now)
 end
 
 --- How many pixel rows of a page `height` pixels tall have come out of the
---- printer `seconds` into the print.
+--- printer `seconds` into the print, a whole number of them: none when the
+--- print is over, and a negative number, which clips to nothing, before it
+--- begins.
 ---
 ---@param seconds number
 ---@param height integer
 ---@return integer
 local function rows_printed(seconds, height)
-  if seconds < 0 or seconds >= M.PRINT_SECONDS then
+  if seconds >= M.PRINT_SECONDS then
     return 0
   end
   return math.floor(height * seconds / M.PRINT_SECONDS)

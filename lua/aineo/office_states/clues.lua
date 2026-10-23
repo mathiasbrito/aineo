@@ -12,8 +12,7 @@ local M = {}
 ---@return string|nil host none when the address holds none
 local function host_of(address)
   local authority = address:gsub('^%a[%w+.-]*://', ''):match('^[^/?#]*')
-  local host = authority:gsub('^.*@', '')
-  host = host:match('^%[.-%]') or host:gsub(':%d*$', '')
+  local host = authority:gsub('^.*@', ''):gsub(':%d*$', '')
   return host ~= '' and host or nil
 end
 
