@@ -26,6 +26,7 @@ local PLAIN_CELLS = { [WALL] = true, [FLOOR] = true, [UNWALKED_FLOOR] = true }
 ---@class aineo.office_scene.FloorLayout
 ---@field width integer
 ---@field is_wall fun(column: integer, row: integer): boolean whether the cell is wall; false below the plan
+---@field is_walkable fun(column: integer, row: integer): boolean whether characters walk on the cell: floor, a spot, or a piece laid on the floor; false below the plan
 ---@field pieces aineo.office_scene.PlacedPiece[] in the order the plan reads, row by row from the top and left to right
 ---@field spots table<string, aineo.office_scene.Spot[]> by name, each in the order the plan reads
 
@@ -121,8 +122,20 @@ end
 ---@field texts string[] the laid out rows
 ---@field pieces aineo.office_scene.PlacedPiece[]
 ---@field spots table<string, aineo.office_scene.Spot[]>
+---@field walkable table<integer, table<integer, true>> the cells characters walk on, by row and column from 0
 
---- Adds the spot `name` at `column` of `row` to `layout`.
+--- Marks the cell at `column` of `row` as one characters walk on.
+---
+---@param layout aineo.office_scene.Layout
+---@param column integer from 0
+---@param row integer from 0
+local function mark_walkable(layout, column, row)
+  layout.walkable[row] = layout.walkable[row] or {}
+  layout.walkable[row][column] = true
+end
+
+--- Adds the spot `name` at `column` of `row` to `layout`; a spot is a cell
+--- characters walk to, so it is one they walk on.
 ---
 ---@param layout aineo.office_scene.Layout
 ---@param name string
@@ -130,6 +143,7 @@ end
 local function add_spot(layout, name, spot)
   layout.spots[name] = layout.spots[name] or {}
   table.insert(layout.spots[name], spot)
+  mark_walkable(layout, spot.column, spot.row)
 end
 
 --- Places the decorations of `names`, left to right from `column` of `row`,
@@ -249,21 +263,24 @@ function M.lay_out(pack, width, height)
   local texts = vim.tbl_map(function(plan_row)
     return lay_out_row(plan_row, floor.repeated_columns, width)
   end, rows_laid_out(floor.rows, floor.repeated_rows, height, width))
-  local layout = { pack = pack, width = width, texts = texts, pieces = {}, spots = {} }
+  local layout =
+    { pack = pack, width = width, texts = texts, pieces = {}, spots = {}, walkable = {} }
   for row_index, text in ipairs(texts) do
     local row = row_index - 1
     walls[row] = {}
     local column = 0
     while column < width do
-      walls[row][column] = is_wall_cell(text, column + 1)
       local letter = text:sub(column + 1, column + 1)
       local length = run_length(text, column + 1)
       local entry = floor.legend[letter]
       if entry then
         place_run(layout, entry, column, row, length)
       end
-      for offset = 1, length - 1 do
+      for offset = 0, length - 1 do
         walls[row][column + offset] = is_wall_cell(text, column + offset + 1)
+        if letter == FLOOR or (entry and entry.walk_over) then
+          mark_walkable(layout, column + offset, row)
+        end
       end
       column = column + length
     end
@@ -272,6 +289,9 @@ function M.lay_out(pack, width, height)
     width = width,
     is_wall = function(column, row)
       return walls[row] ~= nil and walls[row][column] == true
+    end,
+    is_walkable = function(column, row)
+      return layout.walkable[row] ~= nil and layout.walkable[row][column] == true
     end,
     pieces = layout.pieces,
     spots = layout.spots,

@@ -258,8 +258,9 @@ local PLACES = {
 local function write_effect(canvas, drawing, character)
   local pack = drawing.pack
   local pose = pose_of(pack, character)
-  local effect = pose and pose.effect and pack.effects[pose.effect]
-  if not effect then
+  local effect_name = character.effect or (pose and pose.effect)
+  local effect = effect_name and pack.effects[effect_name]
+  if not (pose and effect) then
     return
   end
   local top_pixel = feet_row_of(character)
