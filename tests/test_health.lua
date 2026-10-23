@@ -1931,6 +1931,10 @@ end
 
 T['the office'] = MiniTest.new_set()
 
+--- The packs aineo ships, which the health check finds on 'runtimepath' in
+--- every editor, sorted.
+local SHIPPED_PACKS = { 'default', 'space_station' }
+
 --- The folder of the pack `name` among the packs aineo ships, as the child
 --- finds it.
 ---
@@ -1975,9 +1979,12 @@ T['the office']["is fine when 'termguicolors' is on, and says when it shows by i
   eq(health.section(report, 'Office'), {
     "- ✅ OK 'termguicolors' is on: the office draws its pixels",
     '- the office shows by itself after 90 s without the cursor in the right side (office.idle_ms), and for :Aineo office and \\O: :help |aineo-office|',
-    '- 1 office pack found',
+    ('- %d office packs found'):format(#SHIPPED_PACKS),
     ('- ✅ OK the office pack “default” in %s, named by office.pack, has no problem'):format(
       shipped_pack_folder('default')
+    ),
+    ('- ✅ OK the office pack “space_station” in %s has no problem'):format(
+      shipped_pack_folder('space_station')
     ),
   })
 end
@@ -1989,7 +1996,7 @@ T['the office']['counts the packs found, and each one’s problems, the pack off
   local report = health.report(child)
 
   eq(vim.list_slice(health.section(report, 'Office'), 3), {
-    '- 3 office packs found',
+    ('- %d office packs found'):format(#SHIPPED_PACKS + 2),
     ('- ✅ OK the office pack “fine” in %s, named by office.pack, has no problem'):format(
       vim.fs.joinpath(folder, 'fine')
     ),
@@ -1998,6 +2005,9 @@ T['the office']['counts the packs found, and each one’s problems, the pack off
     ),
     ('- ✅ OK the office pack “default” in %s has no problem'):format(
       shipped_pack_folder('default')
+    ),
+    ('- ✅ OK the office pack “space_station” in %s has no problem'):format(
+      shipped_pack_folder('space_station')
     ),
   })
 end

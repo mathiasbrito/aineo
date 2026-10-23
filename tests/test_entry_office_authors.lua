@@ -18,6 +18,10 @@ local T = MiniTest.new_set({
   },
 })
 
+--- The names of the packs found once the test adds the pack `alt` to the two
+--- aineo ships, `default` and `space_station`, sorted.
+local PACKS_FOUND = { 'alt', 'default', 'space_station' }
+
 --- The folder the user's own packs are made in: `aineo-office` in the
 --- child's configuration directory.
 ---
@@ -199,9 +203,9 @@ end
 T['Aineo office completion']['offers the packs found after states, check and preview, and nothing after new'] = function()
   add_pack('alt')
 
-  eq(child.fn.getcompletion('Aineo office preview ', 'cmdline'), { 'alt', 'default' })
-  eq(child.fn.getcompletion('Aineo office states ', 'cmdline'), { 'alt', 'default' })
-  eq(child.fn.getcompletion('Aineo office check ', 'cmdline'), { 'alt', 'default' })
+  eq(child.fn.getcompletion('Aineo office preview ', 'cmdline'), PACKS_FOUND)
+  eq(child.fn.getcompletion('Aineo office states ', 'cmdline'), PACKS_FOUND)
+  eq(child.fn.getcompletion('Aineo office check ', 'cmdline'), PACKS_FOUND)
   eq(child.fn.getcompletion('Aineo office states a', 'cmdline'), { 'alt' })
   eq(child.fn.getcompletion('Aineo office new ', 'cmdline'), {})
 end
