@@ -28,11 +28,11 @@ end
 
 --- The transcript Claude Code writes for the session `session_id`:
 --- `projects/<folder>/<session id>.jsonl` under its configuration directory.
---- The file of that name in any folder there, if one exists; else the file it
---- will be in the folder named after the working directory the editor started
---- in, every character of whose path but a letter or a digit is a dash, which
---- Claude Code makes at the session's first prompt. `nil` when there is no
---- session.
+--- The regular file of that name in any folder there, if one exists (a named
+--- pipe or a folder of that name is not one); else the file it will be in the
+--- folder named after the working directory the editor started in, every
+--- character of whose path but a letter or a digit is a dash, which Claude Code
+--- makes at the session's first prompt. `nil` when there is no session.
 ---
 ---@param session_id string|nil
 ---@return string|nil path
@@ -43,11 +43,12 @@ local function transcript_of(session_id)
   local projects = vim.fs.joinpath(claude_config_directory(), 'projects')
   for folder, type in vim.fs.dir(projects) do
     local path = vim.fs.joinpath(projects, folder, session_id .. '.jsonl')
-    if type == 'directory' and vim.uv.fs_stat(path) then
+    local stat = type == 'directory' and vim.uv.fs_stat(path)
+    if stat and stat.type == 'file' then
       return path
     end
   end
-  local folder = places.kept_places().working_directory:gsub('[^%w]', '-')
+  local folder = vim.fn.substitute(places.kept_places().working_directory, '[^a-zA-Z0-9]', '-', 'g')
   return vim.fs.joinpath(projects, folder, session_id .. '.jsonl')
 end
 

@@ -202,6 +202,64 @@ T['what the office shows']['has the main agent type once the session writes its 
   eq(typing, true)
 end
 
+--- Makes a named pipe named as the transcript of the child's session in the
+--- folder `any-folder` of its projects, which a process opens for writing a
+--- second from now: an open of it for reading, which blocks until then, ends
+--- by itself.
+local function make_pipe_named_as_the_transcript()
+  local session = child.lua_get([[require('aineo.claude').session_id()]])
+  local directory = child.lua_get([[vim.env.CLAUDE_CONFIG_DIR]])
+  local path = vim.fs.joinpath(directory, 'projects', 'any-folder', session .. '.jsonl')
+  vim.fn.mkdir(vim.fs.dirname(path), 'p')
+  vim.system({ 'mkfifo', path }):wait()
+  vim.system({ 'sh', '-c', 'sleep 1; : > "$0"', path })
+end
+
+T['what the office shows']['is shown at once though a named pipe is named as the transcript'] = function()
+  open_layout('office-pipe')
+  forget_earlier_transcripts()
+  make_pipe_named_as_the_transcript()
+
+  local started = vim.uv.hrtime()
+  entry.command(child, 'Aineo office')
+  local held = math.floor((vim.uv.hrtime() - started) / 1e6)
+
+  eq(held < 500, true)
+end
+
+T['what the office shows']["follows the transcript in the session's own folder, not a named pipe named as it elsewhere"] = function()
+  open_layout('office-pipe-shadow')
+  forget_earlier_transcripts()
+  make_pipe_named_as_the_transcript()
+  entry.command(child, 'Aineo office')
+
+  write_transcript_in_the_sessions_own_folder(vim.list_slice(RECORDED_TURN, 1, 5))
+
+  local typing = vim.wait(5000, function()
+    return office_cells.is_typing(child)
+  end, 50)
+  eq(typing, true)
+end
+
+T['what the office shows']["names the session's folder with a dash for each character, not each byte"] = function()
+  open_layout('office-folder-rule')
+  forget_earlier_transcripts()
+  child.lua([[require('aineo.entry.places').kept_places().working_directory = '/tmp/joão x']])
+  entry.command(child, 'Aineo office')
+  local session = child.lua_get([[require('aineo.claude').session_id()]])
+  local directory = child.lua_get([[vim.env.CLAUDE_CONFIG_DIR]])
+
+  fake_transcript.append(
+    vim.fs.joinpath(directory, 'projects', '-tmp-jo-o-x', session .. '.jsonl'),
+    vim.list_slice(RECORDED_TURN, 1, 5)
+  )
+
+  local typing = vim.wait(5000, function()
+    return office_cells.is_typing(child)
+  end, 50)
+  eq(typing, true)
+end
+
 T['what the office shows']['follows no transcript a session id with a path in it would name'] = function()
   open_layout('office-traversal')
   local directory = child.lua_get([[vim.env.CLAUDE_CONFIG_DIR]])
