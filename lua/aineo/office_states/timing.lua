@@ -14,6 +14,9 @@ M.ARRIVING_SECONDS = 4
 --- How long an agent takes its task (`getting_a_task`) before it thinks.
 M.GETTING_A_TASK_SECONDS = 3
 
+--- How long matching the triggers of one tool call may take, in seconds.
+M.TRIGGER_SECONDS = 0.02
+
 --- How long an agent shows its error before it goes on.
 M.ERROR_SECONDS = 3
 

@@ -29,6 +29,9 @@ local DEFAULT_NAME = 'default'
 --- How many packs deep a pack may be based on others.
 local MAX_BASE_DEPTH = 8
 
+--- The most triggers a pack and the packs it is based on hold together.
+local MOST_TRIGGERS = 64
+
 --- The most art files a pack holds.
 local MAX_PIECES = 500
 
@@ -398,7 +401,17 @@ local function read_triggers(build)
       end
     end
   end
-  return vim.list_extend(triggers, vim.deepcopy(build.base and build.base.triggers or {}))
+  vim.list_extend(triggers, vim.deepcopy(build.base and build.base.triggers or {}))
+  if #triggers > MOST_TRIGGERS then
+    context.report(
+      context.lines[data].triggers,
+      ('the pack and the packs it is based on have more than %d triggers; the rest are left out'):format(
+        MOST_TRIGGERS
+      )
+    )
+    return vim.list_slice(triggers, 1, MOST_TRIGGERS)
+  end
+  return triggers
 end
 
 --- Tells the problems of `pack.lua` that no entry has: a field no pack has, a

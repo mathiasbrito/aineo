@@ -56,15 +56,29 @@ local function matches_call(trigger, signal, agent_kind)
   return true
 end
 
+--- How long matching the triggers of one call may take.
+---@class aineo.office_states.TriggerBudget
+---@field clock fun(): number the time in seconds, on a clock that only grows
+---@field seconds number the most the triggers of one call may take
+---@field on_late fun() called when the triggers not tried yet are given up
+
 --- The activity the first of `triggers`, in order, that matches the call
---- `signal` starts names; none when none matches.
+--- `signal` starts names; none when none matches. With a `budget`, the
+--- triggers not tried when it is spent are given up, and `budget.on_late()`
+--- is called.
 ---
 ---@param signal aineo.transcript.Signal a `tool_started` signal
 ---@param agent_kind aineo.office_states.AgentKind
 ---@param triggers aineo.office_states.Trigger[]
+---@param budget? aineo.office_states.TriggerBudget
 ---@return string|nil activity
-function M.activity_of_call(signal, agent_kind, triggers)
+function M.activity_of_call(signal, agent_kind, triggers, budget)
+  local started = budget and budget.clock()
   for _, trigger in ipairs(triggers) do
+    if budget and budget.clock() - started > budget.seconds then
+      budget.on_late()
+      return nil
+    end
     if matches_call(trigger, signal, agent_kind) then
       return trigger.play
     end

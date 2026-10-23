@@ -4000,7 +4000,10 @@ is a glob over the whole value; `{ lua_pattern = '^make%s+test' }` is a Lua
 pattern, which may hold at most one repetition item (`*`, `+`, `-` or `?`,
 after a character, a class or a set) so that no match can take long; a
 pattern Lua rejects, or with more, is a problem at its line. A trigger costs a
-string match on a call already read.
+string match on a call already read: a pack and the packs it is based on
+hold at most 64 triggers together, the rest told and left out, and the
+triggers of one call are tried for 20 ms at most, the rest of them skipped
+and told once each time the office shows.
 >lua
     triggers = {
       { when = { tool = 'Bash', command = 'docker' },
