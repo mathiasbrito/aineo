@@ -2,7 +2,9 @@ local MiniTest = require('mini.test')
 local claude_session = dofile('tests/helpers/claude_session.lua')
 local entry = dofile('tests/helpers/entry.lua')
 local fake_transcript = dofile('tests/helpers/fake_transcript.lua')
+local fixture = dofile('tests/helpers/fixture.lua')
 local office_cells = dofile('tests/helpers/office_cells.lua')
+local pack_files = dofile('tests/helpers/office_pack_files.lua')
 
 local eq = MiniTest.expect.equality
 
@@ -240,6 +242,69 @@ T['what the office is told']["gives its tracker the name of aineo's report tool"
   entry.command(child, 'Aineo office')
 
   eq(child.lua_get([[_G.tracker_options.report_tool]]), 'mcp__aineo__report')
+end
+
+--- Makes a pack `alt` with a floor of the colour `#ff0000` on the
+--- 'runtimepath' of the child, as a plugin that brings one would.
+local function add_the_alt_pack()
+  local root = fixture.directory('office_entry_pack')
+  pack_files.write_pack(root, 'alt', {
+    ['pack.lua'] = pack_files.pack_text({
+      name = 'alt',
+      colours = { wall = '#292c3c', floor = '#ff0000', ink = '#1e1e2e', wood = '#b4875a' },
+    }),
+  })
+  child.lua([[vim.opt.runtimepath:append(...)]], { root })
+  return root
+end
+
+T['the setting office.pack'] = MiniTest.new_set()
+
+T['the setting office.pack']['names the pack the office draws, found on the runtime path'] = function()
+  entry.use_fake(child, claude_session.fake('office-pack', 'ready'), { office = { pack = 'alt' } })
+  add_the_alt_pack()
+  child.cmd('Aineo open')
+  claude_session.wait_for_status(child, 'ready')
+
+  entry.command(child, 'Aineo office')
+
+  eq(office_cells.shows_colour(child, 'ff0000'), true)
+end
+
+T['the setting office.pack']['draws the default pack when it is not set'] = function()
+  open_layout('office-default-pack')
+  add_the_alt_pack()
+
+  entry.command(child, 'Aineo office')
+
+  eq(office_cells.shows_colour(child, 'ff0000'), false)
+end
+
+T['the setting office.pieces'] = MiniTest.new_set()
+
+T['the setting office.pieces']['leave the pieces of the pack alone when none is named'] = function()
+  open_layout('office-pieces-none')
+
+  entry.command(child, 'Aineo office')
+
+  eq(office_cells.shows_colour(child, 'b4875a'), true)
+end
+
+T['the setting office.pieces']['name art files that replace the pieces of the pack'] = function()
+  local mine = vim.fs.joinpath(fixture.directory('office_entry_pieces'), 'mine.txt')
+  vim.fn.writefile({ 'colours: A = ink', '---', '.', '.' }, mine)
+  entry.use_fake(
+    child,
+    claude_session.fake('office-pieces', 'ready'),
+    { office = { pieces = { desk = mine } } }
+  )
+  child.cmd('Aineo open')
+  claude_session.wait_for_status(child, 'ready')
+
+  entry.command(child, 'Aineo office')
+
+  eq(office_cells.shows_colour(child, 'b4875a'), false)
+  eq(entry.messages(child), {})
 end
 
 T['without an aineo tab'] = MiniTest.new_set()
