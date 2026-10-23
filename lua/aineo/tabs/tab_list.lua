@@ -26,11 +26,13 @@ local SESSION_ID_PATTERN =
 ---@class aineo.tabs.TabList
 ---@field sessions string[] session ids, one per tab
 ---@field current integer a place in `sessions`
+---@field claims? table<string, string> the session each tab claims, by the session of that tab; absent when no tab claims one
 
 --- One tab, as the editor lists its tabs in the order of their places.
 ---
 ---@class aineo.tabs.PlacedTab
 ---@field session string? the session its Claude Code follows; nil before it has one
+---@field claimed string? the session it follows by a claim of it, which its Claude Code does not run; nil when it claims none
 ---@field current boolean whether it is the tab to list as the current one
 
 --- The file that keeps the list of `folder`.
@@ -85,20 +87,57 @@ local function is_tab_list(value)
     and current % 1 == 0
 end
 
+--- The claims of `claims` a list of `sessions` keeps, by the session of the
+--- tab that claims, or nil when it keeps none: in the order of `sessions`,
+--- each claim of a session id the list does not hold and no tab before it
+--- claims, so that no two tabs of a list show one session.
+---
+---@param claims table<string, string>
+---@param sessions string[]
+---@return table<string, string>|nil
+local function distinct_claims(claims, sessions)
+  local kept, taken = {}, {}
+  for _, session in ipairs(sessions) do
+    taken[session] = true
+  end
+  for _, session in ipairs(sessions) do
+    local claimed = claims[session]
+    if is_session_id(claimed) and not taken[claimed] then
+      kept[session] = claimed
+      taken[claimed] = true
+    end
+  end
+  return next(kept) and kept or nil
+end
+
+--- The claims `tab_list` holds that a list keeps (`distinct_claims()`), or
+--- nil when it holds none, or none of another shape than a table.
+---
+---@param tab_list { sessions: string[], claims: any }
+---@return table<string, string>|nil
+local function claims_of(tab_list)
+  if type(tab_list.claims) ~= 'table' then
+    return nil
+  end
+  return distinct_claims(tab_list.claims, tab_list.sessions)
+end
+
 --- The list of `placed`, the editor's tabs in the order of their places: the
 --- session of each tab that has one, a session two tabs show once, at the
 --- lower place; the place of the current tab, or of the tab that shows its
---- session first, else the first. Nil when no tab has a session.
+--- session first, else the first; and the session each tab claims, under its
+--- session. Nil when no tab has a session.
 ---
 ---@param placed aineo.tabs.PlacedTab[]
 ---@return aineo.tabs.TabList|nil
 function M.list_of_placed_tabs(placed)
-  local sessions, place_of = {}, {}
+  local sessions, place_of, claims = {}, {}, {}
   local current = 1
   for _, tab in ipairs(placed) do
     if tab.session and not place_of[tab.session] then
       table.insert(sessions, tab.session)
       place_of[tab.session] = #sessions
+      claims[tab.session] = tab.claimed
     end
     if tab.current and tab.session then
       current = place_of[tab.session]
@@ -107,7 +146,7 @@ function M.list_of_placed_tabs(placed)
   if #sessions == 0 then
     return nil
   end
-  return { sessions = sessions, current = current }
+  return { sessions = sessions, current = current, claims = distinct_claims(claims, sessions) }
 end
 
 --- The text of the file `path`, or nil when it is missing, unreadable, or
@@ -128,9 +167,9 @@ local function read_file(path)
   return text
 end
 
---- The list kept for `folder`, or nil when none is kept: a file that is
---- missing, unreadable, too long, not JSON, or not a non-empty list of
---- session ids with a place in it.
+--- The list kept for `folder`, with the claims it keeps (`claims_of()`), or
+--- nil when none is kept: a file that is missing, unreadable, too long, not
+--- JSON, or not a non-empty list of session ids with a place in it.
 ---
 --- Raises nothing.
 ---
@@ -146,7 +185,11 @@ function M.read_tab_list(state_directory, folder)
   if not decoded or not is_tab_list(value) then
     return nil
   end
-  return { sessions = value.sessions, current = value.current }
+  return {
+    sessions = value.sessions,
+    current = value.current,
+    claims = claims_of(value),
+  }
 end
 
 --- Makes the directory `path` and the directories leading to it, unless it
@@ -211,9 +254,10 @@ local function replace_file(file, text)
 end
 
 --- Keeps `tab_list` as the list of `folder`, in place of any kept before,
---- making the directories that lead to its file when missing. The file
---- holds the whole list or, when the write fails, what it held before.
---- Only a list `read_tab_list()` would give back is written.
+--- making the directories that lead to its file when missing, with the
+--- claims it keeps (`claims_of()`). The file holds the whole list or, when
+--- the write fails, what it held before. Only a list `read_tab_list()` would
+--- give back is written.
 ---
 --- Raises an error naming the file when `tab_list` is no such list, or when
 --- the file cannot be written.
@@ -227,7 +271,11 @@ function M.write_tab_list(state_directory, folder, tab_list)
   if not is_tab_list(tab_list) then
     failure = 'not a list of distinct session ids with a place in it'
   else
-    local text = vim.json.encode({ sessions = tab_list.sessions, current = tab_list.current })
+    local text = vim.json.encode({
+      sessions = tab_list.sessions,
+      current = tab_list.current,
+      claims = claims_of(tab_list),
+    })
     failure = make_directory(vim.fs.dirname(file)) or replace_file(file, text)
   end
   if failure then
