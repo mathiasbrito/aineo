@@ -20,12 +20,17 @@ function M.is_followed_by(step)
   return step.follow == M.SOMEONE_WALKING
 end
 
---- The character on the move that is nearest to `performer`, other than it.
+--- The character on the move that is nearest to `performer`, other than it;
+--- none for a performer that has no place on the plan yet, which has no
+--- distance to anyone.
 ---
 ---@param context aineo.office_scene.DirectorContext
 ---@param performer aineo.office_scene.Performer
 ---@return aineo.office_scene.Performer|nil
 function M.nearest_walker(context, performer)
+  if not performer.column then
+    return nil
+  end
   local nearest, nearest_distance = nil, math.huge
   for _, group in ipairs({ context.agents, context.cats }) do
     for _, other in ipairs(group) do
