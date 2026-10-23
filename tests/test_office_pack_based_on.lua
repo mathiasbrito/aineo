@@ -448,6 +448,25 @@ T['pieces of the user’s own']['keep the piece of the pack when they have a pro
   eq(problems[1].line, 4)
 end
 
+T['pieces of the user’s own']['are named with ~ for the user’s home'] = function()
+  local folder = pack_with_child()
+  local home = vim.fs.dirname(folder)
+  vim.fn.writefile({ 'colours: A = wood', '---', 'AAA' }, vim.fs.joinpath(home, 'mine.txt'))
+  local previous = vim.env.HOME
+  vim.env.HOME = home
+
+  local pack, problems = office_pack.load({
+    name = 'child',
+    folders = { folder },
+    state_names = STATE_NAMES,
+    replaced_pieces = { person = '~/mine.txt' },
+  })
+  vim.env.HOME = previous
+
+  eq(problems, {})
+  eq(pack.pieces.person.frames, { { 'AAA' } })
+end
+
 T['pieces of the user’s own']['tell a file that is missing'] = function()
   local folder = pack_with_child()
   local replacement = vim.fs.joinpath(vim.fs.dirname(folder), 'absent.txt')

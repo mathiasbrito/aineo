@@ -148,6 +148,42 @@ T['an art file']['of 100 000 rows of other widths is told once, not for every ro
   eq(vim.trim(run.stdout), '2')
 end
 
+T['a picture'] = MiniTest.new_set()
+
+T['a picture']['of runs of a stretchable piece of 64 frames is drawn in a few milliseconds, frame after frame'] = function()
+  local directory = fixture.directory('bounds_stretch')
+  local source = ([[
+    local files = dofile('tests/helpers/office_pack_files.lua')
+    local frames = {}
+    for _ = 1, 64 do
+      frames[#frames + 1] = ('AB\n'):rep(100)
+    end
+    local art = 'colours: A = ink, B = wood\nstretch: columns 2-2\n---\n' .. table.concat(frames, '---\n')
+    local plan = ' ~~~~~~\n ######\n' .. (' BBBB..\n'):rep(30)
+    local folder = files.write_pack(%q, 'small', { ['art/bar.txt'] = art, ['floor.txt'] = plan })
+    local pack = require('aineo.office_pack').load({
+      name = 'small',
+      folders = { folder },
+      state_names = { 'standing', 'working', 'resting', 'idle' },
+    })
+    pack.floor.legend.B = { piece = 'bar' }
+    local stage = require('aineo.office_scene').new_stage({ pack = pack, width = 100, height = 40 })
+    stage.advance({}, 0)
+    stage.picture()
+    local started = vim.uv.hrtime()
+    for frame = 1, 5 do
+      stage.advance({}, frame)
+      stage.picture()
+    end
+    print(((vim.uv.hrtime() - started) / 1e6 / 5) < 80 and 'quick' or 'slow')
+  ]]):format(directory)
+
+  local run = bounded.run(source, LIMIT_MS)
+
+  eq(run.stderr, '')
+  eq(vim.trim(run.stdout), 'quick')
+end
+
 T['loading a pack'] = MiniTest.new_set()
 
 T['loading a pack']['and drawing it, whatever bytes its files hold, ends without an error'] = function()
