@@ -168,6 +168,17 @@ T['two idle agents']['play table tennis together, each at an end of the table'] 
   eq(#at_the_table > 0, true)
 end
 
+T['two idle agents']['do not play table tennis when only one of them is idle'] = function()
+  local visited = spots_visited(
+    pack_with_life({ 'play_table_tennis' }),
+    default.agents(1, 'idle'),
+    240,
+    default.AGENT_COLOURS[1]
+  )
+
+  eq(visited.table_tennis, nil)
+end
+
 T['a waiting agent'] = MiniTest.new_set()
 
 T['a waiting agent']['plays each of the things the mock has it do while it waits for its subagents'] =
@@ -189,6 +200,17 @@ T['a waiting agent']['plays each of the things the mock has it do while it waits
     listed_over(pack_with_life({ name }), default.agents(1, 'waiting_for_subagents'), 60)
 
   eq(listed:find(label, 1, true) ~= nil, true)
+end
+
+T['a waiting agent']['drums its fingers at its own desk, going no farther than beside it'] = function()
+  local visited = spots_visited(
+    pack_with_life({ 'drum_its_fingers' }),
+    default.agents(1, 'waiting_for_subagents'),
+    60,
+    default.AGENT_COLOURS[1]
+  )
+
+  eq(visited, { beside_desk = true, desk = true })
 end
 
 T['a waiting agent']['plays each of the seated things while it waits for an answer'] =
@@ -266,6 +288,26 @@ T['the cat']['sleeps on a seat of the sofa for a long time'] = function()
   end
 
   eq(asleep_seconds >= 60, true)
+end
+
+T['the cat']['stays asleep on a seat of the sofa for a minute before it walks off again'] = function()
+  local pack = pack_with_life({ 'sleep_on_a_seat', 'wander_the_aisles' })
+  local spots = default.spots(pack, ROOM[1], ROOM[2] - LIST_ROWS)
+  local stage = default.stage(pack, ROOM[1], ROOM[2])
+  local stay_seconds, longest_stay_seconds = 0, 0
+
+  for step = 0, 4 * 600 do
+    stage.advance({}, step / 4)
+    local place = default.where_is(default.pixels(stage.picture(), ROOM[1]), default.CAT_COLOUR)
+    if place and default.nearest_spot(spots, place) == 'sofa' then
+      stay_seconds = stay_seconds + 0.25
+    else
+      stay_seconds = 0
+    end
+    longest_stay_seconds = math.max(longest_stay_seconds, stay_seconds)
+  end
+
+  eq(longest_stay_seconds >= 60, true)
 end
 
 T['the cat']['leaves a mess that an idle agent cleans up'] = function()
