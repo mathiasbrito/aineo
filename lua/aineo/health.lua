@@ -998,6 +998,97 @@ local function check_explain(resolved_config)
   )
 end
 
+--- The names of the packs the report tells of: those the setting `office.pack`
+--- names, in its order, then the others found, by name.
+---
+---@param chosen string[] the names `office.pack` gives
+---@param found aineo.office_pack.FoundPack[]
+---@return string[]
+local function office_pack_names_in_order(chosen, found)
+  local names = vim.list_slice(chosen)
+  for _, pack in ipairs(found) do
+    if not vim.tbl_contains(chosen, pack.name) then
+      table.insert(names, pack.name)
+    end
+  end
+  return names
+end
+
+--- Reports the problems of the pack `name`: no problem, or how many and the
+--- command that lists them; the pack's folder is `directory`.
+---
+---@param name string
+---@param directory string
+---@param is_chosen boolean whether `office.pack` names the pack
+---@param problems_count integer
+local function report_office_pack(name, directory, is_chosen, problems_count)
+  local place = ('the office pack “%s” in %s%s'):format(
+    name,
+    directory,
+    is_chosen and ', named by office.pack,' or ''
+  )
+  if problems_count == 0 then
+    vim.health.ok(('%s has no problem'):format(place))
+    return
+  end
+  vim.health.warn(
+    ('%s has %s: :Aineo office check %s lists them'):format(
+      place,
+      problems_count == 1 and '1 problem' or ('%d problems'):format(problems_count),
+      name
+    ),
+    'Fix what the check lists: :help |aineo-office-packs|'
+  )
+end
+
+--- Reports the office packs found on 'runtimepath', each with the number of
+--- its problems, the packs `office.pack` names first, a pack it names that is
+--- not found, and the art files of `office.pieces` that cannot be used.
+---
+---@param settings aineo.office.Settings the resolved `office` settings
+local function check_office_packs(settings)
+  local office_pack = require('aineo.office_pack')
+  local folders = vim.api.nvim_get_runtime_file('aineo-office', true)
+  local found = office_pack.find(folders)
+  local chosen = type(settings.pack) == 'table' and settings.pack or { settings.pack }
+  local directories = {}
+  for _, pack in ipairs(found) do
+    directories[pack.name] = pack.directory
+  end
+  vim.health.info(#found == 1 and '1 office pack found' or ('%d office packs found'):format(#found))
+  for _, name in ipairs(office_pack_names_in_order(chosen, found)) do
+    local is_chosen = vim.tbl_contains(chosen, name)
+    local problems = office_pack.check({
+      name = name,
+      folders = folders,
+      replaced_pieces = name == chosen[1] and settings.pieces or nil,
+    })
+    local own = vim.tbl_filter(function(problem)
+      return problem.pack ~= 'office.pieces'
+    end, problems)
+    if directories[name] then
+      report_office_pack(name, directories[name], is_chosen, #own)
+    else
+      vim.health.warn(
+        ('office.pack names “%s”, which is not found, so the office draws the default pack: :Aineo office check %s'):format(
+          name,
+          name
+        ),
+        'Install the pack, or make one with :Aineo office new: :help |aineo-office-packs|'
+      )
+    end
+    for _, problem in ipairs(problems) do
+      if problem.pack == 'office.pieces' then
+        local line = problem.line and (':%d'):format(problem.line) or ''
+        vim.health.warn(
+          ('office.pieces: %s%s: %s'):format(problem.path, line, problem.message),
+          'Fix the art file, or leave the piece out of office.pieces: :help |aineo-config-office.pieces|'
+        )
+      end
+    end
+  end
+end
+
 --- Reports whether the office can draw ('termguicolors' on, an error when off,
 --- and an error when 'ambiwidth' is `double`: it does not show then) and when
 --- it shows by itself, from `office.idle_ms`; the
@@ -1035,6 +1126,7 @@ local function check_office(resolved_config)
       'the office shows only for :Aineo office and \\O (office.idle_ms is false): :help |aineo-office|'
     )
   end
+  check_office_packs(resolved_config.office)
 end
 
 --- Reports what the autostart decided when the editor started, and why, from
