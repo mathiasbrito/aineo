@@ -39,16 +39,19 @@ local function pixels_on_the_area(placed, piece, width, height)
 end
 
 --- How much a placed piece matters: the pieces a character uses, or that
---- show something, matter most.
+--- show something, matter most, a decoration least, whatever it shows.
 ---
 ---@param placed aineo.office_scene.PlacedPiece
 ---@param piece aineo.office_pack.Piece|nil
 ---@return integer kind `DECORATION`, `FURNITURE` or `ESSENTIAL`
 local function kind_of(placed, piece)
+  if placed.decoration then
+    return DECORATION
+  end
   if placed.in_use or placed.shows or placed.on_a_spot or (piece and piece.areas.screen) then
     return ESSENTIAL
   end
-  return placed.decoration and DECORATION or FURNITURE
+  return FURNITURE
 end
 
 --- The pieces of `pieces` the plan may place on an area of `width` cells by

@@ -4041,7 +4041,8 @@ A legend entry has:
 `from_width`	the piece shows only when the office is at least so many
 	columns wide
 `shows`	live content aineo draws into the piece's area of that name
-	(|aineo-office-live|)
+	(|aineo-office-live|); for a run of `decorations`, into each
+	decoration that has such an area
 
                                                            *aineo-office-live*
 Live content ~
