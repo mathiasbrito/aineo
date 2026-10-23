@@ -21,6 +21,7 @@ M.INSTALL = [[
   package.loaded['aineo.office'] = {
     new_office = function(options)
       _G.office_told.made = _G.office_told.made + 1
+      _G.office_options = options
       _G.office_told.settings = _G.office_told.settings or options.settings()
       return {
         permission_wait = function(agent)
@@ -31,6 +32,9 @@ M.INSTALL = [[
         end,
         session_changed = function()
           _G.office_told.session_changed = _G.office_told.session_changed + 1
+        end,
+        follows_session = function()
+          return false
         end,
         show_now = function() end,
         let_go = function()
@@ -46,6 +50,17 @@ M.INSTALL = [[
 ---@param child table
 function M.install(child)
   child.lua(M.INSTALL)
+end
+
+--- What the transcript option of the last stand-in office gives now: the
+--- path of the transcript, and when the tab began following its session.
+---
+---@param child table
+---@return string|nil path
+---@return number|nil since
+function M.transcript_asked(child)
+  local asked = child.lua_get('{ _G.office_options.transcript() }')
+  return asked[1], asked[2]
 end
 
 --- What the stand-in offices were told.

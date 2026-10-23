@@ -304,6 +304,9 @@ T['what the office shows']['follows no transcript a session id with a path in it
       session_id = function()
         return '../escape'
       end,
+      panes_session = function()
+        return nil
+      end,
     }
     require('aineo.entry.office').show(tab)
   ]])

@@ -100,6 +100,21 @@ function M.note_transcript(tab, session_id, path)
   end
 end
 
+--- When, in seconds since 1970, each tab began following the session it shows:
+--- its office was made, its Claude Code started, or its session switched
+--- (`M.began_following()`). The follower looks for the continuation the tab's
+--- own resume wrote from then on.
+---@type table<aineo.entry.Tab, number>
+local began_following_at = setmetatable({}, { __mode = 'k' })
+
+--- Notes that `tab` begins following the session it shows now: its Claude Code
+--- is about to start, or has switched session.
+---
+---@param tab aineo.entry.Tab
+function M.began_following(tab)
+  began_following_at[tab] = os.time()
+end
+
 --- The settings of the office, `office.*` of aineo's configuration
 --- (`aineo.entry.settings`), read each time the office is asked for, with
 --- `office.pack` replaced by the pack `M.use_pack()` chose, if it did. Raises
@@ -167,6 +182,7 @@ end
 ---@return aineo.office.Office
 local function office_of(tab)
   if not offices[tab] then
+    began_following_at[tab] = began_following_at[tab] or os.time()
     offices[tab] = require('aineo.office').new_office({
       right_side = tab.homes.layout.right_column_area,
       pack_folders = M.pack_folders,
@@ -175,7 +191,7 @@ local function office_of(tab)
       end,
       settings = M.settings,
       transcript = function()
-        return transcript_of(tab)
+        return transcript_of(tab), began_following_at[tab]
       end,
       random = random_pick,
       report_tool = require('aineo.mcp').report_tool_name(),
@@ -225,14 +241,17 @@ end
 --- Tells the office `tab` has, if it has one, that the agent `agent_id` of
 --- the session `session_id` waits for the user to answer a permission
 --- prompt: the subagent of that id, or `'main'` when `agent_id` is nil. A wait
---- of a session the tab does not run tells nothing.
+--- of a session the tab neither runs nor shows, nor the office follows (the
+--- sessions of its chain, a continuation of the tab's session among them),
+--- tells nothing.
 ---
 ---@param tab aineo.entry.Tab
 ---@param session_id string
 ---@param agent_id string?
 function M.take_permission_wait(tab, session_id, agent_id)
   local office = offices[tab]
-  if office and session_id == tab.session_id() then
+  local is_of_the_tab = session_id == tab.session_id() or session_id == tab.panes_session()
+  if office and (is_of_the_tab or office.follows_session(session_id)) then
     office.permission_wait(agent_id or 'main')
   end
 end
