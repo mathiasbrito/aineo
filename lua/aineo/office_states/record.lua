@@ -59,6 +59,7 @@ local UNNAMED_CALL = ''
 --- What the tracker is told about the office, which decides what a signal means.
 ---@class aineo.office_states.Settings: aineo.office_states.CallSettings
 ---@field triggers? aineo.office_states.Trigger[] the triggers of the pack, in order
+---@field trigger_budget? aineo.office_states.TriggerBudget how long the triggers of one call may take
 
 --- What a signal is heard with.
 ---@class aineo.office_states.Hearing
@@ -159,7 +160,8 @@ local HEARS = {
       activity = triggers.activity_of_call(
         signal,
         kind_of_agent(record),
-        hearing.settings.triggers or {}
+        hearing.settings.triggers or {},
+        hearing.settings.trigger_budget
       ),
       order = record.started_calls,
     }

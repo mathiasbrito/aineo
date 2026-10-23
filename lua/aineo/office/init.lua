@@ -26,6 +26,11 @@ local M = {}
 --- What the office draws when it is given no settings: the default pack.
 local DEFAULT_SETTINGS = { pack = 'default', pieces = {} }
 
+--- What is told, once for each time the office shows, when the triggers of a
+--- call were given up for taking too long.
+local SLOW_TRIGGERS =
+  'aineo: matching the office pack’s triggers took too long; the triggers after the slow one are skipped'
+
 --- The most problems of a pack a warning lists.
 local MOST_PROBLEMS_LISTED = 5
 
@@ -130,12 +135,21 @@ function M.new_office(options)
   --- transcript the office was told to follow; none when it was told of none,
   --- or the file cannot be followed.
   ---
+  ---@param pack aineo.office_pack.Pack the pack whose triggers the tracker tries
+  ---
   ---@return aineo.office_states.Tracker tracker
   ---@return aineo.transcript.Follower|nil follower
-  local function follow_transcript()
+  local function follow_transcript(pack)
     local tracker = office_states.new_tracker({
       commands = options.commands,
       report_tool = options.report_tool,
+      triggers = pack.triggers,
+      clock = function()
+        return vim.uv.hrtime() / 1e9
+      end,
+      on_slow_triggers = function()
+        vim.notify(SLOW_TRIGGERS, vim.log.levels.WARN)
+      end,
     })
     if not transcript_path then
       return tracker, nil
@@ -291,7 +305,7 @@ function M.new_office(options)
     end
     local float = float_module.open(area)
     local screen = screen_module.new_screen(float.buffer)
-    local tracker, follower = follow_transcript()
+    local tracker, follower = follow_transcript(pack)
     local function draw()
       local now = options.clock()
       stage.advance(tracker.agents(now), now)
