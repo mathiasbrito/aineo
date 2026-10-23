@@ -301,7 +301,10 @@ function M.new_office(options)
 
   --- A tracker of the agents' states, and the follower that feeds it from the
   --- transcript `options.transcript` names; none when it names none, or the
-  --- file cannot be followed.
+  --- file cannot be followed. A line the follower reads as news that says the
+  --- session was continued in another has the office follow again, once the
+  --- current event is over (`office.session_changed()`); one it replays does
+  --- not, since the follower has gone on to the file that line names already.
   ---
   ---@param open { pack: aineo.office_pack.Pack, commands: aineo.office_states.CommandClasses|nil } the pack whose triggers the tracker tries, and the classes of commands it tells apart
   ---
@@ -328,6 +331,12 @@ function M.new_office(options)
     local follower = require('aineo.transcript').follow({
       path = path,
       on_signal = function(signal)
+        if signal.kind == 'session_continued' then
+          if not signal.replayed then
+            vim.schedule(office.session_changed)
+          end
+          return
+        end
         if signal.replayed and signal.kind ~= 'tool_started' and signal.at then
           went_on_at[signal.agent] = math.max(went_on_at[signal.agent] or 0, signal.at)
         end
