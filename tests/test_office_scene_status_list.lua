@@ -92,6 +92,12 @@ T['the status list']['is shown on a stage as short as the office is shown at'] =
   eq(text_at(picture, 19, 0, 40), ('─'):rep(40))
 end
 
+T['the status list']['gives the rows it takes in the picture, none when it is left out'] = function()
+  eq(picture_of(25, {}).status_list_height, 5)
+  eq(picture_of(24, {}).status_list_height, 5)
+  eq(picture_of(23, {}).status_list_height, 0)
+end
+
 T['the status list']['opens with a rule across the stage in the colour of names'] = function()
   local picture = picture_of(25, {})
 
