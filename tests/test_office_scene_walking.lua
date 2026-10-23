@@ -65,4 +65,23 @@ T['walking']['stays where it is when the spot cannot be walked to'] = function()
   eq(cells, vim.fn['repeat']({ '0,0' }, 20))
 end
 
+T['walking']['goes on to the next step when the spot of a step cannot be walked to'] = function()
+  local walled_in = '# plan\n \n a.f#s#\n ..###.\n'
+  local pack = scene.people_pack(walled_in, {
+    a = { spot = 'aside' },
+    s = { spot = 'seat', sitting = true },
+    f = { spot = 'far' },
+  }, {
+    activities = {
+      stand = { steps = { { at = 'aside' } } },
+      work = { steps = { { at = 'seat', for_seconds = 1 }, { at = 'far', pose = 'standing' } } },
+    },
+  })
+  local watched = scene.watch(pack, 6, 2)
+  watched.cell_at(scene.agents_in('standing'), 0)
+  watched.cell_at(scene.agents_in('working'), 0.1)
+
+  eq(watched.cell_at(scene.agents_in('working'), 3), '2,0')
+end
+
 return T
