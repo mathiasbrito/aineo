@@ -107,6 +107,10 @@ local WRONG_PLANS = {
     5,
     'the rows that repeat are one block',
   },
+  { 'a NUL in a row', ' \n .\0.\n', 2, 'this row holds a control character' },
+  { 'a control byte in a row', ' \n .\1.\n', 2, 'this row holds a control character' },
+  { 'a tab in a row', ' \n .\t.\n', 2, 'this row holds a control character' },
+  { 'a delete in a row', ' \n .\127.\n', 2, 'this row holds a control character' },
   {
     'a letter the legend does not have',
     ' \n .D..\n .D.q\n',

@@ -24,7 +24,7 @@ end
 ---@return table[] problems
 ---@return string text of pack.lua
 local function pack_problems(changes)
-  local text = files.pack_text(changes)
+  local text = files.pack_text(changes):gsub('<NUL>', '\0'):gsub('<SOH>', '\1')
   local folder = files.write_pack(pack_root(), 'small', { ['pack.lua'] = text })
   local problems =
     office_pack.check({ name = 'small', folders = { folder }, state_names = STATE_NAMES })
@@ -481,6 +481,25 @@ local WRONG_FIELDS = {
     { triggers = { { when = { command = { lua_pattern = '%s+%d+' } }, play = 'work' } } },
     'triggers',
     'triggers[1].when.command.lua_pattern must be a Lua pattern Lua reads whole that repeats once at most: it repeats 2 times (*, +, - or ?); at most one is taken',
+  },
+  { 'text with a control byte', { about = 'a<SOH>b' }, 'about', 'about holds a control character' },
+  {
+    'an effect with a NUL in its text',
+    { effects = { busy_dots = { text = { '.' } }, spare = { text = { 'a<NUL>' } } } },
+    'effects',
+    'effects.spare.text[1] holds a control character',
+  },
+  {
+    'a name with a control byte',
+    { effects = { busy_dots = { text = { '.' } }, ['sp<SOH>'] = { text = { '.' } } } },
+    'effects',
+    'effects.sp? holds a control character',
+  },
+  {
+    'a trigger match with a control byte',
+    { triggers = { { when = { command = 'ma<SOH>ke' }, play = 'work' } } },
+    'triggers',
+    'triggers[1].when.command holds a control character',
   },
   {
     'a trigger that matches by a number',
