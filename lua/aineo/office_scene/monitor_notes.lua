@@ -42,9 +42,10 @@ local function write_test_verdict(canvas, drawing, owner, screen)
     return
   end
   local shown = verdict.passed and PASSED or FAILED
-  canvas.write_text(
-    screen.column,
-    math.floor(screen.row / 2),
+  areas.write_text_above_the_list(
+    canvas,
+    drawing,
+    { column = screen.column, row = math.floor(screen.row / 2) },
     shown.glyph,
     { foreground = shown.colour }
   )
@@ -66,9 +67,10 @@ function M.paint(canvas, drawing, placed, monitor)
   local area = areas.on_canvas(placed, monitor, 'query')
   local clue = owner.state == ON_THE_WEB and owner.details and owner.details.web_clue
   if area and clue then
-    canvas.write_text(
-      area.column,
-      math.floor(area.row / 2),
+    areas.write_text_above_the_list(
+      canvas,
+      drawing,
+      { column = area.column, row = math.floor(area.row / 2) },
       cell_text.cut_to(clue, area.width),
       { foreground = drawing.pack.text_colours.status }
     )

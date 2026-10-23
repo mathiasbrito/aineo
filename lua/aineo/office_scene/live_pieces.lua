@@ -25,9 +25,10 @@ local function write_wall_text(canvas, drawing, placed, piece)
   if not area then
     return
   end
-  canvas.write_text(
-    area.column,
-    math.floor(area.row / 2),
+  areas.write_text_above_the_list(
+    canvas,
+    drawing,
+    { column = area.column, row = math.floor(area.row / 2) },
     vim.fn.strcharpart(text, 0, area.width),
     { foreground = drawing.pack.text_colours.status }
   )
