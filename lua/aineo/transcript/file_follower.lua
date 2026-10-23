@@ -247,11 +247,32 @@ function M.follow_file(options)
     return offset < current.size and consumed > 0
   end
 
-  --- Reads a pass, and asks for another while bytes remain, so that a long
-  --- file is read in turns with the editor's other work.
-  local function read_appended()
-    if read_pass() then
+  --- The timer that starts the next pass of a burst; nil between bursts.
+  ---@type uv.uv_timer_t|nil
+  local next_pass_timer = nil
+
+  local read_appended
+
+  --- Starts the next pass on the next turn of the event loop, after what is
+  --- waiting there (input, timers, the frames): a scheduled callback would
+  --- run in the turn that is running, with every other one scheduled.
+  local function read_next_pass_soon()
+    local timer = assert(vim.uv.new_timer())
+    next_pass_timer = timer
+    timer:start(0, 0, function()
+      timer:close()
+      if next_pass_timer == timer then
+        next_pass_timer = nil
+      end
       vim.schedule(read_appended)
+    end)
+  end
+
+  --- Reads a pass, and asks for another while bytes remain, so that a long
+  --- file is read in turns of the event loop, a pass at most a megabyte.
+  read_appended = function()
+    if read_pass() and not next_pass_timer then
+      read_next_pass_soon()
     end
   end
 
@@ -277,6 +298,10 @@ function M.follow_file(options)
     stop = function()
       stopped = true
       watch.stop()
+      if next_pass_timer and not next_pass_timer:is_closing() then
+        next_pass_timer:close()
+      end
+      next_pass_timer = nil
     end,
   }
 end
