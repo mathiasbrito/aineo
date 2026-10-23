@@ -9,22 +9,35 @@
 --- The office reads files Claude Code already writes and nothing else: it
 --- calls no Claude, sends nothing to its terminal and spends no token.
 ---
---- While the office shows, one timer draws 12 frames a second and one file
---- watch follows the session's transcript; both stop when it closes. The
---- office closes when the cursor enters any window in the cells it covers.
+--- The office shows by itself once the cursor has been out of the right side
+--- for `office.idle_ms`, and when it is asked to. While it is hidden it holds
+--- one timer, that countdown, and a few autocommands that tell where the
+--- cursor is; nothing is read and nothing is drawn. While it shows, one timer
+--- draws 12 frames a second and one file watch follows the session's
+--- transcript; both stop when it closes. The office closes when the cursor
+--- enters any window in the cells it covers.
+---
+--- Loading this home loads none of the others of the office's context: they
+--- are required when the office first shows.
 
 local colours = require('aineo.office.colours')
+local countdown_module = require('aineo.office.countdown')
 local float_module = require('aineo.office.float')
-local office_pack = require('aineo.office_pack')
-local office_scene = require('aineo.office_scene')
-local office_states = require('aineo.office_states')
 local screen_module = require('aineo.office.screen')
-local transcript = require('aineo.transcript')
 
 local M = {}
 
---- What the office draws when it is given no settings: the default pack.
-local DEFAULT_SETTINGS = { pack = 'default', pieces = {} }
+--- What the office draws when it is given no settings: the default pack, and
+--- no countdown.
+local DEFAULT_SETTINGS = { pack = 'default', pieces = {}, idle_ms = false }
+
+--- How many offices have been made, which names the autocommand group of
+--- each.
+local offices_made = 0
+
+--- What the office tells the user, once, when its settings cannot be read
+--- while it decides whether to show by itself.
+local SETTINGS_UNREADABLE = 'aineo: the office cannot read its settings: %s'
 
 --- What is told, once for each time the office shows, when the triggers of a
 --- call were given up for taking too long.
@@ -49,10 +62,12 @@ local NO_RIGHT_SIDE = "aineo: the office has no right side of aineo's layout to 
 ---@field report_tool? string the name of aineo's report tool, as Claude Code calls it; none, and no call is a report
 ---@field settings? fun(): aineo.office.Settings what the user set for the office, asked each time it shows; the default pack when not given
 ---@field random? fun(count: integer): integer a whole number from 1 to `count`, which picks one of several packs the settings name; the first when not given
+---@field schedule_after? fun(milliseconds: integer, callback: fun()): fun() calls `callback`, on the main loop, once `milliseconds` have passed, and returns what cancels the wait; the idle countdown waits through it; a timer of the editor's loop when not given
 
 ---@class aineo.office.Settings
 ---@field pack string|string[] the pack to draw, or packs to pick one from at random each time
 ---@field pieces table<string, string> art files of the user's own, by the name of the piece each replaces
+---@field idle_ms? integer|false how long the cursor stays out of the right side before the office shows by itself, in milliseconds; none or `false`, and it shows only when asked to
 
 ---@class aineo.office.Office
 ---@field follow_session fun(transcript_path: string|nil) follows the transcript of the session whose file is `transcript_path` while the office shows, or none
@@ -61,8 +76,9 @@ local NO_RIGHT_SIDE = "aineo: the office has no right side of aineo's layout to 
 
 --- Makes the office of one tab.
 ---
---- Nothing is made until `show_now()`: the office has no window, timer, watch
---- or autocommand while it is hidden.
+--- It counts the user's idleness from then on: once the cursor has been out of
+--- the right side for the settings' `idle_ms`, the office shows. Until it
+--- shows it has no window, no frame timer and no watch.
 ---
 ---@param options aineo.office.Options
 ---@return aineo.office.Office office
@@ -72,9 +88,24 @@ function M.new_office(options)
   vim.validate('options.clock', options.clock, 'function')
   vim.validate('options.settings', options.settings, 'function', true)
   vim.validate('options.random', options.random, 'function', true)
+  vim.validate('options.schedule_after', options.schedule_after, 'function', true)
+  offices_made = offices_made + 1
 
   ---@type string|nil
   local transcript_path = nil
+
+  --- Whether the idle time has passed without the office showing, because it
+  --- could not.
+  local idle_time_has_passed = false
+
+  --- Whether the user was told that the settings cannot be read.
+  local settings_unreadable_told = false
+
+  --- Decides, from the cursor and the right side, whether the countdown runs
+  --- and whether the office shows; assigned below, after the functions it
+  --- needs.
+  ---@type fun()
+  local settle
 
   --- What exists while the office shows; nil while it is hidden.
   ---@type { float: aineo.office.Float, timer: uv.uv_timer_t, group: integer, follower: aineo.transcript.Follower|nil, stage: aineo.office_scene.Stage, screen: aineo.office.Screen, area: aineo.layout.Area, refresh_colours: fun() }|nil
@@ -101,7 +132,8 @@ function M.new_office(options)
   ---@param problems aineo.office_pack.Problem[]
   local function warn_of(name, problems)
     if #problems > 0 then
-      vim.notify(office_pack.warning_of(problems, name, MOST_PROBLEMS_LISTED), vim.log.levels.WARN)
+      local warning = require('aineo.office_pack').warning_of(problems, name, MOST_PROBLEMS_LISTED)
+      vim.notify(warning, vim.log.levels.WARN)
     end
   end
 
@@ -128,7 +160,10 @@ function M.new_office(options)
   --- Closes the office once the current event is over: a window cannot be
   --- closed from the autocommand that enters it.
   local function close_soon()
-    vim.schedule(close)
+    vim.schedule(function()
+      close()
+      settle()
+    end)
   end
 
   --- A tracker of the agents' states, and the follower that feeds it from the
@@ -140,7 +175,7 @@ function M.new_office(options)
   ---@return aineo.office_states.Tracker tracker
   ---@return aineo.transcript.Follower|nil follower
   local function follow_transcript(pack)
-    local tracker = office_states.new_tracker({
+    local tracker = require('aineo.office_states').new_tracker({
       commands = options.commands,
       report_tool = options.report_tool,
       triggers = pack.triggers,
@@ -154,7 +189,7 @@ function M.new_office(options)
     if not transcript_path then
       return tracker, nil
     end
-    local follower = transcript.follow({
+    local follower = require('aineo.transcript').follow({
       path = transcript_path,
       on_signal = function(signal)
         tracker.take(signal, options.clock())
@@ -271,18 +306,12 @@ function M.new_office(options)
     transcript_path = path
   end
 
-  --- Shows the office over the right side. With no right side, a pack that
-  --- cannot be loaded or a stage that cannot be made, it tells the user why and
-  --- shows nothing.
-  function office.show_now()
-    if showing then
-      return
-    end
-    local area = options.right_side()
-    if not area then
-      vim.notify(NO_RIGHT_SIDE, vim.log.levels.WARN)
-      return
-    end
+  --- Shows the office over `area`. With a pack that cannot be loaded or a
+  --- stage that cannot be made, tells the user why and shows nothing.
+  ---
+  ---@param area aineo.layout.Area
+  local function show_over(area)
+    local office_pack = require('aineo.office_pack')
     local settings = options.settings and options.settings() or DEFAULT_SETTINGS
     local name = pack_name_of(settings)
     local pack, problems = office_pack.load({
@@ -297,8 +326,10 @@ function M.new_office(options)
     end
     warn_of(name, problems)
     local refresh_colours = colours.follow_highlights(pack)
-    local made, stage =
-      pcall(office_scene.new_stage, { pack = pack, width = area.width, height = area.height })
+    local made, stage = pcall(
+      require('aineo.office_scene').new_stage,
+      { pack = pack, width = area.width, height = area.height }
+    )
     if not made then
       vim.notify(('aineo: the office cannot show: %s'):format(stage), vim.log.levels.ERROR)
       return
@@ -326,8 +357,115 @@ function M.new_office(options)
     draw_frame(draw)
   end
 
-  --- Closes the office and forgets the transcript.
+  --- The settings the user gave the office, or the default when it was given
+  --- none. When asking raises, tells the user once and answers nil.
+  ---
+  ---@return aineo.office.Settings|nil
+  local function settings_if_readable()
+    if not options.settings then
+      return DEFAULT_SETTINGS
+    end
+    local asked, settings = pcall(options.settings)
+    if asked then
+      return settings
+    end
+    if not settings_unreadable_told then
+      settings_unreadable_told = true
+      vim.notify(SETTINGS_UNREADABLE:format(settings), vim.log.levels.ERROR)
+    end
+  end
+
+  --- How long the cursor must stay out of the right side before the office
+  --- shows by itself, in milliseconds; nil when the settings turn that off or
+  --- cannot be read.
+  ---
+  ---@return integer|nil
+  local function idle_time()
+    local settings = settings_if_readable()
+    local idle_ms = settings and settings.idle_ms
+    return type(idle_ms) == 'number' and idle_ms or nil
+  end
+
+  --- Whether the cursor is in a window of the right side now.
+  ---
+  ---@param area aineo.layout.Area|nil the right side now
+  ---@return boolean
+  local function cursor_is_in(area)
+    return area ~= nil and float_module.area_holds(area, vim.api.nvim_get_current_win())
+  end
+
+  local countdown = countdown_module.new_countdown({
+    schedule_after = options.schedule_after,
+    on_elapsed = function()
+      idle_time_has_passed = true
+      settle()
+    end,
+  })
+
+  --- Brings the countdown and the office to what the cursor and the right
+  --- side say: while the office shows, nothing; with the cursor in the right
+  --- side, or the countdown off, no countdown; otherwise the countdown runs,
+  --- and when it has run out the office shows as soon as there is a right
+  --- side.
+  function settle()
+    if showing then
+      return
+    end
+    local idle_ms = idle_time()
+    local area = options.right_side()
+    if not idle_ms or cursor_is_in(area) then
+      countdown.stop()
+      idle_time_has_passed = false
+    elseif idle_time_has_passed then
+      if area then
+        idle_time_has_passed = false
+        show_over(area)
+      end
+    elseif not countdown.is_running() then
+      countdown.start(idle_ms)
+    end
+  end
+
+  --- Starts the countdown from the start, as the user's return to the editor
+  --- or a report that came in does.
+  local function start_counting_again()
+    countdown.stop()
+    idle_time_has_passed = false
+    settle()
+  end
+
+  local life_group = vim.api.nvim_create_augroup('aineo.office.life.' .. offices_made, {})
+  vim.api.nvim_create_autocmd({ 'WinEnter', 'WinResized', 'VimResized' }, {
+    group = life_group,
+    callback = settle,
+  })
+  vim.api.nvim_create_autocmd('TabEnter', {
+    group = life_group,
+    callback = start_counting_again,
+  })
+  settle()
+
+  --- Shows the office over the right side. With no right side, a pack that
+  --- cannot be loaded or a stage that cannot be made, it tells the user why and
+  --- shows nothing.
+  function office.show_now()
+    if showing then
+      return
+    end
+    local area = options.right_side()
+    if not area then
+      vim.notify(NO_RIGHT_SIDE, vim.log.levels.WARN)
+      return
+    end
+    idle_time_has_passed = false
+    countdown.stop()
+    show_over(area)
+  end
+
+  --- Closes the office, stops its countdown and forgets the transcript.
   function office.let_go()
+    countdown.stop()
+    pcall(vim.api.nvim_del_augroup_by_id, life_group)
     close()
     transcript_path = nil
   end
