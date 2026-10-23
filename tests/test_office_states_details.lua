@@ -139,6 +139,63 @@ T['the web clue']['of a fetch of an address with an IPv6 host is the host in its
   eq(story.details().web_clue, '[::1]')
 end
 
+--- The addresses that give no clue: a string that is no host once the
+--- address is cut where a host ends. `ESC` is a literal escape.
+local HOSTILE_ADDRESSES = {
+  { 'https://alice:s3cr3t/word@host.example/' },
+  { 'https://user:pa#ss@example.com/x' },
+  { 'https://user:pa?ss@example.com/x' },
+  { 'data:,my-api-key-123456' },
+  { 'data:text/plain;base64,c2VjcmV0' },
+  { 'javascript:alert(document.cookie)' },
+  { 'https://host.example;jsessionid=ABC123SECRET' },
+  { 'https://host.example\\path?token=SECRET' },
+  { 'https://host\27[31m.example/' },
+  { 'https://host.example:abc/' },
+  { 'https://user:pass@host.example:8080:9090/' },
+  { 'about:blank' },
+  { 'https:example.com/path' },
+  { 'https://:8080/' },
+  { 'file:///etc/passwd' },
+  { 'https://' .. ('a'):rep(50000) .. '.com/' },
+}
+
+T['the web clue']['of a fetch is none for an address that holds no host'] = MiniTest.new_set({
+  parametrize = HOSTILE_ADDRESSES,
+})
+
+T['the web clue']['of a fetch is none for an address that holds no host'][''] = function(address)
+  local story = office_signals.tell()
+
+  story.started('c1', 'WebFetch', { url = address })
+
+  eq(story.details().web_clue, nil)
+end
+
+--- The addresses that give a host, and the host.
+local LEGIT_ADDRESSES = {
+  { 'https://example.com', 'example.com' },
+  { 'https://user:pass@example.com:8080/path?q=secret#frag', 'example.com' },
+  { 'http://[::1]:8080/', '[::1]' },
+  { 'http://[2001:db8::1]/x', '[2001:db8::1]' },
+  { 'https://例え.jp/パス', '例え.jp' },
+  { 'https://xn--r8jz45g.jp/', 'xn--r8jz45g.jp' },
+  { 'ftp://u:p@ftp.example:21/file', 'ftp.example' },
+  { 'localhost:3000/app', 'localhost' },
+}
+
+T['the web clue']['of a fetch keeps a host of the shape of one'] = MiniTest.new_set({
+  parametrize = LEGIT_ADDRESSES,
+})
+
+T['the web clue']['of a fetch keeps a host of the shape of one'][''] = function(address, host)
+  local story = office_signals.tell()
+
+  story.started('c1', 'WebFetch', { url = address })
+
+  eq(story.details().web_clue, host)
+end
+
 T['the web clue']['is none for a call that looks nothing up'] = function()
   local story = office_signals.tell()
 

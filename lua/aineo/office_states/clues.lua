@@ -3,17 +3,25 @@
 
 local M = {}
 
+--- The longest host, in bytes, that a name system allows.
+local LONGEST_HOST = 253
+
 --- The host of `address`: what stands between its scheme, if it has one, and
 --- the first `/`, `?` or `#`, without the user and password before an `@` and
---- the port after a `:`. Nothing else of the address is kept: the path and
---- the query of an address can hold what its owner would not show.
+--- the port after a `:`; and only if that has the shape of a host: letters,
+--- digits, dots, hyphens and the bytes of non-ASCII letters, or an IPv6
+--- address in brackets, at most 253 bytes. Nothing else of the address is
+--- kept: the path, the query and the credentials of an address can hold what
+--- its owner would not show, and so can a string that is no address at all.
 ---
 ---@param address string
 ---@return string|nil host none when the address holds none
 local function host_of(address)
   local authority = address:gsub('^%a[%w+.-]*://', ''):match('^[^/?#]*')
   local host = authority:gsub('^.*@', ''):gsub(':%d*$', '')
-  return host ~= '' and host or nil
+  local is_host = #host <= LONGEST_HOST
+    and (host:find('^[%w.%-\128-\255]+$') or host:find('^%[[%x:.]+%]$'))
+  return is_host and host or nil
 end
 
 ---@type table<string, fun(input: table): string|nil>
