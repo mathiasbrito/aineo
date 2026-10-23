@@ -25,6 +25,7 @@ local colours = require('aineo.office.colours')
 local countdown_module = require('aineo.office.countdown')
 local float_module = require('aineo.office.float')
 local screen_module = require('aineo.office.screen')
+local too_small = require('aineo.office.too_small')
 
 local M = {}
 
@@ -419,12 +420,15 @@ function M.new_office(options)
       if not open.tracker then
         return
       end
+      local width = vim.api.nvim_win_get_width(float.window)
+      local height = vim.api.nvim_win_get_height(float.window)
+      if too_small.holds(width, height) then
+        screen.paint(too_small.picture(width, height))
+        return
+      end
       local now = options.clock()
       stage.advance(open.tracker.agents(now), now)
-      screen.paint(cards.overlay(stage.picture(), {
-        width = vim.api.nvim_win_get_width(float.window),
-        now = now,
-      }))
+      screen.paint(cards.overlay(stage.picture(), { width = width, now = now }))
     end
     start_running(open)
     watch_the_screen(open)
