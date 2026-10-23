@@ -515,16 +515,20 @@ end
 
 T['follow()']['follows eight continuations in a row and no more'] = function()
   for number = 0, 10 do
-    local lines = { continued_in_line(session_numbered(number), session_numbered(number + 1)) }
+    local mark = continued_in_line(session_numbered(number), session_numbered(number + 1))
+    local lines = { mark }
     if number == 8 then
-      lines = RECORDED_TURN
+      lines = vim.list_extend(vim.list_slice(RECORDED_TURN), { mark })
     end
     fake_transcript.append(transcript_of(session_numbered(number)), lines)
   end
 
   local following = follow_path(transcript_of(session_numbered(0)))
 
-  eq(kinds_of(following.signals), KINDS_OF_THE_RECORDED_TURN)
+  eq(
+    kinds_of(following.signals),
+    vim.list_extend(vim.list_slice(KINDS_OF_THE_RECORDED_TURN), { 'session_continued' })
+  )
 end
 
 T['follow()']['finds the continued-in line in a time that does not grow with the lines that hold the field'] = function()
