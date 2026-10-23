@@ -542,4 +542,36 @@ T['a thing that lies on the floor']['no agent can walk to is left where it lies,
   }, { true, true, scene.solid(RED) })
 end
 
+T['a thing that lies on the floor']['is reached again after the plan is laid out wider, for an agent sent for it again'] = function()
+  local pack = scene.people_pack('# plan\n \n .........\n d.d.s...m\n', {
+    d = { spot = 'desk', sitting = true },
+    s = { spot = 'seat', sitting = true },
+    m = { spot = 'away' },
+  }, {
+    activities = {
+      stand = { steps = { { at = 'desk' } } },
+      messy = {
+        steps = {
+          { at = 'seat', pose = 'sitting', for_seconds = 1, leave = 'mess' },
+          { at = 'away' },
+        },
+      },
+      clean_up = { steps = { { at = 'mess', for_seconds = 1, remove = 'mess' } } },
+    },
+    things = { mess = { piece = 'left', cleaned_up_by = 'clean_up' } },
+    states = { standing = 'stand', idle = 'stand', resting = 'stand', working = 'messy' },
+  })
+  local stage = scene.stage_of(pack, 9, 2, { random = scene.always(0) })
+  stage.advance(scene.agents_in('working', 'idle'), 0)
+  stage.advance(scene.agents_in('working', 'idle'), 1.1)
+  stage.advance(scene.agents_in('working', 'resting'), 1.2)
+
+  stage.resize(30, 2)
+  stage.advance(scene.agents_in('working', 'resting'), 1.5)
+  stage.advance(scene.agents_in('working', 'idle'), 2)
+  stage.advance(scene.agents_in('working', 'idle'), 5)
+
+  eq(scene.group_at(stage.picture(), 4, 1), scene.solid(scene.FLOOR))
+end
+
 return T

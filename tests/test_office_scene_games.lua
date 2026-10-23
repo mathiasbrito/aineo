@@ -33,16 +33,16 @@ local function where_the_three_are(stage, width)
   }
 end
 
---- Advances `stage` every half second from `from` to `to` seconds, the
+--- Advances `stage` every tenth of a second from `from` to `to` seconds, the
 --- agents being those `agents_at` gives for the time.
 ---
 ---@param stage aineo.office_scene.Stage
 ---@param agents_at fun(time: number): aineo.office_states.Agent[]
 ---@param from number
 ---@param to number
-local function advance_every_half_second(stage, agents_at, from, to)
-  for half_seconds = math.floor(from * 2 + 0.5), math.floor(to * 2 + 0.5) do
-    stage.advance(agents_at(half_seconds / 2), half_seconds / 2)
+local function advance_every_tenth_second(stage, agents_at, from, to)
+  for tenths = math.floor(from * 10 + 0.5), math.floor(to * 10 + 0.5) do
+    stage.advance(agents_at(tenths / 10), tenths / 10)
   end
 end
 
@@ -98,7 +98,7 @@ end
 T['a game for two']['is not left by a player for a third agent whose activity is over'] = function()
   local stage = stage_of_a_game_with_three_agents()
   local all_idle = crew('idle', 'idle', 'idle')
-  advance_every_half_second(stage, function()
+  advance_every_tenth_second(stage, function()
     return all_idle
   end, 0, 3)
 
@@ -117,7 +117,7 @@ end
 
 T['a game for two']['ends for the other player when one is called away to work'] = function()
   local stage = stage_of_a_game_with_three_agents()
-  advance_every_half_second(stage, function(time)
+  advance_every_tenth_second(stage, function(time)
     return time < 3.1 and crew('idle', 'idle') or crew('idle', 'working')
   end, 0, 9)
 
@@ -126,14 +126,14 @@ end
 
 T['a game for two']['ends for the other player when one leaves the office'] = function()
   local stage = stage_of_a_game_with_three_agents()
-  advance_every_half_second(stage, function(time)
+  advance_every_tenth_second(stage, function(time)
     return time < 3.1 and crew('idle', 'idle') or crew('idle')
   end, 0, 9)
 
   eq(where_the_three_are(stage, 11)[1], '2,0')
 end
 
-T['a game for two']['does not take along the agent sent to clean up a mess'] = function()
+T['a game for two']['does not take along the agent sent to clean up a mess, who is done with it on time'] = function()
   local pack = scene.people_pack('# plan\n \n d.d.d.s.......p.q\n', {
     d = { spot = 'desk', sitting = true },
     s = { spot = 'seat', sitting = true },
@@ -157,11 +157,11 @@ T['a game for two']['does not take along the agent sent to clean up a mess'] = f
   })
   local stage = scene.stage_of(pack, 17, 1, { random = scene.always(0) })
   local one_works_two_are_idle = crew('working', 'idle', 'idle')
-  advance_every_half_second(stage, function()
+  advance_every_tenth_second(stage, function()
     return one_works_two_are_idle
-  end, 0, 3)
+  end, 0, 4.3)
 
-  eq(where_the_three_are(stage, 17), { '0,0', '2,0', '6,0' })
+  eq(where_the_three_are(stage, 17), { '0,0', '2,0', '4,0' })
 end
 
 return T
