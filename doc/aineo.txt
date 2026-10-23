@@ -4084,7 +4084,8 @@ states, `always` among them, in which it may be picked at random), `chance`
 two for a random time between them), `facing`, `effect`, `even_if_taken`,
 `the_one_moved_plays` (an activity), `leave` and `remove` (a thing) and
 `follow`. Spots aineo knows without a legend: `anywhere`, `an_empty_desk`,
-`an_idle_agents_desk` and `next_to_an_agent`, and each thing's name.
+`an_idle_agents_desk`, `next_to_an_agent` and `next_to_the_cat`, and each
+thing's name.
 
 How an agent plays an activity: it takes the steps in order. For a step it
 goes to the nearest spot called `at` that no other agent has taken, walking
@@ -4132,7 +4133,8 @@ A step's `at` may name a spot aineo knows without a legend: `anywhere` is a
 floor cell the random source picks; `an_empty_desk` a desk of the plan no
 agent has; `an_idle_agents_desk` the desk of another agent in the state `idle`
 who is away from it; `next_to_an_agent` a cell beside another agent who stands
-still; and a thing's name is the cell where a thing of that name lies. With
+still; `next_to_the_cat` a cell beside a cat that stands still, facing it; and
+a thing's name is the cell where a thing of that name lies. With
 `even_if_taken` a step goes to the nearest spot of its name, taken or not:
 the character that has it is moved when the one coming arrives, and plays the
 activity `the_one_moved_plays` names, or, when the step names none, looks for
