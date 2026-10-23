@@ -135,6 +135,32 @@ local function kinds_of(signals)
   end, signals)
 end
 
+--- How long a call that must not wait on a named pipe may take, in
+--- milliseconds. The pipes of the cases get a writer after a second, so a call
+--- that opens one waits for it, and takes longer than this.
+local HELD_LIMIT_MS = 500
+
+--- Makes a named pipe at `path` that a process opens for writing, and closes, a
+--- second from now: an open of the pipe for reading, which blocks until then,
+--- ends by itself.
+---
+---@param path string
+local function make_pipe_opened_later(path)
+  vim.fn.mkdir(vim.fs.dirname(path), 'p')
+  vim.system({ 'mkfifo', path }):wait()
+  vim.system({ 'sh', '-c', 'sleep 1; : > "$0"', path })
+end
+
+--- How long, in milliseconds, following `session` held the editor.
+---
+---@param session transcript_subagents.Session
+---@return integer
+local function held_by_follow(session)
+  local started = vim.uv.hrtime()
+  follow(session)
+  return math.floor((vim.uv.hrtime() - started) / 1e6)
+end
+
 --- Waits until `session` has had at least `count` signals of the agent `id`.
 ---
 ---@param session transcript_subagents.Session
@@ -289,17 +315,35 @@ T['a subagent that is over']['leaves after the last lines it wrote, and is follo
   )
 end
 
-T['a subagent whose meta is not a regular file'] = MiniTest.new_set()
+T['a named pipe where a file or a folder is expected'] = MiniTest.new_set()
 
-T['a subagent whose meta is not a regular file']['is taken to run, and the follower reads nothing from the meta'] = function()
+T['a named pipe where a file or a folder is expected']['as a meta is taken for a meta that says nothing, without holding the editor'] = function()
   local session = new_session()
-  vim.fn.mkdir(session.folder, 'p')
-  vim.system({ 'mkfifo', meta_file(session, SUBAGENT) }):wait()
+  make_pipe_opened_later(meta_file(session, SUBAGENT))
   fake_transcript.append(agent_file(session, SUBAGENT), RECORDED_SUBAGENT)
 
-  follow(session)
+  local held = held_by_follow(session)
 
+  eq(held < HELD_LIMIT_MS, true)
   eq(kinds_of(signals_of_agent(session.signals, SUBAGENT)), ARRIVAL_KINDS)
+end
+
+T['a named pipe where a file or a folder is expected']['as the transcript is waited for, without holding the editor'] = function()
+  local session = new_session()
+  make_pipe_opened_later(session.transcript)
+
+  local held = held_by_follow(session)
+
+  eq(held < HELD_LIMIT_MS, true)
+end
+
+T['a named pipe where a file or a folder is expected']['as the subagents folder is waited for, without holding the editor'] = function()
+  local session = new_session()
+  make_pipe_opened_later(session.folder)
+
+  local held = held_by_follow(session)
+
+  eq(held < HELD_LIMIT_MS, true)
 end
 
 T['a folder of more subagents than the office follows'] = MiniTest.new_set()
