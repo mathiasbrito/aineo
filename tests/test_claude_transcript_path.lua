@@ -123,6 +123,8 @@ T['the session']['is told no transcript by a hook that names none, a path that i
     { 'SessionStart', session, 'startup', token, nil, nil, nil },
     { 'SessionStart', session, 'startup', token, nil, nil, 'relative/session.jsonl' },
     { 'SessionStart', session, 'startup', token, nil, nil, '' },
+    { 'SessionStart', session, 'startup', token, nil, nil, '~/session.jsonl' },
+    { 'SessionStart', 'not-a-session', 'startup', token, nil, nil, '/tmp/aineo/other.jsonl' },
     { 'SessionEnd', session, 'clear', token, nil, nil, '/tmp/aineo/session.jsonl' },
   }) do
     child.lua("require('aineo.claude').receive_session_event(...)", told)
