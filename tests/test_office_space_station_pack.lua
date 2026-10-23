@@ -285,11 +285,17 @@ T['the space station pack']['names at most 64 colours of its own'] = function()
 end
 
 T['the space station pack']['tries a trigger of its own before the default pack has its turn'] = function()
-  local trigger = default.load_pack(PACK).triggers[1]
+  local triggers = default.load_pack(PACK).triggers
 
-  eq(trigger, {
-    when = { tool = 'Bash', command = 'git push' },
-    play = 'send_a_transmission',
+  eq({ triggers[1], triggers[2] }, {
+    {
+      when = { tool = 'Bash', command = { lua_pattern = '^git%s+push%f[%s%z;&|]' } },
+      play = 'send_a_transmission',
+    },
+    {
+      when = { tool = 'Bash', command = { lua_pattern = '[;&|]%s*git push%f[%s%z;&|]' } },
+      play = 'send_a_transmission',
+    },
   })
 end
 
