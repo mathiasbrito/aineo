@@ -4,7 +4,7 @@
 **Project:** [[Projects/aineo]]
 **Spec it adds to:** [[Planning/aineo — v1 agent console]] — D54, D62 and T48 (aineo already attaches Claude's window to a background session at a start and from `\S`), D116–D118 and T141–T143 (claims that survive a restart, follow a fork and carry Input). The orchestrator's rulings it rests on, of 2026-10-24: A609 (T144 comes after T141–T143, one packet at a time), A613 (while a claim holds, Send, a Visual Send, `\S` and `:Aineo new` are refused; "sending into a session another process runs comes with T144"), A619 (this pass may start one throwaway background session, on Haiku, with at most two one-line prompts, and never touches the user's own sessions).
 **Raised by:** the user's wish to type into a session another process runs from the tab that shows it (A613, told to the user with D116).
-**Drafted by:** a measure-and-propose agent (Claude, Opus 5.5, `neovim-claude-code-integrator`), 2026-10-24, for the orchestrator to put to the user. **Status: proposal** — nothing here is decided; the user answers *Questions* (AQ1–AQ6) in a converge round, and only then is a packet planned.
+**Drafted by:** a measure-and-propose agent (Claude, Opus 5.5, `neovim-claude-code-integrator`), 2026-10-24, for the orchestrator to put to the user. **Status: decided, 2026-10-24** — the user answered AQ1–AQ4 and the orchestrator settled AQ5 and AQ6 on the recommendations (*Decisions (2026-10-24)*, below): D120 is the build row, T148 its task.
 **Task:** T144 (measure `claude attach`, then propose).
 **Session:** [[Sessions/2026-10-24 — T144 session attach measured]]
 
@@ -124,8 +124,26 @@ AD1 and AD3 compose: AD1 for every attachable claim, AD3 later as an explicit co
 5. **AQ5 — A claim of a session open in another interactive Claude Code** (no short id; `claude attach` cannot open it). (a) Stays read-only, as today **(recommended)**; (b) offer to take it over (AD3′) once that terminal has exited.
 6. **AQ6 — `←` in an attached Claude's window** (agent view opens there, AR2). (a) Accept it as a limit in the help, as today for T48's attaches **(recommended)**; (b) read the screen and return the tab to its session when agent view shows (tier 2, AR1).
 
+## Decisions (2026-10-24)
+
+The orchestrator put AQ1–AQ4 to the user as four questions; the user's choices, verbatim as chosen, and the orchestrator's ruling on the two it did not ask:
+
+| Question | Chosen | The other options this note proposed | Row |
+|---|---|---|---|
+| AQ1 — which design | "Attach in the tab (Recommended)" — AD1 | AD2; AD3 alone; AD1 now with AD3 later | D120 |
+| AQ2 — the tab's own Claude Code during an attach | "Stop it, resume after (Recommended)" — stopped for the attach, resumed when the claim ends, the attach refused while it is busy | stopped even when busy; asked each time | D120 |
+| AQ3 — when the attach happens | "At once on claim (Recommended)" — on `:Aineo claim` and when the tab follows a fork | on the first Send; only on `:Aineo claim` | D120 |
+| AQ4 — when the attached session ends | "Back to own session (Recommended)" | resume the claimed session as the tab's own; stay on the last screen | D120 |
+| AQ5 — a session open in another interactive Claude Code | not asked: stays a read-only claim (the recommendation) | offer AD3′ once that terminal has exited | A620 |
+| AQ6 — `←` opening agent view in Claude's window | not asked: a documented limit, not detected (the recommendation) | read the screen and return the tab | A620 |
+
+- **D120 — the build row, task T148** (the user's decision): while a claim holds a session a Claude Code background host runs (it has a short id in `claude agents --json`), the tab's Claude window runs `claude attach <short id>`, reusing T48's attach code (the Ctrl+Z stop, the `(attached)` mark, the replace path), so Send, `\S` and `:Aineo new` work again for it. The attach happens at once on `:Aineo claim` of such a session and when the tab follows a fork of its own session (T142). The tab's own Claude Code is stopped for the attach and resumed (`--resume <own id>`) when the claim ends; while the own one is busy with a turn the attach is refused with a message, and the claim stays read-only. When the attached session ends (`Session … has exited.`, or the attach exits), the tab returns to its own session as if the claim were released. A restart (T141) re-attaches a kept claim that is still running. Read with A613: Send, `\S` and `:Aineo new` stay refused for a claim that does not attach — a session with no short id (A620), or one whose attach was refused because the tab's own session was busy.
+- **A620** (the orchestrator's ruling, AQ5 and AQ6 on the recommendations): a session open in another interactive Claude Code (no short id) stays a read-only claim; `←` or `/exit` opening agent view in Claude's window is a documented limit, not detected.
+
+AD2 and AD3 are not built. AD3 stays a design this note keeps for a later request; nothing here schedules it.
+
 ## Out of scope
 
-- Building any of it: this note is the proposal T144 asked for; a packet follows the user's answers.
+- Building it in T144: T144 measured and proposed; the build is T148 (D120).
 - Answering a permission prompt of a background session from aineo itself: permissions stay the user's (the integrator's charter); the user answers in Claude Code's own screen.
 - `--fork-session` of a running background session (AF6): not measured, as it makes a second session.

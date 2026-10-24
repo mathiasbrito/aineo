@@ -24,7 +24,7 @@ Typing into a background session means attaching to it; `claude attach` ignores 
 
 ## Decisions
 
-None: this is a proposal. The user answers AQ1–AQ6 in a converge round. The recommendation is AD1 — a claim of a background session attaches the tab's terminal, reusing T48's attach — with AD3 (re-home under this tab's flags) as a possible later command.
+This pass decided nothing itself; it recommended AD1 — a claim of a background session attaches the tab's terminal, reusing T48's attach. The same day the user chose AD1 and the recommended answers to AQ2–AQ4 (D120, the build row, task T148), and the orchestrator settled AQ5 and AQ6 on the recommendations (A620); the plan note's *Decisions (2026-10-24)* records them.
 
 ## Open threads
 
