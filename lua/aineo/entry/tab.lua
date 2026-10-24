@@ -374,7 +374,7 @@ local function make_tab(homes, key, callbacks)
   --- attach` in its place (`attach_listed_claim()`). Attaches nothing when
   --- the tab has no own session to return to, when the window is attached to
   --- `id` already, and while the tab's own Claude Code is busy with a turn
-  --- (`refuses_attach_while_busy()`), before and after the list. Defined
+  --- when the list answers (`refuses_attach_while_busy()`). Defined
   --- below, with the swap of Claude's terminal it makes.
   ---@type fun(id: string)
   local attach_to_claim
@@ -1536,9 +1536,6 @@ local function make_tab(homes, key, callbacks)
   attach_to_claim = function(id)
     local own = own_session_id()
     if not own or (own_while_attached and homes.claude.session_id() == id) then
-      return
-    end
-    if refuses_attach_while_busy(id) then
       return
     end
     require('aineo.claude').list_sessions(
