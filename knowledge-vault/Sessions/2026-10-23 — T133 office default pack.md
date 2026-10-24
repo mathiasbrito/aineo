@@ -167,4 +167,30 @@ The edits of the first round's engine mutants (A1–A5, B1, B2, C1–C4, N1–N6
 
 ## Commits
 
-*Recorded after the merge.*
+Pull request #340 merged into `feature/t123-office`; that branch reached `dev` through pull request #344. Each commit below is as it stands on `dev` (a rebase merge replays under new hashes).
+Released as v0.2.73 (pull request #345, `main` at `d3df7aff`).
+
+- `71850d85` Convert the approved mock into the complete default office pack
+- `5a155293` Pin the default pack: its plan, its states, its look and its life
+- `44a69f58` Write a step's fields in the order the pack format lists them
+- `4ad0d882` WIP: record T133 in a session note and make the code screen test stricter
+- `b8530b57` Kill the three surviving mutants of the default pack's random life
+- `2c6154a4` Draw an agent on a floor cell when the plan lacks its spot
+- `7b0c87b6` Let a run of decorations show live content
+- `b75f509a` Add the spot next_to_the_cat
+- `b3e034c8` Write an agent's name on its desk's name plate
+- `be38a3c7` Use the new engine items in the default pack
+- `392a306e` Record T133 as done: the session note and the plan row
+- `d0ae54c8` Read the status list's cases by where the agent is drawn
+- `c02816c7` Match name plates and monitors to the desk spot under them
+- `1890b3e1` Keep the rug inside its lounge
+- `92ef3905` Show the cat asleep on a sofa seat whole
+- `0c8e0f1a` Hold the cat still while an agent pets it
+- `75b72dce` Put an agent with no place on a free floor cell near the door
+- `e40d967d` Read the rug case from the plan text, not the engine's layout
+- `d8ccb3e0` Pin the anger a mess or a puddle causes
+- `8f15692c` Have the typing check read the pose, not only the desk
+- `eb2994d5` Stop test_entry_office leaving shells blocked on a named pipe
+- `a41180c3` Pin that a desk spot gives its place to one monitor
+- `5a9d76ba` Record the fix round of T133 and every mutant's literal edit
+- `35aeaa2e` Make the anger at a mess or a puddle reach across the room

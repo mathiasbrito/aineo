@@ -90,4 +90,22 @@ Finding 7 of the review (a configuration directory that did not exist at startup
 
 ## Commits
 
-*Recorded after the merge.*
+Pull request #351 merged into `feature/t123-office-authors`; that branch reached `dev` through pull request #355. Each commit below is as it stands on `dev` (a rebase merge replays under new hashes).
+Released as v0.2.74 (pull request #356, `main` at `2874493e`).
+
+- `ee9981ec` Tell what a pack draws for each state, and its triggers
+- `50afba5f` Start a pack of one's own from the default pack
+- `f845075c` Add :Aineo office states and :Aineo office new
+- `2068c5ca` Move putting text over a picture row to the office's text
+- `47d69398` Add :Aineo office preview, a show of every state of a pack
+- `4d5804c6` Count the office packs and their problems in the health check
+- `c08f109f` Match permission-wait tokens to starts by session id
+- `5e57b14b` Document the commands and the health report for pack authors
+- `9b4b89b6` Record T134: the plan row and the session note
+- `6d11021c` Refuse a case variant of a pack's name, and keep a failed copy tidy
+- `34ead136` Keep a pack's about and author only when they are plain text
+- `8fcda55f` Check the pack before a preview closes the office that shows
+- `ca93fa63` Tell a pack once in health, and pin the pieces case
+- `470cf6b1` Document the refusals of `office new` and the failed preview
+- `de3bada1` Record the fix round of T134 in its session note
+- `221b44f8` Name the shipped packs in the tests of T134 after the merge of T135
