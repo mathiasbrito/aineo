@@ -118,17 +118,19 @@ local CLAIM_USAGE = 'aineo: :Aineo claim takes at most one Claude session id'
 --- What `:Aineo office` tells the user when it is given a word, or words,
 --- that it does not take.
 local OFFICE_USAGE =
-  'aineo: :Aineo office takes check, states, preview, new or pack, and the name of a pack'
+  'aineo: :Aineo office takes check, states, preview, new, pack or reset, and the name of a pack'
 
 --- The words `:Aineo office` takes, in the order it offers them, and the
 --- function of `aineo.entry` that does what each says; `new` needs the name
---- of the pack to make, and the others take the name of a pack, or none.
+--- of the pack to make, `reset` takes none, and the others take the name of a
+--- pack, or none.
 local OFFICE_WORDS = {
   { word = 'check', action = 'check_office_pack' },
   { word = 'states', action = 'show_office_states' },
   { word = 'preview', action = 'preview_office' },
   { word = 'new', action = 'start_office_pack', needs_a_name = true },
   { word = 'pack', action = 'choose_office_pack' },
+  { word = 'reset', action = 'reset_office', takes_no_name = true },
 }
 
 --- The function of `aineo.entry` that does what `:Aineo` with `words` says,
@@ -143,7 +145,8 @@ local function office_action_of(words)
   end
   local names_given = #words - 2
   for _, office_word in ipairs(OFFICE_WORDS) do
-    local takes_the_names = names_given == 1 or (names_given == 0 and not office_word.needs_a_name)
+    local takes_the_names = (names_given == 1 and not office_word.takes_no_name)
+      or (names_given == 0 and not office_word.needs_a_name)
     if words[2] == office_word.word and takes_the_names then
       return office_word.action
     end
@@ -832,5 +835,5 @@ end, {
   range = true,
   bar = true,
   complete = complete_subcommand,
-  desc = 'aineo: send, open, report, input, claude, claude-numbers, sessions, new, pane agent|changes|terminal|run|explorer, run shell, claim [id], tab new|close|{n}, diff close, find, zoom or zoom full, [range]explain [issues] [tools] [new]|clear, office [check|states|preview [name]|new name|pack [name]]',
+  desc = 'aineo: send, open, report, input, claude, claude-numbers, sessions, new, pane agent|changes|terminal|run|explorer, run shell, claim [id], tab new|close|{n}, diff close, find, zoom or zoom full, [range]explain [issues] [tools] [new]|clear, office [check|states|preview [name]|new name|pack [name]|reset]',
 })

@@ -17,6 +17,7 @@ local M = {}
 ---@field clock? fun(): number the time in seconds, on a clock that only grows, which limits the triggers of one call to 20 ms; none, and they are not limited
 ---@field on_slow_triggers? fun() called, once, when the triggers of a call were given up for taking too long
 ---@field wall_clock? fun(): number the time in seconds since 1970, which tells how long ago a replayed subagent's transcript was written; none, and every replayed subagent counts as written now
+---@field leave_out_the_past? boolean whether what the transcripts' tails replay is left out: the main agent hears none of it, and each subagent it names rests until a line of it is heard as it happens; false when not given
 
 --- The kinds of signal beyond the transcript's (`aineo.transcript.SignalKind`)
 --- that the office gives the tracker: a session that starts or ends, and an
@@ -292,7 +293,9 @@ function M.new_tracker(options)
   end
 
   --- Whether `signal` is of a subagent the office leaves out: one that rests,
-  --- having gone quiet, as the replayed arrival of a quiet subagent makes it.
+  --- having gone quiet, as the replayed arrival of a quiet subagent makes it,
+  --- or, with `options.leave_out_the_past`, as anything replayed of it does;
+  --- the main agent's replayed signals are then left out too.
   --- A signal heard as it happens ends the rest: the subagent walks in again,
   --- as if it arrived, before it hears the signal; the end of the subagent
   --- has it gone for good instead.
@@ -301,6 +304,10 @@ function M.new_tracker(options)
   ---@param now number
   ---@return boolean
   local function stays_out(signal, now)
+    if signal.replayed and options.leave_out_the_past then
+      resting[signal.agent] = signal.agent ~= record_module.MAIN or nil
+      return true
+    end
     if replays_a_quiet_arrival(signal) then
       resting[signal.agent] = true
     end

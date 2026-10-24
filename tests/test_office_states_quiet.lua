@@ -160,4 +160,31 @@ T['a subagent followed']['that walked out quiet and then finishes does not come 
   eq(ids_after(story, 0.1), { 'main' })
 end
 
+T['a tracker that leaves out the past'] = MiniTest.new_set()
+
+--- A story told to a tracker that leaves out what the transcripts replay.
+---
+---@return aineo.tests.Story
+local function told_leaving_out_the_past()
+  return office_signals.tell({ leave_out_the_past = true })
+end
+
+T['a tracker that leaves out the past']['lists neither a replayed subagent nor what the main agent did'] = function()
+  local story = told_leaving_out_the_past()
+  story.hear_replayed('tool_started', { call = 'read', tool = 'Read', input = {} })
+
+  replay_subagent(story, 'recent', 1)
+
+  eq({ ids_after(story, office_signals.SETTLE), story.state() }, { { 'main' }, 'standing' })
+end
+
+T['a tracker that leaves out the past']['has a replayed subagent walk in with its next line'] = function()
+  local story = told_leaving_out_the_past()
+  replay_subagent(story, 'recent', 1)
+
+  story.hear('tool_started', { agent = 'recent', call = 'read', tool = 'Read', input = {} })
+
+  eq({ story.state('recent'), story.state_after(5, 'recent') }, { 'arriving', 'reading' })
+end
+
 return T
