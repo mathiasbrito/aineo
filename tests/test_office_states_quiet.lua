@@ -137,7 +137,10 @@ T['a subagent followed']['quiet for ten minutes stays while it waits for permiss
 
   story.hear('permission_asked', { agent = 'sub' })
 
-  eq(story.state_after(QUIET_SECONDS + 1, 'sub'), 'needs_permission')
+  eq(
+    { story.state_after(QUIET_SECONDS + 31, 'sub'), ids_after(story, QUIET_SECONDS + 31) },
+    { 'needs_permission', { 'main', 'sub' } }
+  )
 end
 
 T['a subagent followed']['that walked out quiet walks in again with its next line'] = function()
@@ -158,6 +161,15 @@ T['a subagent followed']['that walked out quiet and then finishes does not come 
   story.hear_after(QUIET_SECONDS + 60, 'subagent_finished', { agent = 'sub' })
 
   eq(ids_after(story, 0.1), { 'main' })
+end
+
+T['a subagent followed']['that went quiet is waited for no more'] = function()
+  local story = with_a_subagent_followed()
+  story.hear('turn_ended')
+
+  story.hear_after(QUIET_SECONDS + 10, 'compacted')
+
+  eq(story.state_after(6), 'idle')
 end
 
 T['a tracker that leaves out the past'] = MiniTest.new_set()
