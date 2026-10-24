@@ -2179,12 +2179,14 @@ tab whose start gave those hooks claims the new session, its Report, Input
 and changes pane follow it, Input's text going with it as its draft, with no
 question (|aineo-draft-carry|), the reports from that process reach its
 Report, and the folder's list of tabs keeps the claim for the next start
-(|aineo-tabs|). The tab's own Claude Code stays on its own session. While
-the claim holds, Send and a Visual Send send nothing, `\S` (`:Aineo
-sessions`) and `:Aineo new` do nothing, each telling you why, and a `/clear`
-or `/resume` you type in the tab's terminal is kept for the folder but leaves
-the panes on the claim; `:Aineo claim` without an id returns the tab to its
-own session. Each such session is followed once: a later hook that names it
+(|aineo-tabs|). When the new session runs in Claude Code's background
+service, Claude's window attaches to it (|aineo-claim-attach|). Otherwise
+the tab's own Claude Code stays on its own session, and while the claim
+holds, Send and a Visual Send send nothing, `\S` (`:Aineo sessions`) and
+`:Aineo new` do nothing, each telling you why, and a `/clear` or `/resume`
+you type in the tab's terminal is kept for the folder but leaves the panes
+on the claim; `:Aineo claim` without an id returns the tab to its own
+session. Each such session is followed once: a later hook that names it
 again does not take the tab back to it. An aineo older than this one kept no
 claim in the list: the first start after upgrading from v0.2.74 reopens the
 tab on its own session, and a claim you held then is made again with
@@ -2199,6 +2201,51 @@ follows its switches too, and its claim moves with them; while it follows
 a session its own terminal does not run, a switch in its own Claude Code is
 kept for the directory and leaves its panes where they are. aineo ignores
 a conversation you ran in a plain terminal in the same directory.
+
+                                                        *aineo-claim-attach*
+A claim of a session that runs in Claude Code's background service — one
+`claude agents --json` lists with a short id — attaches Claude's window to
+it: the tab's own Claude Code is stopped by its keys, as `:Aineo new`
+replaces one, and Claude's window runs `claude attach <short id>` for the
+claimed session, its status line reading `(attached)`. It happens at once
+on `:Aineo claim {id}`, when the tab follows a fork of its own session
+(above), and at a start that takes a kept claim up again (|aineo-tabs|).
+The list is read once after the claim, bounded at 5 seconds; a session it
+does not show with a short id — one open in another interactive Claude
+Code among them — stays a read-only claim, as |:Aineo-claim| describes.
+
+While Claude's window is attached to the claimed session, Send and a
+Visual Send paste Input into it (|aineo-send|), `\S` lists the sessions,
+and `:Aineo new` starts a new session of the tab's in place of the attach,
+which ends the claim. The Report, the changes pane, the office and Input
+follow the claimed session as for any claim, and the folder's list of tabs
+keeps the claim under the tab's own session.
+
+The tab's own session is resumed in Claude's window when the claim ends:
+by `:Aineo claim` without an id or with the own session's id, by a claim of
+another session that cannot be attached to, which then stays read-only, and
+when the attach ends by itself — its session exited, `Ctrl+Z` typed in the
+window, a hangup. aineo then tells `aineo: the attach ended; resuming the
+tab’s own session`, and the tab follows and claims its own session again.
+A claim of another session that runs in the background attaches to that
+one in place; the own session stays the one the end of the claim resumes.
+Claiming the attached session again changes nothing.
+
+While the tab's own Claude Code is busy with a turn, which stopping it would
+end, nothing is attached: aineo warns `aineo: not attached — this tab’s
+Claude Code is busy with a turn; the claim of {id} stays read-only until you
+claim it again`, and the claim stays read-only. Claim the session again once
+the turn is over.
+
+`claude attach` takes none of aineo's arguments, so the attached window runs
+under what the background session was started with: its own hooks, MCP
+servers and permission mode. A fork of an aineo tab carries that tab's
+report server and hooks, so its reports reach the Report through the claim
+(|aineo-report-claims|) and its permission prompts reach the office; a
+session Claude Code started elsewhere gives no Report and no permission
+signal. A permission prompt of the attached session is answered in Claude's
+window — or in any other terminal attached to it, since they share one input
+box. What the attached window cannot tell aineo is in |aineo-limits|.
 
 The panes follow the session a start of Claude Code is on once Claude Code
 is ready for input the first time, and every switch after that; until
@@ -2501,7 +2548,8 @@ only in place of a resume Claude Code has no conversation for
 			tab's Claude Code is not ready for input — it has not
 			started, is starting or behind a dialog, or has
 			exited, as for Send (|aineo-send|) — while a claim of
-			another session holds (|:Aineo-claim|), when `claude
+			another session holds that Claude's window is not
+			attached to (|:Aineo-claim|), when `claude
 			agents` fails, is stopped or prints what is not a
 			JSON list, and when Claude Code lists no session. A
 			pick made after the state changed tells you the same,
@@ -2550,7 +2598,8 @@ only in place of a resume Claude Code has no conversation for
 			then press the key again), when Claude Code is
 			starting, behind a dialog or waiting for the session
 			list of a resume, when a claim of another session
-			holds (|:Aineo-claim|), and when Claude's window does
+			holds that Claude's window is not attached to
+			(|:Aineo-claim|), and when Claude's window does
 			not enter Terminal mode within a second. While a turn
 			runs the prompt is on the screen and `/clear` is
 			written all the same; what Claude Code does with it
@@ -2599,7 +2648,10 @@ only in place of a resume Claude Code has no conversation for
 			draft follow that session, at once in the windows
 			that show them, while this Neovim's own Claude
 			terminal runs on its own session; nothing is sent to
-			Claude Code. Input's text goes with the claim, and
+			Claude Code. A session Claude Code's background
+			service runs is attached to in Claude's window
+			instead, and Send reaches it (|aineo-claim-attach|).
+			Input's text goes with the claim, and
 			when the claimed session has another draft you are
 			asked whether to replace or merge it
 			(|aineo-draft-carry|). Completion offers the
@@ -2616,7 +2668,9 @@ only in place of a resume Claude Code has no conversation for
 			  the changes pane and Input to its own terminal's
 			  session, and claims that. The claimed session's
 			  draft is kept as that session's, and Input shows
-			  its own session's draft again.
+			  its own session's draft again. A window attached
+			  to the claimed session resumes its own session
+			  (|aineo-claim-attach|).
 			- its terminal runs no session, as before Claude
 			  Code has started here: it warns once and changes
 			  nothing. `:Aineo claim {id}` follows another
@@ -3586,7 +3640,9 @@ Input — or the selection — holds only white space, and when Claude Code is
 not ready: not started, still starting, behind a dialog that awaits your
 answer, or exited. It sends nothing either while this Neovim follows a session
 its own Claude terminal does not run (|:Aineo-claim|): Input then holds the
-claimed session's draft, which must not reach another conversation. The
+claimed session's draft, which must not reach another conversation; once
+Claude's window is attached to the claimed session, it runs it, and Send
+pastes there (|aineo-claim-attach|). The
 warning names the claimed session, and what works here: `:Aineo claim`
 without an id, which returns this Neovim to its own session, or, when its
 terminal runs no session, `:Aineo claim {id}` or `:Aineo open`. A Visual Send
@@ -4702,6 +4758,18 @@ is a Vimscript `throw`, or a Lua error and the quit runs from Lua, as aineo's
 `\Q` in the last tab does; a Lua error does not when the quit is typed
 (`:qa`). Claude Code then only gets Neovim's hangup, and a Claude Code that
 hangs outlives the editor. aineo cannot detect this.
+
+In a window attached to a claimed session (|aineo-claim-attach|), `←` on an
+empty prompt and `/exit` open Claude Code's agent view there, which lists
+every session of yours, instead of leaving the attach; aineo does not detect
+it, and the tab keeps the claim until it ends. A switch inside the attached
+session, such as `/clear`, reaches aineo only through the session's own
+hooks: for a fork of an aineo tab it moves the claim to the new session,
+whose window stays attached but which Send then refuses as a read-only
+claim; claim the new session again to send to it. Whether a background
+session's short id is listed by the time its fork's first hook reaches
+aineo was not measured: when it is not, the fork stays a read-only claim
+until you claim it again.
 
 A Claude Code attached to a background session (|aineo-claude-session|) is
 stopped by `Ctrl+Z` alone, which detaches it and leaves the session running,

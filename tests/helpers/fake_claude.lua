@@ -104,7 +104,13 @@
 --- attached to a background session did in a Neovim 0.12.5 terminal: it records
 --- `{ ended = 'detach', code = 0 }` and exits 0. In the mode `ignores-detach`
 --- it does not detach. With `AINEO_FAKE_CLAUDE_ATTACH_SAYS` set it instead
---- prints that line, reads no key and exits 1 a moment later. It reads no
+--- prints that line, reads no key and exits 1 a moment later. With
+--- `AINEO_FAKE_CLAUDE_ATTACH_ENDS_MS` set, the session it is attached to
+--- ends that many milliseconds after its screens are drawn, as a `claude
+--- stop` of it ended an attach of Claude Code 2.1.310 (AM10 of the T144
+--- measurement): it prints `Resume this session with:` and `Session <short
+--- id> has exited.`, records `{ ended = 'session_ended', code = 0 }` and
+--- exits 0, the code a detach exits with too. It reads no
 --- `--resume` or `--session-id`, so it keeps no conversation and runs no
 --- hook.
 ---
@@ -126,7 +132,8 @@
 --- ran as `{ hook, session_id, cause, code }` — its event, the session and
 --- source or reason its input named, and its exit code — and the last
 --- line says how it ended: `{ ended, code }`, where `ended` is
---- `keys`, `hangup`, `exit` or `lifetime`.
+--- `keys`, `hangup`, `exit`, `lifetime` or, for an attach, `detach` and
+--- `session_ended`.
 
 local RECORD_PATH =
   assert(os.getenv('AINEO_FAKE_CLAUDE_RECORD'), 'AINEO_FAKE_CLAUDE_RECORD is unset')
@@ -241,6 +248,11 @@ local TURN_ENDING_MS = 1000
 --- exits.
 local ATTACH_SAYS = os.getenv('AINEO_FAKE_CLAUDE_ATTACH_SAYS')
 local ATTACH_SAYS_EXIT_AFTER_MS = 300
+
+--- How long after its screens are drawn the session an attach is attached
+--- to ends, when `AINEO_FAKE_CLAUDE_ATTACH_ENDS_MS` is set; nil when it
+--- never ends by itself.
+local ATTACH_ENDS_MS = tonumber(os.getenv('AINEO_FAKE_CLAUDE_ATTACH_ENDS_MS'))
 
 --- The exit status of a process that a hangup ended.
 local HANGUP_CODE = 129
@@ -1042,6 +1054,12 @@ if os.getenv('AINEO_FAKE_CLAUDE_MCP') == 'kept' then
 end
 if MODE.titles_busy then
   begin_busy_spell()
+end
+if arg[1] == 'attach' and ATTACH_ENDS_MS then
+  vim.defer_fn(function()
+    stdout:write('Resume this session with:\r\nSession ' .. (arg[2] or '') .. ' has exited.\r\n')
+    finish('session_ended', 0)
+  end, ATTACH_ENDS_MS)
 end
 
 stdin:read_start(function(_, input)
