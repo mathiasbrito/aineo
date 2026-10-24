@@ -4264,7 +4264,10 @@ goes to the nearest spot called `at` that no other agent has taken, walking
 the shortest way over floor (`.`), spots and pieces with `walk_over`, never
 over a wall, a space or a piece that stands on the floor, and takes the
 step's `pose`, facing the spot's way or the step's `facing`. A spot called
-`desk` is the agent's own. An agent has a place from its arrival to its
+`desk` is the agent's own; an agent whose place has no desk in the plan (more
+agents than the plan has desks, as in a small window) goes to the nearest desk
+no other character is at, and, with none, waits as for a spot that other
+agents have. An agent has a place from its arrival to its
 leaving, the lowest number no other agent has, and its desk, its monitor and
 its colour go by it: the agent with the first place has the first desk, the
 first monitor and the first colour. After `for_seconds` from its arrival (a
@@ -4357,7 +4360,11 @@ that takes a seat an agent is on, with `even_if_taken`, angers the agent and
 the agent leaves, if the pack says so by `the_one_moved_plays`.
 
 `states` maps the name of a state to an activity; a state it leaves out takes
-its parent's.
+its parent's. An agent that thinks right after a tool call, while the model
+chooses its next one, goes on with the activity of that call's state where
+the call took it, for the first ten seconds of its thinking, and plays what
+`thinking` maps to after them: a run of short calls at the desk, tests between
+edits, keeps the agent at its desk.
 
                                                        *aineo-office-triggers*
 Triggers ~

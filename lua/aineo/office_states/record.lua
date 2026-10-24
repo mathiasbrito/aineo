@@ -56,6 +56,7 @@ local UNNAMED_CALL = ''
 ---@field reported_at? number when it last called aineo's report tool, as heard now rather than read from the past
 ---@field background_jobs integer how many background jobs it started that have not reported back
 ---@field thinking boolean whether the model is at work on what it was given: a prompt, a thought or a result, since the last call started
+---@field finished_call_state? string the state of the call that finished last, until a prompt starts new work
 ---@field turn_ended boolean whether its last turn ended and nothing began since
 ---@field prompted boolean whether it was given a prompt
 ---@field finished boolean whether it finished: a subagent that is over
@@ -218,6 +219,7 @@ local HEARS = {
     end
     record.open_calls[id] = nil
     record.thinking = true
+    record.finished_call_state = call.state
     if signal.failed and call.created_task then
       record.tasks = tasks.without(record.tasks, call.created_task)
     end
@@ -230,6 +232,7 @@ local HEARS = {
 
   prompt = function(record, _, hearing)
     record.thinking = true
+    record.finished_call_state = nil
     record.turn_ended = false
     if is_main(record) or not record.prompted then
       bring_event(record, hearing, 'getting_a_task', timing.GETTING_A_TASK_SECONDS)

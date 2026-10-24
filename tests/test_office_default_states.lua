@@ -66,24 +66,34 @@ local LAST_SPOT = {
   { 'leaving', 'door' },
 }
 
---- A stage of the default pack `size` big with the main agent in `state`,
+--- A stage of the default pack `size` big with the main agent `agent`,
 --- advanced through `seconds` in quarter seconds, and the place of the agent
 --- in its picture and the spots of the plan.
 ---
 ---@param size integer[]
----@param state string
+---@param agent aineo.office_states.Agent
 ---@param seconds number
 ---@return string nearest the name of the spot nearest to the agent, 'nowhere' when it is not drawn
-local function spot_of_agent_after(size, state, seconds)
+local function spot_of_main_agent_after(size, agent, seconds)
   local pack = default.load_pack()
   local spots = default.spots(pack, size[1], size[2] - LIST_ROWS)
   local stage = default.stage(pack, size[1], size[2])
-  local agents = default.agents(1, state)
+  local agents = { agent }
   for time = 0, seconds, 0.25 do
     stage.advance(agents, time)
   end
   local place = default.where_is(default.pixels(stage.picture(), size[1]), default.AGENT_COLOURS[1])
   return place and default.nearest_spot(spots, place) or 'nowhere'
+end
+
+--- `spot_of_main_agent_after()` for the main agent in `state`.
+---
+---@param size integer[]
+---@param state string
+---@param seconds number
+---@return string nearest
+local function spot_of_agent_after(size, state, seconds)
+  return spot_of_main_agent_after(size, default.agents(1, state)[1], seconds)
 end
 
 --- The cases of `pairs` in each of `sizes`: the size, the state, the spot.
@@ -285,6 +295,14 @@ T['an agent']['reaches 22 of the 24 states in turn on a pass, at the spot each e
     asleep = 'sofa',
     leaving = 'door',
   })
+end
+
+T['an agent thinking right after a call'] = MiniTest.new_set()
+
+T['an agent thinking right after a call']['stays at its desk after its tests ran'] = function()
+  local agent = { id = 'main', state = 'thinking', after_call = 'running_tests' }
+
+  eq(spot_of_main_agent_after(MEDIUM, agent, 20), 'desk')
 end
 
 return T
