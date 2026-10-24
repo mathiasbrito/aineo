@@ -432,6 +432,17 @@ local function endings(fake)
   end, claude.record(fake))
 end
 
+--- Waits until `count` processes of `fake` have ended (`endings()`), at
+--- most `claude.STOP_PATIENCE_MS`.
+---
+---@param fake { record: string }
+---@param count integer
+local function wait_for_endings(fake, count)
+  vim.wait(claude.STOP_PATIENCE_MS, function()
+    return #endings(fake) >= count
+  end, 20)
+end
+
 --- Starts the child's Claude home on `KEPT_ID`, kept for the folder of the
 --- case `name`, with `fake`, and waits until it is ready; returns the
 --- settings overrides it started with.
@@ -550,9 +561,26 @@ T['an attach to a claimed session']['ending once another start has taken its pla
   local settings = start_own_session('claim-attach-overtaken', fake)
   local attach = attach_claimed(settings, claimed_listing(), KEPT_ID)
   claude.wait_for_status(child, 'ready')
-  claude.start_again_after_next_exit(child, settings)
+  child.lua(
+    [[
+      local overrides = ...
+      vim.api.nvim_create_autocmd('CmdwinLeave', {
+        once = true,
+        callback = function()
+          vim.schedule(function()
+            local helper = dofile('tests/helpers/claude_session.lua')
+            require('aineo.claude').start_session(helper.stand_in_settings(overrides))
+          end)
+        end,
+      })
+    ]],
+    { settings }
+  )
+  child.type_keys('q:')
 
   claude.press_keys(child, attach, '\26')
+  wait_for_endings(fake, 2)
+  child.api.nvim_input(':quit<CR>')
   claude.wait_for_starts(fake, 3)
   vim.wait(NO_NEW_SESSION_WINDOW_MS, function()
     return false
@@ -582,8 +610,18 @@ T['an attach to a claimed session']['resumes nothing as Neovim quits, which deta
   attach_claimed(settings, claimed_listing(), KEPT_ID)
   claude.wait_for_status(child, 'ready')
 
+  child.lua([[
+    vim.api.nvim_create_autocmd('VimLeavePre', {
+      callback = function()
+        vim.wait(1000, function()
+          return false
+        end, 20)
+      end,
+    })
+  ]])
+
   claude.quit(child)
-  claude.wait_for_end(fake)
+  wait_for_endings(fake, 2)
   vim.wait(NO_NEW_SESSION_WINDOW_MS, function()
     return false
   end, 20)

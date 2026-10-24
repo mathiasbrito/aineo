@@ -169,7 +169,10 @@ local SEND_REFUSED = {
   level = vim.log.levels.WARN,
 }
 
---- How long a case waits to be sure that no attach followed a claim.
+--- How long a case waits to be sure that no attach followed a claim. An
+--- attach first stops the tab's own Claude Code, which takes longer than
+--- this against the fake: a case whose own Claude Code must stay untouched
+--- also checks that it received no Ctrl-C, which that stop presses at once.
 local NO_ATTACH_WINDOW_MS = 1500
 
 --- Waits `NO_ATTACH_WINDOW_MS`, in which an attach that was going to follow
@@ -193,6 +196,7 @@ T[':Aineo claim {id}']['of a session running in the background while the tab’s
   child.cmd('Aineo send')
 
   eq(entry.messages(child), { REFUSED_WHILE_BUSY, SEND_REFUSED })
+  eq(claude_session.ctrl_c_count(fake), 0)
   eq(claude_session.followed_session_id(child), own)
   eq(#claude_session.wait_for_starts(fake, 0), 1)
 end
@@ -220,6 +224,7 @@ T[':Aineo claim {id}']['of a session running in the background attaches nothing 
   let_an_attach_start()
 
   eq(entry.messages(child), { REFUSED_WHILE_BUSY })
+  eq(claude_session.ctrl_c_count(fake), 0)
   eq(claude_session.followed_session_id(child), own)
   eq(#claude_session.wait_for_starts(fake, 0), 1)
 end
@@ -236,6 +241,7 @@ T[':Aineo claim {id}']['of a session open in another interactive Claude Code, wh
   child.cmd('Aineo send')
 
   eq(entry.messages(child), { SEND_REFUSED })
+  eq(claude_session.ctrl_c_count(fake), 0)
   eq(claude_session.followed_session_id(child), own)
   eq(#claude_session.wait_for_starts(fake, 0), 1)
 end
@@ -299,93 +305,55 @@ T[':Aineo claim {id}']['of the session Claude’s window is attached to leaves t
   eq(claude_session.followed_session_id(child), CLAIMED)
 end
 
---- Opens the child's first tab as `open_listing()` does, on `entries`, but
---- with a `claude.cmd` that holds each `agents --json` run back until the
---- gate opens (`claude_session.list_gate()`). Returns the state directory,
---- the fake, the tab's own session and the gate.
----
----@param name string
----@param entries table[]
----@return string state
----@return { record: string, environment: table<string, string> } fake
----@return string own
----@return { cmd: string[], open: fun(), lists_started: fun(): integer } gate
-local function open_gated(name, entries)
-  local listing = vim.fs.joinpath(fixture.directory(name .. '-listing'), 'agents.json')
-  vim.fn.writefile({ vim.json.encode(entries) }, listing)
-  local gate = claude_session.list_gate(name)
-  local state = tabs.use_own_state(child, name)
-  local fake = tabs.fake(name, 'ready', { AINEO_FAKE_CLAUDE_AGENTS = listing })
-  entry.use_fake(child, fake, { claude = { cmd = gate.cmd } })
-  child.cmd('Aineo open')
-  claude_session.wait_for_status(child, 'ready')
-  return state, fake, claude_session.followed_session_id(child), gate
-end
-
---- Claims `CLAIMED` in the child's current tab and waits until the list of
---- sessions the claim reads has started, held at `gate`.
----
----@param gate { lists_started: fun(): integer }
-local function claim_held_at(gate)
-  local before = gate.lists_started()
-  child.cmd('Aineo claim ' .. CLAIMED)
-  vim.wait(claude_session.PATIENCE_MS, function()
-    return gate.lists_started() > before
-  end, 20)
-end
-
 T[':Aineo claim {id}']['ended before the list of sessions answers attaches nothing'] = function()
-  local _, fake, own, gate = open_gated('claim-attach-moved-on', { background_entry() })
-  claim_held_at(gate)
+  local _, fake, own = open_listing('claim-attach-moved-on', { background_entry() })
 
-  child.cmd('Aineo claim')
-  gate.open()
+  child.lua('vim.cmd(...); vim.cmd("Aineo claim")', { 'Aineo claim ' .. CLAIMED })
   claude_session.wait_for_listings(fake, 1)
   let_an_attach_start()
 
+  eq(claude_session.ctrl_c_count(fake), 0)
   eq(claude_session.followed_session_id(child), own)
   eq(#claude_session.wait_for_starts(fake, 0), 1)
 end
 
 T[':Aineo claim {id}']['in a tab that closes before the list of sessions answers attaches nothing'] = function()
-  local _, fake, _, gate = open_gated('claim-attach-closed', { background_entry() })
+  local _, fake = open_listing('claim-attach-closed', { background_entry() })
   tabs.use_next_fake(child, tabs.fake('claim-attach-closed-second'))
   child.cmd('Aineo tab new')
-  child.lua('vim.g.aineo = vim.tbl_deep_extend("force", vim.g.aineo, { claude = { cmd = ... } })', {
-    gate.cmd,
-  })
   child.cmd('tabfirst')
-  claim_held_at(gate)
+  child.lua('vim.env.AINEO_FAKE_CLAUDE_RECORD = ...', { fake.record })
 
-  child.cmd('1tabclose')
-  gate.open()
+  child.lua('vim.cmd(...); vim.cmd("1tabclose")', { 'Aineo claim ' .. CLAIMED })
   claude_session.wait_for_listings(fake, 1)
+  vim.wait(claude_session.STOP_PATIENCE_MS, function()
+    return #endings(fake) == 1
+  end, 20)
   let_an_attach_start()
 
   eq(#claude_session.wait_for_starts(fake, 0), 1)
 end
 
 T[':Aineo claim {id}']['while Neovim quits before the list of sessions answers attaches nothing'] = function()
-  local _, fake, _, gate = open_gated('claim-attach-quit', { background_entry() })
-  claim_held_at(gate)
-  child.lua(
-    [[
-      local gate_file = ...
-      vim.api.nvim_create_autocmd('VimLeavePre', {
-        callback = function()
-          vim.fn.writefile({}, gate_file)
-          vim.wait(3000, function()
-            return false
-          end, 20)
-        end,
-      })
-    ]],
-    { gate.cmd[4] }
-  )
+  local _, fake = open_listing('claim-attach-quit', { background_entry() })
+  child.lua([[
+    vim.api.nvim_create_autocmd('VimLeavePre', {
+      callback = function()
+        vim.wait(2000, function()
+          return false
+        end, 20)
+      end,
+    })
+  ]])
 
-  claude_session.quit(child)
+  child.lua(
+    'vim.cmd(...); vim.schedule(function() vim.cmd("qall!") end)',
+    { 'Aineo claim ' .. CLAIMED }
+  )
   claude_session.wait_for_listings(fake, 1)
-  claude_session.wait_for_end(fake)
+  vim.wait(claude_session.STOP_PATIENCE_MS, function()
+    return #endings(fake) == 1
+  end, 20)
   let_an_attach_start()
 
   eq(#claude_session.wait_for_starts(fake, 0), 1)
