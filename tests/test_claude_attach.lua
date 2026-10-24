@@ -489,6 +489,33 @@ T['an attach to a claimed session']['that ends by itself resumes the session it 
   })
 end
 
+--- Makes the fake `fake` answer `agents --json` with `entries` from now on,
+--- as Claude Code would once its sessions changed.
+---
+---@param fake { record: string }
+---@param entries table[]
+local function list_from_now_on(fake, entries)
+  local listing = vim.fs.joinpath(vim.fs.dirname(fake.record), 'agents.json')
+  assert(vim.fn.writefile({ vim.json.encode(entries) }, listing) == 0, 'cannot write ' .. listing)
+end
+
+--- The short id the cases give the session they attach to when the session
+--- returned to has `SHORT_ID`.
+local CLAIMED_SHORT_ID = 'c1c2c3c4'
+
+T['an attach to a claimed session']['that ends by itself attaches to the session it returns to when a background host runs that one by then'] = function()
+  local fake = fake_listing('claim-attach-own-in-background', {})
+  local settings = start_own_session('claim-attach-own-in-background', fake)
+  local attach = attach_claimed(settings, claimed_listing({ short_id = CLAIMED_SHORT_ID }), KEPT_ID)
+  claude.wait_for_status(child, 'ready')
+  list_from_now_on(fake, { background_entry() })
+
+  claude.press_keys(child, attach, '\26')
+  local returned = claude.start_arguments(fake, 3)
+
+  eq(returned, { 'attach', SHORT_ID })
+end
+
 T['an attach to a claimed session']['replaced by a start of aineo’s resumes nothing more once it has detached'] = function()
   local fake = claude.fake('claim-attach-replaced', 'ready')
   local settings = start_own_session('claim-attach-replaced', fake)
@@ -587,6 +614,55 @@ T['an attach to a claimed session']['ending once another start has taken its pla
   end, 20)
 
   eq(#claude.wait_for_starts(fake, 0), 3)
+end
+
+T['an attach to a claimed session']['ending once another start has taken its place, whose swap an autocommand of the user’s broke, resumes nothing over that start'] = function()
+  local fake = claude.fake('claim-attach-overtaken-broken', 'ready')
+  local settings = start_own_session('claim-attach-overtaken-broken', fake)
+  local attach = attach_claimed(settings, claimed_listing(), KEPT_ID)
+  claude.wait_for_status(child, 'ready')
+  child.lua(
+    [[
+      local overrides = ...
+      vim.api.nvim_create_autocmd('CmdwinLeave', {
+        once = true,
+        callback = function()
+          vim.schedule(function()
+            local helper = dofile('tests/helpers/claude_session.lua')
+            local settings = helper.stand_in_settings(overrides)
+            settings.new_session = true
+            vim.api.nvim_create_autocmd('BufWinEnter', {
+              callback = function(event)
+                if vim.b[event.buf].terminal_job_id and not _G.swap_broken then
+                  _G.swap_broken = true
+                  error('a user autocommand raising as the terminals are swapped')
+                end
+              end,
+            })
+            _G.overtaking = { pcall(require('aineo.claude').start_session, settings) }
+            _G.overtaking_session = require('aineo.claude').session_id()
+          end)
+        end,
+      })
+    ]],
+    { settings }
+  )
+  child.type_keys('q:')
+
+  claude.press_keys(child, attach, '\26')
+  wait_for_endings(fake, 2)
+  vim.wait(claude.PATIENCE_MS, function()
+    return child.lua_get("#vim.api.nvim_get_autocmds({ event = 'CmdwinLeave' })") >= 2
+  end, 20)
+  child.api.nvim_input(':quit<CR>')
+  claude.wait_for_starts(fake, 3)
+  vim.wait(NO_NEW_SESSION_WINDOW_MS, function()
+    return false
+  end, 20)
+
+  eq(child.lua_get('_G.overtaking[1]'), false)
+  eq(child.lua_get('vim.api.nvim_buf_is_valid(...)', { attach }), true)
+  eq(claude.followed_session_id(child), child.lua_get('_G.overtaking_session'))
 end
 
 T['an attach to a claimed session']['resumes nothing once its terminal was wiped, which hangs it up'] = function()

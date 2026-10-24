@@ -374,7 +374,99 @@ T[':Aineo claim {id}']['in a Neovim whose Claude Code never started reads no lis
   eq(entry.messages(child), {})
 end
 
+--- Makes the fake of the case `name` (`open_listing()`) answer `agents
+--- --json` with `entries` from now on, as Claude Code would once its
+--- sessions changed.
+---
+---@param name string
+---@param entries table[]
+local function list_from_now_on(name, entries)
+  fixture.write(name .. '-listing/agents.json', { vim.json.encode(entries) })
+end
+
+--- The short id of the tab's own session in the cases where a background
+--- host runs it by the time the claim ends.
+local OWN_SHORT_ID = 'ffffffff'
+
+--- The session a `/clear` of the tab's own Claude Code moves it to, in the
+--- case where it moves while the list of sessions is read.
+local CLEARED = 'eeeeeeee-eeee-4eee-aeee-eeeeeeeeeeee'
+
+T[':Aineo claim {id}']['of a session running in the background returns to the session the tab’s own Claude Code switched to while the list was read'] = function()
+  local listing = vim.fs.joinpath(fixture.directory('claim-attach-switched-listing'), 'agents.json')
+  vim.fn.writefile({ vim.json.encode({ background_entry() }) }, listing)
+  local gate = claude_session.list_gate('claim-attach-switched')
+  local state = tabs.use_own_state(child, 'claim-attach-switched')
+  local fake = tabs.fake('claim-attach-switched', 'ready', { AINEO_FAKE_CLAUDE_AGENTS = listing })
+  entry.use_fake(child, fake, { claude = { cmd = gate.cmd } })
+  child.cmd('Aineo open')
+  claude_session.wait_for_status(child, 'ready')
+  local own = claude_session.followed_session_id(child)
+  child.cmd('Aineo claim ' .. CLAIMED)
+  vim.wait(claude_session.PATIENCE_MS, function()
+    return gate.lists_started() == 1
+  end, 20)
+
+  child.lua(
+    [[
+      local claude = require('aineo.claude')
+      local own, cleared = ...
+      claude.receive_session_event('SessionEnd', own, 'clear', claude.start_token(), nil, nil, nil)
+      claude.receive_session_event('SessionStart', cleared, 'clear', claude.start_token(), nil, nil, nil)
+    ]],
+    { own, CLEARED }
+  )
+  vim.wait(claude_session.PATIENCE_MS, function()
+    return claude_session.followed_session_id(child) == CLEARED
+  end, 20)
+  gate.open()
+  claude_session.wait_for_starts(fake, 2)
+  claude_session.wait_for_status(child, 'ready')
+  local kept = tabs.kept_tab_list(state, child.fn.getcwd())
+  child.cmd('Aineo claim')
+  local resumed = claude_session.start_arguments(fake, 3)
+
+  eq(claude_session.words_after(resumed, '--resume'), { CLEARED })
+  eq(kept, { sessions = { CLEARED }, current = 1, claims = { [CLEARED] = CLAIMED } })
+end
+
 T[':Aineo claim'] = MiniTest.new_set()
+
+T[':Aineo claim']['with no word, after the attach ended by itself and before the own session resumed in its place is ready, warns that Claude Code is not ready'] = function()
+  local _, fake, own = open_listing('claim-attach-return-unready', { background_entry() })
+  claim_until_attached(fake)
+  child.lua('vim.env.AINEO_FAKE_CLAUDE_MODE = "trust"')
+
+  claude_session.press_keys(child, child.lua_get(CLAUDE_TERMINAL), '\26')
+  local resumed = claude_session.start_arguments(fake, 3)
+  vim.wait(claude_session.PATIENCE_MS, function()
+    return claimant_of(own) == child.v.servername
+  end, 20)
+  child.lua('_G.entry_test_messages = {}')
+  child.cmd('Aineo claim')
+
+  eq(claude_session.words_after(resumed, '--resume'), { own })
+  eq(entry.messages(child), {
+    {
+      message = 'aineo: Claude Code is not ready yet; nothing claimed',
+      level = vim.log.levels.WARN,
+    },
+  })
+end
+
+T[':Aineo claim']['with no word, while attached, attaches to the tab’s own session when a background host runs it by then, rather than resuming it a second time'] = function()
+  local _, fake, own = open_listing('claim-attach-own-moved', { background_entry() })
+  claim_until_attached(fake)
+  list_from_now_on('claim-attach-own-moved', {
+    background_entry(),
+    background_entry({ id = OWN_SHORT_ID, sessionId = own }),
+  })
+
+  child.cmd('Aineo claim')
+  local returned = claude_session.start_arguments(fake, 3)
+
+  eq(vim.list_slice(returned, 1, 2), { 'attach', OWN_SHORT_ID })
+end
 
 T[':Aineo claim']['with no word, while attached, when the tab’s own session cannot be started, stays attached and resumes it at the next try'] = function()
   local _, fake, own = open_listing('claim-attach-resume-fails', { background_entry() })
@@ -420,16 +512,29 @@ end
 
 T['a fork of the tab’s session'] = MiniTest.new_set()
 
-T['a fork of the tab’s session']['that runs in the background, once the tab follows it, has Claude’s window attached to it'] = function()
-  local state, fake, own = open_listing('claim-attach-fork', { background_entry() })
-
+--- Tells the child's Claude home of a `SessionStart` of `id` (`CLAIMED` by
+--- default) from another Claude Code process (pid 1) under the token of
+--- `token` (the tab's start's by default), as a fork Claude Code's
+--- background service runs tells it.
+---
+---@param id? string
+---@param token? string
+local function follow_fork(id, token)
   child.lua(
     [[
       local claude = require('aineo.claude')
-      claude.receive_session_event('SessionStart', ..., 'startup', claude.start_token(), nil, 1, nil)
+      local id, token = ...
+      local from = token ~= vim.NIL and token or claude.start_token()
+      claude.receive_session_event('SessionStart', id, 'startup', from, nil, 1, nil)
     ]],
-    { CLAIMED }
+    { id or CLAIMED, token or vim.NIL }
   )
+end
+
+T['a fork of the tab’s session']['that runs in the background, once the tab follows it, has Claude’s window attached to it'] = function()
+  local state, fake, own = open_listing('claim-attach-fork', { background_entry() })
+
+  follow_fork()
   claude_session.wait_for_starts(fake, 2)
   claude_session.wait_for_status(child, 'ready')
 
@@ -470,10 +575,27 @@ end
 
 T['the next start'] = MiniTest.new_set()
 
+--- The first two words of each of `fake`'s first `count` starts, once it has
+--- started that many times — waiting for that at most
+--- `claude_session.STOP_PATIENCE_MS`, as long as a start, a stop by its keys
+--- and the next start take — or as many as it has by then.
+---
+---@param fake { record: string }
+---@param count integer
+---@return string[][]
+local function first_words_of_starts(fake, count)
+  vim.wait(claude_session.STOP_PATIENCE_MS, function()
+    return #claude_session.wait_for_starts(fake, 0) >= count
+  end, 20)
+  return vim.tbl_map(function(start)
+    return { start.argv[1], start.argv[2] }
+  end, vim.list_slice(claude_session.wait_for_starts(fake, 0), 1, count))
+end
+
 --- The session the folder's list keeps for the tab in the restart cases.
 local KEPT_OWN = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 
-T['the next start']['takes a kept claim of a session still running in the background up again, Claude’s window attached to it'] = function()
+T['the next start']['takes a kept claim of a session still running in the background up again: its own Claude Code launches, is ready, is stopped by its keys, and Claude’s window attaches'] = function()
   local listing = vim.fs.joinpath(fixture.directory('claim-attach-restart-listing'), 'agents.json')
   vim.fn.writefile({ vim.json.encode({ background_entry() }) }, listing)
   local state = tabs.use_own_state(child, 'claim-attach-restart')
@@ -494,14 +616,74 @@ T['the next start']['takes a kept claim of a session still running in the backgr
   entry.use_fake(child, fake)
 
   child.cmd('Aineo open')
-  claude_session.wait_for_starts(fake, 2)
+  local starts = first_words_of_starts(fake, 2)
   claude_session.wait_for_status(child, 'ready')
 
+  eq(starts, { { '--resume', KEPT_OWN }, { 'attach', SHORT_ID } })
+  eq(endings(fake), { { ended = 'keys', code = 0 } })
   eq(vim.list_slice(tabs.start_arguments_in_tab(child, fake, 1), 1, 2), { 'attach', SHORT_ID })
   eq(
     tabs.kept_tab_list(state, folder),
     { sessions = { KEPT_OWN }, current = 1, claims = { [KEPT_OWN] = CLAIMED } }
   )
+end
+
+--- What reaches the child's tab under `token`, a start token: whether a call
+--- of a run tool is answered (`aineo.mcp`'s `receive_run_call()`), and the
+--- sessions whose permission wait reaches the tab's office
+--- (`aineo.entry.office`'s `take_permission_wait()`, noted as it is called).
+---
+---@param token string
+---@return { run_answered: boolean, waits: string[] }
+local function what_reaches_the_tab(token)
+  local answer = child.lua_get(
+    "require('aineo.mcp').receive_run_call({ tool = 'run_output', arguments = { name = 'nothing-runs' } }, ...)",
+    { token }
+  )
+  child.lua([[
+    _G.waits_taken = {}
+    local office = require('aineo.entry.office')
+    local take = office.take_permission_wait
+    office.take_permission_wait = function(tab, session_id, agent_id)
+      table.insert(_G.waits_taken, session_id)
+      return take(tab, session_id, agent_id)
+    end
+  ]])
+  child.lua(
+    "local token, session = ...; require('aineo.claude').receive_permission_wait(token, session, nil)",
+    { token, CLAIMED }
+  )
+  vim.wait(claude_session.PATIENCE_MS, function()
+    return #child.lua_get('_G.waits_taken') > 0
+  end, 20)
+  return { run_answered = type(answer) == 'table', waits = child.lua_get('_G.waits_taken') }
+end
+
+T['a fork of the tab’s session']['once Claude’s window is attached to it, still reaches the tab under the token of the tab’s own start: run calls and permission waits'] = function()
+  local _, fake = open_listing('claim-attach-fork-token', { background_entry() })
+  local token = child.lua_get("require('aineo.claude').start_token()")
+
+  follow_fork()
+  claude_session.wait_for_starts(fake, 2)
+  claude_session.wait_for_status(child, 'ready')
+
+  eq(vim.list_slice(claude_session.start_arguments(fake, 2), 1, 2), { 'attach', SHORT_ID })
+  eq(what_reaches_the_tab(token), { run_answered = true, waits = { CLAIMED } })
+end
+
+T['a fork of the tab’s session']['forked again while Claude’s window is attached to it is followed, under the token of the tab’s own start, and attached to in place'] = function()
+  local other = background_entry({ id = OTHER_SHORT_ID, sessionId = OTHER })
+  local _, fake = open_listing('claim-attach-fork-again', { background_entry(), other })
+  local token = child.lua_get("require('aineo.claude').start_token()")
+  follow_fork()
+  claude_session.wait_for_starts(fake, 2)
+  claude_session.wait_for_status(child, 'ready')
+
+  follow_fork(OTHER, token)
+  local attached = claude_session.start_arguments(fake, 3)
+
+  eq(vim.list_slice(attached, 1, 2), { 'attach', OTHER_SHORT_ID })
+  eq(child.lua_get('vim.b[' .. CLAUDE_TERMINAL .. '].aineo_session_attached'), true)
 end
 
 --- How long after its screens are drawn the attached session of the cases
