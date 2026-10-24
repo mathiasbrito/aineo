@@ -762,7 +762,9 @@ function M.new(identity)
   --- when `carry` asks for it and `buffer` holds text: in place of that
   --- session's draft (`'replace'`), or after it and a blank line (`'merge'`).
   --- A session's draft that cannot be read is never replaced: nothing is
-  --- written then, and the follow tells it (`replace_with_kept_draft()`).
+  --- written then, and the follow tells it (`replace_with_kept_draft()`). A
+  --- carry that cannot be written is told each time (`warn()`): the user
+  --- chose it, and Input shows the session's draft in its place.
   ---
   ---@param buffer integer
   ---@param carry? 'replace'|'merge'
@@ -780,7 +782,7 @@ function M.new(identity)
     end
     local written, failure = pcall(write_draft, kept_draft_file(), text)
     if not written then
-      warn_once('write', failure)
+      warn('aineo: ' .. failure)
     end
   end
 
@@ -973,7 +975,7 @@ function M.new(identity)
   --- draft is that text — and the session followed until then keeps the
   --- text as its own draft too. An empty buffer carries nothing and is given
   --- the session's draft, as a follow without it does; so is a buffer whose
-  --- carry cannot be written, which is told once per home as every save is,
+  --- carry cannot be written, which is told each time,
   --- and one whose session's draft cannot be read, which no carry replaces.
   --- A carry told before `set_draft_environment()`, or with the session
   --- followed already, carries nothing.
@@ -1017,8 +1019,9 @@ function M.new(identity)
       move_directory_draft_once()
     end
     for buffer in pairs(kept) do
+      local carries = carry ~= nil and not is_empty(buffer)
       carry_into_followed_draft(buffer, carry)
-      replace_with_kept_draft(buffer, first_follow or carry ~= nil)
+      replace_with_kept_draft(buffer, first_follow or carries)
     end
   end
 

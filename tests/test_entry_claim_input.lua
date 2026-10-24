@@ -303,6 +303,69 @@ T[':Aineo claim {id}']['answered once its tab page has closed claims nothing and
   })
 end
 
+--- The messages the child has told the user at `level` since its start.
+---
+---@param level integer
+---@return string[]
+local function messages_at(level)
+  return child.lua_get(
+    [[(function(level)
+      return vim.iter(_G.entry_test_messages):filter(function(told)
+        return told.level == level
+      end):map(function(told)
+        return told.message
+      end):totable()
+    end)(...)]],
+    { level }
+  )
+end
+
+T[':Aineo claim {id}']['with the question cancelled while Input’s text cannot be saved says the text is in Input only'] = function()
+  local state, own = open_until_ready('entry-claim-input-unsaved')
+  leave_draft(state, CLAIMED, { CLAIMED_DRAFT })
+  local drafts = vim.fs.dirname(draft_file(state, CLAIMED))
+  entry.set_input(child, { TYPED })
+  vim.uv.fs_chmod(drafts, tonumber('500', 8))
+  MiniTest.finally(function()
+    vim.uv.fs_chmod(drafts, tonumber('700', 8))
+  end)
+  answer_questions_with(nil)
+
+  child.cmd('Aineo claim ' .. CLAIMED)
+  vim.uv.fs_chmod(drafts, tonumber('700', 8))
+
+  eq({
+    input = child.lua_get(INPUT_LINES),
+    own = draft_lines(state, own),
+    told = messages_at(vim.log.levels.INFO),
+  }, {
+    input = { TYPED },
+    own = nil,
+    told = { "aineo: Input's text was not carried over, nor saved; it is in Input only" },
+  })
+end
+
+T[':Aineo claim {id}']['of the session Input follows already asks nothing and tells nothing, a change not saved yet included'] = function()
+  local state = open_until_ready('entry-claim-input-again')
+  leave_draft(state, CLAIMED, { CLAIMED_DRAFT })
+  answer_questions_with('merge')
+  child.cmd('Aineo claim ' .. CLAIMED)
+  entry.set_input(child, { CLAIMED_DRAFT, 'and more typed' })
+  answer_questions_with(nil)
+
+  child.cmd('Aineo claim ' .. CLAIMED)
+
+  eq({
+    questions = #questions(),
+    input = child.lua_get(INPUT_LINES),
+    messages = entry.messages(child),
+  }, {
+    questions = 0,
+    input = { CLAIMED_DRAFT, 'and more typed' },
+    messages = {},
+  })
+end
+
 T[':Aineo claim'] = MiniTest.new_set()
 
 T[':Aineo claim']['with no word, from a claim, shows the own session’s draft, carrying nothing and asking nothing'] = function()
@@ -329,6 +392,38 @@ T[':Aineo claim']['with no word, from a claim, shows the own session’s draft, 
 end
 
 T['a session another Claude Code process starts'] = MiniTest.new_set()
+
+--- A session id of the form Claude Code gives, for a fork of the tab's own
+--- session.
+local FORK = '7d1f0b9e-3c2a-4e5f-9a8b-6c4d2e1f0a3b'
+
+T['a session another Claude Code process starts']['under the tab’s start token, while a claim of another session holds, starts from its own draft and carries nothing'] = function()
+  local state = open_until_ready('entry-claim-input-fork-claimed')
+  leave_draft(state, CLAIMED, { CLAIMED_DRAFT })
+  leave_draft(state, FORK, { 'Kept for the fork' })
+  answer_questions_with('merge')
+  child.cmd('Aineo claim ' .. CLAIMED)
+
+  child.lua(
+    [[
+      local claude = require('aineo.claude')
+      claude.receive_session_event('SessionStart', ..., 'startup', claude.start_token(), nil, 1, nil)
+    ]],
+    { FORK }
+  )
+
+  eq({
+    questions = #questions(),
+    input = child.lua_get(INPUT_LINES),
+    fork = draft_lines(state, FORK),
+    claimed = draft_lines(state, CLAIMED),
+  }, {
+    questions = 0,
+    input = { 'Kept for the fork' },
+    fork = { 'Kept for the fork' },
+    claimed = { CLAIMED_DRAFT },
+  })
+end
 
 T['a session another Claude Code process starts']['under the tab’s start token takes Input’s text in place of its draft, which the session left keeps, asking nothing'] = function()
   local state, own = open_until_ready('entry-claim-input-fork')
