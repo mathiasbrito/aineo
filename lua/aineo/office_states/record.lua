@@ -56,7 +56,7 @@ local UNNAMED_CALL = ''
 ---@field reported_at? number when it last called aineo's report tool, as heard now rather than read from the past
 ---@field background_jobs integer how many background jobs it started that have not reported back
 ---@field thinking boolean whether the model is at work on what it was given: a prompt, a thought or a result, since the last call started
----@field finished_call_state? string the state of the call that finished last, until a prompt starts new work
+---@field finished_call_state? string the state of the call that finished last, until a prompt starts new work or the turn ends
 ---@field turn_ended boolean whether its last turn ended and nothing began since
 ---@field prompted boolean whether it was given a prompt
 ---@field finished boolean whether it finished: a subagent that is over
@@ -171,6 +171,7 @@ local function end_turn(record)
   record.open_calls = {}
   record.thinking = false
   record.turn_ended = true
+  record.finished_call_state = nil
 end
 
 --- What each kind of signal does to the record of the agent that gave it.
