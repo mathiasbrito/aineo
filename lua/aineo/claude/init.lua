@@ -1684,6 +1684,18 @@ function M.list_sessions(command, folder, on_done)
   agents.list_sessions(command, folder, on_done)
 end
 
+--- The entry of `sessions`, as `list_sessions()` delivers them, that holds
+--- the session `id` running in Claude Code's background service with a
+--- short id `claude attach` takes (`agents.running_in_background()`); nil
+--- when none does.
+---
+---@param sessions aineo.claude.ListedSession[]
+---@param id string
+---@return aineo.claude.ListedSession?
+function M.background_session(sessions, id)
+  return agents.running_in_background(sessions, id)
+end
+
 --- Where `listed`, as `list_sessions()` delivers it, stands for a pick,
 --- given the tab pages that show a session and the folder listed
 --- (`agents.standing()`).
