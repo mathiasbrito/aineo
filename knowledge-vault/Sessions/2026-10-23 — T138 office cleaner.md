@@ -1,7 +1,7 @@
 # 2026-10-23 — T138 office cleaner
 
 **Author:** the repository's maintainer, with Claude — implementer agent (`neovim-lua-developer`)
-**Branch:** `bugfix/t138-office-cleaner-linear` (from `feature/t123-office-authors`, rebuilt from `bugfix/t138-office-cleaner` after the space-station pack landed) · **Pull request:** into `feature/t123-office-authors` (number recorded after the merge)
+**Branch:** `bugfix/t138-office-cleaner-linear` (from `feature/t123-office-authors`, rebuilt from `bugfix/t138-office-cleaner` after the space-station pack landed) · **Pull request:** into `feature/t123-office-authors` (#350)
 
 A small fix (D30) of the office screensaver (T123): the cat's mess and puddles piled up for ever while every agent worked, because only an idle agent was sent to clean.
 

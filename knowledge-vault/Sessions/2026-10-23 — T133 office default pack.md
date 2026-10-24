@@ -1,7 +1,7 @@
 # 2026-10-23 — T133 office default pack
 
 **Author:** the repository's maintainer, with Claude — implementer agent (`neovim-lua-developer`)
-**Branch:** `feature/t133-default-pack-3` (continues `feature/t133-default-pack-2` and `feature/t133-default-pack`, built on `feature/t123-office` after T130 landed) · **Pull request:** into `feature/t123-office`, replacing the pull request of the second branch (number recorded after the merge)
+**Branch:** `feature/t133-default-pack-3` (continues `feature/t133-default-pack-2` and `feature/t133-default-pack`, built on `feature/t123-office` after T130 landed) · **Pull request:** into `feature/t123-office`, replacing the pull request of the second branch (#340)
 
 A regular packet of the office screensaver (T123; D26 applies). The default pack is complete: the approved mock's art converted by a converter that ran once, a floor plan of a wall, desk rows with monitors, a lounge and a strip with a second lounge and a table-tennis table, an activity for each of the 24 states, the random life of idle and waiting agents, and the cat with what it leaves.
 

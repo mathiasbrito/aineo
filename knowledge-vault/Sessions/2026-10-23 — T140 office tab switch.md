@@ -1,7 +1,7 @@
 # 2026-10-23 — T140 office tab switch
 
 **Author:** the repository's maintainer, with Claude — implementer agent (`neovim-lua-developer`)
-**Branch:** `bugfix/t140-office-tab-switch` (from `feature/t123-office-authors`) · **Pull request:** into `feature/t123-office-authors` (number recorded after the merge)
+**Branch:** `bugfix/t140-office-tab-switch` (from `feature/t123-office-authors`) · **Pull request:** into `feature/t123-office-authors` (#354)
 
 A small fix (D30) of the office screensaver (T123): an office that shows was gone after the user went to another tab page and came back (D115).
 
