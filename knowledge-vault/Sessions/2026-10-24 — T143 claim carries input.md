@@ -72,6 +72,46 @@ Mutants, each one literal edit applied to a pristine copy, run alone, restored (
 | R1 restart reclaim asks | `claim_session_carrying(kept_claim, carry_nothing)` → `…, choose_carry_of_input)` | reopen case (after the folder draft was planted) |
 | G1 late answer claims | drop the `is_released` guard in the chooser's callback | entry late-answer case |
 
+The table above was measured at the first round's head. Two of its edits (M3, M6) touched lines the fix round changed; F4a and F4b below replace them.
+
+## Fix round (review of PR #361; A615)
+
+The review (attack and test integrity, at `xhigh`) found seven faults. A615, the orchestrator's ruling, has every one fixed:
+
+1. **Finding 1, a regression.** Every claim and fork passed `keep_same_text`, so an empty Input that followed a session with no draft got nothing put in it and kept its undo history. A `u` then brought back the prompt just sent, which was saved as the claimed session's draft. The fix is the reviewer's measured one: only a follow that carries text (`carry ~= nil and not is_empty(buffer)`) keeps Input as it is.
+2. **Finding 2.** Claiming again the session Input already follows asked the question, because that session's file lags Input by up to a second. Esc then told a false message. Now `claim.claimed == claim.left` carries at once.
+3. **Finding 3.** Esc named the left session's draft even when the follow could not save the text there. When Input still differs from the claimed draft after the follow (the swap did not land), the message now says the text is in Input only (`where_text_stayed()`).
+4. **Finding 4 (A615).** A fork carries Input only while no claim of another session holds. Input then holds that session's text, which the fork does not continue. A614's reason holds only for the parent.
+5. **Finding 5.** Every refused carry is told (`warn()`), not only the first in a home.
+6. **Finding 6.** Replace keeping the cursor and undo is pinned.
+7. **Finding 7.** A merge into an empty draft gives just the text; this is pinned.
+
+The help's *aineo-draft-carry* says each of these. One test was renamed from "tells it once" to "tells it".
+
+**Seen red**, each for the intended reason:
+- draft, empty Input's undo: `u` gave "The prompt I sent". The reviewer's probe `rev361-p1` failed both of its cases the same way.
+- entry, re-claim: asked, and gave the Esc message.
+- entry, Esc with an unsaved text: the message named the own session. A first run failed on a `...` in my helper, which is not a valid red; I fixed the helper and ran it again.
+- draft, refused again: the second carry was not told. A first build refused session b only after the home had taken its file writes, so that red was not trustworthy; both refusals are now in place before the environment is given.
+- entry, fork under a claim: the claimed draft was carried into the fork.
+
+**Arrived green**, pins of behaviour already there:
+- Replace's cursor and undo, killed by MA.
+- Merge into an empty draft, killed by MD.
+
+**Mutants** (each run alone from a pristine copy at ce0e8bc5; every kill is an equality assertion):
+
+| Mutant | Literal edit | Killed by |
+|---|---|---|
+| MA (the reviewer's) | `replace_with_kept_draft(buffer, first_follow or carries)` → `replace_with_kept_draft(buffer, first_follow)` | the draft Replace cursor-and-undo case (it still passes `test_entry_claim_input`) |
+| MD (the reviewer's) | `if carry == 'merge' and draft and draft ~= '' then` → `if carry == 'merge' and draft then` | the draft merge-into-empty case |
+| F1 | `first_follow or carries` → `first_follow or carry ~= nil` | the draft empty-Input undo case |
+| F2 | drop `claim.claimed == claim.left or` | the entry re-claim case |
+| F3 | `if draft.input_differs_from_draft(claim.claimed) then` in `where_text_stayed()` → `if false then` | the entry unsaved-Esc case |
+| F4a | `local carry = not holds_other_claim() and 'replace' or nil` → `local carry = 'replace'` | the entry fork-under-claim case |
+| F4b | the same line → `local carry = nil` | the entry fork case |
+| F5 | `warn('aineo: ' .. failure)` in the carry → `warn_once('write', failure)` | the draft refused-again case |
+
 ## Open threads
 
 - A Merge of two drafts that end without a newline is not reachable: drafts are written by `draft_of()`, each line ending in one.
