@@ -134,14 +134,14 @@ end
 
 T['a step that goes to its own desk'] = MiniTest.new_set()
 
-T['a step that goes to its own desk']['goes to a desk no one is at when the plan lacks the agent’s own'] = function()
+T['a step that goes to its own desk']['does not go to the desk of an agent that is away but not idle when the plan lacks the agent’s own'] = function()
   local stage = stage_of_a_visit('# plan\n \n a.d....\n', DESKS_LEGEND, 8, 'anywhere')
   local crew = scene.agents_in('standing', 'working')
   stage.advance(crew, 0)
 
   stage.advance(crew, 3)
 
-  eq(where_the_two_are(stage, 8), { '0,0', '2,0' })
+  eq(where_the_two_are(stage, 8), { '0,0', '1,0' })
 end
 
 T['a step that goes to an idle agent’s desk'] = MiniTest.new_set()
