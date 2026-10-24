@@ -446,6 +446,47 @@ T['a claim']['kept in the list is taken again at the next start while a process 
   })
 end
 
+T['a claim']['kept in the list and taken again at the next start shows its session’s draft in Input, asking nothing and carrying nothing'] = function()
+  local state, folder = reopening_setup(
+    'reopen-claim-draft',
+    { sessions = { FIRST }, current = 1, claims = { [FIRST] = THIRD } },
+    FIRST
+  )
+  record_process_on(state, THIRD, vim.fn.getpid())
+  local own_draft, claimed_draft = draft_file(state, FIRST), draft_file(state, THIRD)
+  local folder_draft = vim.fs.joinpath(state, 'aineo', 'drafts', vim.fn.sha256(folder) .. '.txt')
+  vim.fn.mkdir(vim.fs.dirname(own_draft), 'p')
+  vim.fn.writefile({ 'the own session’s draft' }, own_draft)
+  vim.fn.writefile({ 'the claimed session’s draft' }, claimed_draft)
+  vim.fn.writefile({ 'typed before any session' }, folder_draft)
+  child.lua([[
+    _G.questions = 0
+    vim.ui.select = function(_, _, on_choice)
+      _G.questions = _G.questions + 1
+      on_choice('replace')
+    end
+  ]])
+
+  child.cmd('Aineo open')
+  tabs.entries_once(state, child, function(entries)
+    return entries[tabs.FIRST_TAB] ~= nil and entries[tabs.FIRST_TAB].session == THIRD
+  end)
+
+  eq({
+    questions = child.lua_get('_G.questions'),
+    input = input_lines_of_tab(1),
+    own = vim.fn.readfile(own_draft),
+    claimed = vim.fn.readfile(claimed_draft),
+    folder = vim.fn.readfile(folder_draft),
+  }, {
+    questions = 0,
+    input = { 'the claimed session’s draft' },
+    own = { 'the own session’s draft' },
+    claimed = { 'the claimed session’s draft' },
+    folder = { 'typed before any session' },
+  })
+end
+
 --- Writes a transcript of `session` where Claude Code keeps those of the
 --- child's folder: `projects/<the folder, every character but a letter or a
 --- digit a dash>/<session>.jsonl` under the child's Claude Code configuration
