@@ -52,10 +52,12 @@ local M = {}
 --- its process has ended, the process's exit code and when it ended; and
 --- when it launched, both by `vim.uv.hrtime()`; and whether its home's stop
 --- has stopped it (`stop_running_session()`); and the pid of its own Claude
---- Code once its first hook named it (`note_own_claude_pid()`). A start with
+--- Code once its first hook named it (`note_own_claude_pid()`); and, for an
+--- attach to a claimed session, the session resumed in its place once it
+--- ends by itself (`return_to`, `return_after_attach()`). A start with
 --- no job yet waits for the list of the folder's sessions
 --- (`launch_once_listed()`).
----@alias aineo.claude.Start { buffer: integer, command: string[], job: integer?, choice: aineo.claude.SessionChoice, settings: aineo.claude.Settings, start_token: string, settings_unread: boolean, attached: boolean?, followed: string, unpaired: aineo.claude.SessionEvent[], told_elsewhere: table<string, true>, ready: boolean?, ready_told: boolean?, exit_code: integer?, launched_at: number?, ended_at: number?, stopped: boolean?, claude_pid: integer? }
+---@alias aineo.claude.Start { buffer: integer, command: string[], job: integer?, choice: aineo.claude.SessionChoice, settings: aineo.claude.Settings, start_token: string, settings_unread: boolean, attached: boolean?, return_to: string?, followed: string, unpaired: aineo.claude.SessionEvent[], told_elsewhere: table<string, true>, ready: boolean?, ready_told: boolean?, exit_code: integer?, launched_at: number?, ended_at: number?, stopped: boolean?, claude_pid: integer? }
 
 --- One Claude Code session home: what one copy of this module keeps, its
 --- last start (`new()`).
@@ -697,7 +699,9 @@ local ATTACH_FAILED_NOTE = 'aineo: the attach failed; resuming the session'
 --- closed, when it is open — and tells the user (`ATTACH_FAILED_NOTE`). It
 --- resumes none once Neovim is quitting (`v:exiting` set), once another
 --- start has made a session of its own, nor when the terminal was wiped,
---- which hangs the attach up.
+--- which hangs the attach up; nor for an attach that returns to a session
+--- of its own when it ends (`return_after_attach()`), since another process
+--- runs the session it attached to.
 ---
 ---@param home aineo.claude.Home
 ---@param settings aineo.claude.Settings
@@ -705,6 +709,7 @@ local ATTACH_FAILED_NOTE = 'aineo: the attach failed; resuming the session'
 local function resume_after_failed_attach(home, settings, ended)
   if
     not ended.attached
+    or ended.return_to
     or ended.exit_code == 0
     or ended.ended_at - ended.launched_at > ATTACH_FAILURE_WINDOW_NS
   then
@@ -724,11 +729,49 @@ local function resume_after_failed_attach(home, settings, ended)
   end)
 end
 
+--- What aineo tells the user when an attach that returns to a session
+--- (`attach_session()`) has ended by itself and that session is resumed in
+--- its place. One line of at most 60 characters.
+local ATTACH_ENDED_NOTE = 'aineo: the attach ended; resuming the tab’s own session'
+
+--- When `ended`, an attach that returns to a session once it ends
+--- (`attach_session()`), has ended by itself — its session ended, a Ctrl+Z,
+--- a hangup, a failure — resumes that session in its place
+--- (`start_in_place_of_ended_session()`), from a scheduled callback — once
+--- the command-line window has closed, when it is open — and tells the user
+--- (`ATTACH_ENDED_NOTE`). It resumes none once Neovim is quitting
+--- (`v:exiting` set), once the home's stop has stopped the attach — a start
+--- of aineo's replacing it, the tab's close — or another start has made a
+--- session of its own, nor when the terminal was wiped, which hangs the
+--- attach up.
+---
+---@param home aineo.claude.Home
+---@param settings aineo.claude.Settings
+---@param ended table
+local function return_after_attach(home, settings, ended)
+  if not ended.return_to then
+    return
+  end
+  schedule_outside_command_line_window(function()
+    if
+      vim.v.exiting ~= vim.NIL
+      or ended.stopped
+      or home.session ~= ended
+      or not vim.api.nvim_buf_is_valid(ended.buffer)
+    then
+      return
+    end
+    vim.notify(ATTACH_ENDED_NOTE, vim.log.levels.INFO)
+    start_in_place_of_ended_session(home, settings, { id = ended.return_to, resumed = true })
+  end)
+end
+
 --- Runs Claude Code in the terminal buffer of `prepared` (`launch()`); when
 --- it then finds no conversation to resume, a new session takes its place
---- (`start_in_place_of_no_conversation()`), and when an attach does not take,
+--- (`start_in_place_of_no_conversation()`); when an attach does not take,
 --- the session it was to attach to is resumed
---- (`resume_after_failed_attach()`).
+--- (`resume_after_failed_attach()`); and when an attach that returns to a
+--- session ends, that session is resumed (`return_after_attach()`).
 ---
 ---@param home aineo.claude.Home
 ---@param prepared aineo.claude.Start
@@ -736,6 +779,7 @@ local function launch_start(home, prepared)
   launch(home, prepared, function(ended)
     start_in_place_of_no_conversation(home, prepared.settings, ended)
     resume_after_failed_attach(home, prepared.settings, ended)
+    return_after_attach(home, prepared.settings, ended)
   end)
 end
 
@@ -914,27 +958,45 @@ end
 
 --- Replaces `home`'s running Claude Code with a start prepared for `choice`, in
 --- the windows that show the running one's terminal, and returns the new
---- terminal; keeps `choice`'s id for `settings.cwd`, so that the next start
---- there lands in it. `background`, a listed background session, makes the
---- start an attach to it (`attach_to()`). The running Claude Code is
---- stopped after the start is prepared, so that an error preparing it
---- stops nothing (`stop_running_session()`): by Ctrl+Z, for an attached one.
+--- start; tells nothing of it. `attach`, when given, makes the start an
+--- attach to its listed background session (`attach_to()`), and gives it
+--- the session it returns to when the attach ends by itself, when it names
+--- one (`return_after_attach()`). The running Claude Code is stopped after
+--- the start is prepared, so that an error preparing it stops nothing
+--- (`stop_running_session()`): by Ctrl+Z, for an attached one.
+---
+---@param home aineo.claude.Home
+---@param settings aineo.claude.Settings
+---@param choice aineo.claude.SessionChoice
+---@param attach? { session: aineo.claude.ListedSession, return_to: string? }
+---@return aineo.claude.Start
+local function replace_running_session(home, settings, choice, attach)
+  local previous = home.session
+  local replacement = prepare_start(settings, choice)
+  stop_running_session(home)
+  if attach then
+    attach_to(replacement, attach.session)
+    replacement.return_to = attach.return_to
+  end
+  launch_start(home, replacement)
+  become_the_session(home, replacement, previous)
+  return replacement
+end
+
+--- Replaces `home`'s running Claude Code as `replace_running_session()` does,
+--- an attach to `background` when it is given, keeps `choice`'s id for
+--- `settings.cwd`, so that the next start there lands in it, and announces
+--- the start (`announce_launch()`); returns the new terminal.
 ---
 ---@param home aineo.claude.Home
 ---@param settings aineo.claude.Settings
 ---@param choice aineo.claude.SessionChoice
 ---@param background? aineo.claude.ListedSession
 ---@return integer buffer
-local function replace_running_session(home, settings, choice, background)
-  local previous = home.session
-  local left = previous and previous.followed
-  local replacement = prepare_start(settings, choice)
-  stop_running_session(home)
-  if background then
-    attach_to(replacement, background)
-  end
-  launch_start(home, replacement)
-  become_the_session(home, replacement, previous)
+local function replace_running_session_kept(home, settings, choice, background)
+  local left = home.session and home.session.followed
+  local replacement =
+    replace_running_session(home, settings, choice, background and { session = background })
   keep_session_id(settings, choice.id)
   announce_launch(home, left)
   return replacement.buffer
@@ -946,7 +1008,7 @@ end
 --- sessions` do where the running Claude Code is attached
 --- (`is_attached()`) and a command written into it would reach the
 --- background session. Stops, launches and keeps the id as
---- `replace_running_session()` does, and raises the errors `start_session()`
+--- `replace_running_session_kept()` does, and raises the errors `start_session()`
 --- raises, before it stops anything. Returns the new terminal.
 ---
 ---@param home aineo.claude.Home
@@ -955,7 +1017,7 @@ end
 ---@return integer buffer the terminal buffer Claude Code runs in
 local function replace_session(home, settings, choice)
   validate_settings(settings)
-  return replace_running_session(
+  return replace_running_session_kept(
     home,
     settings,
     choice or { id = session_ids.new_session_id(), resumed = false }
@@ -993,14 +1055,54 @@ local function join_session(home, settings, listed, sessions)
   if not can_join_session(target, settings.cwd) then
     error('aineo.claude: the session ' .. listed.session_id .. ' cannot be joined', 2)
   end
-  local buffer =
-    replace_running_session(home, settings, { id = listed.session_id, resumed = true }, background)
+  local buffer = replace_running_session_kept(
+    home,
+    settings,
+    { id = listed.session_id, resumed = true },
+    background
+  )
   if agents.way_to_join(target) == 'attach' then
     vim.notify(ATTACHED_NOTE, vim.log.levels.INFO)
   else
     vim.notify(ALSO_OPEN_WARNING, vim.log.levels.WARN)
   end
   return buffer
+end
+
+--- Replaces the running Claude Code with an attach to `background`, a
+--- session `list_sessions()` listed in Claude Code's background service
+--- with a short id, in the windows that show the running one's terminal, and
+--- returns the new terminal: `claude.cmd` followed by `attach` and the short
+--- id, none of aineo's arguments (`attach_to()`). The running Claude Code is
+--- stopped first, as `replace_session()` stops it. Keeps nothing for
+--- `settings.cwd`: the session kept there stays the next start's.
+--- `settings.on_session_switched` is told the switch to the attached session
+--- (`announce_launch()`), and `settings.on_session_ready` is called when the
+--- attach is ready. Once the attach ends by itself, `return_to` is resumed
+--- in its place (`return_after_attach()`). Raises an error, starting nothing
+--- and stopping nothing, when `settings` is malformed, `claude.cmd` is not
+--- executable, or `background` cannot be attached to (`agents.way_to_join()`
+--- does not say `'attach'`).
+---
+---@param home aineo.claude.Home
+---@param settings aineo.claude.Settings
+---@param background aineo.claude.ListedSession
+---@param return_to string the session resumed in the attach's place once it ends by itself
+---@return integer buffer the terminal buffer the attach runs in
+local function attach_session(home, settings, background, return_to)
+  validate_settings(settings)
+  if agents.way_to_join(background) ~= 'attach' then
+    error('aineo.claude: the session ' .. background.session_id .. ' cannot be attached to', 2)
+  end
+  local left = home.session and home.session.followed
+  local replacement = replace_running_session(
+    home,
+    settings,
+    { id = background.session_id, resumed = true },
+    { session = background, return_to = return_to }
+  )
+  announce_launch(home, left)
+  return replacement.buffer
 end
 
 --- Starts Claude Code in a new terminal buffer and returns that buffer. While
@@ -1698,6 +1800,7 @@ end
 ---@field join_session fun(settings: aineo.claude.Settings, listed: aineo.claude.ListedSession, sessions: aineo.claude.ListedSession[]): integer see `join_session()`
 ---@field can_join_session fun(listed: aineo.claude.ListedSession, folder?: string): boolean see `can_join_session()`
 ---@field replace_session fun(settings: aineo.claude.Settings, choice?: aineo.claude.SessionChoice): integer see `replace_session()`
+---@field attach_session fun(settings: aineo.claude.Settings, background: aineo.claude.ListedSession, return_to: string): integer see `attach_session()`
 ---@field is_attached fun(): boolean see `is_attached()`
 ---@field session_status fun(): string?, integer? see `session_status()`
 ---@field session_id fun(): string? see `session_id()`
@@ -1727,6 +1830,9 @@ local function session_functions_of(home)
     can_join_session = can_join_session,
     replace_session = function(settings, choice)
       return replace_session(home, settings, choice)
+    end,
+    attach_session = function(settings, background, return_to)
+      return attach_session(home, settings, background, return_to)
     end,
     is_attached = function()
       return is_attached(home)
