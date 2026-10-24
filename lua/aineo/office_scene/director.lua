@@ -80,14 +80,17 @@ local WANTED, RANDOM, INTERLUDE = performers.WANTED, performers.RANDOM, performe
 ---@field taken table<aineo.office_scene.Spot, string> the id of the character that has each spot taken
 ---@field places_taken table<integer, true> the places the agents the director knows have
 
---- Puts the performer in the pose of `step`, facing the way the step or its
---- spot says, at `time`.
+--- The pose of a character that stands aside beside a desk.
+local STANDING_ASIDE_POSE = 'standing'
+
+--- Puts the performer in the pose of `step`, or standing when it has stepped
+--- aside, facing the way the step or its spot says, at `time`.
 ---
 ---@param performer aineo.office_scene.Performer
 ---@param step table
 ---@param time number
 local function arrive(performer, step, time)
-  performer.pose = step.pose
+  performer.pose = performer.stands_aside and STANDING_ASIDE_POSE or step.pose
   performer.facing = step.facing or (performer.spot and performer.spot.facing) or performer.facing
   performer.effect = step.effect
   performer.arrived_at = time
@@ -168,6 +171,7 @@ local function begin_step(context, performer, index, time)
   performer.looks_again_at = nil
   performer.path = {}
   performer.following = nil
+  performer.stands_aside = nil
   if following.is_followed_by(step) and performer.column then
     following.start(context, performer, step, time)
     return
@@ -209,12 +213,38 @@ local function look_again(context, performer, now)
   )
   if route then
     holding.take_route(context, performer, route)
+    performer.stands_aside = nil
   elseif why == spots.TAKEN then
     wait_for_a_spot(performer, now)
     return
   end
   performer.looks_again_at = nil
   start_step(context, performer, step, now)
+end
+
+--- Has `guest`, the owner of the desk it worked at having taken it back at
+--- `time`, step aside: it walks to the nearest free spot beside a desk and
+--- stands there, looking for another desk every second. Whether it found a
+--- spot to step aside to.
+---
+---@param context aineo.office_scene.DirectorContext
+---@param guest aineo.office_scene.Performer
+---@param time number
+---@return boolean stepped_aside
+local function step_aside(context, guest, time)
+  local route = spots.route(
+    context.layout,
+    named_spots.choose(context, named_spots.BESIDE_DESK, guest, false),
+    guest
+  )
+  if not route then
+    return false
+  end
+  holding.take_route(context, guest, route)
+  guest.stands_aside = true
+  start_step(context, guest, guest.activity.steps[guest.step_index], time)
+  wait_for_a_spot(guest, time)
+  return true
 end
 
 --- When the performer's step ended, if it has by `time`.
@@ -327,7 +357,12 @@ function settle_at_spot(context, performer, step, time)
   else
     local since = math.max(time, occupant.clock)
     begin_step(context, occupant, occupant.step_index, since)
-    if occupant.spot == nil and occupant.column then
+    local left_a_desk = occupant.activity.steps[occupant.step_index].at == named_spots.OWN_DESK
+    if
+      occupant.spot == nil
+      and occupant.column
+      and not (left_a_desk and step_aside(context, occupant, since))
+    then
       occupant.looks_again_at = nil
       occupant.arrived_at, occupant.step_seconds = since, 0
     end
