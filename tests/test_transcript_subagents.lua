@@ -222,6 +222,40 @@ T['a subagent running when the follower starts']['arrives, with the lines it has
   )
 end
 
+--- The line a subagent writes as it starts its test run, its output sent to
+--- a file, as the call `id` of the Bash tool.
+local TEST_RUN_COMMAND = 'make test_file FILE=tests/test_draft.lua > .tests/x.txt 2>&1'
+local TEST_RUN_LINE = vim.json.encode({
+  type = 'assistant',
+  message = {
+    role = 'assistant',
+    content = {
+      {
+        type = 'tool_use',
+        id = 'toolu_test_run',
+        name = 'Bash',
+        input = { command = TEST_RUN_COMMAND },
+      },
+    },
+  },
+})
+
+T['a subagent running when the follower starts']['is heard starting a test run as soon as it writes the call'] = function()
+  local session = new_session()
+  fake_transcript.append(session.transcript, RECORDED_TURN)
+  write_subagent(session, SUBAGENT, 'running')
+  follow(session)
+
+  fake_transcript.append(agent_file(session, SUBAGENT), { TEST_RUN_LINE })
+  wait_for_signals(session, SUBAGENT, #ARRIVAL_KINDS + 1)
+
+  local heard = signals_of_agent(session.signals, SUBAGENT)[#ARRIVAL_KINDS + 1] or {}
+  eq(
+    { heard.kind, heard.tool, (heard.input or {}).command, heard.replayed },
+    { 'tool_started', 'Bash', TEST_RUN_COMMAND }
+  )
+end
+
 T['a subagent running when the follower starts']['is not drawn when its meta says it finished'] = function()
   local session = new_session()
   fake_transcript.append(session.transcript, RECORDED_TURN)
