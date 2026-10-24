@@ -54,6 +54,12 @@ local MOST_WAITS_KEPT = 64
 --- each.
 local offices_made = 0
 
+--- When each session was last reset (`reset()`), in seconds since 1970, by
+--- the path of its transcript: what the transcripts' tails replay of before
+--- then is left out each time an office of this Neovim follows that session.
+---@type table<string, number>
+local reset_at_of_transcript = {}
+
 --- What the office tells the user, once, when its settings cannot be read
 --- while it decides whether to show by itself.
 local SETTINGS_UNREADABLE = 'aineo: the office cannot read its settings: %s'
@@ -97,7 +103,7 @@ end
 ---@field report_tool? string the name of aineo's report tool, as Claude Code calls it; none, and no call is a report
 ---@field settings? fun(): aineo.office.Settings what the user set for the office, asked each time it shows; the default pack when not given
 ---@field random? fun(count: integer): integer a whole number from 1 to `count`, which picks one of several packs the settings name; the first when not given
----@field wall_clock? fun(): number the time in seconds since 1970, which the stamps of the transcript's lines are on; the system's when not given
+---@field wall_clock? fun(): number the time in seconds since 1970, which the stamps of the transcript's lines are on and which tells how long ago a subagent's transcript was written; the system's when not given
 ---@field transcript? fun(): string|nil, number|nil the path of the transcript of the session the office acts out, asked each time the office starts following it (each show, and each return to its tab page), and when the tab began following that session, in seconds since 1970, which lets the follower go on in the session its transcript says was continued in another (`aineo.transcript`'s `follow()`); none or nil, and it follows none
 ---@field preview_seconds_per_state? number how long `preview()` shows each state, in seconds; 9 when not given
 ---@field schedule_after? fun(milliseconds: integer, callback: fun()): fun() calls `callback`, on the main loop, once `milliseconds` have passed, and returns what cancels the wait; the idle countdown waits through it; a timer of the editor's loop when not given
@@ -116,6 +122,7 @@ end
 ---@field show_now fun() shows the office over the right side at once, and does nothing when it shows
 ---@field preview fun(pack?: string) shows the pack, or the one the settings name, over the right side with every state of the vocabulary acted out in turn, each named, in place of the office that shows, which stays when the pack cannot be shown; the preview follows no transcript
 ---@field reload fun() shows the office again with what the settings name now, when it shows, and does nothing when it is hidden, previews a pack or has no right side; a pack that cannot be shown is told, and the office that shows stays
+---@field reset fun() shows the office over the right side as if the session began now: every agent is forgotten but for a permission wait not answered, the main agent walks in, and only what the transcripts say from then on is acted out, then and whenever an office of this Neovim follows the session again; with no right side, a pack that cannot be loaded or a stage that cannot be made, it tells the user why and the office that shows stays
 ---@field let_go fun() closes the office, stops its timer and its watch, and forgets the session
 
 --- Makes the office of one tab.
@@ -179,6 +186,11 @@ function M.new_office(options)
   --- followed is known while it is hidden.
   ---@type table<string, true>
   local followed_sessions = {}
+
+  --- Whether the next start of following leaves out what the transcripts'
+  --- tails replay, the main agent walking in: set by `reset()`, and spent by
+  --- the start it asks for.
+  local follows_from_now = false
 
   --- Whether `let_go()` has been called: the office counts no more.
   local has_been_let_go = false
@@ -310,10 +322,13 @@ function M.new_office(options)
 
   --- A tracker of the agents' states, and the follower that feeds it from the
   --- transcript `options.transcript` names; none when it names none, or the
-  --- file cannot be followed. A line the follower reads as news that says the
-  --- session was continued in another has the office follow again, once the
-  --- current event is over (`office.session_changed()`); one it replays does
-  --- not, since the follower has gone on to the file that line names already.
+  --- file cannot be followed. After `reset()`, the tracker leaves out what the
+  --- follower replays of before the reset, then and each time the session is
+  --- followed again in this Neovim, and has the main agent walk in. A line
+  --- the follower reads as news that says the session was continued in
+  --- another has the office follow again, once the current event is over
+  --- (`office.session_changed()`); one it replays does not, since the
+  --- follower has gone on to the file that line names already.
   ---
   ---@param open { pack: aineo.office_pack.Pack, commands: aineo.office_states.CommandClasses|nil } the pack whose triggers the tracker tries, and the classes of commands it tells apart
   ---
@@ -321,6 +336,15 @@ function M.new_office(options)
   ---@return aineo.transcript.Follower|nil follower
   ---@return table<string, number> went_on_at for each agent whose lines the follower replayed, the stamp of the latest that is not the start of a call
   local function follow_transcript(open)
+    local from_now = follows_from_now
+    follows_from_now = false
+    local path, since
+    if options.transcript then
+      path, since = options.transcript()
+    end
+    if from_now and path then
+      reset_at_of_transcript[path] = wall_clock()
+    end
     local tracker = require('aineo.office_states').new_tracker({
       commands = open.commands,
       report_tool = options.report_tool,
@@ -331,12 +355,13 @@ function M.new_office(options)
       on_slow_triggers = function()
         vim.notify(SLOW_TRIGGERS, vim.log.levels.WARN)
       end,
+      wall_clock = wall_clock,
+      forgotten_before = from_now and wall_clock() or reset_at_of_transcript[path or ''],
     })
-    local went_on_at = {}
-    local path, since
-    if options.transcript then
-      path, since = options.transcript()
+    if from_now then
+      tracker.take({ agent = 'main', kind = 'session_started' }, options.clock())
     end
+    local went_on_at = {}
     if not path then
       return tracker, nil, went_on_at
     end
@@ -757,6 +782,22 @@ function M.new_office(options)
     local area = options.right_side()
     if open and not open.preview and area then
       show_over(area, nil, close)
+    end
+  end
+
+  function office.reset()
+    local area = options.right_side()
+    local why = why_it_cannot_show(area)
+    if why then
+      vim.notify(why, vim.log.levels.WARN)
+      return
+    end
+    idle_time_has_passed = false
+    countdown.stop()
+    follows_from_now = true
+    if not show_over(area, nil, close) then
+      follows_from_now = false
+      settle()
     end
   end
 

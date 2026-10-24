@@ -50,28 +50,38 @@ local function ids_in(folder)
   return ids
 end
 
---- Whether the meta file at `path` says its subagent is over: it carries
---- `finished` or `stoppedByUser`. A meta file that is missing, not a regular
---- file (opening a named pipe would hold the editor), too long or not JSON
---- says nothing, so its subagent is taken to run.
+--- What the meta file at `path` says, decoded; an empty table for a meta file
+--- that is missing, not a regular file (opening a named pipe would hold the
+--- editor), too long or not JSON, which says nothing.
 ---
 ---@param path string
----@return boolean
-local function is_over(path)
+---@return table meta
+local function meta_of(path)
   local stat = vim.uv.fs_stat(path)
   if not stat or stat.type ~= 'file' then
-    return false
+    return {}
   end
   local file = io.open(path, 'rb')
   if not file then
-    return false
+    return {}
   end
   local text = file:read(MAX_META_BYTES + 1) or ''
   file:close()
   local decoded, meta = pcall(vim.json.decode, text, { luanil = { object = true } })
   if not decoded or type(meta) ~= 'table' then
-    return false
+    return {}
   end
+  return meta
+end
+
+--- Whether the meta file at `path` says its subagent is over: it carries
+--- `finished` or `stoppedByUser`. A meta file that says nothing (`meta_of()`)
+--- leaves its subagent taken to run.
+---
+---@param path string
+---@return boolean
+local function is_over(path)
+  local meta = meta_of(path)
   return meta.finished == true or meta.stoppedByUser == true
 end
 
@@ -81,10 +91,12 @@ end
 --- signal and its transcript's tail, all marked `replayed = true`; one that is
 --- over by then is not heard of. Each subagent that arrives later gives a
 --- `subagent_started` signal and then, as they are written, the signals of its
---- lines from the first. A subagent whose meta file says it is over gives the
---- signals of the lines it wrote last, then `subagent_finished`, and is
---- followed no more. A subagent whose meta file has not been written is taken
---- to run.
+--- lines from the first. A `subagent_started` signal names the call of the
+--- session's agent that started the subagent (`call`, as its meta file tells
+--- it) and when its transcript was last written (`written_at`). A subagent
+--- whose meta file says it is over gives the signals of the lines it wrote
+--- last, then `subagent_finished`, and is followed no more. A subagent whose
+--- meta file has not been written is taken to run.
 ---
 --- Signals are delivered from the editor's main loop, never from a fast event.
 ---
@@ -123,7 +135,15 @@ function M.follow_subagents(options)
   ---@param id string
   ---@param past boolean
   local function arrive(id, past)
-    options.on_signal({ agent = id, kind = 'subagent_started', replayed = past or nil })
+    local started_by = meta_of(meta_path(id)).toolUseId
+    local transcript = vim.uv.fs_stat(transcript_path(id))
+    options.on_signal({
+      agent = id,
+      kind = 'subagent_started',
+      replayed = past or nil,
+      call = type(started_by) == 'string' and started_by or nil,
+      written_at = transcript and transcript.mtime.sec + transcript.mtime.nsec / 1e9,
+    })
     if stopped then
       return
     end

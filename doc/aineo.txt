@@ -2892,6 +2892,27 @@ keeps the tab's claim, and the next start takes it up again (|aineo-tabs|).
 			from this command or from `office.pack`. {name} is
 			completed from the packs found. It needs no aineo tab.
 
+                                                         *:Aineo-office-reset*
+:Aineo office reset
+			Shows the office over the right side of the layout as
+			if the tab's session began now: every agent it showed
+			is forgotten, the main agent walks in through the
+			door, and only what the transcripts say from then on
+			is acted out, a subagent walking in with its next
+			line (|aineo-office|). A permission prompt not yet
+			answered stays shown. It works whether the office
+			shows or not, and in place of a preview. The reset
+			holds for as long as this Neovim runs: each time an
+			office follows that session again (it shows again,
+			its tab page is entered again, `:Aineo office pack`
+			shows it again), what came before the reset is left
+			out. It acts on the aineo tab `:Aineo office` acts
+			on (|:Aineo-office|) and makes none, and it shows
+			nothing, and tells you why, with 'termguicolors' off
+			or 'ambiwidth' `double`.
+			With any word after it, it tells you, with one error,
+			what `:Aineo office` takes.
+
 When an action fails — `claude.cmd` is not executable, say — aineo tells you
 once, with one error message starting with `aineo:`, and opens nothing.
 
@@ -3960,9 +3981,15 @@ folder `<session id>/subagents` beside it, the transcript and the meta file
 of each subagent. The office reads the end of the transcript when it opens,
 and each line added while it shows; a subagent that runs when it opens, or
 starts while it shows, is followed until its meta file says it finished or
-the user stopped it. A transcript cut short or replaced by another is read
-again from its end. It calls no Claude, sends nothing to its terminal, makes
-no MCP call or network request, writes nothing and spends no token. While it
+the user stopped it. A subagent quiet for ten minutes is not in the office:
+one whose transcript was last written ten minutes or more before the office
+opens is left out, and one that writes nothing the office reads for ten
+minutes while it shows walks out, unless the session's agent still waits on
+the call that started it or the subagent waits for your permission; either
+walks in again with its next line. A transcript cut short or replaced by
+another is read again from its end. It calls no Claude, sends nothing to its
+terminal, makes no MCP call or network request, writes nothing and spends no
+token. While it
 shows, one timer draws 12 frames a second, one file watch follows the
 transcript, one the subagents' folder and one each subagent it follows, 64 at
 most; where the system gives no file
@@ -4038,9 +4065,10 @@ on it that `office.pack` (|aineo-config-office.pack|) can name in its place.
 pack, `:Aineo office states` (|:Aineo-office-states|) lists what it draws for
 each state, `:Aineo office preview` (|:Aineo-office-preview|) plays every
 state over scripted agents, `:Aineo office new` (|:Aineo-office-new|)
-starts a pack of your own from the default, and `:Aineo office pack`
+starts a pack of your own from the default, `:Aineo office pack`
 (|:Aineo-office-pack|) switches the pack every office draws for this
-Neovim's session. How a pack is chosen, found and
+Neovim's session, and `:Aineo office reset` (|:Aineo-office-reset|) starts
+the office afresh, every agent forgotten. How a pack is chosen, found and
 written is told next.
 
                                                          *aineo-office-packs*
@@ -4264,7 +4292,13 @@ goes to the nearest spot called `at` that no other agent has taken, walking
 the shortest way over floor (`.`), spots and pieces with `walk_over`, never
 over a wall, a space or a piece that stands on the floor, and takes the
 step's `pose`, facing the spot's way or the step's `facing`. A spot called
-`desk` is the agent's own. An agent has a place from its arrival to its
+`desk` is the agent's own. An agent whose place has no desk in the plan (more
+agents than the plan has desks, as in a small window) works at the nearest
+desk no agent has, else at the desk of an agent that is idle and away from
+it, and, with neither, waits as for a spot that other agents have; when the
+owner of the desk it works at comes back, it steps off, to another such desk
+or else beside a desk, where it stands, and the owner sits. Two agents never
+stand on one desk. An agent has a place from its arrival to its
 leaving, the lowest number no other agent has, and its desk, its monitor and
 its colour go by it: the agent with the first place has the first desk, the
 first monitor and the first colour. After `for_seconds` from its arrival (a
@@ -4357,7 +4391,13 @@ that takes a seat an agent is on, with `even_if_taken`, angers the agent and
 the agent leaves, if the pack says so by `the_one_moved_plays`.
 
 `states` maps the name of a state to an activity; a state it leaves out takes
-its parent's.
+its parent's. An agent that thinks right after a tool call, while the model
+chooses its next one, goes on with the activity of that call's state where
+the call took it, for the first ten seconds of its thinking, and plays what
+`thinking` maps to after them: a run of short calls at the desk, tests between
+edits, keeps the agent at its desk. A call that asks you (`asking_you`) or
+hands a task over (`delegating`) is not gone on with, and the end of a turn
+ends it.
 
                                                        *aineo-office-triggers*
 Triggers ~

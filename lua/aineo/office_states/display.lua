@@ -2,9 +2,9 @@
 --- dwell so that rapid changes do not flicker. Pure: the time is given.
 ---
 --- An agent wants, in turn, to ask for permission when it did and has not
---- been answered; to show the event a signal brought while it lasts; and
---- else the state its facts give. Of that, an idle agent falls asleep after
---- ten quiet minutes.
+--- been answered; to leave once it has gone quiet; to show the event a
+--- signal brought while it lasts; and else the state its facts give. Of
+--- that, an idle agent falls asleep after ten quiet minutes.
 
 local timing = require('aineo.office_states.timing')
 
@@ -43,6 +43,9 @@ end
 local function wanted_at(record, now)
   if record.permission_asked_at then
     return { state = 'needs_permission', since = record.permission_asked_at }
+  end
+  if record.quiet_at and now >= record.quiet_at then
+    return { state = 'leaving', since = record.quiet_at }
   end
   for _, event in ipairs(events_of(record)) do
     if event.since <= now and now < event.since + event.lasts then

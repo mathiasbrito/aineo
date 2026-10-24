@@ -21,6 +21,9 @@ local QUIET_MS = 400
 --- The recorded turn: a prompt, a call, its result and the turn's end.
 local RECORDED_TURN = fake_transcript.lines_of('turn-with-a-command-2.1.308.jsonl')
 
+--- The recorded subagent's lines.
+local RECORDED_SUBAGENT = fake_transcript.lines_of('subagent-explore-2.1.308.jsonl')
+
 --- The lines of the recorded turn before the user's prompt, the prompt and the
 --- call it leads to, and what follows: the result and the turn's end. The
 --- prompt starts the agent's work, so the agent stands only before it.
@@ -779,6 +782,157 @@ T['what the office shows']['rewrites the rows an agent’s move changes'] = func
   end)
 
   eq(child.lua_get([[vim.api.nvim_buf_get_changedtick(...)]], { buffer }) > before, true)
+end
+
+--- When the stories' subagents' transcripts were last written, in seconds
+--- since 1970, and the wall clock of the office twenty minutes later.
+local WRITTEN_LONG_AGO = 1700000000
+local WALL_CLOCK_LATER = '{ wall_clock = function() return 1700001200 end }'
+
+--- Writes the subagent `id` of the session whose transcript is `path`, running,
+--- with the recorded subagent's lines, its transcript last written at
+--- `written_at`.
+---
+---@param path string the session's transcript
+---@param id string
+---@param written_at number seconds since 1970
+local function write_running_subagent(path, id, written_at)
+  local folder = vim.fs.joinpath(vim.fn.fnamemodify(path, ':r'), 'subagents')
+  local transcript = vim.fs.joinpath(folder, ('agent-%s.jsonl'):format(id))
+  fake_transcript.write_subagent_meta(
+    vim.fs.joinpath(folder, ('agent-%s.meta.json'):format(id)),
+    'running'
+  )
+  fake_transcript.append(transcript, RECORDED_SUBAGENT)
+  vim.uv.fs_utime(transcript, written_at, written_at)
+end
+
+--- The text of the office's buffer, its lines joined.
+---
+---@return string
+local function office_text()
+  local lines = child.lua_get(
+    [[vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(...), 0, -1, false)]],
+    { office_window() }
+  )
+  return table.concat(lines, '\n')
+end
+
+T['the subagents the office brings in'] = MiniTest.new_set()
+
+T['the subagents the office brings in']['leave out one whose transcript was last written ten minutes before, by its wall clock'] = function()
+  local path = transcript_path()
+  fake_transcript.append(path, RECORDED_TURN)
+  write_running_subagent(path, 'oldhelper', WRITTEN_LONG_AGO)
+  write_running_subagent(path, 'newhelper', WRITTEN_LONG_AGO + 1000)
+  open_office(path, nil, WALL_CLOCK_LATER)
+
+  child.lua([[_G.office.show_now()]])
+
+  eq(
+    { office_text():find('newhelper') ~= nil, office_text():find('oldhelper') ~= nil },
+    { true, false }
+  )
+end
+
+T['resetting the office'] = MiniTest.new_set()
+
+T['resetting the office']['forgets every agent, the main agent walking in again'] = function()
+  local path = transcript_path()
+  fake_transcript.append(path, vim.list_slice(RECORDED_TURN, 1, 5))
+  write_running_subagent(path, 'helper', os.time())
+  open_office(path)
+  child.lua([[_G.office.show_now()]])
+
+  child.lua([[_G.office.reset()]])
+
+  eq(
+    { office_text():find('helper') ~= nil, office_text():find('arriving') ~= nil },
+    { false, true }
+  )
+end
+
+T['resetting the office']['acts out what the transcripts say from then on'] = function()
+  local path = transcript_path()
+  fake_transcript.append(path, RECORDED_TURN)
+  write_running_subagent(path, 'helper', os.time())
+  open_office(path)
+  child.lua([[_G.office.show_now()]])
+  child.lua([[_G.office.reset()]])
+
+  fake_transcript.append(
+    vim.fs.joinpath(vim.fn.fnamemodify(path, ':r'), 'subagents', 'agent-helper.jsonl'),
+    RECORDED_SUBAGENT
+  )
+
+  eq(
+    wait_until(function()
+      return office_text():find('helper') ~= nil
+    end),
+    true
+  )
+end
+
+T['resetting the office']['shows it when it is hidden'] = function()
+  open_office()
+
+  child.lua([[_G.office.reset()]])
+
+  eq(office_window() ~= vim.NIL, true)
+end
+
+--- Waits, at most `PATIENCE_MS`, until the office's text holds `words`, and
+--- says whether it did.
+---
+---@param words string
+---@return boolean
+local function wait_for_words(words)
+  return wait_until(function()
+    return office_text():find(words, 1, true) ~= nil
+  end)
+end
+
+T['resetting the office']['keeps a permission wait the user has not answered'] = function()
+  local path = transcript_path()
+  fake_transcript.append(path, vim.list_slice(RECORDED_TURN, 1, 5))
+  open_office(path)
+  child.lua([[_G.office.show_now()]])
+  child.lua([[_G.office.permission_wait('main')]])
+
+  child.lua([[_G.office.reset()]])
+
+  eq(wait_for_words('needs'), true)
+end
+
+T['resetting the office']['holds when the office follows the session again'] = function()
+  local path = transcript_path()
+  fake_transcript.append(path, vim.list_slice(RECORDED_TURN, 1, 5))
+  write_running_subagent(path, 'helper', os.time() - 5)
+  open_office(path)
+  child.lua([[_G.office.show_now()]])
+  child.lua([[_G.office.reset()]])
+
+  child.lua([[_G.office.reload()]])
+  vim.wait(QUIET_MS)
+
+  eq(
+    { office_text():find('helper') ~= nil, office_text():find('standing', 1, true) ~= nil },
+    { false, true }
+  )
+end
+
+T['resetting the office']['that could not show leaves the next show replaying the transcripts'] = function()
+  local path = transcript_path()
+  fake_transcript.append(path, RECORDED_TURN)
+  write_running_subagent(path, 'helper', os.time())
+  open_office(path, nil, '{ pack_folders = function() return _G.pack_folders end }')
+  child.lua([[_G.pack_folders = {}]])
+  child.lua([[_G.office.reset()]])
+
+  child.lua([[_G.pack_folders = vim.api.nvim_get_runtime_file('aineo-office', true)]])
+  child.lua([[_G.office.show_now()]])
+
+  eq(wait_for_words('helper'), true)
 end
 
 T['waking'] = MiniTest.new_set()

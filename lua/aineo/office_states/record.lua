@@ -56,6 +56,7 @@ local UNNAMED_CALL = ''
 ---@field reported_at? number when it last called aineo's report tool, as heard now rather than read from the past
 ---@field background_jobs integer how many background jobs it started that have not reported back
 ---@field thinking boolean whether the model is at work on what it was given: a prompt, a thought or a result, since the last call started
+---@field finished_call_state? string the state of the call that finished last, until a prompt starts new work or the turn ends
 ---@field turn_ended boolean whether its last turn ended and nothing began since
 ---@field prompted boolean whether it was given a prompt
 ---@field finished boolean whether it finished: a subagent that is over
@@ -67,6 +68,9 @@ local UNNAMED_CALL = ''
 ---@field fact aineo.office_states.Appearance the state its facts give, from when they give it
 ---@field shown aineo.office_states.Appearance the state it shows, held by the dwell
 ---@field listed_until? number a finished agent is listed until then
+---@field heard_at? number when it was last heard of, on the caller's clock: for a subagent replayed, when its transcript was last written
+---@field started_by? string the id of the main agent's call that started it, for a subagent whose arrival names one
+---@field quiet_at? number when it goes quiet and leaves, unless it is heard of before; none for an agent that does not
 
 --- What the tracker is told about the office, which decides what a signal means.
 ---@class aineo.office_states.Settings: aineo.office_states.CallSettings
@@ -167,6 +171,7 @@ local function end_turn(record)
   record.open_calls = {}
   record.thinking = false
   record.turn_ended = true
+  record.finished_call_state = nil
 end
 
 --- What each kind of signal does to the record of the agent that gave it.
@@ -218,6 +223,7 @@ local HEARS = {
     end
     record.open_calls[id] = nil
     record.thinking = true
+    record.finished_call_state = call.state
     if signal.failed and call.created_task then
       record.tasks = tasks.without(record.tasks, call.created_task)
     end
@@ -230,6 +236,7 @@ local HEARS = {
 
   prompt = function(record, _, hearing)
     record.thinking = true
+    record.finished_call_state = nil
     record.turn_ended = false
     if is_main(record) or not record.prompted then
       bring_event(record, hearing, 'getting_a_task', timing.GETTING_A_TASK_SECONDS)

@@ -234,7 +234,7 @@ T[':Aineo office pack']['is offered after office, with the names of the packs fo
 
   eq(
     child.fn.getcompletion('Aineo office ', 'cmdline'),
-    { 'check', 'states', 'preview', 'new', 'pack' }
+    { 'check', 'states', 'preview', 'new', 'pack', 'reset' }
   )
   eq(child.fn.getcompletion('Aineo office pack ', 'cmdline'), { 'alt', 'default', 'space_station' })
   eq(child.fn.getcompletion('Aineo office pack a', 'cmdline'), { 'alt' })

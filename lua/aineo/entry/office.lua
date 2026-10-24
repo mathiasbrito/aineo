@@ -215,6 +215,14 @@ function M.show(tab)
   office.show_now()
 end
 
+--- Shows the office of `tab` over the right side of its layout as if its
+--- session began now: every agent forgotten, the main agent walking in.
+---
+---@param tab aineo.entry.Tab
+function M.reset(tab)
+  office_of(tab).reset()
+end
+
 --- Previews the pack `name`, or the one the settings name, in the office of
 --- `tab`, over the right side of its layout.
 ---

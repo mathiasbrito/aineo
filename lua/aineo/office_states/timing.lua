@@ -32,6 +32,18 @@ M.COMPACTING_SECONDS = 5
 --- How long an agent is idle before it is `asleep`.
 M.ASLEEP_AFTER_SECONDS = 600
 
+--- How long an agent that thinks right after a call goes on where that call
+--- took it before it goes to think: the time the model takes to choose its
+--- next call, during which a run of short calls keeps the agent at its work.
+M.THINKS_AT_ITS_WORK_SECONDS = 10
+
+--- How long a subagent may go unheard before it leaves the office: one whose
+--- transcript was last written that long before the office replays it is not
+--- brought in, and one the office follows that says nothing for that long
+--- walks out; either comes back with its next line. A subagent whose starting
+--- call the session's agent is still waiting on stays.
+M.QUIET_SUBAGENT_SECONDS = 600
+
 --- How long a subagent that left stays in the tracker's list, for the scene to
 --- walk it out of the door.
 M.LEAVING_LISTED_SECONDS = 30
