@@ -8,6 +8,7 @@ local editors = require('aineo.entry.editors')
 local errors = require('aineo.entry.errors')
 local explorer = require('aineo.entry.explorer')
 local folder_tabs = require('aineo.entry.folder_tabs')
+local input_carry = require('aineo.entry.input_carry')
 local links = require('aineo.entry.links')
 local offices = require('aineo.entry.office')
 local places = require('aineo.entry.places')
@@ -271,9 +272,11 @@ local function make_tab(homes, key, callbacks)
   ---
   --- A follow told `{ claim = true }` is a claim's: the report and draft homes
   --- then move nothing of the working directory's (their `claim` option).
+  --- One told `carry` carries Input's text into the session's draft as the
+  --- draft home's `carry` option says.
   ---
   ---@param id string Claude Code's session id
-  ---@param options? { claim: boolean? }
+  ---@param options? { claim: boolean?, carry: ('replace'|'merge')? }
   local function follow_session(id, options)
     homes.report.follow_report_session(id, options)
     homes.draft.follow_draft_session(id, options)
@@ -424,12 +427,14 @@ local function make_tab(homes, key, callbacks)
 
   --- Makes the panes follow `id` as a claim of it, a session the tab's own
   --- Claude terminal does not run (`follow_session()` told a claim's, which
-  --- moves nothing), writes the entry, and keeps the folder's list of tabs,
-  --- which keeps the claim (`folder_tabs.keep_folder_tabs()`).
+  --- moves nothing), Input's text carried into its draft as `carry` says
+  --- (nil: Input shows its draft), writes the entry, and keeps the folder's
+  --- list of tabs, which keeps the claim (`folder_tabs.keep_folder_tabs()`).
   ---
   ---@param id string
-  local function follow_claimed_session(id)
-    follow_session(id, { claim = true })
+  ---@param carry? 'replace'|'merge'
+  local function follow_claimed_session(id, carry)
+    follow_session(id, { claim = true, carry = carry })
     set_panes_session(id)
     claimed_by_id = id
     write_entry()
@@ -541,7 +546,9 @@ local function make_tab(homes, key, callbacks)
   --- (`follow_claimed_session()`, `claim()`): a session another Claude Code
   --- process started under the tab's start token (`aineo.claude`'s
   --- `on_session_elsewhere`), as Claude Code's background service runs a
-  --- conversation of the tab's in a process of its own. The tab's own
+  --- conversation of the tab's in a process of its own. That conversation
+  --- goes on there, so Input's text goes with it, in place of any draft of
+  --- `id`, with no question; the session left keeps it too. The tab's own
   --- Claude terminal runs on its own session meanwhile, and a confirmation
   --- of its start that comes later leaves the panes on the claim
   --- (`follow_confirmed_start()`). Notes that the tab's office begins
@@ -550,7 +557,7 @@ local function make_tab(homes, key, callbacks)
   ---@param id string
   local function follow_session_elsewhere(id)
     offices.began_following(tab)
-    follow_claimed_session(id)
+    follow_claimed_session(id, 'replace')
     claim(id)
   end
 
@@ -1129,20 +1136,22 @@ local function make_tab(homes, key, callbacks)
     write_entry()
   end
 
-  --- Makes the panes follow the session `id` as a claim of it, and claims it
-  --- (`claim()`): what `:Aineo claim {id}` does, and what a session picker
-  --- calls. Nothing is sent to Claude Code, whose terminal runs on its own
-  --- session. The report home is given its environment first
-  --- (`give_report_environment()`), so that it takes the session's reports
-  --- before aineo's layout has opened. The id of the tab's own terminal's
-  --- session claims it as `claim_own_session()` does.
+  --- Makes the panes follow the session `id` as a claim of it, Input's text
+  --- carried into its draft as `choose_carry` chooses, and claims it
+  --- (`follow_claimed_session()`, `claim()`). Nothing is sent to Claude Code,
+  --- whose terminal runs on its own session. The report home is given its
+  --- environment first (`give_report_environment()`), so that it takes the
+  --- session's reports before aineo's layout has opened. The id of the tab's
+  --- own terminal's session claims it as `claim_own_session()` does, and
+  --- carries nothing. A choice made once the tab is released claims nothing.
   ---
   --- Raises an error naming `id` when it is not a session id of the form
   --- Claude Code gives (`aineo.claude`'s `is_session_id()`), and changes
   --- nothing then.
   ---
   ---@param id string
-  local function claim_session(id)
+  ---@param choose_carry fun(id: string, with_carry: fun(carry: ('replace'|'merge')?)) calls `with_carry` with how Input's text goes with the claim of `id`
+  local function claim_session_carrying(id, choose_carry)
     if not require('aineo.claude').is_session_id(id) then
       error((':Aineo claim takes a Claude session id, not %s'):format(id), 0)
     end
@@ -1151,8 +1160,41 @@ local function make_tab(homes, key, callbacks)
       return
     end
     give_report_environment()
-    follow_claimed_session(id)
-    claim(id)
+    choose_carry(id, function(carry)
+      if is_released then
+        return
+      end
+      follow_claimed_session(id, carry)
+      claim(id)
+    end)
+  end
+
+  --- Chooses how Input's text goes with a claim of `id`
+  --- (`aineo.entry.input_carry`'s `choose_input_carry()`), the session the
+  --- panes follow now being the one it leaves.
+  ---
+  ---@param id string
+  ---@param with_carry fun(carry: ('replace'|'merge')?)
+  local function choose_carry_of_input(id, with_carry)
+    input_carry.choose_input_carry(homes.draft, { claimed = id, left = panes_session }, with_carry)
+  end
+
+  --- Chooses that Input's text goes with no claim: Input shows the claimed
+  --- session's draft.
+  ---
+  ---@param _ string
+  ---@param with_carry fun(carry: ('replace'|'merge')?)
+  local function carry_nothing(_, with_carry)
+    with_carry(nil)
+  end
+
+  --- What `:Aineo claim {id}` does, and what a session picker calls: claims
+  --- `id` as `claim_session_carrying()` does, Input's text going with it as
+  --- `choose_carry_of_input()` chooses.
+  ---
+  ---@param id string
+  local function claim_session(id)
+    claim_session_carrying(id, choose_carry_of_input)
   end
 
   --- What tells the user how to leave a claim of another session
@@ -1533,7 +1575,8 @@ local function make_tab(homes, key, callbacks)
   --- `kept_claim`, the session the tab claimed when the list was kept: while a
   --- Claude Code runs it (`places.is_session_running()`; the tab's own has not
   --- started yet), the tab claims it again once its Claude Code starts on `id`
-  --- (`claim_session()`). Else, when its transcript is in this folder's
+  --- (`claim_session_carrying()`), Input showing its draft: nothing is
+  --- carried, nor asked. Else, when its transcript is in this folder's
   --- (`places.folder_transcript()`), its Claude Code resumes `kept_claim` in
   --- place of `id`, and that is the tab's own session from then on; when it is
   --- not, the claim is dropped and the tab resumes `id`.
@@ -1551,7 +1594,7 @@ local function make_tab(homes, key, callbacks)
     end
     open_layout_around(config, claude_terminal_resuming(config, id))
     if kept_claim then
-      claim_session(kept_claim)
+      claim_session_carrying(kept_claim, carry_nothing)
     end
   end
 
