@@ -228,15 +228,21 @@ function M.start_again_noting_replacements(child, overrides)
 end
 
 --- The Lua, run in a child, that starts the session with the stand-in
---- settings overridden by `...`'s second value and an `on_session_switched`
+--- settings overridden by `...`'s second value, an `on_session_switched`
 --- that appends each switch it is told of to `_G.session_switches`, emptied
---- first, as `{ id, source, left, reason }`; and returns its terminal.
+--- first, as `{ id, source, left, reason }`, and an `on_session_elsewhere`
+--- that appends each session it is told of to `_G.sessions_elsewhere`,
+--- emptied first, as `{ id, source }`; and returns its terminal.
 local START_NOTING_SWITCHES = [[
   local helper, overrides = dofile(...), select(2, ...)
   _G.session_switches = {}
+  _G.sessions_elsewhere = {}
   local settings = helper.stand_in_settings(overrides)
   settings.on_session_switched = function(id, source, left, reason)
     table.insert(_G.session_switches, { id = id, source = source, left = left, reason = reason })
+  end
+  settings.on_session_elsewhere = function(id, source)
+    table.insert(_G.sessions_elsewhere, { id = id, source = source })
   end
   return require('aineo.claude').start_session(settings)
 ]]
@@ -244,7 +250,10 @@ local START_NOTING_SWITCHES = [[
 --- Starts the session in `child` as `start()` does — `fake`'s environment
 --- set, its terminal shown in the current window — with an
 --- `on_session_switched` that notes each switch in the child's
---- `_G.session_switches` (`wait_for_session_switches()`); returns its terminal.
+--- `_G.session_switches` (`wait_for_session_switches()`), and an
+--- `on_session_elsewhere` that notes each session in its
+--- `_G.sessions_elsewhere` (`wait_for_sessions_elsewhere()`); returns its
+--- terminal.
 ---
 ---@param child table
 ---@param fake { environment: table<string, string> }
@@ -283,6 +292,23 @@ function M.wait_for_session_switches(child, count)
     return #switches >= count
   end, 20)
   return switches
+end
+
+--- The sessions `on_session_elsewhere` has noted in `child`
+--- (`start_noting_switches()`), each `{ id, source }`, once there are `count`
+--- of them — waiting for that at most `PATIENCE_MS` — or when the wait runs
+--- out.
+---
+---@param child table
+---@param count integer
+---@return table[]
+function M.wait_for_sessions_elsewhere(child, count)
+  local sessions
+  vim.wait(M.PATIENCE_MS, function()
+    sessions = child.lua_get('_G.sessions_elsewhere')
+    return #sessions >= count
+  end, 20)
+  return sessions
 end
 
 --- The id of the session `child`'s Claude home follows now

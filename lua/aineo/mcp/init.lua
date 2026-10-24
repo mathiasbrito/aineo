@@ -388,6 +388,17 @@ function M.running_sessions(state_directory, working_directory)
   return processes.running_sessions(state_directory, working_directory)
 end
 
+--- Whether a Claude Code process aineo started runs on `session` now, in
+--- any directory, by the records of the processes whose pid still runs; the
+--- records of processes that have ended are removed.
+---
+---@param state_directory string
+---@param session string
+---@return boolean
+function M.is_session_running(state_directory, session)
+  return processes.is_running(state_directory, session)
+end
+
 --- The session the Claude Code process `pid`, of the start `token`, is on,
 --- as its record holds it; nil when there is no record of that start.
 ---

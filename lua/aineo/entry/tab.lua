@@ -160,11 +160,12 @@ end
 ---@field write_entry fun()
 ---@field release_claim fun()
 ---@field panes_session fun(): string? the session the tab's panes follow
+---@field claimed_session fun(): string? the session the tab's panes follow by a claim of it; nil while they follow its own Claude terminal's
 ---@field runs_session fun(id: string): boolean whether the tab's Claude Code runs the session `id`
 ---@field start_token fun(): string? see `aineo.claude.Session`'s `start_token()`
 ---@field start_in_new_tab fun() what `:Aineo tab new` does once the tab page exists
 ---@field start_on_session fun(listed: aineo.claude.ListedSession, sessions: aineo.claude.ListedSession[]) what a pick of `\S` does once the tab page exists: starts Claude Code on that session
----@field open_on_session fun(id: string) what reopening the folder's tabs does for each tab once its tab page exists: starts Claude Code on the session `id`, resumed or attached to where it runs in the background, in a layout of its own
+---@field open_on_session fun(id: string, kept_claim: string?) what reopening the folder's tabs does for each tab once its tab page exists: starts Claude Code on the session `id`, resumed or attached to where it runs in the background, in a layout of its own, and takes up `kept_claim`, the claim the folder's list kept for it, as `open_on_session()` says
 ---@field session_id fun(): string? the session the tab's Claude Code follows, nil before it has started
 ---@field session_name fun(): string? the name of the session the tab's Claude terminal shows (`b:aineo_session_name`), nil before it has one
 ---@field is_busy fun(): boolean whether the Claude Code on the tab's terminal is busy
@@ -423,7 +424,8 @@ local function make_tab(homes, key, callbacks)
 
   --- Makes the panes follow `id` as a claim of it, a session the tab's own
   --- Claude terminal does not run (`follow_session()` told a claim's, which
-  --- moves nothing), and writes the entry.
+  --- moves nothing), writes the entry, and keeps the folder's list of tabs,
+  --- which keeps the claim (`folder_tabs.keep_folder_tabs()`).
   ---
   ---@param id string
   local function follow_claimed_session(id)
@@ -431,6 +433,7 @@ local function make_tab(homes, key, callbacks)
     set_panes_session(id)
     claimed_by_id = id
     write_entry()
+    folder_tabs.keep_folder_tabs()
   end
 
   --- What the tab does with a switch of a Claude Code it does not run, from
@@ -532,6 +535,23 @@ local function make_tab(homes, key, callbacks)
     if moves_claim then
       claim(id)
     end
+  end
+
+  --- Makes the panes follow `id` as a claim of it, and claims it
+  --- (`follow_claimed_session()`, `claim()`): a session another Claude Code
+  --- process started under the tab's start token (`aineo.claude`'s
+  --- `on_session_elsewhere`), as Claude Code's background service runs a
+  --- conversation of the tab's in a process of its own. The tab's own
+  --- Claude terminal runs on its own session meanwhile, and a confirmation
+  --- of its start that comes later leaves the panes on the claim
+  --- (`follow_confirmed_start()`). Notes that the tab's office begins
+  --- following then (`aineo.entry.office`'s `began_following()`).
+  ---
+  ---@param id string
+  local function follow_session_elsewhere(id)
+    offices.began_following(tab)
+    follow_claimed_session(id)
+    claim(id)
   end
 
   --- Hands what aineo keeps for the Claude session `dead`, whose resume
@@ -698,11 +718,11 @@ local function make_tab(homes, key, callbacks)
   --- (`aineo.mcp`), the state directory of `kept_places()`, the editor's
   --- address and program for the session hooks, and the callbacks that make
   --- the panes follow the session (`replacement_callbacks()`,
-  --- `follow_confirmed_start()`), and those that tell the tab's office where
-  --- its session's transcript is written and that an agent waits for the
-  --- user (`aineo.entry.office`'s `note_transcript()` and
-  --- `take_permission_wait()`). With `new_session` the start is on a new
-  --- session id.
+  --- `follow_confirmed_start()`, `follow_session_elsewhere()`), and those
+  --- that tell the tab's office where its session's transcript is written
+  --- and that an agent waits for the user (`aineo.entry.office`'s
+  --- `note_transcript()` and `take_permission_wait()`). With `new_session`
+  --- the start is on a new session id.
   ---
   ---@param config table the resolved configuration
   ---@param working_directory string
@@ -732,6 +752,7 @@ local function make_tab(homes, key, callbacks)
       on_terminal_replaced = replacement.on_terminal_replaced,
       on_session_ready = follow_confirmed_start,
       on_session_switched = replacement.on_session_switched,
+      on_session_elsewhere = follow_session_elsewhere,
       on_transcript = function(session_id, path)
         offices.note_transcript(tab, session_id, path)
       end,
@@ -1508,13 +1529,30 @@ local function make_tab(homes, key, callbacks)
 
   --- Starts Claude Code on the session `id` (`claude_terminal_resuming()`) in
   --- a layout opened around it, as the first open does for the kept session:
-  --- what the reopening of the folder's tabs does for each tab.
+  --- what the reopening of the folder's tabs does for each tab. With
+  --- `kept_claim`, the session the tab claimed when the list was kept: while a
+  --- Claude Code runs it (`places.is_session_running()`; the tab's own has not
+  --- started yet), the tab claims it again once its Claude Code starts on `id`
+  --- (`claim_session()`). Else, when its transcript is in this folder's
+  --- (`places.folder_transcript()`), its Claude Code resumes `kept_claim` in
+  --- place of `id`, and that is the tab's own session from then on; when it is
+  --- not, the claim is dropped and the tab resumes `id`.
   ---
   ---@param id string
-  local function open_on_session(id)
+  ---@param kept_claim? string
+  local function open_on_session(id, kept_claim)
     opened_from_list = true
     local config = resolved_config()
+    if kept_claim and not places.is_session_running(kept_claim) then
+      if vim.fn.filereadable(places.folder_transcript(kept_claim)) == 1 then
+        id = kept_claim
+      end
+      kept_claim = nil
+    end
     open_layout_around(config, claude_terminal_resuming(config, id))
+    if kept_claim then
+      claim_session(kept_claim)
+    end
   end
 
   --- What `:Aineo new` does: a new Claude Code session. When Claude Code
@@ -1773,6 +1811,9 @@ local function make_tab(homes, key, callbacks)
   tab.panes_session = function()
     return panes_session
   end
+  tab.claimed_session = function()
+    return claimed_by_id
+  end
   tab.runs_session = runs_session
   tab.start_token = function()
     return homes.claude.start_token()
@@ -1785,9 +1826,9 @@ local function make_tab(homes, key, callbacks)
       start_session_on(listed, sessions)
     end)
   end
-  tab.open_on_session = function(id)
+  tab.open_on_session = function(id, kept_claim)
     start_in_new_tab(function()
-      open_on_session(id)
+      open_on_session(id, kept_claim)
     end)
   end
   tab.session_id = function()

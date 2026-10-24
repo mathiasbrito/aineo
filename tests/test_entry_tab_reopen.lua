@@ -354,6 +354,247 @@ T['the folder’s list']['is not written again after the quit has kept it, by a 
   eq(#tabs.kept_tab_list(state, folder).sessions, 1)
 end
 
+T['a claim'] = MiniTest.new_set()
+
+T['a claim']['by :Aineo claim {id} is kept in the folder’s list at once, under the session of the tab'] = function()
+  local state = tabs.open_first_tab(child, 'reopen-claim-kept')
+  local own = tabs.session_of_tab(state, child, tabs.FIRST_TAB)
+
+  child.cmd('Aineo claim ' .. THIRD)
+
+  local list = tabs.kept_tab_list_once(state, child.fn.getcwd(), function(kept)
+    return kept ~= nil and kept.claims ~= nil
+  end)
+  eq(list, { sessions = { own }, current = 1, claims = { [own] = THIRD } })
+end
+
+T['a claim']['the user ends with :Aineo claim is no longer in the folder’s list'] = function()
+  local state = tabs.open_first_tab(child, 'reopen-claim-ended')
+  local own = tabs.session_of_tab(state, child, tabs.FIRST_TAB)
+  child.cmd('Aineo claim ' .. THIRD)
+  tabs.kept_tab_list_once(state, child.fn.getcwd(), function(kept)
+    return kept ~= nil and kept.claims ~= nil
+  end)
+
+  child.cmd('Aineo claim')
+
+  local list = tabs.kept_tab_list_once(state, child.fn.getcwd(), function(kept)
+    return kept ~= nil and kept.claims == nil
+  end)
+  eq(list, { sessions = { own }, current = 1 })
+end
+
+T['a claim']['of a session another Claude Code process started under the tab’s token is kept in the folder’s list'] = function()
+  local state = tabs.open_first_tab(child, 'reopen-claim-fork')
+  local own = tabs.session_of_tab(state, child, tabs.FIRST_TAB)
+
+  child.lua(
+    [[
+      local claude = require('aineo.claude')
+      claude.receive_session_event('SessionStart', ..., 'startup', claude.start_token(), nil, 1, nil)
+    ]],
+    { THIRD }
+  )
+
+  local list = tabs.kept_tab_list_once(state, child.fn.getcwd(), function(kept)
+    return kept ~= nil and kept.claims ~= nil
+  end)
+  eq(list, { sessions = { own }, current = 1, claims = { [own] = THIRD } })
+end
+
+--- Records, under `state`, a Claude Code process aineo started that runs on
+--- `session`, as its report server records one: its pid is `pid`.
+---
+---@param state string
+---@param session string
+---@param pid integer
+local function record_process_on(state, session, pid)
+  require('aineo.mcp').record_server_start(state, {
+    pid = pid,
+    token = 'a start of another editor',
+    session = session,
+    working_directory = '/elsewhere',
+  })
+end
+
+T['a claim']['kept in the list is taken again at the next start while a process aineo started runs its session'] = function()
+  local state, folder, fake = reopening_setup(
+    'reopen-claim-live',
+    { sessions = { FIRST }, current = 1, claims = { [FIRST] = THIRD } },
+    FIRST
+  )
+  record_process_on(state, THIRD, vim.fn.getpid())
+
+  child.cmd('Aineo open')
+
+  local tab_entry = tabs.entries_once(state, child, function(entries)
+    return entries[tabs.FIRST_TAB] ~= nil
+  end)[tabs.FIRST_TAB]
+  eq({
+    resumed = sorted_words_after(fake, 1, '--resume'),
+    listed = { tab_entry.session, tab_entry.own },
+    claimant = child.lua_get(
+      "require('aineo.mcp').session_claimant(vim.fn.stdpath('state'), ...)",
+      { THIRD }
+    ),
+    list = tabs.kept_tab_list(state, folder),
+  }, {
+    resumed = { FIRST },
+    listed = { THIRD, false },
+    claimant = child.v.servername,
+    list = { sessions = { FIRST }, current = 1, claims = { [FIRST] = THIRD } },
+  })
+end
+
+--- Writes a transcript of `session` where Claude Code keeps those of the
+--- child's folder: `projects/<the folder, every character but a letter or a
+--- digit a dash>/<session>.jsonl` under the child's Claude Code configuration
+--- directory, which the suite keeps under the checkout.
+---
+---@param session string
+local function plant_transcript_here(session)
+  local project = vim.fn.substitute(child.fn.getcwd(), '[^a-zA-Z0-9]', '-', 'g')
+  local transcript = vim.fs.joinpath(
+    child.lua_get('vim.env.CLAUDE_CONFIG_DIR'),
+    'projects',
+    project,
+    session .. '.jsonl'
+  )
+  vim.fn.mkdir(vim.fs.dirname(transcript), 'p')
+  vim.fn.writefile({ '{}' }, transcript)
+  MiniTest.finally(function()
+    vim.fn.delete(transcript)
+  end)
+end
+
+T['a claim']['kept in the list is resumed as the tab’s own session at the next start when no process runs it and its transcript is in this folder'] = function()
+  local state, folder, fake = reopening_setup(
+    'reopen-claim-ended-process',
+    { sessions = { FIRST }, current = 1, claims = { [FIRST] = THIRD } },
+    FIRST
+  )
+  local ended = vim.system({ 'true' })
+  ended:wait()
+  record_process_on(state, THIRD, ended.pid)
+  plant_transcript_here(THIRD)
+
+  child.cmd('Aineo open')
+
+  local tab_entry = tabs.entries_once(state, child, function(entries)
+    return entries[tabs.FIRST_TAB] ~= nil
+  end)[tabs.FIRST_TAB]
+  eq({
+    resumed = sorted_words_after(fake, 1, '--resume'),
+    listed = { tab_entry.session, tab_entry.own },
+    list = tabs.kept_tab_list_once(state, folder, function(list)
+      return list ~= nil and list.sessions[1] == THIRD
+    end),
+  }, {
+    resumed = { THIRD },
+    listed = { THIRD, true },
+    list = { sessions = { THIRD }, current = 1 },
+  })
+end
+
+--- Writes, in the child's Claude Code configuration directory, the entry of
+--- Claude Code's own registry of its processes for a process on `session`:
+--- `sessions/<pid>.json`, the pid this Neovim's and its start as Claude Code
+--- 2.1.310 writes it (`ps -o lstart=` in UTC), removed when the case ends.
+---
+---@param session string
+local function register_in_claude_code(session)
+  local pid = vim.fn.getpid()
+  local started = vim
+    .system({ 'ps', '-p', tostring(pid), '-o', 'lstart=' }, { env = { TZ = 'UTC' }, text = true })
+    :wait().stdout
+  local folder = vim.fs.joinpath(child.lua_get('vim.env.CLAUDE_CONFIG_DIR'), 'sessions')
+  local registry_file = vim.fs.joinpath(folder, pid .. '.json')
+  vim.fn.mkdir(folder, 'p')
+  vim.fn.writefile({
+    vim.json.encode({ pid = pid, sessionId = session, procStart = vim.trim(started) }),
+  }, registry_file)
+  MiniTest.finally(function()
+    vim.fn.delete(registry_file)
+  end)
+end
+
+T['a claim']['kept in the list is taken again at the next start while Claude Code’s own registry names a process on its session'] = function()
+  local state, _, fake = reopening_setup(
+    'reopen-claim-registered',
+    { sessions = { FIRST }, current = 1, claims = { [FIRST] = THIRD } },
+    FIRST
+  )
+  plant_transcript_here(THIRD)
+  register_in_claude_code(THIRD)
+
+  child.cmd('Aineo open')
+
+  local tab_entry = tabs.entries_once(state, child, function(entries)
+    return entries[tabs.FIRST_TAB] ~= nil
+  end)[tabs.FIRST_TAB]
+  eq({
+    resumed = sorted_words_after(fake, 1, '--resume'),
+    listed = { tab_entry.session, tab_entry.own },
+  }, {
+    resumed = { FIRST },
+    listed = { THIRD, false },
+  })
+end
+
+T['a claim']['kept in the list whose session has no transcript in this folder is dropped at the next start, the tab resuming its own'] = function()
+  local conversations = fixture.directory('reopen-claim-elsewhere-conversations')
+  vim.fn.writefile({ 'a conversation' }, vim.fs.joinpath(conversations, FIRST))
+  local state, folder, fake = reopening_setup(
+    'reopen-claim-elsewhere',
+    { sessions = { FIRST }, current = 1, claims = { [FIRST] = THIRD } },
+    FIRST,
+    { environment = { AINEO_FAKE_CLAUDE_CONVERSATIONS = conversations } }
+  )
+  local claimed_draft = draft_file(state, THIRD)
+  vim.fn.mkdir(vim.fs.dirname(claimed_draft), 'p')
+  vim.fn.writefile({ 'the claimed session’s draft' }, claimed_draft)
+
+  child.cmd('Aineo open')
+
+  local list = tabs.kept_tab_list_once(state, folder, function(kept)
+    return kept ~= nil and kept.claims == nil
+  end)
+  eq({
+    resumed = sorted_words_after(fake, 1, '--resume'),
+    listed = tabs.session_of_tab(state, child, tabs.FIRST_TAB),
+    list = list,
+    kept_for_folder = require('aineo.claude').kept_session(state, folder),
+    claimed_draft_left = vim.uv.fs_stat(claimed_draft) ~= nil,
+  }, {
+    resumed = { FIRST },
+    listed = FIRST,
+    list = { sessions = { FIRST }, current = 1 },
+    kept_for_folder = FIRST,
+    claimed_draft_left = true,
+  })
+end
+
+T['the folder’s list']['keeps the session a /resume in the tab’s Claude Code switched to, which the next start resumes'] = function()
+  local state = tabs.open_first_tab(child, 'reopen-resumed-in-tab')
+  local folder = child.fn.getcwd()
+  tabs.session_of_tab(state, child, tabs.FIRST_TAB)
+  claude_session.press_keys(
+    child,
+    tabs.claude_terminal_of_tab(child, 1),
+    '/resume ' .. SECOND .. '\r'
+  )
+  tabs.kept_tab_list_once(state, folder, function(list)
+    return list ~= nil and list.sessions[1] == SECOND
+  end)
+  restart_on_state(state)
+  local fake = tabs.fake('reopen-resumed-in-tab-next')
+  entry.use_fake(child, fake)
+
+  child.cmd('Aineo open')
+
+  eq(sorted_words_after(fake, 1, '--resume'), { SECOND })
+end
+
 T['the first open'] = MiniTest.new_set()
 
 T['the first open']['reopens every tab of the list in its order, each on its session, with the tab at the list’s place current'] = function()

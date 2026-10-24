@@ -765,6 +765,34 @@ reopens nothing either. A tab closed with `\Q` or by Neovim's own commands is
 no longer in the list and does not reopen; `\S` brings its session back. `:qa`
 keeps every tab in the list, and so does `\Q` on the last tab.
 
+The list keeps a claim too (|:Aineo-claim|): the session a tab follows by a
+claim, beside the session of its own Claude Code, kept as you claim it, as a
+claim moves, and at the quit. When the list reopens, that tab claims the
+session again while a Claude Code runs it — the one Claude Code's background
+service runs a conversation of the tab in, the Claude Code of another aineo
+tab, or a `claude` you started yourself — and its own Claude Code resumes its
+own session. When none runs it and Claude Code keeps the session's transcript
+for this folder, the tab's Claude Code resumes the claimed session in place
+of its own, and that becomes the tab's own session; the other stays among the
+folder's sessions, where `\S` lists it. When none runs it and its transcript
+is not this folder's — a session of another folder, or one with no
+conversation — the claim is dropped and the tab resumes its own session.
+Claiming another session, or switching to the tab's own with `:Aineo claim`,
+ends a claim, and the list forgets it.
+
+Whether a session runs is read from what aineo keeps of the Claude Codes it
+started (|aineo-report-claims|) — not a session one of them has ended — and
+from Claude Code's own registry of its processes, `sessions/` in its
+configuration directory (`$CLAUDE_CONFIG_DIR`, else `~/.claude`): an entry
+counts while a process of its pid runs that started when the entry says, so
+a pid another process took since does not. aineo reads the session, pid and
+start of each entry and nothing else there. The registry's form is Claude
+Code's own and was read on Claude Code 2.1.310; the start is compared with
+what `ps` prints for the pid, and where `ps` cannot be run, no entry
+counts. Its transcript is looked for where Claude Code 2.1.310 keeps those of
+this folder, `projects/<this folder, every character but a letter or a digit
+a dash>/<session>.jsonl` in that directory.
+
 The changes pane ~
                                                                *aineo-changes*
 The changes pane lists what changed in your repository since the base of
@@ -2145,16 +2173,27 @@ at each start (|aineo-report|): Claude Code 2.1.292 ends the session it
 leaves (`SessionEnd`), then starts the next (`SessionStart`). `/compact`
 stays on the same session, and changes nothing. A conversation Claude Code
 moves to another process of its own — its background service runs it there
-on a new session id, under the hooks of aineo's start — is followed as a
-switch too, while aineo's own Claude Code runs: the tab whose start gave
-those hooks follows the new session, and the reports from that process
-reach its Report. A process Claude Code started with another tab's hooks,
-or with none of aineo's, moves nothing. Where hooks do not run,
-aineo follows the session it started: see |aineo-limits|. Two Neovims in
-one directory resume the session of the last switch in either. A switch
-made by a Claude Code whose editor is gone — it quit while Claude Code ran
-on — is kept all the same, as the session the next start in that directory
-resumes. A Neovim that follows a session by a claim (|:Aineo-claim|)
+on a new session id, under the hooks of aineo's start — is followed too,
+while aineo's own Claude Code runs, as a claim of it (|:Aineo-claim|): the
+tab whose start gave those hooks claims the new session, its Report, Input
+and changes pane follow it, the reports from that process reach its Report,
+and the folder's list of tabs keeps the claim for the next start
+(|aineo-tabs|). The tab's own Claude Code stays on its own session. While
+the claim holds, Send and a Visual Send send nothing, `\S` (`:Aineo
+sessions`) and `:Aineo new` do nothing, each telling you why, and a `/clear`
+or `/resume` you type in the tab's terminal is kept for the folder but leaves
+the panes on the claim; `:Aineo claim` without an id returns the tab to its
+own session. Each such session is followed once: a later hook that names it
+again does not take the tab back to it. An aineo older than this one kept no
+claim in the list: the first start after upgrading from v0.2.74 reopens the
+tab on its own session, and a claim you held then is made again with
+`:Aineo claim {id}`. A process Claude Code started with
+another tab's hooks, or with none of aineo's, moves nothing. Where hooks do
+not run, aineo follows the session it started: see |aineo-limits|. Two
+Neovims in one directory resume the session of the last switch in either. A
+switch made by a Claude Code whose editor is gone — it quit while Claude Code
+ran on — is kept all the same, as the session the next start in that
+directory resumes. A Neovim that follows a session by a claim (|:Aineo-claim|)
 follows its switches too, and its claim moves with them; while it follows
 a session its own terminal does not run, a switch in its own Claude Code is
 kept for the directory and leaves its panes where they are. aineo ignores
@@ -2579,7 +2618,8 @@ only in place of a resume Claude Code has no conversation for
 With tabs (|aineo-tabs|) `:Aineo claim` acts in the current tab: the Report,
 the changes pane and Input of that tab follow the claimed session. When
 another tab of this Neovim runs the session {id} names, `:Aineo claim {id}`
-moves you to that tab instead and claims nothing.
+moves you to that tab instead and claims nothing. The folder's list of tabs
+keeps the tab's claim, and the next start takes it up again (|aineo-tabs|).
 
                                                                   *:Aineo-tab*
 :Aineo tab new		Opens a tab page at the end with a tab of
@@ -3645,14 +3685,17 @@ None of the four is a tool error.
 A claim lasts until the claiming Neovim follows another session, returns to
 its own (|:Aineo-claim|) or quits, or until another Neovim claims the
 session; a claim another Neovim took over does not come back when that one
-lets go. When Claude Code switches session — `/clear`, `/resume`, `/branch` —
-the claim moves to the new session, and a Neovim that follows the session
-left by a claim follows the new one, whether or not the editor that started
-Claude Code answers, and while it, or another such Neovim, waits for you at
-a hit-enter prompt. What aineo keeps for this, under `stdpath('state')` in
-`aineo/editors/`, `aineo/claims/` and `aineo/claude-processes/`, only you can
-read: the running aineo Neovims and the session each follows, the claims,
-and the session each Claude Code process aineo started is on.
+lets go. A tab's claim the folder's list of tabs kept at the quit is made
+again when the list reopens, while a Claude Code runs its session
+(|aineo-tabs|). When Claude Code switches session — `/clear`,
+`/resume`, `/branch` — the claim moves to the new session, and a Neovim that
+follows the session left by a claim follows the new one, whether or not the
+editor that started Claude Code answers, and while it, or another such
+Neovim, waits for you at a hit-enter prompt. What aineo keeps for this, under
+`stdpath('state')` in `aineo/editors/`, `aineo/claims/` and
+`aineo/claude-processes/`, only you can read: the running aineo Neovims and
+the session each follows, the claims, and the session each Claude Code
+process aineo started is on.
 
 A report holds a `task`, a `status` — `started`, `progress`, `blocked`,
 `done` or `failed` — a one-line `summary` and, optionally, `details`. The
@@ -4665,7 +4708,10 @@ list is kept again once all have opened. Closing the last aineo tab page with
 that tab closed. A reopening resumes a session whose Claude Code in a tab just
 closed still stops, without waiting for the stop. A reopening of several real
 sessions, one of them attached in the background, was not measured: the suites
-run a fake Claude Code.
+run a fake Claude Code. A tab a reopening does not open — past the first 20,
+or not tried after one that could not start — stays in the list without its
+claim. A reopening makes each kept claim again, so a claim another Neovim
+took of that session meanwhile moves to this one.
 
 A tab opened after the first has buffers named with a number that is never
 given again (`aineo://report-2`), and a `:tabclose` of the first tab leaves
@@ -4708,25 +4754,34 @@ by Claude Code's background service with aineo's hooks, on a new session
 id, with no end of the session aineo followed. aineo follows a new session
 that Claude Code's own process in aineo's terminal starts only after it
 ends the session aineo follows; one that another process starts under
-aineo's hooks, it follows at once, while its own Claude Code runs. The
+aineo's hooks, it claims at once, while its own Claude Code runs. The
 tab's own Claude Code is the process whose `SessionStart` of the session
 the tab started on told aineo first, by its process id — until one has,
 the process aineo started in the terminal. Any other process id is
 another process, wherever it runs: Claude Code's background service can
 be a child of the tab's own Claude Code. So a `/fork` copy whose
-`SessionStart` reaches aineo moves the tab to the copy, and a teammate
+`SessionStart` reaches aineo makes the tab claim the copy, and a teammate
 that runs as a process of its own would too (neither seen). The
 teammates and background sessions Claude Code 2.1.292 starts are given its
 `--settings`, aineo's hooks among them (read in its program, not run);
 aineo ignores every hook that ran after its Claude Code exited, so a
-session they start then is not followed. Once aineo follows a session
+session they start then is not followed. Once aineo claims a session
 another process started, a `/clear` or `/resume` in its own terminal is
-not followed: it ends a session aineo no longer follows. A hook that
+kept for the directory but leaves the panes on the claim, as for any claim
+(|:Aineo-claim|). A hook that
 cannot reach the editor tells it nothing, but keeps a switch it completes
 as the session the next start in that directory resumes
 (|aineo-claude-session|); and once the end of the session
 aineo follows is lost, no later switch of that Claude Code is followed,
-until it starts again. Each hook starts
+until it starts again. A start's hooks name its tab by the start token; a
+process Claude Code started earlier with those hooks — a background host
+kept ready, say — that later runs another client's session would make that
+tab claim a session it never ran (not seen: the real Claude Code was not run
+for it). With a `claude.cmd` that runs Claude Code under a program of its own,
+a `/clear` in the tab's terminal whose start's first `SessionStart` never
+reached the editor comes from a process aineo takes for another, so the tab
+claims its own new session rather than switching to it (not seen either).
+Each hook starts
 a headless `nvim` and returns at once; that `nvim` tells the editor, waits
 for its answer, then exits: at once in an idle editor, and once you answer
 the prompt in an editor at a prompt.
