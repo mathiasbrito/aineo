@@ -97,7 +97,7 @@ end
 ---@field report_tool? string the name of aineo's report tool, as Claude Code calls it; none, and no call is a report
 ---@field settings? fun(): aineo.office.Settings what the user set for the office, asked each time it shows; the default pack when not given
 ---@field random? fun(count: integer): integer a whole number from 1 to `count`, which picks one of several packs the settings name; the first when not given
----@field wall_clock? fun(): number the time in seconds since 1970, which the stamps of the transcript's lines are on; the system's when not given
+---@field wall_clock? fun(): number the time in seconds since 1970, which the stamps of the transcript's lines are on and which tells how long ago a subagent's transcript was written; the system's when not given
 ---@field transcript? fun(): string|nil, number|nil the path of the transcript of the session the office acts out, asked each time the office starts following it (each show, and each return to its tab page), and when the tab began following that session, in seconds since 1970, which lets the follower go on in the session its transcript says was continued in another (`aineo.transcript`'s `follow()`); none or nil, and it follows none
 ---@field preview_seconds_per_state? number how long `preview()` shows each state, in seconds; 9 when not given
 ---@field schedule_after? fun(milliseconds: integer, callback: fun()): fun() calls `callback`, on the main loop, once `milliseconds` have passed, and returns what cancels the wait; the idle countdown waits through it; a timer of the editor's loop when not given
@@ -331,6 +331,7 @@ function M.new_office(options)
       on_slow_triggers = function()
         vim.notify(SLOW_TRIGGERS, vim.log.levels.WARN)
       end,
+      wall_clock = wall_clock,
     })
     local went_on_at = {}
     local path, since

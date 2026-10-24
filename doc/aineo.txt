@@ -3960,9 +3960,15 @@ folder `<session id>/subagents` beside it, the transcript and the meta file
 of each subagent. The office reads the end of the transcript when it opens,
 and each line added while it shows; a subagent that runs when it opens, or
 starts while it shows, is followed until its meta file says it finished or
-the user stopped it. A transcript cut short or replaced by another is read
-again from its end. It calls no Claude, sends nothing to its terminal, makes
-no MCP call or network request, writes nothing and spends no token. While it
+the user stopped it. A subagent quiet for ten minutes is not in the office:
+one whose transcript was last written ten minutes or more before the office
+opens is left out, and one that writes nothing the office reads for ten
+minutes while it shows walks out, unless the session's agent still waits on
+the call that started it or the subagent waits for your permission; either
+walks in again with its next line. A transcript cut short or replaced by
+another is read again from its end. It calls no Claude, sends nothing to its
+terminal, makes no MCP call or network request, writes nothing and spends no
+token. While it
 shows, one timer draws 12 frames a second, one file watch follows the
 transcript, one the subagents' folder and one each subagent it follows, 64 at
 most; where the system gives no file
