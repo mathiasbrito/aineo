@@ -137,7 +137,7 @@ T['Aineo office check']['is offered after office, with the names of the packs fo
 
   eq(
     child.fn.getcompletion('Aineo office ', 'cmdline'),
-    { 'check', 'states', 'preview', 'new', 'pack' }
+    { 'check', 'states', 'preview', 'new', 'pack', 'reset' }
   )
   eq(
     child.fn.getcompletion('Aineo office check ', 'cmdline'),

@@ -2892,6 +2892,24 @@ keeps the tab's claim, and the next start takes it up again (|aineo-tabs|).
 			from this command or from `office.pack`. {name} is
 			completed from the packs found. It needs no aineo tab.
 
+                                                         *:Aineo-office-reset*
+:Aineo office reset
+			Shows the office over the right side of the layout as
+			if the tab's session began now: every agent it showed
+			is forgotten, the main agent walks in through the
+			door, and only what the transcripts say from then on
+			is acted out, a subagent walking in with its next
+			line (|aineo-office|). It works whether the office
+			shows or not, and in place of a preview. The office
+			reads the end of the transcripts again the next time
+			it starts following them: when it shows again, or
+			its tab page is entered again. Like `:Aineo office`,
+			it acts on the aineo tab of the current tab page and
+			makes none, and it shows nothing, and tells you why,
+			with 'termguicolors' off or 'ambiwidth' `double`.
+			With any word after it, it tells you, with one error,
+			what `:Aineo office` takes.
+
 When an action fails — `claude.cmd` is not executable, say — aineo tells you
 once, with one error message starting with `aineo:`, and opens nothing.
 
@@ -4044,9 +4062,10 @@ on it that `office.pack` (|aineo-config-office.pack|) can name in its place.
 pack, `:Aineo office states` (|:Aineo-office-states|) lists what it draws for
 each state, `:Aineo office preview` (|:Aineo-office-preview|) plays every
 state over scripted agents, `:Aineo office new` (|:Aineo-office-new|)
-starts a pack of your own from the default, and `:Aineo office pack`
+starts a pack of your own from the default, `:Aineo office pack`
 (|:Aineo-office-pack|) switches the pack every office draws for this
-Neovim's session. How a pack is chosen, found and
+Neovim's session, and `:Aineo office reset` (|:Aineo-office-reset|) starts
+the office afresh, every agent forgotten. How a pack is chosen, found and
 written is told next.
 
                                                          *aineo-office-packs*

@@ -191,6 +191,19 @@ ACTIONS.office = function()
   offices.show(tab)
 end
 
+--- What `:Aineo office reset` does: shows the office of the existing aineo
+--- tab to act on (as `:Aineo office`) as if its session began now, every
+--- agent forgotten and the main agent walking in (`aineo.entry.office`'s
+--- `reset()`). With no aineo tab, tells the user.
+function M.reset_office()
+  local tab = opening.existing_acting_tab()
+  if not tab then
+    vim.notify(NO_TAB_FOR_OFFICE, vim.log.levels.WARN)
+    return
+  end
+  offices.reset(tab)
+end
+
 --- What `:Aineo office preview [name]` does: shows the office of the existing
 --- aineo tab to act on (as `:Aineo office`) acting out every state in turn
 --- with the pack `name`, or the one the setting `office.pack` names
