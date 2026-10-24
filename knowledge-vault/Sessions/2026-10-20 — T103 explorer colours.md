@@ -70,4 +70,9 @@ D30: no whole suite. Run: `tests/test_explorer_tree.lua` (33 cases), `tests/test
 
 ## Commits
 
-*Recorded after the merge.*
+Pull request #295 was closed unmerged; its commits landed in `dev` through pull request #296. Each commit below is as it stands on `dev` (a rebase merge replays under new hashes).
+Released as v0.2.63 (pull request #297, `main` at `68de1b9f`).
+
+- `69d2e2ad` Colour the explorer: file marks and names, folders, ignored entries
+- `c12ac86f` Pin the explorer's ignored colours and the definition of change groups
+- `a765b084` Record the T103 session: the explorer's colours

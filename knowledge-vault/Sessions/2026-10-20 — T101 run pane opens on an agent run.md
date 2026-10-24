@@ -45,4 +45,8 @@ None.
 
 ## Commits
 
-Recorded after the merge.
+Pull request #291 merged into `dev`. Each commit below is as it stands on `dev` (a rebase merge replays under new hashes).
+Released as v0.2.61 (pull request #292, `main` at `c7d059b2`).
+
+- `96adc734` Show the run pane when the agent runs a command
+- `bec1ce4b` Make the run answer true for a tab page the user is not in

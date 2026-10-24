@@ -52,4 +52,12 @@ A small fix after PR #307 merged (A537; D30: no whole suite before the push). Th
 ## Open threads
 
 - The `Send` cases of `test_entry_tabs_routing` flake under host load (above); no change here.
-- **Commits** — recorded after the merge.
+- **Commits** —
+
+Pull request #309 was closed unmerged; its commits landed in `dev` through pull request #312. Each commit below is as it stands on `dev` (a rebase merge replays under new hashes).
+Released as v0.2.68 (pull request #313, `main` at `179c4e9a`).
+
+- `eba48555` Name the reported branches in the started-work notice
+- `534ca16b` Pin the fake's record by an assertion, not only by a crash
+- `218fd199` Record A537 and T112
+- `e2929f4e` Correct the flake counts in T112's session note
