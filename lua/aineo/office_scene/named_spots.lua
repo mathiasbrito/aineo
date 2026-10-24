@@ -2,7 +2,9 @@
 --- places aineo knows by name without a legend.
 ---
 --- The spot called `desk` is each agent's own: the agent with the first place
---- has the first desk of the plan, the agent with the second place the second.
+--- has the first desk of the plan, the agent with the second place the second;
+--- an agent whose place has no desk in the plan goes to a desk no other
+--- character is at, and a cat, which has no place, has none.
 --- `anywhere` is a floor cell at random; `an_empty_desk` a desk no agent has;
 --- `an_idle_agents_desk` the desk of another agent in the state `idle`;
 --- `next_to_an_agent` a cell beside another agent who stands still,
@@ -269,6 +271,40 @@ local function is_open(world, spot, character, even_if_taken)
   return even_if_taken or world.taken[spot] == nil or world.taken[spot] == character.id
 end
 
+--- Of `all`, the spots `character` may go to, and whether there are any.
+---
+---@param world aineo.office_scene.SpotWorld
+---@param all aineo.office_scene.Spot[]
+---@param character { id: string }
+---@param even_if_taken boolean
+---@return aineo.office_scene.SpotChoice
+local function open_spots_choice(world, all, character, even_if_taken)
+  local open = vim.tbl_filter(function(spot)
+    return is_open(world, spot, character, even_if_taken)
+  end, all)
+  return { open = open, any = #all > 0 }
+end
+
+--- The desk `character` goes to: its own, the desk of its place; when the
+--- plan has none for its place, the desks no other character is at; none for
+--- a cat, which has no place.
+---
+---@param world aineo.office_scene.SpotWorld
+---@param character { id: string, place?: integer }
+---@param even_if_taken boolean
+---@return aineo.office_scene.SpotChoice
+local function desk_choice(world, character, even_if_taken)
+  if not character.place then
+    return { open = {}, any = false }
+  end
+  local desks = world.layout.spots[OWN_DESK] or {}
+  local own = desks[character.place]
+  if own then
+    return { open = { own }, any = true }
+  end
+  return open_spots_choice(world, desks, character, even_if_taken)
+end
+
 --- How many spots named `name` `character` may go to, and whether the plan
 --- has any: what it takes to know whether a step can be played, drawing
 --- nothing.
@@ -300,11 +336,12 @@ end
 
 --- The spots named `name` that `character` may go to, and whether there are
 --- any of the name. For `anywhere`, the one floor cell the random source
---- picks.
+--- picks; for `desk`, the character's own, or, when the plan has none for its
+--- place, the desks no other character is at.
 ---
 ---@param world aineo.office_scene.SpotWorld
 ---@param name string
----@param character { id: string, place: integer }
+---@param character { id: string, place?: integer } an agent, which has a place, or a cat, which has none
 ---@param even_if_taken boolean whether the spots other characters have are open too
 ---@return aineo.office_scene.SpotChoice
 function M.choose(world, name, character, even_if_taken)
@@ -312,14 +349,9 @@ function M.choose(world, name, character, even_if_taken)
     return floor_cell_choice(world, {})
   end
   if name == OWN_DESK then
-    local own = spots_called(world, name, character)[character.place]
-    return { open = { own }, any = own ~= nil }
+    return desk_choice(world, character, even_if_taken)
   end
-  local all = spots_called(world, name, character)
-  local open = vim.tbl_filter(function(spot)
-    return is_open(world, spot, character, even_if_taken)
-  end, all)
-  return { open = open, any = #all > 0 }
+  return open_spots_choice(world, spots_called(world, name, character), character, even_if_taken)
 end
 
 return M
