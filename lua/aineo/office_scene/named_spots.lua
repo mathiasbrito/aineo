@@ -3,8 +3,9 @@
 ---
 --- The spot called `desk` is each agent's own: the agent with the first place
 --- has the first desk of the plan, the agent with the second place the second;
---- an agent whose place has no desk in the plan goes to a desk no other
---- character is at, and a cat, which has no place, has none.
+--- an agent whose place has no desk in the plan goes to a desk no agent has,
+--- else to the desk of an idle agent away from it, and a cat, which has no
+--- place, has none.
 --- `anywhere` is a floor cell at random; `an_empty_desk` a desk no agent has;
 --- `an_idle_agents_desk` the desk of another agent in the state `idle`;
 --- `next_to_an_agent` a cell beside another agent who stands still,
@@ -19,6 +20,13 @@ local M = {}
 
 --- The name of the spots that belong to one agent each.
 local OWN_DESK = 'desk'
+
+--- The name of the spot that belongs to one agent each, for the director.
+M.OWN_DESK = OWN_DESK
+
+--- The name of the spots beside the desks, where an agent that has to leave a
+--- desk it does not own steps aside to.
+M.BESIDE_DESK = 'beside_desk'
 
 --- The name of a floor cell drawn at random when a character goes there.
 M.ANYWHERE = 'anywhere'
@@ -286,8 +294,9 @@ local function open_spots_choice(world, all, character, even_if_taken)
 end
 
 --- The desk `character` goes to: its own, the desk of its place; when the
---- plan has none for its place, the desks no other character is at; none for
---- a cat, which has no place.
+--- plan has none for its place, a desk no agent has that no other character
+--- is at, else the desk of an idle agent away from it; none for a cat, which
+--- has no place.
 ---
 ---@param world aineo.office_scene.SpotWorld
 ---@param character { id: string, place?: integer }
@@ -302,7 +311,13 @@ local function desk_choice(world, character, even_if_taken)
   if own then
     return { open = { own }, any = true }
   end
-  return open_spots_choice(world, desks, character, even_if_taken)
+  local empty = open_spots_choice(world, empty_desks(world), character, even_if_taken)
+  if #empty.open > 0 then
+    return { open = empty.open, any = #desks > 0 }
+  end
+  local idle_owners =
+    open_spots_choice(world, idle_agents_desks(world, character), character, even_if_taken)
+  return { open = idle_owners.open, any = #desks > 0 }
 end
 
 --- How many spots named `name` `character` may go to, and whether the plan
@@ -337,7 +352,8 @@ end
 --- The spots named `name` that `character` may go to, and whether there are
 --- any of the name. For `anywhere`, the one floor cell the random source
 --- picks; for `desk`, the character's own, or, when the plan has none for its
---- place, the desks no other character is at.
+--- place, the free desks no agent has, else those of idle agents away from
+--- them.
 ---
 ---@param world aineo.office_scene.SpotWorld
 ---@param name string

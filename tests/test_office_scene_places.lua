@@ -163,6 +163,90 @@ T['an agent']['draws random times only once it has a place, however many frames 
   eq(draws, 1)
 end
 
+T['an agent with no desk of its own'] = MiniTest.new_set()
+
+--- A stage of `plan`, `width` cells wide, whose desks are `d`, whose spots
+--- to stand at are `a` and whose spots beside a desk are `b`; an agent
+--- stands at `aside` while standing or idle and sits at its `desk` while
+--- working, in four colours.
+---
+---@param plan string
+---@param width integer
+---@return aineo.office_scene.Stage
+local function desks_and_asides(plan, width)
+  local pack = scene.people_pack(plan, {
+    d = { spot = 'desk', sitting = true },
+    a = { spot = 'aside' },
+    b = { spot = 'beside_desk' },
+  }, {
+    characters = FOUR_COLOURS,
+    activities = {
+      stand = { steps = { { at = 'aside', pose = 'standing' } } },
+      work = { steps = { { at = 'desk', pose = 'sitting' } } },
+    },
+    states = { standing = 'stand', idle = 'stand', working = 'work' },
+  })
+  return scene.stage_of(pack, width, 1)
+end
+
+--- The agents `main`, `two`, `three` and `four`, each in the state given, or
+--- left out where `false` is given.
+---
+---@param ... string|false
+---@return aineo.office_states.Agent[]
+local function crew_of_four(...)
+  local agents = {}
+  for index, state in ipairs({ ... }) do
+    if state then
+      table.insert(agents, { id = ({ 'main', 'two', 'three', 'four' })[index], state = state })
+    end
+  end
+  return agents
+end
+
+T['an agent with no desk of its own']['works at a desk no agent has, not at an agent’s own while it is away'] = function()
+  local stage = desks_and_asides('# plan\n \n aaa.d.d\n', 7)
+  stage.advance(crew_of_four('standing', 'standing', 'standing'), 0)
+  stage.advance(crew_of_four('standing', false, 'standing'), 1)
+
+  stage.advance(crew_of_four('standing', false, 'working'), 2)
+  stage.advance(crew_of_four('standing', false, 'working'), 8)
+
+  eq(where_are(stage, 7)[3], '6,0')
+end
+
+T['an agent with no desk of its own']['works, when no desk is empty, at the desk of an idle agent away from it'] = function()
+  local stage = desks_and_asides('# plan\n \n aaa.d.d\n', 7)
+  stage.advance(crew_of_four('standing', 'idle', 'standing'), 0)
+
+  stage.advance(crew_of_four('standing', 'idle', 'working'), 1)
+  stage.advance(crew_of_four('standing', 'idle', 'working'), 8)
+
+  eq(where_are(stage, 7)[3], '6,0')
+end
+
+T['an agent with no desk of its own']['steps off beside the desk when its owner comes back, and the owner sits'] = function()
+  local stage = desks_and_asides('# plan\n \n aa.db\n', 5)
+  stage.advance(crew_of_four('idle', 'working'), 0)
+  stage.advance(crew_of_four('idle', 'working'), 6)
+
+  stage.advance(crew_of_four('working', 'working'), 7)
+  stage.advance(crew_of_four('working', 'working'), 14)
+
+  eq(vim.list_slice(where_are(stage, 5), 1, 2), { '3,0', '4,0' })
+end
+
+T['an agent with no desk of its own']['leaves the empty desk another such agent is at to it'] = function()
+  local stage = desks_and_asides('# plan\n \n aaaa.d.d\n', 8)
+  stage.advance(crew_of_four('standing', 'standing', 'standing', 'standing'), 0)
+  stage.advance(crew_of_four('standing', false, 'standing', 'standing'), 1)
+
+  stage.advance(crew_of_four('standing', false, 'working', 'working'), 2)
+  stage.advance(crew_of_four('standing', false, 'working', 'working'), 10)
+
+  eq(vim.list_slice(where_are(stage, 8), 3, 4), { '7,0', '3,0' })
+end
+
 T['a stage'] = MiniTest.new_set()
 
 --- A stage of a long aisle whose agent stands at one end for a second and
