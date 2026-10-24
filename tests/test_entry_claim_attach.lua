@@ -89,6 +89,10 @@ local function open_listing(name, entries, mode, extra_environment)
   return state, fake, claude_session.followed_session_id(child)
 end
 
+--- The expression, run in the child, that gives the terminal Claude's window
+--- shows: the layout's first window.
+local CLAUDE_TERMINAL = 'vim.api.nvim_win_get_buf(vim.fn.win_getid(1))'
+
 --- How each process of `fake` that has ended so far ended, in order, each as
 --- the record's `{ ended, code }` line.
 ---
@@ -269,6 +273,18 @@ T[':Aineo claim {id}']['of another session running in the background, while Clau
 
   eq(vim.list_slice(attached, 1, 2), { 'attach', OTHER_SHORT_ID })
   eq(claude_session.words_after(resumed, '--resume'), { own })
+end
+
+T[':Aineo claim {id}']['of another session running in the background attaches to it in place while the attached session is busy, which a detach does not stop'] = function()
+  local other = background_entry({ id = OTHER_SHORT_ID, sessionId = OTHER })
+  local _, fake = open_listing('claim-attach-busy-attached', { background_entry(), other })
+  claim_until_attached(fake)
+  child.lua('vim.b[' .. CLAUDE_TERMINAL .. '].aineo_session_busy = true')
+
+  child.cmd('Aineo claim ' .. OTHER)
+  local attached = claude_session.start_arguments(fake, 3)
+
+  eq(vim.list_slice(attached, 1, 2), { 'attach', OTHER_SHORT_ID })
 end
 
 T[':Aineo claim {id}']['of the session Claude’s window is attached to leaves the attach as it is'] = function()
@@ -523,10 +539,6 @@ end
 --- How long after its screens are drawn the attached session of the cases
 --- that end it ends: long enough for the attach to be ready first.
 local SESSION_ENDS_AFTER_MS = '3000'
-
---- The expression, run in the child, that gives the terminal Claude's window
---- shows: the layout's first window.
-local CLAUDE_TERMINAL = 'vim.api.nvim_win_get_buf(vim.fn.win_getid(1))'
 
 --- Does nothing to the attached session, which ends by itself.
 local function wait_for_its_end() end
