@@ -39,7 +39,8 @@ M.NOT_JSON = 'not JSON'
 ---@field kind aineo.transcript.SignalKind
 ---@field tool? string the tool's name, for `tool_started`
 ---@field input? table the tool's input, for `tool_started`
----@field call? string the tool call's id, for `tool_started` and `tool_finished`
+---@field call? string the tool call's id, for `tool_started` and `tool_finished`; for `subagent_started`, the id of the call of the session's agent that started the subagent, when its meta file names it
+---@field written_at? number seconds since 1970 when the subagent's transcript was last written, for `subagent_started`
 ---@field session? string the id of the session Claude Code goes on in, for `session_continued`
 ---@field failed? boolean whether the tool's result was an error, for `tool_finished`
 ---@field at? number seconds since 1970 of the line the signal came from, when the line is stamped

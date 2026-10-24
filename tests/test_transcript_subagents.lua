@@ -256,6 +256,21 @@ T['a subagent running when the follower starts']['is heard starting a test run a
   )
 end
 
+T['a subagent running when the follower starts']['arrives naming the call that started it and when its transcript was written'] = function()
+  local session = new_session()
+  fake_transcript.append(session.transcript, RECORDED_TURN)
+  write_subagent(session, SUBAGENT, 'running')
+  vim.uv.fs_utime(agent_file(session, SUBAGENT), 1700000000, 1700000000)
+
+  follow(session)
+
+  local arrival = signals_of_agent(session.signals, SUBAGENT)[1]
+  eq(
+    { arrival.kind, arrival.call, arrival.written_at },
+    { 'subagent_started', 'toolu_fixture0010', 1700000000 }
+  )
+end
+
 T['a subagent running when the follower starts']['is not drawn when its meta says it finished'] = function()
   local session = new_session()
   fake_transcript.append(session.transcript, RECORDED_TURN)
