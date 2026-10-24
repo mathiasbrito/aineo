@@ -117,4 +117,15 @@ Also: the *git's marks* case asserts its tree (`eq(wait_for_tree(expected), expe
 
 ## Commits
 
-Recorded after the merge.
+Pull request #293 merged into `dev`. Each commit below is as it stands on `dev` (a rebase merge replays under new hashes).
+Released as v0.2.62 (pull request #294, `main` at `00d874cd`).
+
+- `c18a2644` Build the explorer's tree as data, and the reads it needs
+- `45b2d0f3` Add the explorer pane: a tree of the folder Claude works in
+- `9f61cc4b` Share one pick of worktree between the explorer and the changes pane
+- `9a933fa6` Document the explorer pane in the help and the README
+- `d1fb6f5d` Record D92, A515, A517 and T102, and the explorer's session note
+- `31ad3818` Pin the :Aineo description with the explorer pane
+- `508b267c` Harden the explorer against what a repository may hold (A518)
+- `38b94efd` Bring the help and README in line with the explorer's fix round
+- `d3b5d305` Record A518 and the explorer's fix round

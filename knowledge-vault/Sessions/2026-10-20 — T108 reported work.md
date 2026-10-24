@@ -120,4 +120,18 @@ Mutants on the fix round's tree, each on its narrowed test file, one at a time: 
 
 ## Commits
 
-Recorded after the merge.
+Pull request #302 was closed unmerged; its commits landed in `dev` through pull request #305. Each commit below is as it stands on `dev` (a rebase merge replays under new hashes).
+Released as v0.2.66 (pull request #306, `main` at `6e4cf71a`).
+
+- `adbc3559` List reported work atop the commits window, read from its base
+- `ddf47583` Require a base in announce_work and resolve it before a tab takes it
+- `de24a77e` Catch git commands that make work with aineo's own PostToolUse hook
+- `993d4c0a` Record D97, A527, A528 and T108 and the T108 session note
+- `f3abea1a` End aineo's PostToolUse hook after 6 s, and pin its silence and -C path
+- `4376691e` Resolve a reported base where the agent made its work
+- `41875b05` Read reported work from its base only while that base still holds
+- `dde42972` Keep one line per piece of work, and follow a branch made in it
+- `ae92d80d` Name the PostToolUse hook wherever the help and the health check list hooks
+- `d7208b2d` Pin that a branch's unknown reported base gives way to the pane's own
+- `5921d00f` Record A531 and the fix round of T108
+- `4cd39f07` Read only the complete lines of the fake claude's record

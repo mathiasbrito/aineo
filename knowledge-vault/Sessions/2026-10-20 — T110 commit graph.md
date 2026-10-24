@@ -124,4 +124,35 @@ The whole suite ran once on the code first pushed (Neovim 0.12.5, the host's): 5
 
 ## Commits
 
-Recorded after the merge.
+Pull request #305 merged into `dev`. Each commit below is as it stands on `dev` (a rebase merge replays under new hashes).
+Released as v0.2.66 (pull request #306, `main` at `6e4cf71a`).
+
+- `adbc3559` List reported work atop the commits window, read from its base
+- `ddf47583` Require a base in announce_work and resolve it before a tab takes it
+- `de24a77e` Catch git commands that make work with aineo's own PostToolUse hook
+- `993d4c0a` Record D97, A527, A528 and T108 and the T108 session note
+- `f3abea1a` End aineo's PostToolUse hook after 6 s, and pin its silence and -C path
+- `4376691e` Resolve a reported base where the agent made its work
+- `41875b05` Read reported work from its base only while that base still holds
+- `dde42972` Keep one line per piece of work, and follow a branch made in it
+- `ae92d80d` Name the PostToolUse hook wherever the help and the health check list hooks
+- `d7208b2d` Pin that a branch's unknown reported base gives way to the pane's own
+- `5921d00f` Record A531 and the fix round of T108
+- `4cd39f07` Read only the complete lines of the fake claude's record
+- `debe47ba` Draw the commit graph of every branch in the git home
+- `8db54bd6` Add changes.graph_limit, the commit graph's limit
+- `6932f23c` Build the commit graph's lines, colours and moves as pure functions
+- `c00a3960` Toggle the commit graph in the commits window with t
+- `1f039371` Document the commit graph, its keys, colours and limit
+- `f1476eba` Pin what the commit graph's mutants found unpinned
+- `4dceef6f` Record D99, A530, T110 and the T110 session
+- `8599f4ff` Draw the commit graph without colour whatever git's settings say
+- `75fc7199` Snap the graph's cursor in the direction it moved
+- `41422572` Keep every commits window on a commit after each graph read
+- `3292812d` See a commit on another worktree's detached HEAD as a reference
+- `cfd414b4` Pin what the test review found unproven, and restore a live guard
+- `7f34ac9f` Say in the help that t and j/k are the graph's only where it shows
+- `59f64c5e` Pin a commits buffer made anew on its commit, after the fixes
+- `7751b831` Record A532, A533 and the T110 fix round
+- `e09d40a2` Show the graph in place of the Reported section too
+- `ae35b72f` Record the T110 rebase onto T108 in its session note

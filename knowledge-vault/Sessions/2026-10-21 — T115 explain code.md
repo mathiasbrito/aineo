@@ -102,4 +102,22 @@ Runs, each file on its own, on the head: `test_explain` 44 cases, `test_entry_ex
 - No real `claude -p --output-format json --json-schema` run was recorded: the fake's answers are synthetic, shaped from the documentation of 2.1.306. A contract run that records one is the user's to start (the suite never runs the real Claude).
 - The health check does not check a version floor for the flags this uses (`--json-schema`, `--no-session-persistence`, `--tools`), as none is measured.
 - The `modularity` skill's table of homes does not list `explain`; `aineo.entry` requiring its entry point is an edge that table already allows. Adding the row is an `ai/` change, not part of this packet.
-- **Commits** — recorded after the merge.
+- **Commits** —
+
+Pull request #314 merged into `dev`. Each commit below is as it stands on `dev` (a rebase merge replays under new hashes).
+Released as v0.2.69 (pull request #315, `main` at `fb3a91f9`).
+
+- `9e61811e` Add the explain.model and explain.timeout_ms settings
+- `7a169a84` Add the explain home that asks a Claude of its own to explain code
+- `ed855c2c` Map \v and \V and add :AineoExplain to explain the current file
+- `37d056b3` Report the explain keys and settings in the health check
+- `43279bf2` Document explaining code in the help and the README
+- `6a43711f` Record D103, A544, T115 and the T115 session
+- `39e26aff` Make explain a subcommand of :Aineo, with a range (A548)
+- `3e2eca33` Keep a project's settings and claude.cmd's flags out of the explain process
+- `f9cd136e` Show an answer when a write moved the change count but not the text
+- `e4fcd9d3` Bound the cost and the width of what an explanation draws
+- `6482344e` Tell an error result on a non-zero exit, and run in a folder that exists
+- `69c2e3a4` Pin Visual \V: the read-only tools and the lines selected
+- `6aa196be` Record A549 and mend the records of D103 and T115
+- `ec238021` Expect explain in test_entry's :Aineo completion and description

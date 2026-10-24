@@ -51,4 +51,11 @@ Added: `tests/test_changes_follow.lua` (the following and `<BS>`), one case in `
 
 ## Commits
 
-Recorded after the merge.
+Pull request #300 was closed unmerged; its commits landed in `dev` through pull request #299. Each commit below is as it stands on `dev` (a rebase merge replays under new hashes).
+Released as v0.2.64 (pull request #301, `main` at `c8106836`).
+
+- `8479fbe9` Expand a leading ~ in the links followed in Claude's terminal
+- `a63bfaeb` Read the Report's ~/ paths by the rule links use
+- `3d3b8514` Show the diff of the file under the cursor as the files window's cursor moves
+- `d2cd2125` Pin that <BS> stays Vim's own in a file opened from the pane
+- `6c78878e` Make the diff that follows the cursor say nothing of a file as HEAD has it

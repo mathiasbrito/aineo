@@ -47,4 +47,7 @@ Added in `tests/test_changes_follow.lua`: `draws nothing while no diff is open`,
 
 ## Commits
 
-Recorded after the merge.
+Pull request #303 merged into `dev`. Each commit below is as it stands on `dev` (a rebase merge replays under new hashes).
+Released as v0.2.65 (pull request #304, `main` at `f7385235`).
+
+- `51e545c1` Follow the cursor in the files window only while a diff is open
