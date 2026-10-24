@@ -791,6 +791,16 @@ As offered; the answers are in *Outcome* (D111, A574).
 - **OQ4 — a key for the office.** **(a) None: `:Aineo office` and `<Plug>(aineo-office)` (recommended)**, the office comes by itself. (b) A prefix key, such as `\O`.
 - **OQ5 — `compacting` live.** **(a) From the transcript, after the fact (recommended)**: tidying for a few seconds once compaction is written. (b) A second asynchronous hook, `PreCompact`, so it shows while it runs.
 
+## Rulings recorded after the merge (2026-10-24)
+
+*Recorded by the knowledge-writer agent (branch `knowledge/w21-records-v074-v075`) from the user's words and the orchestrator's rulings of 2026-10-23. No row above is edited; each ruling here says what it replaces.*
+
+| ID | Ruling | Replaces |
+|---|---|---|
+| D113 | The user, 2026-10-23, verbatim: "working agents are not cleaning the cat mess! … the agent must get upset go clean and come back even if it is working". A thing on the floor always gets a cleaner: the nearest idle agent that can walk to it cleans, and when none can, the nearest working agent that can walk to it (not one already in an interlude, not arriving or leaving). The cleaner first shows it is upset (the thing's `upset_agents_play`), then walks over and cleans, then goes back to the activity its state asks for. A601 keeps idle agents preferred and counts a subagent as an agent. T138 built it. | The wording of §3's `cleaned_up_by` row, *the activity the nearest idle agent plays first to remove it*, and of D109's *an idle one cleans it*: the cleaner is the nearest idle agent, else the nearest agent that is working; the activity it plays is unchanged. The row above stays as it was written. |
+| A604 | The follower's start may search up to the last 8 MiB of the main transcript, in 1 MiB windows, for Claude Code's `continued-in` line and follow its chain (at most 8 hops). The replay itself stays the 256 KiB tail, so A569 and C17 hold for the replay. The line names the file, so it replaces the sibling-file heuristic that extended A598 (a sibling that mentions the followed session could be another tab's fork). T137 built it. | The reading of A569 and C17 as bounding everything the follower reads at its start: only the replay is bounded by the 256 KiB tail; the search for the line reaches 8 MiB. |
+| A607 | The tab's own continuation is the first `continued-in` line in the followed file stamped at or after the moment the tab began following it (its Claude Code start for a resume, the switch for a session switch). No such line yet: keep following the file and keep reading it for one, each hop likewise. "Most recently written" is not used, as it flips between two live continuations. T137 built it. | A605's choice rule (follow the target written most recently), which the orchestrator withdrew the same day, and the last-mark rule before it. |
+
 ## Risks
 
 - **OR1** — the transcript's shape is tier 2 and changes without notice: the codec passes over what it does not know, fixtures carry their version, health shows the Claude Code version, and a re-recording runs only when the user starts it.
