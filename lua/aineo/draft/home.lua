@@ -8,13 +8,18 @@ local M = {}
 ---@class aineo.draft.Home
 ---@field set_draft_environment fun(draft_environment: aineo.draft.Environment)
 ---@field keep_draft fun(buffer: integer)
----@field follow_draft_session fun(session_id: string, options?: { claim: boolean? })
+---@field follow_draft_session fun(session_id: string, options?: { claim: boolean?, carry: ('replace'|'merge')? })
 ---@field hand_over_draft_session fun(from: string, to: string)
+---@field input_differs_from_draft fun(session_id: string): boolean
 ---@field let_go? fun() only on a home `require('aineo.draft').new()` made: saves what Input holds, removes its handlers and keeps no buffer
 
 --- How long after a change to the kept buffer its text is saved: a crash
 --- loses at most the changes of that last second.
 local SAVE_DELAY_MS = 1000
+
+--- The ways a follow carries Input's text into the followed session's draft
+--- (`follow_draft_session()`'s `options.carry`).
+local CARRIES = { replace = true, merge = true }
 
 --- The permissions a draft file is created with: read and write for its
 --- owner only, since a draft is the user's unsent text.
@@ -185,6 +190,30 @@ local TEXTLOCK_REFUSAL = 'E565:'
 --- another device, or it has too many.
 local LINK_REFUSALS = { ENOTSUP = true, EPERM = true, EXDEV = true, EMLINK = true, ENOSYS = true }
 
+--- The draft kept in the draft file `file`, or nil when there is none.
+---
+--- Raises an error naming `file` when it cannot be opened for any reason but
+--- its absence — a directory named `drafts` that is a file included — or
+--- cannot be read.
+---
+---@param file string
+---@return string|nil
+local function read_draft_file(file)
+  local descriptor, open_failure, open_error = vim.uv.fs_open(file, 'r', 0)
+  if open_error == 'ENOENT' then
+    return nil
+  end
+  if not descriptor then
+    error(("cannot read Input's draft in %s: %s"):format(file, open_failure), 0)
+  end
+  local draft, read_failure = vim.uv.fs_read(descriptor, vim.uv.fs_fstat(descriptor).size, 0)
+  vim.uv.fs_close(descriptor)
+  if not draft then
+    error(("cannot read Input's draft in %s: %s"):format(file, read_failure), 0)
+  end
+  return draft
+end
+
 --- Whether the file at `path` is a symbolic link: a hard link to it would
 --- name the file it leads to, not the link.
 ---
@@ -335,28 +364,13 @@ function M.new(identity)
   end
 
   --- The draft kept in the draft's file (`kept_draft_file()`), or nil when
-  --- none is kept.
+  --- none is kept (`read_draft_file()`).
   ---
-  --- Raises an error naming the draft's file when it cannot be opened for any
-  --- reason but its absence — a directory named `drafts` that is a file
-  --- included — or cannot be read.
+  --- Raises an error naming the draft's file when it cannot be read.
   ---
   ---@return string|nil
   local function read_draft()
-    local file = kept_draft_file()
-    local descriptor, open_failure, open_error = vim.uv.fs_open(file, 'r', 0)
-    if open_error == 'ENOENT' then
-      return nil
-    end
-    if not descriptor then
-      error(("cannot read Input's draft in %s: %s"):format(file, open_failure), 0)
-    end
-    local draft, read_failure = vim.uv.fs_read(descriptor, vim.uv.fs_fstat(descriptor).size, 0)
-    vim.uv.fs_close(descriptor)
-    if not draft then
-      error(("cannot read Input's draft in %s: %s"):format(file, read_failure), 0)
-    end
-    return draft
+    return read_draft_file(kept_draft_file())
   end
 
   --- Tells the user once (`warn_once()`) that the kept draft could not be put
@@ -744,6 +758,32 @@ function M.new(identity)
     })
   end
 
+  --- Writes `buffer`'s text as the draft of the session the home follows now,
+  --- when `carry` asks for it and `buffer` holds text: in place of that
+  --- session's draft (`'replace'`), or after it and a blank line (`'merge'`).
+  --- A session's draft that cannot be read is never replaced: nothing is
+  --- written then, and the follow tells it (`replace_with_kept_draft()`).
+  ---
+  ---@param buffer integer
+  ---@param carry? 'replace'|'merge'
+  local function carry_into_followed_draft(buffer, carry)
+    if not carry or is_empty(buffer) then
+      return
+    end
+    local read, draft = pcall(read_draft)
+    if not read then
+      return
+    end
+    local text = draft_of(buffer)
+    if carry == 'merge' and draft and draft ~= '' then
+      text = draft .. '\n' .. text
+    end
+    local written, failure = pcall(write_draft, kept_draft_file(), text)
+    if not written then
+      warn_once('write', failure)
+    end
+  end
+
   --- The hand-overs told before `set_draft_environment()`, in the order
   --- they were told, made once it is called (`hand_over()`).
   ---@type { from: string, to: string }[]
@@ -925,8 +965,22 @@ function M.new(identity)
   --- (`aineo.entry`) does with the Input it has just made, which keeps that
   --- unreached.
   ---
-  --- Raises an error naming `session_id` when it is not a string, or
-  --- `options` when it is not a table, and nothing else; a draft that cannot
+  --- A follow told `options.carry` carries the text of each kept buffer that
+  --- holds some into the session's draft, which is written at once: in place
+  --- of that draft (`'replace'`), or after it and a blank line (`'merge'`;
+  --- just the text when the session has no draft). The buffer then shows
+  --- that draft — its text kept as it is, cursor and undo included, when the
+  --- draft is that text — and the session followed until then keeps the
+  --- text as its own draft too. An empty buffer carries nothing and is given
+  --- the session's draft, as a follow without it does; so is a buffer whose
+  --- carry cannot be written, which is told once per home as every save is,
+  --- and one whose session's draft cannot be read, which no carry replaces.
+  --- A carry told before `set_draft_environment()`, or with the session
+  --- followed already, carries nothing.
+  ---
+  --- Raises an error naming `session_id` when it is not a string,
+  --- `options` when it is not a table, or `options.carry` when it is neither
+  --- `'replace'` nor `'merge'`, and nothing else; a draft that cannot
   --- be read or put in, saved, or moved is told to
   --- the user as a warning, once per home for putting in, once for saving
   --- and once for moving, but a draft that cannot be read and a text kept in
@@ -935,10 +989,14 @@ function M.new(identity)
   --- follow.
   ---
   ---@param session_id string
-  ---@param options? { claim: boolean? }
+  ---@param options? { claim: boolean?, carry: ('replace'|'merge')? }
   function copy.follow_draft_session(session_id, options)
     vim.validate('session_id', session_id, 'string')
     vim.validate('options', options, 'table', true)
+    local carry = options and options.carry
+    vim.validate('options.carry', carry, function(value)
+      return value == nil or CARRIES[value] == true
+    end, "'replace' or 'merge'")
     local as_claim = options ~= nil and options.claim == true
     if session_id == followed_session and as_claim == followed_as_claim then
       return
@@ -959,7 +1017,8 @@ function M.new(identity)
       move_directory_draft_once()
     end
     for buffer in pairs(kept) do
-      replace_with_kept_draft(buffer, first_follow)
+      carry_into_followed_draft(buffer, carry)
+      replace_with_kept_draft(buffer, first_follow or carry ~= nil)
     end
   end
 
@@ -1004,6 +1063,35 @@ function M.new(identity)
       return
     end
     hand_over(from, to)
+  end
+
+  --- Whether a kept buffer holds text that the Claude session `session_id`'s
+  --- draft is not, while that session has a draft: what a follow carrying
+  --- Input's text (`follow_draft_session()`'s `carry`) would replace or merge
+  --- with. False before `set_draft_environment()`, for an empty buffer, for a
+  --- session with no draft or an empty one, and for a draft that cannot be
+  --- read, which no carry replaces.
+  ---
+  --- Raises an error naming `session_id` when it is not a string.
+  ---
+  ---@param session_id string
+  ---@return boolean
+  function copy.input_differs_from_draft(session_id)
+    vim.validate('session_id', session_id, 'string')
+    if not environment then
+      return false
+    end
+    local read, draft =
+      pcall(read_draft_file, session_draft_file(environment.state_directory, session_id))
+    if not read or not draft or draft == '' then
+      return false
+    end
+    for buffer in pairs(kept) do
+      if not is_empty(buffer) and draft_of(buffer) ~= draft then
+        return true
+      end
+    end
+    return false
   end
 
   --- Removes the file a labelled home kept its text in before it followed a
