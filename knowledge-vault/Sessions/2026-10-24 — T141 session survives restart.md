@@ -105,4 +105,13 @@ Seen red in the round: the P1 case; the registry's first case (no function); the
 
 ## Commits
 
-*Recorded after the merge.*
+Pull request #357 merged into `dev`. Each commit below is as it stands on `dev` (a rebase merge replays under new hashes).
+Released as v0.2.75 (pull request #358, `main` at `f1243b14`).
+
+- `f33a6103` Keep each tab's claim in the folder's list of tabs
+- `907152b8` Tell whether a Claude Code aineo started runs a session
+- `233dfc3d` Follow a session another Claude Code process starts as a claim
+- `de1c3551` Keep a tab's claim across a restart and take it up again
+- `7bb94ca7` Record T141 and T142 in the plan and a session note
+- `9782b4d3` Resume a kept claim only where it is safe, and see every Claude Code
+- `eaa9bf36` Record the fix round of T141 and T142

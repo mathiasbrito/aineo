@@ -80,4 +80,10 @@ Files run on the fix (Neovim 0.12.5, each `Fails (0)`): `test_claude_switch` (10
 
 ## Commits
 
-*Recorded after the merge.*
+Pull request #318 merged into `dev`. Each commit below is as it stands on `dev` (a rebase merge replays under new hashes).
+Released as v0.2.71 (pull request #319, `main` at `a9c0f219`).
+
+- `0b5bd800` Follow a session another Claude Code process starts under the tab's token
+- `da42067c` Record T120 and A556, the fork's reports and what the fix leaves open
+- `13fe1e6b` Know the tab's own Claude Code by the pid of its first SessionStart
+- `2d21cde4` Record A563 in T120's row and the session note's fix round

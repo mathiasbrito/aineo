@@ -149,4 +149,26 @@ The round's own mutants, killed by an assertion each: B1–B6 (`director.lua`: t
 
 ## Commits
 
-*Recorded after the merge.*
+Pull request #335 merged into `feature/t123-office`; that branch reached `dev` through pull request #344. Each commit below is as it stands on `dev` (a rebase merge replays under new hashes).
+Released as v0.2.73 (pull request #345, `main` at `d3df7aff`).
+
+- `573bb541` Walk agents over floor cells and play activities step by step
+- `edfac013` Draw poses with mirrored layers, rises, props and seats
+- `d2140758` Show in_use art and lay walk_over pieces on the floor
+- `57276c7a` Show a pose's screen on its agent's own monitor
+- `a4c20a60` Cap the pieces a plan places so a pack cannot make a frame costly
+- `ac29dcff` Draw the status list on the last rows below the plan
+- `cca71dcf` Write the time and the date into the pieces that show them
+- `d45fb34a` Document how agents play activities and the status list
+- `2c928b00` Pin a frame's rows, a departing agent's spot and a pose's restart
+- `bca3adf8` Pin the columns a mirrored figure shows at the stage's edge
+- `f821d78f` Give the picture the rows its status list takes
+- `5a12ee40` Record T129, the office director, in the plan and a session note
+- `367d5196` Name the pull request in the T129 session note
+- `d9795f9c` Pin what the review of the director found unpinned
+- `f2c90168` Search only as far as the nearest spot, and begin few steps an update
+- `bb8a13ac` Leave out what a frame cannot afford, and lay out in linear time
+- `863f0fb8` Keep the plan above the status list, and a prop with its art
+- `b0efc5f8` Keep an agent's place, its spot and its walk across arrivals and resizes
+- `ec3cb212` Document what a pack can ask of a frame, and the review round
+- `72271336` Pin that a report card stands above the status list the scene draws

@@ -42,4 +42,18 @@ The review of the pull request found nine items; each was built test first. The 
 
 ## Commits
 
-*Recorded after the merge.*
+Pull request #329 merged into `feature/t123-office`; that branch reached `dev` through pull request #343. Each commit below is as it stands on `dev` (a rebase merge replays under new hashes).
+Released as v0.2.73 (pull request #345, `main` at `d3df7aff`).
+
+- `23236c3e` Give the Claude session an asynchronous PermissionRequest hook
+- `f01d622c` Make the hook relay tell the editor of a permission wait
+- `58584cbf` Route a permission wait to the tab whose start token it carries
+- `cb4efd8b` Hand the session's transcript path from SessionStart to its tab
+- `6dff9da1` Give each tab's office the transcript path and the permission waits
+- `ca99bd89` Document the office's two hooks in the help and the health advice
+- `eaff415c` Record T128 and run the subagent relay case once
+- `415c04b8` Take the hook-input fixture from scrubber v3
+- `7ddb2d05` Pin the PermissionRequest refusal and the hook-named transcript's order
+- `b172ef3f` Bound the relay's stdin, stop its socket, and skip dontAsk
+- `581b8192` Count a transcript path only when it starts with a slash
+- `d4c249b5` Say in the help what the permission hook does not see

@@ -116,4 +116,18 @@ Each run against the test file named, one at a time, from the final tree (the ho
 
 ## Commits
 
-*Recorded after the merge.*
+Pull request #353 merged into `feature/t123-office-authors`; that branch reached `dev` through pull request #355. Each commit below is as it stands on `dev` (a rebase merge replays under new hashes).
+Released as v0.2.74 (pull request #356, `main` at `2874493e`).
+
+- `d5f59147` Let the office follow the transcript of a session the tab switched to
+- `166af58a` Tell the tab's office when the tab's session or its transcript changes
+- `97e3b74b` Follow the session a transcript says it was continued in
+- `df27bf49` Have the office go on when its transcript says the session was continued
+- `db514c9d` Record T137 in the office plan and write its session note
+- `afd59fc3` Have the office act out the session the tab's panes follow
+- `eed3b17d` Follow the tab's own continuation, the first line stamped after its start
+- `af0aa8ac` Hand the follower the anchor and keep the sessions of the chain
+- `1ff1555b` Tell the follower when the tab began following its session
+- `6e3c3069` Describe in the help which session the office acts out and how it goes on
+- `0d80eb2f` Note the moment a tab began following only at a start and a switch
+- `b7a69f5a` Rewrite the T137 session note for the first-line rule and the claimed tab

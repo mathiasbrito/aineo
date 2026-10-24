@@ -84,7 +84,27 @@ The first push: 5896 cases, `Fails (0)`, after two failures of the first whole r
 
 ## Commits
 
-*Recorded after the merge.*
+Pull request #320 merged into `dev`. Each commit below is as it stands on `dev` (a rebase merge replays under new hashes).
+Released as v0.2.72 (pull request #321, `main` at `77502d9a`).
+
+- `4fe39810` Add explain.issues_prompt, the words that open a prompt of marked issues
+- `31aa616f` Jump between explanations and issues with ]v and [v
+- `e12fa624` Mark issues with \vm, shown with a check and a stronger tint
+- `155577f9` Count the marked issues in the window's corner badge
+- `3e02767b` Send the marked issues to Claude with \s, behind a prompt of their own
+- `ce649991` Document and check ]v, [v, \vm and explain.issues_prompt
+- `667cbb1a` Record D105, D106 and tasks T121, T122, with the session note
+- `87baaf33` List the new mappings in the plugin suite, and keep answers apart per suite
+- `16f70b3e` Read the marked issues in the buffer \s was pressed in
+- `3bd67d19` Tell the sent issues' files from the folder Claude Code runs in
+- `7992f19b` Tell the listeners of every mark an edit took, whoever noticed
+- `c276550b` Reveal the line a jump lands on: open its folds, show the band above it
+- `45d760e2` Map ]v and [v whenever absent, and remove them by their description
+- `9e2d3793` Make the badge's marked part follow the buffer, and name the configured key
+- `56c51c67` Wait for the second tab's Send from the bytes received before the press
+- `7a3ba0e0` Pin a wiped buffer's badge, an upward \vm and the send under a claim
+- `ebd9ed22` Say that \v also waits for m, and list \vm among the Visual keys
+- `ce0f4546` Record A566 and A568 in the D105 and D106 rows, and the fix round
 
 ## Open threads
 

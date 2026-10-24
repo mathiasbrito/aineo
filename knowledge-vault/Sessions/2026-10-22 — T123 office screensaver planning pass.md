@@ -38,4 +38,8 @@ On the same branch, a second commit wrote the plan to those answers:
 
 ## Commits
 
-*Recorded after the merge.*
+Pull request #322 merged into `dev`. Each commit below is as it stands on `dev` (a rebase merge replays under new hashes).
+A vault-only change; it has no release of its own.
+
+- `32574591` Plan the office screensaver: homes, state source, pack format
+- `e8792e84` Write the office plan to the user's answers and rulings
