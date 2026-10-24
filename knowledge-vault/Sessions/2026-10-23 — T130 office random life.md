@@ -151,4 +151,27 @@ The dispatch's five of the first round are D1 (the same behaviour twice in a row
 
 ## Commits
 
-*Recorded after the merge.*
+Pull request #338 merged into `feature/t123-office`; that branch reached `dev` through pull request #344. Each commit below is as it stands on `dev` (a rebase merge replays under new hashes).
+Released as v0.2.73 (pull request #345, `main` at `d3df7aff`).
+
+- `244e7294` Pick what an agent does next at random, alone or with partners
+- `3b5e7c2c` Name the spots a pack can use without a legend
+- `fee4cfb4` Leave things on the floor for agents to be upset by and clean up
+- `be9f665c` Give the office a cat with a life of its own
+- `4af310af` Split the director into the concerns it had grown
+- `d1e89c47` Follow only the name the format defines
+- `740b3ba8` Document the office's random life for pack authors
+- `a66c0a23` Drop a guard the end-of-update cleaner pass makes unobservable
+- `b7aa5019` Keep characters moving when a spot is gone, and pin what mutants found
+- `66356ea1` List an agent with the label of what it is playing
+- `8b2c7aeb` Stop characters that move one another off a spot from doing it for ever
+- `c0ee095d` Drop a claim the cleaner needs no more than the spot's own taking
+- `36cad600` Pin that one cleaner is sent and that the cat has no desk
+- `9e45b94e` Record T130, the office's random life, in the plan and a session note
+- `518315b5` Keep a cat that has no place yet from weighing who walks nearest it
+- `78464618` Keep a game for two a game for two, and pin the partner's random draw
+- `ad94779d` Send only an agent that can walk to a mess to clean it up
+- `8e70ce10` End the step of a character moved off a spot with nowhere to go
+- `a7bcb0a0` Lay the agents out again in the order they were given
+- `114f3b41` Pin that a game leaves a cleaner alone and that a thing's reach is found anew
+- `a7c5bf26` Record the review round of the random life in the session note

@@ -84,4 +84,25 @@ Mutants of the review round, all killed by an assertion: N1–N17 (budget not co
 
 ## Commits
 
-*Recorded after the merge.*
+Pull request #332 merged into `feature/t123-office`; that branch reached `dev` through pull request #343. Each commit below is as it stands on `dev` (a rebase merge replays under new hashes).
+Released as v0.2.73 (pull request #345, `main` at `d3df7aff`).
+
+- `dda94cc0` Read block comments, long strings and Lua's table semantics in packs
+- `e0e922da` Tell every problem of a pack with its file and line, and read art headers
+- `d27f32da` Read floor plans with repeated rows, and check them line by line
+- `8c9722a8` Lay out repeated rows, hidden pieces, decorations and stretched runs
+- `22071a4e` Read every field of the pack format through one schema, line by line
+- `39346601` Pin the fallbacks of a pack based on another
+- `dc893abf` Check that spots can be reached and that activities have their spots
+- `8d5ee97e` Choose the office's pack, replace its pieces and check it
+- `85bd06bb` Refuse a trigger's Lua pattern that is none, and pin the pack's size caps
+- `7d9e6c18` Record T125 and pin a pose that is like itself falling back
+- `1ceaa143` Describe :Aineo office check in the command's description test
+- `623aef26` Refuse a trigger's Lua pattern with more than one repetition item
+- `1675ffc8` Count ? as a repetition item, and read one walker for every Lua pattern
+- `25262b53` Stop a pack's bytes from hanging, slowing or breaking the office
+- `d806ceb0` Pin the reader's survivors, expand ~ in office.pieces, stretch once
+- `1e27c09a` Keep a pack to plain names and to its own folder, and tell odd files
+- `1973f7e7` Bound what loading a pack reads, and read it again only when it changed
+- `8aac942c` Cap a pack's triggers at 64 and the time to try them at 20 ms
+- `2ba1e14f` Record the review round of T125 in its session note

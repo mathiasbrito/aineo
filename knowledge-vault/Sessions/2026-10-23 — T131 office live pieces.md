@@ -131,4 +131,18 @@ Mutants of the round, each a literal edit on a pristine copy, all killed by an a
 
 ## Commits
 
-*Recorded after the merge.*
+Pull request #336 merged into `feature/t123-office`; that branch reached `dev` through pull request #344. Each commit below is as it stands on `dev` (a rebase merge replays under new hashes).
+Released as v0.2.73 (pull request #345, `main` at `d3df7aff`).
+
+- `b38e8814` Give each office agent the details its pieces show
+- `bf3654a9` Draw the sky, the tasks, the printed page and the monitor's notes
+- `d404611e` Pin the live pieces' frames, anchors and clips, and document them
+- `eb2e6c65` Assert that a printer and a monitor with nobody behind them draw nothing
+- `a41953db` Make the missing-page and missing-details cases able to fail
+- `543fd256` Record the live pieces in the session note and the plan
+- `add7b6c2` Keep a fetched address's host only when it has the shape of one
+- `b3d15ed1` Follow Claude Code's task rules for deleted and failed tasks
+- `4d604981` Keep text one cell a character, cheap, and off the status list
+- `6bad5750` Say why the office does not show when 'ambiwidth' is double
+- `2d22b85a` Show a NUL in a clue or a task as ? and keep the rest of the text
+- `b61f56ba` Record the review round of the live pieces in the session note

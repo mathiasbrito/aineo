@@ -34,4 +34,7 @@ A small fix (D30) of the office screensaver (T123): the office's pack could only
 
 ## Commits
 
-*Recorded after the merge.*
+Pull request #352 merged into `feature/t123-office-authors`; that branch reached `dev` through pull request #355. Each commit below is as it stands on `dev` (a rebase merge replays under new hashes).
+Released as v0.2.74 (pull request #356, `main` at `2874493e`).
+
+- `dd6926b9` Add :Aineo office pack to switch the office's pack on the fly

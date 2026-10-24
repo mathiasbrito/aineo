@@ -97,4 +97,12 @@ Survivors, and where they are killed: M4 and M11 survive the states file and die
 
 ## Commits
 
-*Recorded after the merge.*
+Pull request #347 merged into `feature/t123-office-authors`; that branch reached `dev` through pull request #355. Each commit below is as it stands on `dev` (a rebase merge replays under new hashes).
+Released as v0.2.74 (pull request #356, `main` at `2874493e`).
+
+- `a194c66f` Add the space-station office pack, an original second look for the office
+- `8d0d663d` Pin the space station's push, stretched runs and starhare fur
+- `554da4f5` Record T135, the space-station pack, in the plan and a session note
+- `7c8e2d0c` Expect the space-station pack among the packs that check offers
+- `26997cb3` Make the station's push trigger stop at a real push
+- `bce2e1cc` Draw the starhare's puddle as an oval

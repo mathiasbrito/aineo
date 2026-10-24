@@ -35,4 +35,11 @@ The passes through 22 of the 24 states (default pack, and the station's at three
 
 ## Commits
 
-*Recorded after the merge.*
+Pull request #350 merged into `feature/t123-office-authors`; that branch reached `dev` through pull request #355. Each commit below is as it stands on `dev` (a rebase merge replays under new hashes).
+Released as v0.2.74 (pull request #356, `main` at `2874493e`).
+
+- `a6559abf` Send the nearest working agent to clean the cat's mess
+- `56363c0f` Draw the cat's puddle as an oval
+- `02c799e9` Record T138: the cat's mess always gets cleaned
+- `ff150215` Keep the cat out of the state passes
+- `05c83ecd` Note the rebuilt branch and the state passes in T138's record

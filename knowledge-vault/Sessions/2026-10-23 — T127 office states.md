@@ -115,4 +115,26 @@ The whole suite (`make test`) on the first push's tree: `Fails (1)` in `test_ent
 
 ## Commits
 
-*Recorded after the merge.*
+Pull request #325 merged into `feature/t123-office`; that branch reached `dev` through pull request #343. Each commit below is as it stands on `dev` (a rebase merge replays under new hashes).
+Released as v0.2.73 (pull request #345, `main` at `d3df7aff`).
+
+- `700fa715` Give the office the full vocabulary of 24 states and four parents
+- `27df47c9` Derive an agent's state from its tool calls and command chains
+- `2c77dffc` Give the tracker the time of each signal and each frame
+- `44a8a52d` Track each agent's life: turns, errors, subagents, dwell
+- `606e3aef` Let a pack's triggers name the activity of a tool call
+- `763a130c` Add the office.commands setting with its checks and its help
+- `594bafaa` Tell the office's tracker the command classes and the report tool
+- `bd4d9c4a` Pin the cd and assignment skipping of a command chain
+- `5c2d2f59` Refuse a signal that names no agent, and pin the time check
+- `ec4aef05` Record T127, the office's states, in its session note and the plan
+- `b6c7155e` Record the pull request and the whole-suite result of T127
+- `ccc34836` Read an office.commands Lua pattern whole, and refuse one that repeats twice
+- `51b9e1b3` Match globs in linear time and bound what a Lua pattern may cost
+- `c8dc31c8` Leave heredoc bodies out of a command's class, and pin the separators
+- `591baa31` Pin that the default and the setup() classes of commands reach the tracker
+- `57b86733` Read the resolved configuration through one helper in aineo.entry
+- `21e6f7ca` Pin that every state of the vocabulary has an activity in a pack
+- `5b2c5eb6` Keep the walk in, the background job and the permission wait whole
+- `166de038` Document the matching limits and record the review round of T127
+- `70915ccc` Load the Lua pattern walker only when a pattern needs it
