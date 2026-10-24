@@ -88,4 +88,24 @@ Not given a case of its own: `gf` and `<S-CR>` (they read the entry's worktree t
 
 - `from ?` lines list no commits (above): the orchestrator's ruling to keep or change.
 - `D101` and `T113` are on `feature/t113-diff-base`, in flight; D102's and T114's rows are appended after D100's and T112's and will meet theirs at the rebase. If T113 lands first, a tree commit line shows `Against:` as any commit line does, once the branch is rebased onto it.
-- **Commits** — recorded after the merge.
+- **Commits** —
+
+Pull request #311 was closed unmerged; its commits landed in `dev` through pull request #312. Each commit below is as it stands on `dev` (a rebase merge replays under new hashes).
+Released as v0.2.68 (pull request #313, `main` at `179c4e9a`).
+
+- `eba48555` Name the reported branches in the started-work notice
+- `534ca16b` Pin the fake's record by an assertion, not only by a crash
+- `218fd199` Record A537 and T112
+- `e2929f4e` Correct the flake counts in T112's session note
+- `aaa546a4` List a branch's commits below its line in the Reported tree
+- `79b89a17` Read the commits each Reported branch lists, by the base its line shows
+- `8b141b89` Give the Reported tree's branch lines the commits read for them
+- `053537c5` Pin the reselect of a vanished tree commit apart from the cursor
+- `d57b9217` Describe the commits under a Reported branch in the help and README
+- `8c684f40` Record D102, A540 and T114 and the session note
+- `dfe6d8b6` Keep a tree commit's files while a picked branch waits behind the view
+- `82c9cdba` Keep the cursor on the nearest line listing its entry through a redraw
+- `b287bd3a` Act in the worktree a tree commit's branch is checked out in
+- `7e9021cb` Keep a tree commit selected when the view switches to the default one
+- `ad57d9ec` Record A545 and the fix round of PR #311
+- `e1910bdd` Act in the worktree that has the branch, wherever the tree lists it

@@ -59,4 +59,12 @@ Existing tests that assert commit lines go through `git_repo.commit_line()` now 
 
 ## Commits
 
-*Recorded after the merge.*
+Pull request #296 merged into `dev`. Each commit below is as it stands on `dev` (a rebase merge replays under new hashes).
+Released as v0.2.63 (pull request #297, `main` at `68de1b9f`).
+
+- `69d2e2ad` Colour the explorer: file marks and names, folders, ignored entries
+- `c12ac86f` Pin the explorer's ignored colours and the definition of change groups
+- `a765b084` Record the T103 session: the explorer's colours
+- `25c13d27` Show each commit's author and age in the changes pane, and l / BS
+- `f9c5f9b5` Record D94, A520 and T104 and the T104 session note
+- `0fcdb067` Expect the author and time in the hostile-configuration commit cases
