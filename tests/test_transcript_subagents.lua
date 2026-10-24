@@ -140,15 +140,20 @@ end
 --- that opens one waits for it, and takes longer than this.
 local HELD_LIMIT_MS = 500
 
---- Makes a named pipe at `path` that a process opens for writing, and closes, a
---- second from now: an open of the pipe for reading, which blocks until then,
---- ends by itself.
+--- How long the process that opens a pipe may take to end, in milliseconds.
+local OPENER_PATIENCE_MS = 3000
+
+--- Makes a named pipe at `path` that a process opens, and closes, a second from
+--- now: an open of the pipe for reading, which blocks until then, ends by
+--- itself. The process opens it for reading and writing, which does not wait
+--- for a reader, so that it ends by itself when nobody reads the pipe.
 ---
 ---@param path string
+---@return vim.SystemObj opener
 local function make_pipe_opened_later(path)
   vim.fn.mkdir(vim.fs.dirname(path), 'p')
   vim.system({ 'mkfifo', path }):wait()
-  vim.system({ 'sh', '-c', 'sleep 1; : > "$0"', path })
+  return vim.system({ 'sh', '-c', 'sleep 1; exec 3<> "$0"', path })
 end
 
 --- How long, in milliseconds, following `session` held the editor.
@@ -319,31 +324,34 @@ T['a named pipe where a file or a folder is expected'] = MiniTest.new_set()
 
 T['a named pipe where a file or a folder is expected']['as a meta is taken for a meta that says nothing, without holding the editor'] = function()
   local session = new_session()
-  make_pipe_opened_later(meta_file(session, SUBAGENT))
+  local opener = make_pipe_opened_later(meta_file(session, SUBAGENT))
   fake_transcript.append(agent_file(session, SUBAGENT), RECORDED_SUBAGENT)
 
   local held = held_by_follow(session)
 
   eq(held < HELD_LIMIT_MS, true)
+  eq(opener:wait(OPENER_PATIENCE_MS).code, 0)
   eq(kinds_of(signals_of_agent(session.signals, SUBAGENT)), ARRIVAL_KINDS)
 end
 
 T['a named pipe where a file or a folder is expected']['as the transcript is waited for, without holding the editor'] = function()
   local session = new_session()
-  make_pipe_opened_later(session.transcript)
+  local opener = make_pipe_opened_later(session.transcript)
 
   local held = held_by_follow(session)
 
   eq(held < HELD_LIMIT_MS, true)
+  eq(opener:wait(OPENER_PATIENCE_MS).code, 0)
 end
 
 T['a named pipe where a file or a folder is expected']['as the subagents folder is waited for, without holding the editor'] = function()
   local session = new_session()
-  make_pipe_opened_later(session.folder)
+  local opener = make_pipe_opened_later(session.folder)
 
   local held = held_by_follow(session)
 
   eq(held < HELD_LIMIT_MS, true)
+  eq(opener:wait(OPENER_PATIENCE_MS).code, 0)
 end
 
 T['a folder of more subagents than the office follows'] = MiniTest.new_set()
