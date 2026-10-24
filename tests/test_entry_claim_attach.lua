@@ -100,6 +100,18 @@ local function endings(fake)
   end, claude_session.record(fake))
 end
 
+--- The address of the editor whose claim of `session` the child's state
+--- keeps (`aineo.mcp`'s `session_claimant()`); nil when none claims it.
+---
+---@param session string
+---@return string?
+local function claimant_of(session)
+  return child.lua_get(
+    "require('aineo.mcp').session_claimant(vim.fn.stdpath('state'), ...)",
+    { session }
+  )
+end
+
 T[':Aineo claim {id}'] = MiniTest.new_set()
 
 T[':Aineo claim {id}']['of a session running in the background stops the tab’s Claude Code by its keys and attaches Claude’s window to it'] = function()
@@ -271,7 +283,140 @@ T[':Aineo claim {id}']['of the session Claude’s window is attached to leaves t
   eq(claude_session.followed_session_id(child), CLAIMED)
 end
 
+--- Opens the child's first tab as `open_listing()` does, on `entries`, but
+--- with a `claude.cmd` that holds each `agents --json` run back until the
+--- gate opens (`claude_session.list_gate()`). Returns the state directory,
+--- the fake, the tab's own session and the gate.
+---
+---@param name string
+---@param entries table[]
+---@return string state
+---@return { record: string, environment: table<string, string> } fake
+---@return string own
+---@return { cmd: string[], open: fun(), lists_started: fun(): integer } gate
+local function open_gated(name, entries)
+  local listing = vim.fs.joinpath(fixture.directory(name .. '-listing'), 'agents.json')
+  vim.fn.writefile({ vim.json.encode(entries) }, listing)
+  local gate = claude_session.list_gate(name)
+  local state = tabs.use_own_state(child, name)
+  local fake = tabs.fake(name, 'ready', { AINEO_FAKE_CLAUDE_AGENTS = listing })
+  entry.use_fake(child, fake, { claude = { cmd = gate.cmd } })
+  child.cmd('Aineo open')
+  claude_session.wait_for_status(child, 'ready')
+  return state, fake, claude_session.followed_session_id(child), gate
+end
+
+--- Claims `CLAIMED` in the child's current tab and waits until the list of
+--- sessions the claim reads has started, held at `gate`.
+---
+---@param gate { lists_started: fun(): integer }
+local function claim_held_at(gate)
+  local before = gate.lists_started()
+  child.cmd('Aineo claim ' .. CLAIMED)
+  vim.wait(claude_session.PATIENCE_MS, function()
+    return gate.lists_started() > before
+  end, 20)
+end
+
+T[':Aineo claim {id}']['ended before the list of sessions answers attaches nothing'] = function()
+  local _, fake, own, gate = open_gated('claim-attach-moved-on', { background_entry() })
+  claim_held_at(gate)
+
+  child.cmd('Aineo claim')
+  gate.open()
+  claude_session.wait_for_listings(fake, 1)
+  let_an_attach_start()
+
+  eq(claude_session.followed_session_id(child), own)
+  eq(#claude_session.wait_for_starts(fake, 0), 1)
+end
+
+T[':Aineo claim {id}']['in a tab that closes before the list of sessions answers attaches nothing'] = function()
+  local _, fake, _, gate = open_gated('claim-attach-closed', { background_entry() })
+  tabs.use_next_fake(child, tabs.fake('claim-attach-closed-second'))
+  child.cmd('Aineo tab new')
+  child.lua('vim.g.aineo = vim.tbl_deep_extend("force", vim.g.aineo, { claude = { cmd = ... } })', {
+    gate.cmd,
+  })
+  child.cmd('tabfirst')
+  claim_held_at(gate)
+
+  child.cmd('1tabclose')
+  gate.open()
+  claude_session.wait_for_listings(fake, 1)
+  let_an_attach_start()
+
+  eq(#claude_session.wait_for_starts(fake, 0), 1)
+end
+
+T[':Aineo claim {id}']['while Neovim quits before the list of sessions answers attaches nothing'] = function()
+  local _, fake, _, gate = open_gated('claim-attach-quit', { background_entry() })
+  claim_held_at(gate)
+  child.lua(
+    [[
+      local gate_file = ...
+      vim.api.nvim_create_autocmd('VimLeavePre', {
+        callback = function()
+          vim.fn.writefile({}, gate_file)
+          vim.wait(3000, function()
+            return false
+          end, 20)
+        end,
+      })
+    ]],
+    { gate.cmd[4] }
+  )
+
+  claude_session.quit(child)
+  claude_session.wait_for_listings(fake, 1)
+  claude_session.wait_for_end(fake)
+  let_an_attach_start()
+
+  eq(#claude_session.wait_for_starts(fake, 0), 1)
+end
+
+T[':Aineo claim {id}']['in a Neovim whose Claude Code never started reads no list and attaches nothing'] = function()
+  local listing = vim.fs.joinpath(fixture.directory('claim-attach-no-own-listing'), 'agents.json')
+  vim.fn.writefile({ vim.json.encode({ background_entry() }) }, listing)
+  tabs.use_own_state(child, 'claim-attach-no-own')
+  local fake = tabs.fake('claim-attach-no-own', 'ready', { AINEO_FAKE_CLAUDE_AGENTS = listing })
+  entry.use_fake(child, fake)
+
+  child.cmd('Aineo claim ' .. CLAIMED)
+  let_an_attach_start()
+
+  eq(#claude_session.wait_for_listings(fake, 0), 0)
+  eq(#claude_session.wait_for_starts(fake, 0), 0)
+  eq(entry.messages(child), {})
+end
+
 T[':Aineo claim'] = MiniTest.new_set()
+
+T[':Aineo claim']['with no word, while attached, when the tab’s own session cannot be started, stays attached and resumes it at the next try'] = function()
+  local _, fake, own = open_listing('claim-attach-resume-fails', { background_entry() })
+  claim_until_attached(fake)
+  local cmd = child.lua_get('vim.g.aineo.claude.cmd')
+  child.lua('vim.g.aineo = vim.tbl_deep_extend("force", vim.g.aineo, { claude = { cmd = ... } })', {
+    { '/nonexistent/claude' },
+  })
+
+  child.lua('_G.entry_test_messages = {}')
+  child.cmd('Aineo claim')
+  local failed = entry.messages(child)
+  child.lua('vim.g.aineo = vim.tbl_deep_extend("force", vim.g.aineo, { claude = { cmd = ... } })', {
+    cmd,
+  })
+  child.cmd('Aineo claim')
+  local resumed = claude_session.start_arguments(fake, 3)
+
+  eq(failed, {
+    {
+      message = "aineo: claude.cmd: '/nonexistent/claude' is not executable",
+      level = vim.log.levels.ERROR,
+    },
+  })
+  eq(claude_session.words_after(resumed, '--resume'), { own })
+end
 
 T[':Aineo claim']['with no word, while Claude’s window is attached to the claimed session, detaches it and resumes the tab’s own session, which the panes follow'] = function()
   local state, fake, own = open_listing('claim-attach-release', { background_entry() })
@@ -285,6 +430,7 @@ T[':Aineo claim']['with no word, while Claude’s window is attached to the clai
   eq(endings(fake), { { ended = 'keys', code = 0 }, { ended = 'detach', code = 0 } })
   local listed = tabs.entries(state, child.v.servername)[tabs.FIRST_TAB]
   eq({ listed.session, listed.own }, { own, true })
+  eq(claimant_of(own), child.v.servername)
   eq(tabs.kept_tab_list(state, child.fn.getcwd()), { sessions = { own }, current = 1 })
 end
 
@@ -423,6 +569,7 @@ T['the attached session']['ending by itself returns the tab to its own session a
   eq(claude_session.words_after(resumed, '--resume'), { own })
   local listed = tabs.entries(state, child.v.servername)[tabs.FIRST_TAB]
   eq({ listed.session, listed.own }, { own, true })
+  eq(claimant_of(own), child.v.servername)
   eq(tabs.kept_tab_list(state, child.fn.getcwd()), { sessions = { own }, current = 1 })
 end
 
