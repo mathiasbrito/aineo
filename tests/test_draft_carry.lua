@@ -164,6 +164,23 @@ T['a claim carrying Input']["to merge with a session's other draft makes that dr
   })
 end
 
+T['a claim carrying Input']["to merge with a session whose draft is empty makes Input's text alone its draft"] = function()
+  local state = fixture.directory('draft-carry-merge-empty')
+  plant_draft(session_draft_file(state, 'session-claimed'), '')
+  keep_input_following(state, 'session-left')
+  set_input({ 'Typed for the left session' })
+
+  claim_carrying('session-claimed', 'merge')
+
+  eq({
+    input = input_lines(),
+    claimed = read_text(session_draft_file(state, 'session-claimed')),
+  }, {
+    input = { 'Typed for the left session' },
+    claimed = 'Typed for the left session\n',
+  })
+end
+
 T['a claim carrying Input']["with Input empty shows the session's draft, which it leaves as it is"] = function()
   local state = fixture.directory('draft-carry-empty')
   plant_draft(session_draft_file(state, 'session-claimed'), 'Kept for the claimed session\n')
@@ -177,6 +194,51 @@ T['a claim carrying Input']["with Input empty shows the session's draft, which i
   }, {
     input = { 'Kept for the claimed session' },
     claimed = 'Kept for the claimed session\n',
+  })
+end
+
+--- Ends the undo block of the kept buffer, `_G.input` in the child, so that
+--- the next change is undone on its own, as a pause in typing does.
+local function end_undo_block()
+  child.lua('vim.api.nvim_buf_call(_G.input, function() vim.o.undolevels = vim.o.undolevels end)')
+end
+
+--- Undoes the last change in the kept buffer, `_G.input` in the child.
+local function undo_input()
+  child.lua("vim.api.nvim_buf_call(_G.input, function() vim.cmd('silent! undo') end)")
+end
+
+T['a claim carrying Input']['with Input empty leaves no undo that reaches text typed before it'] = function()
+  local state = fixture.directory('draft-carry-empty-undo')
+  keep_input_following(state, 'session-left')
+  set_input({ 'The prompt I sent' })
+  end_undo_block()
+  set_input({ '' })
+  end_undo_block()
+
+  claim_carrying('session-claimed', 'replace')
+  undo_input()
+
+  eq(input_lines(), { '' })
+end
+
+T['a claim carrying Input']["to replace a session's other draft keeps Input's cursor and undo"] = function()
+  local state = fixture.directory('draft-carry-replace-undo')
+  plant_draft(session_draft_file(state, 'session-claimed'), 'Kept for the claimed session\n')
+  keep_input_following(state, 'session-left')
+  set_input({ 'First line' })
+  end_undo_block()
+  set_input({ 'First line', 'Second line' })
+  end_undo_block()
+  child.lua('vim.api.nvim_win_set_cursor(0, { 2, 5 })')
+
+  claim_carrying('session-claimed', 'replace')
+  local cursor = child.lua_get('vim.api.nvim_win_get_cursor(0)')
+  undo_input()
+
+  eq({ cursor = cursor, undone = input_lines() }, {
+    cursor = { 2, 5 },
+    undone = { 'First line' },
   })
 end
 
@@ -233,17 +295,21 @@ T['a claim carrying Input']['to a session whose draft cannot be read replaces no
 end
 
 --- Makes the child's draft home, once given its environment, refuse to open
---- for writing any file whose path holds `refused`, as a file system that
---- refuses it would; it opens every other as the home does.
+--- for writing any file whose path holds one of `refused`, as a file system
+--- that refuses it would; it opens every other as the home does. It must be
+--- called before the environment is given, which takes the file writes.
 ---
----@param refused string
+---@param refused string[]
 local function refuse_writes_to(refused)
   child.lua(
     [[
       local refused = ...
       _G.draft_files = {
         open_file = function(path)
-          if path:find(refused, 1, true) then
+          local is_refused = vim.iter(refused):any(function(fragment)
+            return path:find(fragment, 1, true) ~= nil
+          end)
+          if is_refused then
             return nil, 'EACCES: permission denied'
           end
           return vim.uv.fs_open(path, 'w', tonumber('600', 8))
@@ -254,11 +320,11 @@ local function refuse_writes_to(refused)
   )
 end
 
-T['a claim carrying Input']["whose write is refused tells it once, and shows the session's draft, Input's text staying the left one's"] = function()
+T['a claim carrying Input']["whose write is refused tells it, and shows the session's draft, Input's text staying the left one's"] = function()
   local state = fixture.directory('draft-carry-refused')
   local claimed = session_draft_file(state, 'session-claimed')
   plant_draft(claimed, 'Kept for the claimed session\n')
-  refuse_writes_to(vim.fn.sha256('session-claimed'))
+  refuse_writes_to({ vim.fn.sha256('session-claimed') })
   keep_input_following(state, 'session-left')
   set_input({ 'Typed for the left session' })
 
@@ -279,6 +345,21 @@ T['a claim carrying Input']["whose write is refused tells it once, and shows the
     claimed = 'Kept for the claimed session\n',
     left = 'Typed for the left session\n',
   })
+end
+
+T['a claim carrying Input']['whose write is refused again is told again'] = function()
+  local state = fixture.directory('draft-carry-refused-twice')
+  plant_draft(session_draft_file(state, 'session-b'), 'Kept for b\n')
+  refuse_writes_to({ vim.fn.sha256('session-a'), vim.fn.sha256('session-b') })
+  keep_input_following(state, 'session-left')
+  set_input({ 'First text' })
+  local first = claim_carrying_noting_messages('session-a', 'replace')
+  child.lua("require('aineo.draft').follow_draft_session('session-left-2')")
+  set_input({ 'Second text' })
+
+  local second = claim_carrying_noting_messages('session-b', 'merge')
+
+  eq({ first = #first.messages, second = #second.messages }, { first = 1, second = 1 })
 end
 
 --- Whether the child's draft home says Input's text differs from the draft
