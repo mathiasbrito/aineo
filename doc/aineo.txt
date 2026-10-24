@@ -2899,14 +2899,17 @@ keeps the tab's claim, and the next start takes it up again (|aineo-tabs|).
 			is forgotten, the main agent walks in through the
 			door, and only what the transcripts say from then on
 			is acted out, a subagent walking in with its next
-			line (|aineo-office|). It works whether the office
-			shows or not, and in place of a preview. The office
-			reads the end of the transcripts again the next time
-			it starts following them: when it shows again, or
-			its tab page is entered again. Like `:Aineo office`,
-			it acts on the aineo tab of the current tab page and
-			makes none, and it shows nothing, and tells you why,
-			with 'termguicolors' off or 'ambiwidth' `double`.
+			line (|aineo-office|). A permission prompt not yet
+			answered stays shown. It works whether the office
+			shows or not, and in place of a preview. The reset
+			holds for as long as this Neovim runs: each time an
+			office follows that session again (it shows again,
+			its tab page is entered again, `:Aineo office pack`
+			shows it again), what came before the reset is left
+			out. It acts on the aineo tab `:Aineo office` acts
+			on (|:Aineo-office|) and makes none, and it shows
+			nothing, and tells you why, with 'termguicolors' off
+			or 'ambiwidth' `double`.
 			With any word after it, it tells you, with one error,
 			what `:Aineo office` takes.
 
@@ -4289,10 +4292,13 @@ goes to the nearest spot called `at` that no other agent has taken, walking
 the shortest way over floor (`.`), spots and pieces with `walk_over`, never
 over a wall, a space or a piece that stands on the floor, and takes the
 step's `pose`, facing the spot's way or the step's `facing`. A spot called
-`desk` is the agent's own; an agent whose place has no desk in the plan (more
-agents than the plan has desks, as in a small window) goes to the nearest desk
-no other character is at, and, with none, waits as for a spot that other
-agents have. An agent has a place from its arrival to its
+`desk` is the agent's own. An agent whose place has no desk in the plan (more
+agents than the plan has desks, as in a small window) works at the nearest
+desk no agent has, else at the desk of an agent that is idle and away from
+it, and, with neither, waits as for a spot that other agents have; when the
+owner of the desk it works at comes back, it steps off, to another such desk
+or else beside a desk, where it stands, and the owner sits. Two agents never
+stand on one desk. An agent has a place from its arrival to its
 leaving, the lowest number no other agent has, and its desk, its monitor and
 its colour go by it: the agent with the first place has the first desk, the
 first monitor and the first colour. After `for_seconds` from its arrival (a
@@ -4389,7 +4395,9 @@ its parent's. An agent that thinks right after a tool call, while the model
 chooses its next one, goes on with the activity of that call's state where
 the call took it, for the first ten seconds of its thinking, and plays what
 `thinking` maps to after them: a run of short calls at the desk, tests between
-edits, keeps the agent at its desk.
+edits, keeps the agent at its desk. A call that asks you (`asking_you`) or
+hands a task over (`delegating`) is not gone on with, and the end of a turn
+ends it.
 
                                                        *aineo-office-triggers*
 Triggers ~
