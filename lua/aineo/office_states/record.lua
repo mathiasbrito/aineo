@@ -68,6 +68,9 @@ local UNNAMED_CALL = ''
 ---@field fact aineo.office_states.Appearance the state its facts give, from when they give it
 ---@field shown aineo.office_states.Appearance the state it shows, held by the dwell
 ---@field listed_until? number a finished agent is listed until then
+---@field heard_at? number when it was last heard of, on the caller's clock: for a subagent replayed, when its transcript was last written
+---@field started_by? string the id of the main agent's call that started it, for a subagent whose arrival names one
+---@field quiet_at? number when it goes quiet and leaves, unless it is heard of before; none for an agent that does not
 
 --- What the tracker is told about the office, which decides what a signal means.
 ---@class aineo.office_states.Settings: aineo.office_states.CallSettings

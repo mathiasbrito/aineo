@@ -7,7 +7,8 @@
 --- falls back to, and `fallback_chain()` follows those fallbacks;
 --- `new_tracker()` keeps every agent's state, and the activity a trigger names
 --- for it, from the signals `aineo.transcript` gives and the few the office
---- adds (`aineo.office_states.OfficeSignalKind`). Each agent it lists carries
+--- adds (`aineo.office_states.OfficeSignalKind`), and lets a subagent that
+--- has gone quiet leave until it is heard of again. Each agent it lists carries
 --- details of what it works on (`aineo.office_states.AgentDetails`): its
 --- tasks, what it looks up on the web, how its last test run ended and when it
 --- last reported.
