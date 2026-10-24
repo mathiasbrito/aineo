@@ -370,7 +370,7 @@ end
 --- Makes a pack `alt` with a floor of the colour `#ff0000` on the
 --- 'runtimepath' of the child, as a plugin that brings one would.
 local function add_the_alt_pack()
-  local root = fixture.directory('office_entry_pack')
+  local root = fixture.directory('office_entry_setting_pack')
   pack_files.write_pack(root, 'alt', {
     ['pack.lua'] = pack_files.pack_text({
       name = 'alt',
