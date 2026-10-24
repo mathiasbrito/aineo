@@ -54,10 +54,12 @@ local M = {}
 --- has stopped it (`stop_running_session()`); and the pid of its own Claude
 --- Code once its first hook named it (`note_own_claude_pid()`); and, for an
 --- attach to a claimed session, the session resumed in its place once it
---- ends by itself (`return_to`, `return_after_attach()`). A start with
+--- ends by itself (`return_to`, `return_after_attach()`) and the token of
+--- the start it took the place of, which still names the home
+--- (`held_token`, `has_start_token()`). A start with
 --- no job yet waits for the list of the folder's sessions
 --- (`launch_once_listed()`).
----@alias aineo.claude.Start { buffer: integer, command: string[], job: integer?, choice: aineo.claude.SessionChoice, settings: aineo.claude.Settings, start_token: string, settings_unread: boolean, attached: boolean?, return_to: string?, followed: string, unpaired: aineo.claude.SessionEvent[], told_elsewhere: table<string, true>, ready: boolean?, ready_told: boolean?, exit_code: integer?, launched_at: number?, ended_at: number?, stopped: boolean?, claude_pid: integer? }
+---@alias aineo.claude.Start { buffer: integer, command: string[], job: integer?, choice: aineo.claude.SessionChoice, settings: aineo.claude.Settings, start_token: string, settings_unread: boolean, attached: boolean?, return_to: string?, held_token: string?, followed: string, unpaired: aineo.claude.SessionEvent[], told_elsewhere: table<string, true>, ready: boolean?, ready_told: boolean?, exit_code: integer?, launched_at: number?, ended_at: number?, stopped: boolean?, claude_pid: integer? }
 
 --- One Claude Code session home: what one copy of this module keeps, its
 --- last start (`new()`).
@@ -550,6 +552,14 @@ end
 ---@type fun(home: aineo.claude.Home, settings: aineo.claude.Settings, choice: aineo.claude.SessionChoice): integer
 local start_in_place
 
+--- Starts a resume of `choice` as `home`'s one session, launched once the
+--- list of the folder's sessions has answered, and attached to where it runs
+--- in Claude Code's background service then; returns its terminal, which
+--- takes the last session's place at once. Defined below, with what it
+--- launches.
+---@type fun(home: aineo.claude.Home, settings: aineo.claude.Settings, choice: aineo.claude.SessionChoice, left: string?): integer
+local start_after_list
+
 --- Calls `callback` from a callback scheduled now or, while the command-line
 --- window is open then — where starting a terminal is refused (E11) — from
 --- one scheduled once it has closed.
@@ -736,11 +746,17 @@ local ATTACH_ENDED_NOTE = 'aineo: the attach ended; resuming the tab’s own ses
 
 --- When `ended`, an attach that returns to a session once it ends
 --- (`attach_session()`), has ended by itself — its session ended, a Ctrl+Z,
---- a hangup, a failure — resumes that session in its place
---- (`start_in_place_of_ended_session()`), from a scheduled callback — once
---- the command-line window has closed, when it is open — and tells the user
---- (`ATTACH_ENDED_NOTE`). It resumes none once Neovim is quitting
---- (`v:exiting` set), once the home's stop has stopped the attach — a start
+--- a hangup, a failure — resumes that session in its place as a start that
+--- resumes does (`start_after_list()`): the list of the folder's sessions is
+--- read first, and a session another process has meanwhile put in Claude
+--- Code's background service is attached to rather than resumed a second
+--- time. Its terminal is handed to `settings.on_terminal_replaced`, and
+--- `settings.on_session_switched` is told the switch once it launches. It
+--- runs from a scheduled callback — once the command-line window has closed,
+--- when it is open — and tells the user (`ATTACH_ENDED_NOTE`); a resume that
+--- cannot start is told the user once, as an error. It resumes none once
+--- Neovim is quitting (`v:exiting` set), once the home's stop has stopped
+--- the attach — a start
 --- of aineo's replacing it, the tab's close — or another start has made a
 --- session of its own, nor when the terminal was wiped, which hangs the
 --- attach up.
@@ -762,7 +778,20 @@ local function return_after_attach(home, settings, ended)
       return
     end
     vim.notify(ATTACH_ENDED_NOTE, vim.log.levels.INFO)
-    start_in_place_of_ended_session(home, settings, { id = ended.return_to, resumed = true })
+    local resumed, terminal = pcall(
+      start_after_list,
+      home,
+      settings,
+      { id = ended.return_to, resumed = true },
+      ended.followed
+    )
+    if not resumed then
+      vim.notify('aineo: ' .. first_line_of(terminal), vim.log.levels.ERROR)
+      return
+    end
+    if settings.on_terminal_replaced then
+      settings.on_terminal_replaced(terminal)
+    end
   end)
 end
 
@@ -918,13 +947,7 @@ end
 --- (`launch_once_listed()`). The list is asked for before the terminals are
 --- swapped: an error the swap raises, from an autocommand of the user's, then
 --- leaves a start that goes on to launch.
----
----@param home aineo.claude.Home
----@param settings aineo.claude.Settings
----@param choice aineo.claude.SessionChoice
----@param left string? the id followed before the start
----@return integer buffer
-local function start_after_list(home, settings, choice, left)
+start_after_list = function(home, settings, choice, left)
   local previous = home.session
   local waiting = prepare_start(settings, choice)
   launch_once_listed(home, waiting, left)
@@ -961,14 +984,15 @@ end
 --- start; tells nothing of it. `attach`, when given, makes the start an
 --- attach to its listed background session (`attach_to()`), and gives it
 --- the session it returns to when the attach ends by itself, when it names
---- one (`return_after_attach()`). The running Claude Code is stopped after
---- the start is prepared, so that an error preparing it stops nothing
+--- one (`return_after_attach()`), and the token it holds for the start it
+--- takes the place of (`held_token`). The running Claude Code is stopped
+--- after the start is prepared, so that an error preparing it stops nothing
 --- (`stop_running_session()`): by Ctrl+Z, for an attached one.
 ---
 ---@param home aineo.claude.Home
 ---@param settings aineo.claude.Settings
 ---@param choice aineo.claude.SessionChoice
----@param attach? { session: aineo.claude.ListedSession, return_to: string? }
+---@param attach? { session: aineo.claude.ListedSession, return_to: string?, held_token: string? }
 ---@return aineo.claude.Start
 local function replace_running_session(home, settings, choice, attach)
   local previous = home.session
@@ -977,6 +1001,7 @@ local function replace_running_session(home, settings, choice, attach)
   if attach then
     attach_to(replacement, attach.session)
     replacement.return_to = attach.return_to
+    replacement.held_token = attach.held_token
   end
   launch_start(home, replacement)
   become_the_session(home, replacement, previous)
@@ -1069,6 +1094,34 @@ local function join_session(home, settings, listed, sessions)
   return buffer
 end
 
+--- Replaces `home`'s running Claude Code with a resume of the session `id`
+--- that lists the folder's sessions first, as a start that resumes does
+--- (`launch_once_listed()`): Claude Code launches once the list has
+--- answered, attached to the session where Claude Code's background service
+--- runs it then, so that no second copy of it is resumed, else resumed with
+--- `--resume`. The new terminal, still empty, takes the running one's place
+--- at once and is returned; the running Claude Code is stopped once the start
+--- is prepared, as `replace_session()` stops it; `id` is kept for
+--- `settings.cwd`, and `settings.on_session_switched` is told the switch when
+--- Claude Code launches. Raises the errors `start_session()` raises, before
+--- it stops anything.
+---
+---@param home aineo.claude.Home
+---@param settings aineo.claude.Settings
+---@param id string
+---@return integer buffer the terminal buffer Claude Code launches in
+local function resume_session(home, settings, id)
+  validate_settings(settings)
+  local previous = home.session
+  local left = previous and previous.followed
+  local waiting = prepare_start(settings, { id = id, resumed = true })
+  stop_running_session(home)
+  launch_once_listed(home, waiting, left)
+  become_the_session(home, waiting, previous)
+  keep_session_id(settings, id)
+  return waiting.buffer
+end
+
 --- Replaces the running Claude Code with an attach to `background`, a
 --- session `list_sessions()` listed in Claude Code's background service
 --- with a short id, in the windows that show the running one's terminal, and
@@ -1079,8 +1132,13 @@ end
 --- `settings.on_session_switched` is told the switch to the attached session
 --- (`announce_launch()`), and `settings.on_session_ready` is called when the
 --- attach is ready. Once the attach ends by itself, `return_to` is resumed
---- in its place (`return_after_attach()`). Raises an error, starting nothing
---- and stopping nothing, when `settings` is malformed, `claude.cmd` is not
+--- in its place (`return_after_attach()`). The token of the start it takes
+--- the place of — or the one that start held, for an attach in place of an
+--- attach — still names the home while the attach runs (`has_start_token()`):
+--- a fork of the session that start ran carries that token in its hooks and
+--- its MCP relay, while `claude attach` carries none. Raises an error,
+--- starting nothing and stopping nothing, when `settings` is malformed,
+--- `claude.cmd` is not
 --- executable, or `background` cannot be attached to (`agents.way_to_join()`
 --- does not say `'attach'`).
 ---
@@ -1095,11 +1153,12 @@ local function attach_session(home, settings, background, return_to)
     error('aineo.claude: the session ' .. background.session_id .. ' cannot be attached to', 2)
   end
   local left = home.session and home.session.followed
+  local held_token = home.session and (home.session.held_token or home.session.start_token)
   local replacement = replace_running_session(
     home,
     settings,
     { id = background.session_id, resumed = true },
-    { session = background, return_to = return_to }
+    { session = background, return_to = return_to, held_token = held_token }
   )
   announce_launch(home, left)
   return replacement.buffer
@@ -1444,6 +1503,43 @@ local function home_started_with(start_token)
   end)
 end
 
+--- The home whose last start holds the token `start_token` for the start it
+--- took the place of (`held_token`); nil when no home's does.
+---
+---@param start_token string
+---@return aineo.claude.Home?
+local function home_holding(start_token)
+  return vim.iter(started_homes):find(function(started)
+    return started.session.held_token == start_token
+  end)
+end
+
+--- What `told` does to the session of the home whose last start holds its
+--- token for the start it took the place of (`home_holding()`), as an
+--- attach to a claimed session holds the token of the start it replaced: a
+--- `SessionStart` of a session other than the one followed is told as a
+--- session elsewhere (`tell_session_elsewhere()`) — a fork, in Claude Code's
+--- background service, of the session that start ran. Nothing else of such a
+--- hook is taken: no pid is noted and no switch followed, since none of the
+--- attach's own hooks runs. Nothing either once Neovim is quitting, for an id
+--- of another form than Claude Code's, or once the attach has ended.
+---
+---@param told aineo.claude.SessionEvent
+local function take_held_session_event(told)
+  local home = home_holding(told.start_token)
+  if
+    vim.v.exiting ~= vim.NIL
+    or not home
+    or not session_ids.is_session_id(told.id)
+    or home.session.ended_at
+    or told.event ~= 'SessionStart'
+    or told.id == home.session.followed
+  then
+    return
+  end
+  tell_session_elsewhere(home.session, told)
+end
+
 --- What `told` does to the session of the home whose last start has its
 --- token (`started_homes`): a `SessionStart` of another session from
 --- another Claude Code process (`is_start_in_another_process()`) is told as
@@ -1456,14 +1552,19 @@ end
 --- hook that ran after its start's process ended (another process Claude
 --- Code started with the start's `--settings`), an id of another form than
 --- Claude Code's (`session_ids.is_session_id()`), and every hook once Neovim
---- is quitting (`v:exiting` set) among them.
+--- is quitting (`v:exiting` set) among them. A hook whose token no home's
+--- last start has, but one holds for the start it replaced, is taken as
+--- `take_held_session_event()` says.
 ---
 ---@param told aineo.claude.SessionEvent
 local function take_session_event(told)
   local home = home_started_with(told.start_token)
+  if not home then
+    take_held_session_event(told)
+    return
+  end
   if
     vim.v.exiting ~= vim.NIL
-    or not home
     or not session_ids.is_session_id(told.id)
     or (home.session.ended_at and told.ran and told.ran > home.session.ended_at)
   then
@@ -1553,7 +1654,8 @@ function M.receive_session_event(event, session_id, cause, start_token, ran, pid
 end
 
 --- Tells `settings.on_permission_wait` of the home whose last start has
---- `start_token` that the agent `agent_id` of the session `session_id`
+--- `start_token`, or holds it for the start it took the place of
+--- (`home_holding()`), that the agent `agent_id` of the session `session_id`
 --- waits for the user. Does nothing for a token that is no home's last
 --- start's, a start whose Claude Code process has ended, an id of another
 --- form than Claude Code's (`session_ids.is_session_id()`), and once Neovim
@@ -1563,7 +1665,7 @@ end
 ---@param session_id string
 ---@param agent_id string?
 local function take_permission_wait(start_token, session_id, agent_id)
-  local home = home_started_with(start_token)
+  local home = home_started_with(start_token) or home_holding(start_token)
   if
     vim.v.exiting ~= vim.NIL
     or not home
@@ -1802,17 +1904,31 @@ local function start_token(home)
   return home.session and home.session.start_token
 end
 
+--- Whether `token` names `home`'s last start: it is that start's token, or
+--- the token that start holds for the one it took the place of
+--- (`held_token`), as an attach to a claimed session does (`attach_session()`).
+---
+---@param home aineo.claude.Home
+---@param token string
+---@return boolean
+local function has_start_token(home, token)
+  return home.session ~= nil
+    and (home.session.start_token == token or home.session.held_token == token)
+end
+
 --- The functions of one session home, called as fields: each is the
 --- function of the same name above, for the home it was made with.
 ---@class aineo.claude.Session
 ---@field stop_session fun() stops the home's Claude Code as quitting stops it, in every state (`stop_running_session()`): one that runs, one that waits for the list of sessions to launch, one that is about to be replaced by a restart; every other home's keeps running
 ---@field start_token fun(): string? see `start_token()`
+---@field has_start_token fun(token: string): boolean see `has_start_token()`
 ---@field let_go? fun() only on a copy `M.new()` made: takes it out of the homes a session hook is told and the quit stops, stopping no Claude Code
 ---@field start_session fun(settings: aineo.claude.Settings): integer see `start_session()`
 ---@field join_session fun(settings: aineo.claude.Settings, listed: aineo.claude.ListedSession, sessions: aineo.claude.ListedSession[]): integer see `join_session()`
 ---@field can_join_session fun(listed: aineo.claude.ListedSession, folder?: string): boolean see `can_join_session()`
 ---@field replace_session fun(settings: aineo.claude.Settings, choice?: aineo.claude.SessionChoice): integer see `replace_session()`
 ---@field attach_session fun(settings: aineo.claude.Settings, background: aineo.claude.ListedSession, return_to: string): integer see `attach_session()`
+---@field resume_session fun(settings: aineo.claude.Settings, id: string): integer see `resume_session()`
 ---@field is_attached fun(): boolean see `is_attached()`
 ---@field session_status fun(): string?, integer? see `session_status()`
 ---@field session_id fun(): string? see `session_id()`
@@ -1846,6 +1962,9 @@ local function session_functions_of(home)
     attach_session = function(settings, background, return_to)
       return attach_session(home, settings, background, return_to)
     end,
+    resume_session = function(settings, id)
+      return resume_session(home, settings, id)
+    end,
     is_attached = function()
       return is_attached(home)
     end,
@@ -1867,6 +1986,9 @@ local function session_functions_of(home)
     end,
     start_token = function()
       return start_token(home)
+    end,
+    has_start_token = function(token)
+      return has_start_token(home, token)
     end,
   }
   home_of_session[functions] = home

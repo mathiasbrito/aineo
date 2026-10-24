@@ -54,7 +54,9 @@ local function route_report(session_id, options)
 end
 
 --- The tab of `tab_list` whose Claude Code has the start token
---- `start_token`, whichever tab is current, in a tab page that exists; nil
+--- `start_token` (`aineo.entry.Tab`'s `has_start_token()`, which a window
+--- attached to a claimed session keeps for the start it replaced),
+--- whichever tab is current, in a tab page that exists; nil
 --- when there is none: an announcement of work, or a call of a run tool, is
 --- about the tab whose Claude Code works, not about the session a report
 --- narrates.
@@ -63,7 +65,7 @@ end
 ---@return aineo.entry.Tab?
 local function tab_for_work(start_token)
   return vim.iter(registry.tab_list):find(function(tab)
-    return tab.is_bound() and tab.start_token() == start_token
+    return tab.is_bound() and tab.has_start_token(start_token)
   end)
 end
 

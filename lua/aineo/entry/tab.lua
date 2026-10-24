@@ -171,6 +171,7 @@ end
 ---@field claimed_session fun(): string? the session the tab's panes follow by a claim of it; nil while they follow its own Claude terminal's
 ---@field runs_session fun(id: string): boolean whether the tab's Claude Code runs the session `id`
 ---@field start_token fun(): string? see `aineo.claude.Session`'s `start_token()`
+---@field has_start_token fun(token: string): boolean whether `token` names the start of the tab's Claude Code (`aineo.claude.Session`'s `has_start_token()`)
 ---@field start_in_new_tab fun() what `:Aineo tab new` does once the tab page exists
 ---@field start_on_session fun(listed: aineo.claude.ListedSession, sessions: aineo.claude.ListedSession[]) what a pick of `\S` does once the tab page exists: starts Claude Code on that session
 ---@field open_on_session fun(id: string, kept_claim: string?) what reopening the folder's tabs does for each tab once its tab page exists: starts Claude Code on the session `id`, resumed or attached to where it runs in the background, in a layout of its own, and takes up `kept_claim`, the claim the folder's list kept for it, as `open_on_session()` says
@@ -374,14 +375,25 @@ local function make_tab(homes, key, callbacks)
   --- attach` in its place (`attach_listed_claim()`). Attaches nothing when
   --- the tab has no own session to return to, when the window is attached to
   --- `id` already, and while the tab's own Claude Code is busy with a turn
-  --- when the list answers (`refuses_attach_while_busy()`). Defined
+  --- when the list answers (`refuses_attach_while_busy()`). Until the start
+  --- of the tab's Claude Code is confirmed, as at a start that takes a kept
+  --- claim up again, the attach waits for it (`attach_once_confirmed`), so
+  --- that the own Claude Code is launched, ready and stopped by its keys,
+  --- never stopped half started. Defined
   --- below, with the swap of Claude's terminal it makes.
   ---@type fun(id: string)
   local attach_to_claim
 
+  --- The claimed session whose attach waits for the start of the tab's own
+  --- Claude Code to be confirmed (`attach_to_claim()`,
+  --- `follow_confirmed_start()`); nil when none waits.
+  ---@type string?
+  local attach_once_confirmed = nil
+
   --- Puts the tab's own Claude Code back in Claude's window in place of the
   --- attach to a claimed session: resumes the tab's own session there
-  --- (`aineo.claude`'s `replace_session()`), which detaches the attach, and
+  --- (`aineo.claude`'s `resume_session()`), which detaches the attach and
+  --- attaches instead where a background host runs that session by then, and
   --- forgets the attach (`own_while_attached`). The panes are left where
   --- they are. Raises the error the swap raises, the attach going on then.
   --- Defined below, with the swap of Claude's terminal it makes.
@@ -559,12 +571,19 @@ local function make_tab(homes, key, callbacks)
   --- is on then (`follow_own_session()`) — unless a claim of another session
   --- holds (`holds_other_claim()`), or Claude's window is attached to the
   --- claimed session (`own_while_attached`), which keep them where they are.
+  --- An attach that waited for the confirmation (`attach_once_confirmed`) is
+  --- made then, while its claim still holds.
   ---
   ---@param id string
   local function follow_confirmed_start(id)
     start_confirmed = true
     if not holds_other_claim() and not own_while_attached then
       follow_own_session(id)
+    end
+    local waiting = attach_once_confirmed
+    attach_once_confirmed = nil
+    if waiting and claimed_by_id == waiting then
+      attach_to_claim(waiting)
     end
   end
 
@@ -1502,10 +1521,12 @@ local function make_tab(homes, key, callbacks)
   end
 
   --- Acts on `sessions`, the folder's sessions read for the claim of `id`,
-  --- `own` being the tab's own session then: when they show `id` running in
-  --- Claude Code's background service with a short id, Claude's window
-  --- attaches to it (`aineo.claude`'s `attach_session()`), `own` being the
-  --- session the end of the attach resumes, unless the tab's own Claude Code
+  --- `own` being the tab's own session when the claim was made: when they
+  --- show `id` running in Claude Code's background service with a short id,
+  --- Claude's window attaches to it (`aineo.claude`'s `attach_session()`),
+  --- the session the end of the attach resumes being the tab's own session
+  --- now — the one its Claude Code switched to meanwhile, if it did — and the
+  --- folder's list keeps the claim under it; unless the tab's own Claude Code
   --- turned busy meanwhile (`refuses_attach_while_busy()`). When they do not —
   --- a session with no short id, a list that failed — the claim stays
   --- read-only, and a window attached to an earlier claim gets the tab's own
@@ -1527,15 +1548,21 @@ local function make_tab(homes, key, callbacks)
     if not background or refuses_attach_while_busy(id) then
       return
     end
+    own = own_session_id() or own
     swap_claude_terminal(function(session, settings)
       return session.attach_session(settings, background, own)
     end)
     own_while_attached = own
+    folder_tabs.keep_folder_tabs()
   end
 
   attach_to_claim = function(id)
     local own = own_session_id()
     if not own or (own_while_attached and homes.claude.session_id() == id) then
+      return
+    end
+    if not start_confirmed then
+      attach_once_confirmed = id
       return
     end
     require('aineo.claude').list_sessions(
@@ -1553,7 +1580,7 @@ local function make_tab(homes, key, callbacks)
     local own = own_while_attached
     own_while_attached = nil
     local resumed, failure = pcall(swap_claude_terminal, function(session, settings)
-      return session.replace_session(settings, { id = own, resumed = true })
+      return session.resume_session(settings, own)
     end)
     if not resumed then
       own_while_attached = own
@@ -1992,6 +2019,7 @@ local function make_tab(homes, key, callbacks)
     panes_session = nil
     claimed_by_id = nil
     own_while_attached = nil
+    attach_once_confirmed = nil
     start_confirmed = false
     shared_session_told = {}
   end
@@ -2041,6 +2069,9 @@ local function make_tab(homes, key, callbacks)
   tab.runs_session = runs_session
   tab.start_token = function()
     return homes.claude.start_token()
+  end
+  tab.has_start_token = function(token)
+    return homes.claude.has_start_token(token)
   end
   tab.start_in_new_tab = function()
     start_in_new_tab(start_new_session)
