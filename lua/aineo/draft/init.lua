@@ -42,6 +42,10 @@ M.follow_draft_session = module_copy.follow_draft_session
 --- copy (`aineo.draft.Home`'s `hand_over_draft_session()`).
 M.hand_over_draft_session = module_copy.hand_over_draft_session
 
+--- Whether the module's copy's Input holds text a session's draft is not
+--- (`aineo.draft.Home`'s `input_differs_from_draft()`).
+M.input_differs_from_draft = module_copy.input_differs_from_draft
+
 --- A new copy of the home, whose kept Inputs, followed session, environment
 --- and handlers are its own, apart from the module's and from every copy
 --- made before. Its functions are fields, as the module's own are. Its

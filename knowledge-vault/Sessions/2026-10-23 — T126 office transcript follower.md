@@ -129,4 +129,22 @@ Mutants of the round, each run alone on the head, killed by assertion: M1 (`test
 
 ## Commits
 
-*Recorded after the merge.*
+Pull request #330 merged into `feature/t123-office`; that branch reached `dev` through pull request #343. Each commit below is as it stands on `dev` (a rebase merge replays under new hashes).
+Released as v0.2.73 (pull request #345, `main` at `d3df7aff`).
+
+- `963d81cf` Add the recorded session and subagent transcripts for T126
+- `eb991b58` Read the rest of a transcript's signals in the codec
+- `b6c8d457` Follow a session's transcript and its subagents across changes under it
+- `33bc25a8` Hand the office the path of a transcript that is not written yet
+- `6437c7dc` Bound what the subagents' folder can ask of the office
+- `d2933155` Deliver nothing once the follower is stopped, whatever a callback did
+- `88817aec` Pin that a stopped follower reads nothing more, with a read in several passes
+- `1e0047de` Pin two edges of the follower that its mutants found loose
+- `24885b93` Record T126: session note and plan row
+- `b685027d` Use the recording of scrubber v4 and count the notice as a notice
+- `33577761` Watch only a regular file or a folder, and name the folder per character
+- `b7bc1426` Read a burst in turns of the event loop, and pin what the mutants left loose
+- `3ae1ea5d` Survive a consumer that raises, and keep the past of a subagent admitted late
+- `6469fd06` Say in the help what each followed subagent holds
+- `b9dbe0f2` Record the review round of T126 in its session note
+- `a50d66ee` Pin the transcript precedence and keep the office cases true after T127

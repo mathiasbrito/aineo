@@ -151,4 +151,28 @@ A mistake of this round: a test title with an apostrophe in a single-quoted stri
 
 ## Commits
 
-*Recorded after the merge.*
+Pull request #324 merged into `feature/t123-office`; that branch reached `dev` through pull request #343. Each commit below is as it stands on `dev` (a rebase merge replays under new hashes).
+Released as v0.2.73 (pull request #345, `main` at `d3df7aff`).
+
+- `cb531e6c` Add the transcript home: signals of a session, followed by offset
+- `26189d4a` Add the office states home: the vocabulary and a tracker of agents
+- `09d4292e` Add the pack literal reader: a pack.lua is data, never run
+- `6cc293bb` Add the pack loader: pack.lua, floor plan and art files as data
+- `b6eb5b6f` Add the scene home: a canvas of half-block pixels and a stage of agents
+- `14232b3c` Add the default office pack: a door, beans, desks with monitors
+- `970c464a` Give the layout right_column_area(): the screen cells of the right column
+- `a065800c` Add the office home: a float over the right side, drawn at 12 fps
+- `83441416` Wire the office in: :Aineo office, \O, the transcript, the help
+- `d0d0d877` Pin the session id check in the office's transcript lookup
+- `ee24edc1` Close the office without a stray frame, and pin two survivors
+- `14e9abb6` Record T124: session note, plan row, and the subcommand list test
+- `83f11767` Refuse a pack's long chain of poses, and pin the loader's guards
+- `8a2e6fd2` Keep the office over the right column, and shut its edges
+- `9dd4ef40` Skip the pieces off the canvas, and pin the effect's places
+- `fca27efd` Replay a tail that starts on a line, and count an over-long line once
+- `0cf0e8de` Pin the default pack's door, desk top, walking legs and typing dots
+- `2bfa6db3` Delete a dead line in the tracker's close_call
+- `cd59d845` Drop a redundant tab page clause from the office's wake
+- `5da59ebf` Pin the edge of the cull: a pixel on the canvas's last row
+- `9250bf10` Fix a test title that stopped test_office_scene from loading
+- `a58345d4` Record the review round of T124 in its session note

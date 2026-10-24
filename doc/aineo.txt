@@ -2176,8 +2176,9 @@ moves to another process of its own — its background service runs it there
 on a new session id, under the hooks of aineo's start — is followed too,
 while aineo's own Claude Code runs, as a claim of it (|:Aineo-claim|): the
 tab whose start gave those hooks claims the new session, its Report, Input
-and changes pane follow it, the reports from that process reach its Report,
-and the folder's list of tabs keeps the claim for the next start
+and changes pane follow it, Input's text going with it as its draft, with no
+question (|aineo-draft-carry|), the reports from that process reach its
+Report, and the folder's list of tabs keeps the claim for the next start
 (|aineo-tabs|). The tab's own Claude Code stays on its own session. While
 the claim holds, Send and a Visual Send send nothing, `\S` (`:Aineo
 sessions`) and `:Aineo new` do nothing, each telling you why, and a `/clear`
@@ -2238,7 +2239,9 @@ editor's life.
 When aineo follows another session, a change not saved yet is first saved
 as the draft of the session it followed until then, and the new session's
 draft then takes the place of whatever Input holds — or Input is emptied,
-for a session with no draft. The text that leaves Input is not lost: it
+for a session with no draft — except at a claim of a session by its id and
+at the follow of a session's fork, which carry Input's text with them
+(|aineo-draft-carry|). The text that leaves Input is not lost: it
 comes back when aineo follows its session again. When it cannot be saved,
 Input keeps it, as that session's draft, and you are told so at each
 switch. A session's draft that cannot be read is told at each switch to
@@ -2262,6 +2265,30 @@ directory's draft written after that is taken by the next editor that
 first follows a session with no draft of its own, and is not shown
 otherwise. A draft that cannot be moved so is told once
 as a warning, and the session keeps its own.
+
+                                                           *aineo-draft-carry*
+`:Aineo claim {id}` carries what Input holds to the session it claims
+(|:Aineo-claim|). An empty Input shows the claimed session's draft. Text in
+Input stays there and becomes the claimed session's draft too, when that
+session has no draft or the same text, or is the session Input follows
+already. When it has another draft, you are asked once, through
+`vim.ui.select()`: Replace makes Input's text its draft, Merge makes its
+draft that draft, a blank line, then Input's text, which Input then shows;
+Esc claims as before — Input shows the claimed draft — and tells you which
+session's draft (or this folder's) still holds your text, or, when your text
+could not be saved there, that it is in Input only, which keeps it. Either
+way the session you left keeps the text as its draft as well: a claim
+copies it, it does not move it. A tab that follows its session's fork
+(|aineo-claude-session|) asks nothing: the fork goes on with the same
+conversation, so Input's text always becomes its draft, as Replace makes it
+— unless a claim of another session holds, whose text the fork does not
+continue: Input then shows the fork's own draft, or nothing. A claim taken
+up again at a start (|aineo-tabs|) and `:Aineo claim` without an id carry
+nothing and ask nothing: Input shows that session's draft. A claimed
+session's draft that cannot be read is never replaced: the claim then shows
+Input emptied, as any follow of it does. A carried draft that cannot be
+written is told as a warning each time, and Input shows the claimed
+session's draft.
 
 The draft comes back into an empty Input: the first time the layout opens
 in this editor, and again once Input's text was dropped — `:bwipeout`,
@@ -2572,9 +2599,13 @@ only in place of a resume Claude Code has no conversation for
 			draft follow that session, at once in the windows
 			that show them, while this Neovim's own Claude
 			terminal runs on its own session; nothing is sent to
-			Claude Code. Completion offers the sessions that
-			have a running Claude Code in the directory this
-			Neovim started in, which `:cd` does not change; any
+			Claude Code. Input's text goes with the claim, and
+			when the claimed session has another draft you are
+			asked whether to replace or merge it
+			(|aineo-draft-carry|). Completion offers the
+			sessions that have a running Claude Code in the
+			directory this Neovim started in, which `:cd` does
+			not change; any
 			id of Claude Code's form is taken, running or not,
 			and shows that session's kept Report and draft. Any
 			other word is refused with one error naming it.

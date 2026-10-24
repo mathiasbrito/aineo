@@ -1,7 +1,7 @@
 # 2026-10-23 — T135 office space station pack
 
 **Author:** the repository's maintainer, with Claude — implementer agent (`neovim-lua-developer`)
-**Branch:** `feature/t135-space-station-pack` (from `feature/t123-office-authors`) · **Pull request:** into `feature/t123-office-authors` (number recorded after the merge)
+**Branch:** `feature/t135-space-station-pack` (from `feature/t123-office-authors`) · **Pull request:** into `feature/t123-office-authors` (#347)
 
 A regular packet of the office screensaver (T123; D26 applies). The second pack: an original space-station theme, written as an outside author would write it, in the pack format alone (`pack.lua`, `floor.txt`, `art/*.txt`). `office.pack = 'space_station'` draws it, and a list of both picks one each time the office shows. Nothing of the engine changed.
 
@@ -97,4 +97,12 @@ Survivors, and where they are killed: M4 and M11 survive the states file and die
 
 ## Commits
 
-*Recorded after the merge.*
+Pull request #347 merged into `feature/t123-office-authors`; that branch reached `dev` through pull request #355. Each commit below is as it stands on `dev` (a rebase merge replays under new hashes).
+Released as v0.2.74 (pull request #356, `main` at `2874493e`).
+
+- `a194c66f` Add the space-station office pack, an original second look for the office
+- `8d0d663d` Pin the space station's push, stretched runs and starhare fur
+- `554da4f5` Record T135, the space-station pack, in the plan and a session note
+- `7c8e2d0c` Expect the space-station pack among the packs that check offers
+- `26997cb3` Make the station's push trigger stop at a real push
+- `bce2e1cc` Draw the starhare's puddle as an oval

@@ -1,7 +1,7 @@
 # 2026-10-23 — T138 office cleaner
 
 **Author:** the repository's maintainer, with Claude — implementer agent (`neovim-lua-developer`)
-**Branch:** `bugfix/t138-office-cleaner-linear` (from `feature/t123-office-authors`, rebuilt from `bugfix/t138-office-cleaner` after the space-station pack landed) · **Pull request:** into `feature/t123-office-authors` (number recorded after the merge)
+**Branch:** `bugfix/t138-office-cleaner-linear` (from `feature/t123-office-authors`, rebuilt from `bugfix/t138-office-cleaner` after the space-station pack landed) · **Pull request:** into `feature/t123-office-authors` (#350)
 
 A small fix (D30) of the office screensaver (T123): the cat's mess and puddles piled up for ever while every agent worked, because only an idle agent was sent to clean.
 
@@ -35,4 +35,11 @@ The passes through 22 of the 24 states (default pack, and the station's at three
 
 ## Commits
 
-*Recorded after the merge.*
+Pull request #350 merged into `feature/t123-office-authors`; that branch reached `dev` through pull request #355. Each commit below is as it stands on `dev` (a rebase merge replays under new hashes).
+Released as v0.2.74 (pull request #356, `main` at `2874493e`).
+
+- `a6559abf` Send the nearest working agent to clean the cat's mess
+- `56363c0f` Draw the cat's puddle as an oval
+- `02c799e9` Record T138: the cat's mess always gets cleaned
+- `ff150215` Keep the cat out of the state passes
+- `05c83ecd` Note the rebuilt branch and the state passes in T138's record

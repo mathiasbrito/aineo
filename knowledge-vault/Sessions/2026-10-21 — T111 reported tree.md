@@ -112,4 +112,13 @@ Each the literal edit, run on the file named, restored.
 ## Open threads
 
 - **The label picked is not remembered**: a restart shows all the reported work where a label's work was shown.
-- **Commits** — recorded after the merge.
+- **Commits** —
+
+Pull request #307 merged into `dev`. Each commit below is as it stands on `dev` (a rebase merge replays under new hashes).
+Released as v0.2.67 (pull request #308, `main` at `657cfed6`).
+
+- `7416f011` Report work as a tree of worktrees and their branches
+- `8556678a` Record D100, A534 and T111 for the reported tree
+- `67d32787` Refuse a relative worktree in announce_work
+- `87e10224` Close the reported tree's gaps the reviews of PR #307 found
+- `adba8bba` Record A535, A536 and T111's fix round

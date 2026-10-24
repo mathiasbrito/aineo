@@ -1,7 +1,7 @@
 # 2026-10-23 — T139 office pack command
 
 **Author:** the repository's maintainer, with Claude — implementer agent (`neovim-lua-developer`)
-**Branch:** `feature/t139-office-pack-command` (from `feature/t123-office-authors`) · **Pull request:** into `feature/t123-office-authors` (number recorded after the merge)
+**Branch:** `feature/t139-office-pack-command` (from `feature/t123-office-authors`) · **Pull request:** into `feature/t123-office-authors` (#352)
 
 A small fix (D30) of the office screensaver (T123): the office's pack could only be changed by editing `office.pack` and restarting; `:Aineo office pack [name]` switches it on the fly.
 
@@ -34,4 +34,7 @@ A small fix (D30) of the office screensaver (T123): the office's pack could only
 
 ## Commits
 
-*Recorded after the merge.*
+Pull request #352 merged into `feature/t123-office-authors`; that branch reached `dev` through pull request #355. Each commit below is as it stands on `dev` (a rebase merge replays under new hashes).
+Released as v0.2.74 (pull request #356, `main` at `2874493e`).
+
+- `dd6926b9` Add :Aineo office pack to switch the office's pack on the fly
