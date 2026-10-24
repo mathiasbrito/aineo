@@ -1,7 +1,7 @@
 # 2026-10-24 — T141 session survives restart
 
 **Author:** the repository's maintainer, with Claude — implementer agent (`neovim-claude-code-integrator`)
-**Branch:** `feature/t141-session-survives-restart` (from `dev` at 5a2009d4) · **Pull request:** into `dev` (number recorded after the merge)
+**Branch:** `feature/t141-session-survives-restart` (from `dev` at 5a2009d4) · **Pull request:** into `dev` (#357)
 
 T141 and T142, one packet (A609): a tab keeps the session it shows across a restart (D116), and follows its session where it moves (D117). The user's words: "we are back, but the session was not resumed after the restart, I had to stop and /resume after".
 

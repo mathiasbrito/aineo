@@ -1,7 +1,7 @@
 # 2026-10-23 — T135 office space station pack
 
 **Author:** the repository's maintainer, with Claude — implementer agent (`neovim-lua-developer`)
-**Branch:** `feature/t135-space-station-pack` (from `feature/t123-office-authors`) · **Pull request:** into `feature/t123-office-authors` (number recorded after the merge)
+**Branch:** `feature/t135-space-station-pack` (from `feature/t123-office-authors`) · **Pull request:** into `feature/t123-office-authors` (#347)
 
 A regular packet of the office screensaver (T123; D26 applies). The second pack: an original space-station theme, written as an outside author would write it, in the pack format alone (`pack.lua`, `floor.txt`, `art/*.txt`). `office.pack = 'space_station'` draws it, and a list of both picks one each time the office shows. Nothing of the engine changed.
 

@@ -1,7 +1,7 @@
 # 2026-10-23 — T134 office authors
 
 **Author:** the repository's maintainer, with Claude — implementer agent (`neovim-lua-developer`)
-**Branch:** `feature/t134-office-authors-cli` (from `feature/t123-office-authors`) · **Pull request:** into `feature/t123-office-authors` (number recorded after the merge)
+**Branch:** `feature/t134-office-authors-cli` (from `feature/t123-office-authors`) · **Pull request:** into `feature/t123-office-authors` (#351)
 
 A regular packet of the office screensaver (T123; D26 applies): the commands and the health report for the authors of office packs, and a fix to a test that swapped under load.
 

@@ -1,7 +1,7 @@
 # 2026-10-23 — T130 office random life
 
 **Author:** the repository's maintainer, with Claude — implementer agent (`neovim-lua-developer`)
-**Branch:** `feature/t130-random-life-linear` (built on `feature/t123-office` after T131 landed; `feature/t130-random-life`, pull request #337, is replaced by it) · **Pull request:** into `feature/t123-office` (number recorded after the merge)
+**Branch:** `feature/t130-random-life-linear` (built on `feature/t123-office` after T131 landed; `feature/t130-random-life`, pull request #337, is replaced by it) · **Pull request:** into `feature/t123-office` (#338)
 
 A regular packet of the office screensaver (T123; D26 applies). In `aineo.office_scene` (C20) an agent whose activity is over now picks the next at random, steps leave things on the floor that anger the agents near them and that an idle agent cleans up, a cat has a life of its own, and a step may take a spot another character is on.
 
