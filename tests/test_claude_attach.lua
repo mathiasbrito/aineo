@@ -530,6 +530,37 @@ T['an attach to a claimed session']['that fails at once resumes the session it r
   eq(#claude.wait_for_starts(fake, 0), 3)
 end
 
+T['an attach to a claimed session']['stopped by its home’s stop resumes nothing, as a closing tab stops it'] = function()
+  local fake = claude.fake('claim-attach-stopped', 'ready')
+  local settings = start_own_session('claim-attach-stopped', fake)
+  attach_claimed(settings, claimed_listing(), KEPT_ID)
+  claude.wait_for_status(child, 'ready')
+
+  child.lua("require('aineo.claude').stop_session()")
+  vim.wait(NO_NEW_SESSION_WINDOW_MS, function()
+    return false
+  end, 20)
+
+  eq(#claude.wait_for_starts(fake, 0), 2)
+  eq(endings(fake), { { ended = 'keys', code = 0 }, { ended = 'detach', code = 0 } })
+end
+
+T['an attach to a claimed session']['ending once another start has taken its place resumes nothing more'] = function()
+  local fake = claude.fake('claim-attach-overtaken', 'ready')
+  local settings = start_own_session('claim-attach-overtaken', fake)
+  local attach = attach_claimed(settings, claimed_listing(), KEPT_ID)
+  claude.wait_for_status(child, 'ready')
+  claude.start_again_after_next_exit(child, settings)
+
+  claude.press_keys(child, attach, '\26')
+  claude.wait_for_starts(fake, 3)
+  vim.wait(NO_NEW_SESSION_WINDOW_MS, function()
+    return false
+  end, 20)
+
+  eq(#claude.wait_for_starts(fake, 0), 3)
+end
+
 T['an attach to a claimed session']['resumes nothing once its terminal was wiped, which hangs it up'] = function()
   local fake = claude.fake('claim-attach-wiped', 'ready')
   local settings = start_own_session('claim-attach-wiped', fake)
