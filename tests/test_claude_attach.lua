@@ -370,4 +370,194 @@ T['an attach that exits with a failure at once']['is not followed by a resume wh
   eq(#claude.wait_for_starts(fake, 0), 1)
 end
 
+T['an attach to a claimed session'] = MiniTest.new_set()
+
+--- The session another process runs that these cases attach to, as
+--- `list_sessions()` delivers it: in Claude Code's background service, with
+--- a short id, with `overrides` on top.
+---
+---@param overrides? table
+---@return aineo.claude.ListedSession
+local function claimed_listing(overrides)
+  return vim.tbl_extend('force', {
+    session_id = OTHER_ID,
+    short_id = SHORT_ID,
+    kind = 'background',
+    status = 'idle',
+    running = true,
+  }, overrides or {})
+end
+
+--- Attaches the child's Claude home to `listed` (`attach_session()`), with
+--- the stand-in settings overridden by `overrides`, and `return_to` the
+--- session resumed when the attach ends; the new terminal is shown in the
+--- current window, and each terminal `on_terminal_replaced` and each switch
+--- `on_session_switched` is given is noted in the child's
+--- `_G.replaced_terminals` and `_G.session_switches`. Returns the new
+--- terminal.
+---
+---@param overrides table
+---@param listed aineo.claude.ListedSession
+---@param return_to string
+---@return integer
+local function attach_claimed(overrides, listed, return_to)
+  return child.lua(
+    [[
+      local overrides, listed, return_to = ...
+      local settings = dofile('tests/helpers/claude_session.lua').stand_in_settings(overrides)
+      _G.replaced_terminals = {}
+      _G.session_switches = {}
+      settings.on_terminal_replaced = function(terminal)
+        table.insert(_G.replaced_terminals, terminal)
+      end
+      settings.on_session_switched = function(id, source, left)
+        table.insert(_G.session_switches, { id = id, source = source, left = left })
+      end
+      local buffer = require('aineo.claude').attach_session(settings, listed, return_to)
+      vim.api.nvim_win_set_buf(0, buffer)
+      return buffer
+    ]],
+    { overrides, listed, return_to }
+  )
+end
+
+--- How each process of `fake` that has ended so far ended, in order, each
+--- as the record's `{ ended, code }` line.
+---
+---@param fake { record: string }
+---@return table[]
+local function endings(fake)
+  return vim.tbl_filter(function(entry)
+    return entry.ended ~= nil
+  end, claude.record(fake))
+end
+
+--- Starts the child's Claude home on `KEPT_ID`, kept for the folder of the
+--- case `name`, with `fake`, and waits until it is ready; returns the
+--- settings overrides it started with.
+---
+---@param name string
+---@param fake { environment: table<string, string> }
+---@return table
+local function start_own_session(name, fake)
+  local settings = keeping_the_session(name)
+  claude.start(child, fake, settings)
+  claude.wait_for_status(child, 'ready')
+  return settings
+end
+
+T['an attach to a claimed session']['stops the running Claude Code by its keys and attaches to the session, keeping nothing for the folder'] = function()
+  local fake = claude.fake('claim-attach', 'ready')
+  local settings = start_own_session('claim-attach', fake)
+
+  attach_claimed(settings, claimed_listing(), KEPT_ID)
+  local attached = claude.start_arguments(fake, 2)
+
+  eq(attached, { 'attach', SHORT_ID })
+  eq(endings(fake), { { ended = 'keys', code = 0 } })
+  eq(claude.followed_session_id(child), OTHER_ID)
+  eq(kept_session_id(settings), KEPT_ID)
+end
+
+T['an attach to a claimed session']['that ends by itself resumes the session it returns to in its place, telling the replacement and the switch'] = function()
+  local fake = claude.fake('claim-attach-ends', 'ready')
+  local settings = start_own_session('claim-attach-ends', fake)
+  local attach = attach_claimed(settings, claimed_listing(), KEPT_ID)
+  claude.wait_for_status(child, 'ready')
+
+  claude.press_keys(child, attach, '\26')
+  local resumed = claude.start_arguments(fake, 3)
+  claude.wait_for_session_switches(child, 2)
+
+  eq(claude.words_after(resumed, '--resume'), { KEPT_ID })
+  eq(claude.followed_session_id(child), KEPT_ID)
+  eq(#child.lua_get('_G.replaced_terminals'), 1)
+  eq(child.lua_get('_G.session_switches'), {
+    { id = OTHER_ID, source = 'resume', left = KEPT_ID },
+    { id = KEPT_ID, source = 'resume', left = OTHER_ID },
+  })
+end
+
+T['an attach to a claimed session']['replaced by a start of aineo’s resumes nothing more once it has detached'] = function()
+  local fake = claude.fake('claim-attach-replaced', 'ready')
+  local settings = start_own_session('claim-attach-replaced', fake)
+  attach_claimed(settings, claimed_listing(), KEPT_ID)
+  claude.wait_for_status(child, 'ready')
+
+  child.lua(
+    [[
+      local settings = dofile('tests/helpers/claude_session.lua').stand_in_settings(...)
+      require('aineo.claude').replace_session(settings, { id = select(2, ...), resumed = true })
+    ]],
+    { settings, KEPT_ID }
+  )
+  claude.wait_for_status(child, 'ready')
+  vim.wait(NO_NEW_SESSION_WINDOW_MS, function()
+    return false
+  end, 20)
+
+  eq(#claude.wait_for_starts(fake, 0), 3)
+  eq(endings(fake), { { ended = 'keys', code = 0 }, { ended = 'detach', code = 0 } })
+end
+
+T['an attach to a claimed session']['of a session that cannot be attached to raises, stopping nothing'] = function()
+  local fake = claude.fake('claim-attach-refused', 'ready')
+  local settings = start_own_session('claim-attach-refused', fake)
+
+  local attached, failure =
+    pcall(attach_claimed, settings, claimed_listing({ kind = 'interactive', pid = 4242 }), KEPT_ID)
+
+  eq(attached, false)
+  eq(
+    tostring(failure):find('the session ' .. OTHER_ID .. ' cannot be attached to', 1, true) ~= nil,
+    true
+  )
+  eq(child.lua_get("require('aineo.claude').session_status()"), 'ready')
+  eq(#claude.wait_for_starts(fake, 0), 1)
+end
+
+T['an attach to a claimed session']['that fails at once resumes the session it returns to, never the session it attached to'] = function()
+  local fake = claude.fake('claim-attach-fails', 'ready', ATTACH_FAILS)
+  local settings = start_own_session('claim-attach-fails', fake)
+
+  attach_claimed(settings, claimed_listing(), KEPT_ID)
+  local resumed = claude.start_arguments(fake, 3)
+  vim.wait(NO_NEW_SESSION_WINDOW_MS, function()
+    return false
+  end, 20)
+
+  eq(claude.words_after(resumed, '--resume'), { KEPT_ID })
+  eq(#claude.wait_for_starts(fake, 0), 3)
+end
+
+T['an attach to a claimed session']['resumes nothing once its terminal was wiped, which hangs it up'] = function()
+  local fake = claude.fake('claim-attach-wiped', 'ready')
+  local settings = start_own_session('claim-attach-wiped', fake)
+  local attach = attach_claimed(settings, claimed_listing(), KEPT_ID)
+  claude.wait_for_status(child, 'ready')
+
+  child.lua('vim.cmd.bwipeout({ tostring(...), bang = true })', { attach })
+  claude.wait_for_status(child, 'exited')
+  vim.wait(NO_NEW_SESSION_WINDOW_MS, function()
+    return false
+  end, 20)
+
+  eq(#claude.wait_for_starts(fake, 0), 2)
+end
+
+T['an attach to a claimed session']['resumes nothing as Neovim quits, which detaches it'] = function()
+  local fake = claude.fake('claim-attach-quit', 'ready')
+  local settings = start_own_session('claim-attach-quit', fake)
+  attach_claimed(settings, claimed_listing(), KEPT_ID)
+  claude.wait_for_status(child, 'ready')
+
+  claude.quit(child)
+  claude.wait_for_end(fake)
+  vim.wait(NO_NEW_SESSION_WINDOW_MS, function()
+    return false
+  end, 20)
+
+  eq(#claude.wait_for_starts(fake, 0), 2)
+end
+
 return T
