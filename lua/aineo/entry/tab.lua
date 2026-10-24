@@ -548,7 +548,10 @@ local function make_tab(homes, key, callbacks)
   --- `on_session_elsewhere`), as Claude Code's background service runs a
   --- conversation of the tab's in a process of its own. That conversation
   --- goes on there, so Input's text goes with it, in place of any draft of
-  --- `id`, with no question; the session left keeps it too. The tab's own
+  --- `id`, with no question, while Input follows the session it came from;
+  --- the session left keeps it too. While a claim of another session holds
+  --- (`holds_other_claim()`), Input holds that session's text, which the
+  --- fork does not continue: Input then shows `id`'s draft. The tab's own
   --- Claude terminal runs on its own session meanwhile, and a confirmation
   --- of its start that comes later leaves the panes on the claim
   --- (`follow_confirmed_start()`). Notes that the tab's office begins
@@ -557,7 +560,8 @@ local function make_tab(homes, key, callbacks)
   ---@param id string
   local function follow_session_elsewhere(id)
     offices.began_following(tab)
-    follow_claimed_session(id, 'replace')
+    local carry = not holds_other_claim() and 'replace' or nil
+    follow_claimed_session(id, carry)
     claim(id)
   end
 
