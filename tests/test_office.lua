@@ -835,6 +835,52 @@ T['the subagents the office brings in']['leave out one whose transcript was last
   )
 end
 
+T['resetting the office'] = MiniTest.new_set()
+
+T['resetting the office']['forgets every agent, the main agent walking in again'] = function()
+  local path = transcript_path()
+  fake_transcript.append(path, vim.list_slice(RECORDED_TURN, 1, 5))
+  write_running_subagent(path, 'helper', os.time())
+  open_office(path)
+  child.lua([[_G.office.show_now()]])
+
+  child.lua([[_G.office.reset()]])
+
+  eq(
+    { office_text():find('helper') ~= nil, office_text():find('arriving') ~= nil },
+    { false, true }
+  )
+end
+
+T['resetting the office']['acts out what the transcripts say from then on'] = function()
+  local path = transcript_path()
+  fake_transcript.append(path, RECORDED_TURN)
+  write_running_subagent(path, 'helper', os.time())
+  open_office(path)
+  child.lua([[_G.office.show_now()]])
+  child.lua([[_G.office.reset()]])
+
+  fake_transcript.append(
+    vim.fs.joinpath(vim.fn.fnamemodify(path, ':r'), 'subagents', 'agent-helper.jsonl'),
+    RECORDED_SUBAGENT
+  )
+
+  eq(
+    wait_until(function()
+      return office_text():find('helper') ~= nil
+    end),
+    true
+  )
+end
+
+T['resetting the office']['shows it when it is hidden'] = function()
+  open_office()
+
+  child.lua([[_G.office.reset()]])
+
+  eq(office_window() ~= vim.NIL, true)
+end
+
 T['waking'] = MiniTest.new_set()
 
 T['waking']['closes the office when the cursor enters a window of the right column'] = function()

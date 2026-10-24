@@ -199,7 +199,7 @@ T['Aineo office completion'] = MiniTest.new_set()
 T['Aineo office completion']['offers check, states, preview and new after office'] = function()
   eq(
     child.fn.getcompletion('Aineo office ', 'cmdline'),
-    { 'check', 'states', 'preview', 'new', 'pack' }
+    { 'check', 'states', 'preview', 'new', 'pack', 'reset' }
   )
 end
 
