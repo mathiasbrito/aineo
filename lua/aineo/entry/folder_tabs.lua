@@ -14,7 +14,8 @@ local M = {}
 local tabs_reopening = false
 
 --- Keeps the folder's list of tabs as the tabs stand (`aineo.tabs`'
---- `keep_tabs()`): the session of each tab whose layout is in a tab page, in
+--- `keep_tabs()`): the own session of each tab whose layout is in a tab page
+--- (`aineo.entry.Tab`'s `own_session()`), in
 --- the order of the tab pages, with the session it claims (`aineo.entry.Tab`'s
 --- `claimed_session()`), and the place of the tab whose tab page is
 --- current, or of the tab used last (`last_used_tab`) when the current tab
@@ -45,7 +46,7 @@ local function write_folder_tabs(not_opened)
   end)
   local tabs = require('aineo.tabs')
   local list = tabs.list_of_tabs(vim.tbl_map(function(tab)
-    return { session = tab.session_id(), claimed = tab.claimed_session(), current = tab == current }
+    return { session = tab.own_session(), claimed = tab.claimed_session(), current = tab == current }
   end, bound))
   list = list or (not_opened and #not_opened > 0 and { sessions = {}, current = 1 }) or nil
   if not list then
