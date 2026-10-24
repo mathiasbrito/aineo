@@ -881,6 +881,60 @@ T['resetting the office']['shows it when it is hidden'] = function()
   eq(office_window() ~= vim.NIL, true)
 end
 
+--- Waits, at most `PATIENCE_MS`, until the office's text holds `words`, and
+--- says whether it did.
+---
+---@param words string
+---@return boolean
+local function wait_for_words(words)
+  return wait_until(function()
+    return office_text():find(words, 1, true) ~= nil
+  end)
+end
+
+T['resetting the office']['keeps a permission wait the user has not answered'] = function()
+  local path = transcript_path()
+  fake_transcript.append(path, vim.list_slice(RECORDED_TURN, 1, 5))
+  open_office(path)
+  child.lua([[_G.office.show_now()]])
+  child.lua([[_G.office.permission_wait('main')]])
+
+  child.lua([[_G.office.reset()]])
+
+  eq(wait_for_words('needs'), true)
+end
+
+T['resetting the office']['holds when the office follows the session again'] = function()
+  local path = transcript_path()
+  fake_transcript.append(path, vim.list_slice(RECORDED_TURN, 1, 5))
+  write_running_subagent(path, 'helper', os.time() - 5)
+  open_office(path)
+  child.lua([[_G.office.show_now()]])
+  child.lua([[_G.office.reset()]])
+
+  child.lua([[_G.office.reload()]])
+  vim.wait(QUIET_MS)
+
+  eq(
+    { office_text():find('helper') ~= nil, office_text():find('standing', 1, true) ~= nil },
+    { false, true }
+  )
+end
+
+T['resetting the office']['that could not show leaves the next show replaying the transcripts'] = function()
+  local path = transcript_path()
+  fake_transcript.append(path, RECORDED_TURN)
+  write_running_subagent(path, 'helper', os.time())
+  open_office(path, nil, '{ pack_folders = function() return _G.pack_folders end }')
+  child.lua([[_G.pack_folders = {}]])
+  child.lua([[_G.office.reset()]])
+
+  child.lua([[_G.pack_folders = vim.api.nvim_get_runtime_file('aineo-office', true)]])
+  child.lua([[_G.office.show_now()]])
+
+  eq(wait_for_words('helper'), true)
+end
+
 T['waking'] = MiniTest.new_set()
 
 T['waking']['closes the office when the cursor enters a window of the right column'] = function()

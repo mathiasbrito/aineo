@@ -70,4 +70,28 @@ T['an agent thinking']['after a call tells nothing once its next call runs'] = f
   eq({ story.state(), after_call_after(story, office_signals.SETTLE) }, { 'reading' })
 end
 
+T['an agent thinking']['after a call that asks the user, or hands a task over, tells no call'] =
+  MiniTest.new_set({ parametrize = { { 'AskUserQuestion' }, { 'Agent' } } })
+
+T['an agent thinking']['after a call that asks the user, or hands a task over, tells no call']['tool'] = function(
+  tool
+)
+  local story = office_signals.tell({ commands = COMMANDS })
+  story.started('a', tool)
+
+  story.finished('a')
+
+  eq({ story.state(), after_call_after(story, office_signals.SETTLE) }, { 'thinking' })
+end
+
+T['an agent thinking']['after a turn that ended tells no call'] = function()
+  local story = after_a_test_run()
+  story.hear('turn_ended')
+
+  story.hear_after(60, 'background_done')
+  story.hear('thinking')
+
+  eq({ story.state(), after_call_after(story, office_signals.SETTLE) }, { 'thinking' })
+end
+
 return T

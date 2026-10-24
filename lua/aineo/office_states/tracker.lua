@@ -17,7 +17,7 @@ local M = {}
 ---@field clock? fun(): number the time in seconds, on a clock that only grows, which limits the triggers of one call to 20 ms; none, and they are not limited
 ---@field on_slow_triggers? fun() called, once, when the triggers of a call were given up for taking too long
 ---@field wall_clock? fun(): number the time in seconds since 1970, which tells how long ago a replayed subagent's transcript was written; none, and every replayed subagent counts as written now
----@field leave_out_the_past? boolean whether what the transcripts' tails replay is left out: the main agent hears none of it, and each subagent it names rests until a line of it is heard as it happens; false when not given
+---@field forgotten_before? number a time in seconds since 1970 before which what the transcripts' tails replay is left out: a line stamped before it, or not stamped, and the arrival of a subagent whose transcript was last written before it; the main agent hears none of it, and each subagent left out rests until a line of it is heard as it happens; none, and nothing is left out for its time
 
 --- The kinds of signal beyond the transcript's (`aineo.transcript.SignalKind`)
 --- that the office gives the tracker: a session that starts or ends, and an
@@ -39,9 +39,15 @@ local M = {}
 --- The kinds of signal of the main agent that end its work.
 local ENDS_THE_MAIN_AGENTS_WORK = { turn_ended = true, interrupted = true, session_ended = true }
 
+--- The states of calls an agent does not go on with while it thinks after
+--- them: asking the user and handing a task over are moments with someone,
+--- over when the call is.
+local NOT_GONE_ON_WITH = { asking_you = true, delegating = true }
+
 --- The state of the call the agent of `record` finished, while what it shows,
 --- `shown`, is the thinking that followed the call and has lasted less than
---- `timing.THINKS_AT_ITS_WORK_SECONDS` at `now`; none otherwise.
+--- `timing.THINKS_AT_ITS_WORK_SECONDS` at `now`; none otherwise, and none for
+--- a call it does not go on with (`NOT_GONE_ON_WITH`).
 ---
 ---@param record aineo.office_states.Record
 ---@param shown aineo.office_states.Appearance
@@ -49,6 +55,9 @@ local ENDS_THE_MAIN_AGENTS_WORK = { turn_ended = true, interrupted = true, sessi
 ---@return string|nil
 local function after_call(record, shown, now)
   if shown.state ~= 'thinking' or now >= shown.since + timing.THINKS_AT_ITS_WORK_SECONDS then
+    return nil
+  end
+  if NOT_GONE_ON_WITH[record.finished_call_state] then
     return nil
   end
   return record.finished_call_state
@@ -136,7 +145,7 @@ function M.new_tracker(options)
   local by_id
   ---@type table<string, true>
   local gone
-  ---@type table<string, true> the subagents left out for being quiet, until a line of theirs is heard
+  ---@type table<string, { started_by?: string }> the subagents left out for being quiet, until a line of theirs is heard, each with the main agent's call that started it
   local resting
 
   local function start_over()
@@ -164,6 +173,20 @@ function M.new_tracker(options)
   local function main_agent_runs(call)
     local main = by_id[record_module.MAIN]
     return call ~= nil and main ~= nil and main.open_calls[call] ~= nil
+  end
+
+  --- Whether `signal` is replayed and tells of before `options.forgotten_before`:
+  --- the arrival of a subagent whose transcript was last written before it,
+  --- or a line stamped before it, or not stamped.
+  ---
+  ---@param signal aineo.transcript.Signal
+  ---@return boolean
+  local function replays_what_was_forgotten(signal)
+    if not (signal.replayed and options.forgotten_before) then
+      return false
+    end
+    local when = signal.kind == 'subagent_started' and signal.written_at or signal.at
+    return when == nil or when < options.forgotten_before
   end
 
   --- Whether `signal` replays the arrival of a subagent that has been quiet
@@ -201,7 +224,7 @@ function M.new_tracker(options)
       if finished or walked_out then
         by_id[record.id] = nil
         gone[record.id] = finished or nil
-        resting[record.id] = walked_out or nil
+        resting[record.id] = walked_out and { started_by = record.started_by } or nil
       end
       return not (finished or walked_out)
     end, records)
@@ -224,6 +247,42 @@ function M.new_tracker(options)
       return nil
     end
     return record.heard_at + timing.QUIET_SUBAGENT_SECONDS
+  end
+
+  --- When the last subagent that has gone quiet by `now` went quiet; nil when
+  --- none has.
+  ---
+  ---@param now number
+  ---@return number|nil
+  local function last_gone_quiet(now)
+    local last = nil
+    for _, record in ipairs(records) do
+      if is_quiet(record, now) then
+        last = math.max(last or record.quiet_at, record.quiet_at)
+      end
+    end
+    return last
+  end
+
+  --- `record` as it stands at `now`: itself, or, when subagents that went
+  --- quiet since its facts were last given change what they give, a view of
+  --- it whose facts are those of `now`, from when the last of them went quiet.
+  --- Asked at any time, in any order: it changes nothing.
+  ---
+  ---@param record aineo.office_states.Record
+  ---@param now number
+  ---@param running_subagents integer how many subagents run at `now` (`count_running_subagents()`)
+  ---@return aineo.office_states.Record
+  local function as_of(record, now, running_subagents)
+    local state, activity = record_module.fact_state(record, running_subagents)
+    if state == record.fact.state and activity == record.fact.activity then
+      return record
+    end
+    local since = math.max(record.fact.since, last_gone_quiet(now) or record.fact.since)
+    return setmetatable(
+      { fact = { state = state, activity = activity, since = since } },
+      { __index = record }
+    )
   end
 
   --- Gives every record the state its facts give now, remembering since when,
@@ -294,24 +353,29 @@ function M.new_tracker(options)
 
   --- Whether `signal` is of a subagent the office leaves out: one that rests,
   --- having gone quiet, as the replayed arrival of a quiet subagent makes it,
-  --- or, with `options.leave_out_the_past`, as anything replayed of it does;
-  --- the main agent's replayed signals are then left out too.
+  --- or as a replayed signal of what came before `options.forgotten_before`
+  --- does (`replays_what_was_forgotten()`), which is left out for the main
+  --- agent too.
   --- A signal heard as it happens ends the rest: the subagent walks in again,
-  --- as if it arrived, before it hears the signal; the end of the subagent
-  --- has it gone for good instead.
+  --- as if it arrived, with the main agent's call that started it, before it
+  --- hears the signal; the end of the subagent has it gone for good instead.
   ---
   ---@param signal aineo.transcript.Signal
   ---@param now number
   ---@return boolean
   local function stays_out(signal, now)
-    if signal.replayed and options.leave_out_the_past then
-      resting[signal.agent] = signal.agent ~= record_module.MAIN or nil
+    local rest = resting[signal.agent]
+    if replays_what_was_forgotten(signal) then
+      if signal.agent ~= record_module.MAIN then
+        resting[signal.agent] = { started_by = signal.call or (rest and rest.started_by) }
+      end
       return true
     end
     if replays_a_quiet_arrival(signal) then
-      resting[signal.agent] = true
+      rest = { started_by = signal.call }
+      resting[signal.agent] = rest
     end
-    if not resting[signal.agent] then
+    if not rest then
       return false
     end
     if signal.replayed then
@@ -323,7 +387,7 @@ function M.new_tracker(options)
       return true
     end
     if signal.kind ~= 'subagent_started' then
-      let_hear({ agent = signal.agent, kind = 'subagent_started' }, now)
+      let_hear({ agent = signal.agent, kind = 'subagent_started', call = rest.started_by }, now)
     end
     return false
   end
@@ -347,19 +411,21 @@ function M.new_tracker(options)
       if stays_out(signal, now) then
         return
       end
+      local running_subagents = count_running_subagents(records, now)
       for _, record in ipairs(records) do
-        record.shown = display.shown_at(record, now)
+        record.shown = display.shown_at(as_of(record, now, running_subagents), now)
       end
       let_hear(signal, now)
     end,
 
     agents = function(now)
       local agents = {}
+      local running_subagents = count_running_subagents(records, now)
       for _, record in ipairs(records) do
         local listed = (not record.listed_until or now < record.listed_until)
           and not has_walked_out_quiet(record, now)
         if listed then
-          local shown = display.shown_at(record, now)
+          local shown = display.shown_at(as_of(record, now, running_subagents), now)
           local since = shown.since ~= timing.BEFORE_THE_TRACKER and shown.since or nil
           table.insert(agents, {
             id = record.id,

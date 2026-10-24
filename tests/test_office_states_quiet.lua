@@ -88,6 +88,18 @@ T['a subagent replayed']['long quiet walks in with its next line'] = function()
   eq({ story.state('old'), story.state_after(5, 'old') }, { 'arriving', 'reading' })
 end
 
+T['a subagent replayed']['goes quiet ten minutes after its transcript was written, whatever its replayed lines'] = function()
+  local story = told_at_wall_now()
+  replay_subagent(story, 'sub', QUIET_SECONDS - 10)
+
+  story.hear_replayed('tool_started', { agent = 'sub', call = 'read', tool = 'Read', input = {} })
+
+  eq(
+    { story.state_after(20, 'sub'), vim.tbl_contains(ids_after(story, 50), 'sub') },
+    { 'leaving', false }
+  )
+end
+
 T['a subagent followed'] = MiniTest.new_set()
 
 --- A story in which the subagent `sub` arrives and is given a prompt, both
@@ -172,17 +184,42 @@ T['a subagent followed']['that went quiet is waited for no more'] = function()
   eq(story.state_after(6), 'idle')
 end
 
-T['a tracker that leaves out the past'] = MiniTest.new_set()
+T['a subagent followed']['that went quiet is waited for no more, with no other signal heard'] = function()
+  local story = with_a_subagent_followed()
 
---- A story told to a tracker that leaves out what the transcripts replay.
----
----@return aineo.tests.Story
-local function told_leaving_out_the_past()
-  return office_signals.tell({ leave_out_the_past = true })
+  story.hear('turn_ended')
+
+  eq({ story.state_after(QUIET_SECONDS + 40), story.state_after(1300) }, { 'idle', 'asleep' })
 end
 
-T['a tracker that leaves out the past']['lists neither a replayed subagent nor what the main agent did'] = function()
-  local story = told_leaving_out_the_past()
+T['a subagent replayed']['long quiet walks in with the call that started it, which keeps it while it runs'] = function()
+  local story = told_at_wall_now()
+  replay_subagent(story, 'old', QUIET_SECONDS, 'delegate')
+  story.started('delegate', 'Agent')
+
+  story.hear('tool_started', { agent = 'old', call = 'read', tool = 'Read', input = {} })
+
+  eq(story.state_after(QUIET_SECONDS + 1, 'old'), 'reading')
+end
+
+T['a tracker that forgets what came before a time'] = MiniTest.new_set()
+
+--- A story told to a tracker whose wall clock says `WALL_NOW` and that
+--- forgets what the transcripts replay of before `seconds_ago` before it.
+---
+---@param seconds_ago number
+---@return aineo.tests.Story
+local function told_forgetting_before(seconds_ago)
+  return office_signals.tell({
+    wall_clock = function()
+      return WALL_NOW
+    end,
+    forgotten_before = WALL_NOW - seconds_ago,
+  })
+end
+
+T['a tracker that forgets what came before a time']['lists neither a replayed subagent nor what the main agent did before it'] = function()
+  local story = told_forgetting_before(0)
   story.hear_replayed('tool_started', { call = 'read', tool = 'Read', input = {} })
 
   replay_subagent(story, 'recent', 1)
@@ -190,13 +227,26 @@ T['a tracker that leaves out the past']['lists neither a replayed subagent nor w
   eq({ ids_after(story, office_signals.SETTLE), story.state() }, { { 'main' }, 'standing' })
 end
 
-T['a tracker that leaves out the past']['has a replayed subagent walk in with its next line'] = function()
-  local story = told_leaving_out_the_past()
+T['a tracker that forgets what came before a time']['has a replayed subagent it forgot walk in with its next line'] = function()
+  local story = told_forgetting_before(0)
   replay_subagent(story, 'recent', 1)
 
   story.hear('tool_started', { agent = 'recent', call = 'read', tool = 'Read', input = {} })
 
   eq({ story.state('recent'), story.state_after(5, 'recent') }, { 'arriving', 'reading' })
+end
+
+T['a tracker that forgets what came before a time']['hears what the replay says came after it'] = function()
+  local story = told_forgetting_before(100)
+  story.hear_replayed(
+    'tool_started',
+    { call = 'read', tool = 'Read', input = {}, at = WALL_NOW - 50 }
+  )
+
+  replay_subagent(story, 'before', 200)
+  replay_subagent(story, 'after', 20)
+
+  eq({ ids_after(story, office_signals.SETTLE), story.state() }, { { 'main', 'after' }, 'reading' })
 end
 
 return T
