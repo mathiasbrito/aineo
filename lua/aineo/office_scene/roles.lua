@@ -38,8 +38,10 @@ function M.kind_of(agent)
   return agent.id == MAIN_AGENT and 'agent' or 'subagent'
 end
 
---- The activity `agent` plays: the one a trigger chose when the pack has it,
---- otherwise its state's, otherwise standing's.
+--- The activity `agent` plays: the one a trigger chose when the pack has it;
+--- otherwise, while it thinks right after a call (`after_call`), that call's
+--- state's, so that it stays where the call took it; otherwise its state's,
+--- otherwise standing's.
 ---
 ---@param pack aineo.office_pack.Pack
 ---@param agent aineo.office_states.Agent
@@ -48,7 +50,9 @@ end
 function M.activity_of(pack, agent)
   local name = agent.activity
   if not (name and pack.activities[name]) then
-    name = pack.state_activity[agent.state] or pack.state_activity.standing
+    name = pack.state_activity[agent.after_call]
+      or pack.state_activity[agent.state]
+      or pack.state_activity.standing
   end
   return name, pack.activities[name]
 end

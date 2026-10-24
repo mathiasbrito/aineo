@@ -394,4 +394,18 @@ T['a match']['with a Lua pattern that repeats twice on a command of 4096 bytes i
   eq(milliseconds_to_hear(string.rep('a', 4096), commands) < MOST_MILLISECONDS, true)
 end
 
+--- Test runs as an agent writes them: its output sent to a file, runs joined
+--- by `;`, and a run in a loop.
+T['a test run'] = MiniTest.new_set({
+  parametrize = {
+    { 'make test_file FILE=tests/test_draft.lua > .tests/x.txt 2>&1' },
+    { 'make test_file FILE=tests/a.lua; make test_file FILE=tests/b.lua' },
+    { 'for f in a b; do make test_file FILE=tests/$f.lua; done' },
+  },
+})
+
+T['a test run']['is running tests however the command around it is written'] = function(command)
+  eq(state_while_running(command, COMMANDS), 'running_tests')
+end
+
 return T

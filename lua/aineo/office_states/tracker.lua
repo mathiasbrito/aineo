@@ -28,6 +28,7 @@ local M = {}
 ---@field activity? string the activity a trigger of the pack names for what the agent is doing, in place of its state's own; none when no trigger matches
 ---@field since? number when the agent came into its state, on the caller's clock; none for an agent that has been in it since the tracker was made
 ---@field details aineo.office_states.AgentDetails what the agent knows of the world it works in, which the pieces of the office show
+---@field after_call? string while the agent thinks right after a call, the state of that call; none otherwise
 
 ---@class aineo.office_states.Tracker
 ---@field take fun(signal: aineo.transcript.Signal, now: number) takes in what an agent did, heard at `now`, in seconds on the caller's clock
@@ -35,6 +36,21 @@ local M = {}
 
 --- The kinds of signal of the main agent that end its work.
 local ENDS_THE_MAIN_AGENTS_WORK = { turn_ended = true, interrupted = true, session_ended = true }
+
+--- The state of the call the agent of `record` finished, while what it shows,
+--- `shown`, is the thinking that followed the call and has lasted less than
+--- `timing.THINKS_AT_ITS_WORK_SECONDS` at `now`; none otherwise.
+---
+---@param record aineo.office_states.Record
+---@param shown aineo.office_states.Appearance
+---@param now number
+---@return string|nil
+local function after_call(record, shown, now)
+  if shown.state ~= 'thinking' or now >= shown.since + timing.THINKS_AT_ITS_WORK_SECONDS then
+    return nil
+  end
+  return record.finished_call_state
+end
 
 --- How many of `records` are subagents that have not finished.
 ---
@@ -197,6 +213,7 @@ function M.new_tracker(options)
             activity = shown.activity,
             since = since,
             details = details.of(record),
+            after_call = after_call(record, shown, now),
           })
         end
       end
