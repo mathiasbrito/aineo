@@ -62,4 +62,12 @@ T['an agent thinking']['after a call and a thought of its own still tells the ca
   eq(after_call_after(story, office_signals.SETTLE), 'running_tests')
 end
 
+T['an agent thinking']['after a call tells nothing once its next call runs'] = function()
+  local story = after_a_test_run()
+
+  story.started('b', 'Read')
+
+  eq({ story.state(), after_call_after(story, office_signals.SETTLE) }, { 'reading' })
+end
+
 return T
