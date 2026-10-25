@@ -168,6 +168,7 @@ resumes it.
 | `\v`, `\V` | explain the code of the file, or in Visual mode of the selected lines: `\v` hands Claude the code alone, `\V` lets it read the project too |
 | `\vi`, `\VI` | the same, asking for potential issues instead of explanations (`\vi` the code alone, `\VI` with the project readable) |
 | `\VV`, `\VVI` | the deep versions of `\V` and `\VI`: a float with the whole prompt to edit opens first, then the request runs with higher effort |
+| `\Vf`, `\VVf` | propose a fix for the issue on the cursor's line, shown over the code until you accept it with `\Va` (one undo step, no file written), reject it with `\Vr`, or see it as a diff with `\Vd`; `\VVf` opens the float to edit the prompt first |
 | `\vm` | marks the issues on the cursor's line (on each selected line in Visual mode), or unmarks them; `\s` then sends the marked issues to Claude |
 | `]v`, `[v` | jump to the next and the previous explanation or issue of the buffer |
 | `\z` | zooms the window of the right column the cursor is in, and gives the heights back when pressed again |
@@ -434,6 +435,23 @@ after `explain.deep_timeout_ms`. Its answers are labelled `expl+` and
 `issue+`, work with `]v`, `[v`, `\vm` and `\s` as the others do, and are kept
 under a key that includes your text, so a different steer is a new request.
 
+`\Vf` proposes a fix for the issue shown on the cursor's line (the marked one
+when several are), asked of a Claude Code of its own with the read-only tools
+at `explain.fix_effort` (`'high'`) with the model `explain.fix_model`
+(`'sonnet'`), stopped after `explain.fix_timeout_ms`; `\VVf` first opens the
+float above with the fix's own default text. Claude answers edits of this file,
+each with the lines it replaces, and aineo places an edit only where those
+lines are the lines it sent, byte for byte, at the lines named or at the one
+other place they stand; otherwise the whole fix is refused and you are told
+why. The fix shows over the code without changing it: the old lines hidden, the
+new lines in their place in a green band, each edit explained above them in a
+band of its own, labelled `why`. While it shows, `\Va` accepts it (checked
+again, applied as one undo step, the file not written), `\Vr` rejects it and
+`\Vd` shows it as a diff, the old lines struck through above the new; an edit
+of its lines drops it. The groups are `AineoFix`, `AineoFixGutter`,
+`AineoFixGutterFill`, `AineoFixOld`, `AineoFixWhy`, `AineoFixWhyGutter` and
+`AineoFixWhyGutterFill`.
+
 An explanation shows as a band tinted from your colour scheme, its text italic
 in the accent of `DiagnosticInfo`, starting at the explained line's indent,
 with a `▎` and the label `expl` in the number column and the line's number in
@@ -639,6 +657,9 @@ vim.g.aineo = {
     deep_model = 'sonnet',
     deep_effort = 'high',
     deep_timeout_ms = 300000,
+    fix_model = 'sonnet',
+    fix_effort = 'high',
+    fix_timeout_ms = 300000,
     issues_prompt = 'Some issues were found in this code, can you check and propose a fix if the issue holds:',
   },
   office = {
@@ -673,6 +694,9 @@ vim.g.aineo = {
 | `explain.deep_model` | `'sonnet'` | The model of the Claude Code that `\VV` and `\VVI` start, as `claude --model` takes it. A non-empty string. |
 | `explain.deep_effort` | `'high'` | The effort of that Claude Code, as `claude --effort` takes it: `'low'`, `'medium'`, `'high'`, `'xhigh'` or `'max'`. |
 | `explain.deep_timeout_ms` | `300000` | How long a deep request may run before aineo stops its Claude Code, a whole number of milliseconds of at least 1. |
+| `explain.fix_model` | `'sonnet'` | The model of the Claude Code that `\Vf` and `\VVf` start, as `claude --model` takes it. A non-empty string. |
+| `explain.fix_effort` | `'high'` | The effort of that Claude Code, as `claude --effort` takes it: `'low'`, `'medium'`, `'high'`, `'xhigh'` or `'max'`. |
+| `explain.fix_timeout_ms` | `300000` | How long a request for a fix may run before aineo stops its Claude Code, a whole number of milliseconds of at least 1. |
 | `explain.issues_prompt` | `'Some issues were found in this code, can you check and propose a fix if the issue holds:'` | The words that open the message `\s` sends when issues are marked, before the line for each issue. A non-empty string. |
 | `office.idle_ms` | `180000` | How long the cursor stays out of the right side before the office shows by itself, in milliseconds, a whole number of at least 1; `false` turns that off, and the office then shows only for `\O`. It needs `'termguicolors'`. See `:help aineo-config-office.idle_ms`. |
 | `office.pack` | `'default'` | The pack the office draws: a name of letters, digits, `_` and `-`, or a list of names, one picked at random each time the office shows. `'default'` and `'space_station'` ship with aineo; others are found on `'runtimepath'` under `aineo-office/<name>/`. A pack that cannot be used gives way to the default, with a warning. `:Aineo office pack <name>` replaces it for this Neovim. See `:help aineo-config-office.pack`. |

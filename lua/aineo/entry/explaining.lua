@@ -1,7 +1,7 @@
---- What `\v`, `\V`, `\vi`, `\VI`, `\VV`, `\VVI`, their `<Plug>` mappings and
---- `:Aineo explain` do: hand the current buffer, a file's, to the explain home
---- (`aineo.explain`), with the Claude Code command and the settings of the
---- configuration.
+--- What `\v`, `\V`, `\vi`, `\VI`, `\VV`, `\VVI`, `\Vf`, `\VVf`, their `<Plug>`
+--- mappings, the keys of a fix shown and `:Aineo explain` do: hand the
+--- current buffer, a file's, to the explain home (`aineo.explain`), with the
+--- Claude Code command and the settings of the configuration.
 
 local M = {}
 
@@ -53,6 +53,62 @@ function M.explain(order)
     timeout_ms = order.deep and settings.deep_timeout_ms or settings.timeout_ms,
     send_key = config.prefix and config.prefix .. 's' or ':Aineo send',
   })
+end
+
+--- How a fix is asked for.
+---@class aineo.entry.FixOrder
+---@field steered boolean whether the user edits the prompt first, in a float
+
+--- What `\Vf`, `\VVf` and their `<Plug>` mappings do: ask the explain home
+--- for a fix of the issue shown for the cursor's line of the current buffer,
+--- a file's (`aineo.explain`'s `propose_fix()`), with `claude.cmd`,
+--- `explain.fix_model`, `explain.fix_effort` and `explain.fix_timeout_ms`;
+--- while the fix is shown, the prefix followed by `Va`, `Vr` and `Vd`
+--- accept it, reject it and show its diff, unless the prefix is `false`.
+---
+--- Raises an error when the current buffer holds no file, and the
+--- configuration's or the explain home's errors.
+---
+---@param order aineo.entry.FixOrder
+function M.propose_fix(order)
+  local buffer = vim.api.nvim_get_current_buf()
+  if not holds_a_file(buffer) then
+    error('a fix is asked in the buffer of a file', 0)
+  end
+  local config = resolved_config()
+  local settings = config.explain
+  local prefix = config.prefix
+  require('aineo.explain').propose_fix({
+    buffer = buffer,
+    window = vim.api.nvim_get_current_win(),
+    line = vim.fn.line('.'),
+    steered = order.steered,
+    command = config.claude.cmd,
+    model = settings.fix_model,
+    effort = settings.fix_effort,
+    timeout_ms = settings.fix_timeout_ms,
+    keys = prefix and { accept = prefix .. 'Va', reject = prefix .. 'Vr', diff = prefix .. 'Vd' }
+      or nil,
+  })
+end
+
+--- What `<Plug>(aineo-fix-accept)` does: accepts the fix the current buffer
+--- shows (`aineo.explain`'s `accept_fix()`).
+function M.accept_fix()
+  require('aineo.explain').accept_fix(vim.api.nvim_get_current_buf())
+end
+
+--- What `<Plug>(aineo-fix-reject)` does: rejects the fix the current buffer
+--- shows (`aineo.explain`'s `reject_fix()`).
+function M.reject_fix()
+  require('aineo.explain').reject_fix(vim.api.nvim_get_current_buf())
+end
+
+--- What `<Plug>(aineo-fix-diff)` does: shows the fix the current buffer
+--- shows as the diff view, or as the overlay again (`aineo.explain`'s
+--- `toggle_fix_diff()`).
+function M.toggle_fix_diff()
+  require('aineo.explain').toggle_fix_diff(vim.api.nvim_get_current_buf())
 end
 
 --- What `\v`, `\V`, `\vi`, `\VI`, `\VV` and `\VVI` do in Visual mode: leave
