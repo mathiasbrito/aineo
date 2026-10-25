@@ -260,15 +260,19 @@ local HANGUP_CODE = 129
 --- The longest a fake runs before it exits by itself.
 local LIFETIME_MS = 60000
 
-local record_file = assert(io.open(RECORD_PATH, 'a'))
+--- The record, opened to append (`O_APPEND`, `rw-r--r--`).
+local record_file = assert(vim.uv.fs_open(RECORD_PATH, 'a', 420))
 
---- Appends `entry` to the record, as one line of JSON, and flushes it so that a
---- test reads it even when the fake is killed next.
+--- Appends `entry` to the record, as one line of JSON, in one write to the
+--- file, so that the lines of several fakes that append to one record at once
+--- never mix — the C library's buffered writes reach the file 4096 bytes at a
+--- time, and another fake's line could fall between two of them — and so that
+--- a test reads it even when the fake is killed next.
 ---
 ---@param entry table
 local function record(entry)
-  record_file:write(vim.json.encode(entry), '\n')
-  record_file:flush()
+  local line = vim.json.encode(entry) .. '\n'
+  assert(vim.uv.fs_write(record_file, line) == #line, 'the record took part of a line')
 end
 
 --- The values of the variables `AINEO_FAKE_CLAUDE_ENV` names, `vim.NIL` for
