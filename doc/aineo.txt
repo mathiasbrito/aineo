@@ -4768,7 +4768,11 @@ spot of the same name and number in the new plan.
     },
 <
 An agent whose step names a spot that other agents have keeps the spot it
-stands on and looks again every second. An agent that has no place yet, whose
+stands on and looks again every second. When another character stands still
+on its cell, or is on its way to that cell, it first steps, standing, to the
+nearest floor cell that is no spot's and that no other character stands on or
+is on its way to, so that two agents never wait on one cell; one that only
+walks over its cell does not move it. An agent that has no place yet, whose
 step names a spot that other agents have, or that the plan lacks (as in a
 room too small for the desks), or that cannot be walked to, is put on the free
 floor cell nearest the spot `door` (the one the random source picks when the
