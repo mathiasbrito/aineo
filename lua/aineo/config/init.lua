@@ -77,6 +77,17 @@ local function is_model_name(value)
   return type(value) == 'string' and value ~= ''
 end
 
+--- The efforts Claude Code's `--effort` takes, from the least to the most.
+local EXPLAIN_EFFORTS = { 'low', 'medium', 'high', 'xhigh', 'max' }
+
+--- Whether `value` is an effort Claude Code takes (`EXPLAIN_EFFORTS`).
+---
+---@param value any
+---@return boolean
+local function is_effort(value)
+  return vim.list_contains(EXPLAIN_EFFORTS, value)
+end
+
 --- Whether `value` is the words that open a prompt: a non-empty string.
 ---
 ---@param value any
@@ -290,6 +301,24 @@ local SETTINGS = {
   {
     name = 'explain.timeout_ms',
     default = 180000,
+    validator = is_positive_count,
+    expected = 'a whole number of milliseconds of at least 1',
+  },
+  {
+    name = 'explain.deep_model',
+    default = 'sonnet',
+    validator = is_model_name,
+    expected = 'a non-empty string naming a model',
+  },
+  {
+    name = 'explain.deep_effort',
+    default = 'high',
+    validator = is_effort,
+    expected = 'one of ' .. table.concat(EXPLAIN_EFFORTS, ', '),
+  },
+  {
+    name = 'explain.deep_timeout_ms',
+    default = 300000,
     validator = is_positive_count,
     expected = 'a whole number of milliseconds of at least 1',
   },

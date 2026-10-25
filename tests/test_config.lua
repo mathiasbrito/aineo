@@ -16,6 +16,9 @@ local DEFAULTS = {
   explain = {
     model = 'sonnet',
     timeout_ms = 180000,
+    deep_model = 'sonnet',
+    deep_effort = 'high',
+    deep_timeout_ms = 300000,
     issues_prompt = 'Some issues were found in this code, can you check and propose a fix if the issue holds:',
   },
   office = {
@@ -371,6 +374,81 @@ T['resolve_config()']['refuses a timeout that is not a whole number of milliseco
   expect.error(function()
     config.resolve_config({ explain = { timeout_ms = timeout } }, nil)
   end, 'explain%.timeout_ms: expected a whole number of milliseconds of at least 1')
+end
+
+T['resolve_config()']['takes the deep explanation settings from either source: Sonnet, effort high and 300000 ms by default'] = function()
+  local from_global = config.resolve_config(
+    { explain = { deep_model = 'opus', deep_effort = 'max', deep_timeout_ms = 1000 } },
+    nil
+  )
+  local from_setup = config.resolve_config(
+    { explain = { deep_model = 'opus', deep_effort = 'max', deep_timeout_ms = 1000 } },
+    { explain = { deep_model = 'haiku', deep_effort = 'low', deep_timeout_ms = 1 } }
+  )
+  local defaults = config.resolve_config(nil, nil).explain
+
+  eq({
+    from_global.explain.deep_model,
+    from_global.explain.deep_effort,
+    from_global.explain.deep_timeout_ms,
+  }, { 'opus', 'max', 1000 })
+  eq({
+    from_setup.explain.deep_model,
+    from_setup.explain.deep_effort,
+    from_setup.explain.deep_timeout_ms,
+  }, { 'haiku', 'low', 1 })
+  eq(
+    { defaults.deep_model, defaults.deep_effort, defaults.deep_timeout_ms },
+    { 'sonnet', 'high', 300000 }
+  )
+end
+
+T['resolve_config()']['refuses a deep model that is not a non-empty string'] = MiniTest.new_set({
+  parametrize = { { '' }, { 5 }, { false }, { { 'sonnet' } } },
+})
+
+T['resolve_config()']['refuses a deep model that is not a non-empty string']['as explain.deep_model'] = function(
+  model
+)
+  expect.error(function()
+    config.resolve_config({ explain = { deep_model = model } }, nil)
+  end, 'explain%.deep_model: expected a non%-empty string naming a model')
+end
+
+T['resolve_config()']['refuses a deep effort that is not low, medium, high, xhigh or max'] =
+  MiniTest.new_set({
+    parametrize = { { '' }, { 'highest' }, { 'High' }, { 5 }, { false } },
+  })
+
+T['resolve_config()']['refuses a deep effort that is not low, medium, high, xhigh or max']['as explain.deep_effort'] = function(
+  effort
+)
+  expect.error(function()
+    config.resolve_config({ explain = { deep_effort = effort } }, nil)
+  end, 'explain%.deep_effort: expected one of low, medium, high, xhigh, max')
+end
+
+T['resolve_config()']['takes each of the five deep efforts'] = MiniTest.new_set({
+  parametrize = { { 'low' }, { 'medium' }, { 'high' }, { 'xhigh' }, { 'max' } },
+})
+
+T['resolve_config()']['takes each of the five deep efforts']['as explain.deep_effort'] = function(
+  effort
+)
+  eq(config.resolve_config({ explain = { deep_effort = effort } }, nil).explain.deep_effort, effort)
+end
+
+T['resolve_config()']['refuses a deep timeout that is not a whole number of milliseconds of at least 1'] =
+  MiniTest.new_set({
+    parametrize = { { 0 }, { -5 }, { 2.5 }, { '100' }, { false }, { math.huge } },
+  })
+
+T['resolve_config()']['refuses a deep timeout that is not a whole number of milliseconds of at least 1']['as explain.deep_timeout_ms'] = function(
+  timeout
+)
+  expect.error(function()
+    config.resolve_config({ explain = { deep_timeout_ms = timeout } }, nil)
+  end, 'explain%.deep_timeout_ms: expected a whole number of milliseconds of at least 1')
 end
 
 T['resolve_config()']['takes the prompt that sends marked issues from either source, a request to check them by default'] = function()

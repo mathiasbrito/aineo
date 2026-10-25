@@ -1892,9 +1892,10 @@ Visual mode they ask about the lines selected. When it finds none, you are
 told once: `aineo: no potential issues found`. Issues show as explanations do,
 in a namespace of their own and in the look of |hl-AineoExplainIssue|, the
 accent being the foreground of |hl-DiagnosticWarn|, `#e5c07b` without one, and
-the label `issue`. Since `\v` starts `\vi` and `\vm`, and `\V` starts `\VI`,
-Neovim waits 'timeoutlen' for a following `i` or `m` before it runs `\v`, and
-for a following `I` before it runs `\V`.
+the label `issue`. Since `\v` starts `\vi` and `\vm`, `\V` starts `\VI` and
+`\VV`, and `\VV` starts `\VVI`, Neovim waits 'timeoutlen' for a following `i`
+or `m` before it runs `\v`, for a following `I` or `V` before it runs `\V`,
+and for a following `I` before it runs `\VV`.
 
 Explanations and issues are shown together on a buffer, and each key toggles
 its own kind: pressed in Normal mode on a buffer that shows what the key asks
@@ -1919,6 +1920,58 @@ timers end with the request, whichever way it ends: its answer, a key that
 stops it, `explain.timeout_ms`, an error, the buffer wiped out,
 `:Aineo explain clear`, or Neovim quitting; a window closed takes its badge
 and the request goes on.
+
+                                                          *aineo-explain-deep*
+`\VV` and `\VVI` are `\V` and `\VI` for hard questions: a deep request, which
+you steer. Before it starts, a float opens in the middle of the editor with
+the whole prompt, ready to edit: a scratch buffer of the markdown filetype,
+titled with what the request does and the keys, and holding the default text
+of its kind with the file, its language and the lines asked about filled in.
+For explanations the default asks for thorough explanations: what the code
+does and why, the call paths and data flow it takes part in, found by reading
+the project with the tools, and what is non-obvious. For issues it asks for
+each potential issue, why it holds, how it would show up, and the evidence in
+the project, with no remarks on style and an empty list when there is none.
+In Normal mode `<CR>` sends the text, `q` and `<Esc>` close the float with
+nothing sent, and `R` puts the default text back; Insert mode is plain
+editing. A text of white space alone is not sent: you are told, once, and the
+float stays. The text last sent is remembered for each kind, for the Neovim
+session, and starts the next float of that kind; `R` brings back the default.
+The first line of the default names the file, its language and the lines;
+when a remembered text starts the float of another file or other lines, that
+line is replaced by the new one where it still reads as aineo wrote it, and
+a line you rewrote is left alone.
+
+There is one float at a time. Leaving it, with a window command or `:q`,
+closes it with nothing sent and keeps its text as the draft of its kind, which
+starts the next float of that kind as a text sent does (`q` and `<Esc>` keep
+nothing). A deep key pressed while a float is open focuses it. If the lines
+asked about are no longer in the buffer when you press `<CR>`, you are told,
+once, `aineo: the selected lines are no longer in the buffer`, nothing is sent
+and the float closes.
+
+What is sent is your text, then what aineo always adds and you do not edit:
+which file and lines are asked about, whatever your text says, the rule that
+ties each item of the answer to the first line it concerns, from the first to
+the last line asked, so that the answers stay anchored to their lines, and
+every line of the buffer, numbered, as `\V` hands it. The
+request always has the read-only tools `Read`, `Grep` and `Glob`, as `\V`
+does, and runs at `explain.deep_effort` (`--effort`) with the model
+`explain.deep_model` and the time limit `explain.deep_timeout_ms`
+(|aineo-config-explain.deep_model|, |aineo-config-explain.deep_effort|,
+|aineo-config-explain.deep_timeout_ms|). In Visual mode they ask about the
+lines selected. The answer has the same structure and shows as `\V` and `\VI`
+answers do, in the same two namespaces, replacing what its kind showed above
+those lines; the label in the gutter is `expl+` (`issue+`), and while it runs
+the working line and the badge say `explaining in depth…` (`looking for
+issues in depth…`). `]v` and `[v`, `\vm` and `\s` work on deep answers as on
+the others, and issues from `\VVI` can be marked. `\VV` and `\VVI` do not
+toggle: they open the float whenever no request of their kind runs for the
+buffer (while one runs they stop it, as the other keys do), and what is shown
+is cleared by `\v` and `\V` for explanations, `\vi` and `\VI` for issues.
+A deep answer is kept under a key that includes your text, the model and the
+effort: the same text on unchanged lines places the kept answer, you are told
+so, once, and a different text starts a request.
 
                                                           *aineo-explain-jump*
 `]v` and `[v` move the cursor to the line of the next and the previous
@@ -1988,7 +2041,8 @@ or answers nothing aineo can read: nothing is shown then. When the text of the
 buffer changed while the request ran (a write of it changes nothing), nothing
 is shown and you are told to ask again. The Claude Code of every request that
 runs is stopped when Neovim quits. The buffer must hold a file: in aineo's own
-panes, `\v`, `\V`, `\vi` and `\VI` tell you so (|:Aineo-explain|). The model
+panes, `\v`, `\V`, `\vi`, `\VI`, `\VV` and `\VVI` tell you so
+(|:Aineo-explain|). The model
 is `explain.model` (|aineo-config-explain.model|). Each request is a model
 call, billed as Claude Code's own usage is.
 
@@ -2838,10 +2892,12 @@ keeps the tab's claim, and the next start takes it up again (|aineo-tabs|).
 			that Claude Code may read the project with `Read`,
 			`Grep` and `Glob`; without, it has the code alone.
 			`\v`, `\V`, `\vi` and `\VI` do the same
-			(|aineo-keys|). Asked while a request of its kind runs
-			for the buffer, it stops that request; asked for the
-			whole buffer while it shows what it asks for, it
-			clears that. When an earlier answer for the same
+			(|aineo-keys|); `\VV` and `\VVI` ask the deep way,
+			which this command does not (|aineo-explain-deep|).
+			Asked while a request of its kind runs for the
+			buffer, it stops that request; asked for the whole
+			buffer while it shows what it asks for, it clears
+			that. When an earlier answer for the same
 			kind, tools and lines is kept and their text is
 			unchanged, it places that answer and starts no
 			request; `new` asks again whatever is kept or shown,
@@ -3102,6 +3158,18 @@ you turn the prefix off, or when a prefix key is yours: >lua
 			`Grep` and `Glob`; what `:Aineo explain issues tools`
 			does (|:Aineo-explain|).
 
+                                                  *<Plug>(aineo-explain-deep)*
+<Plug>(aineo-explain-deep)
+			Opens the float in which you edit the prompt of a deep
+			request for explanations, then sends it
+			(|aineo-explain-deep|); in Visual mode, for the lines
+			selected alone, leaving Visual mode.
+
+                                           *<Plug>(aineo-explain-deep-issues)*
+<Plug>(aineo-explain-deep-issues)
+			Does what `<Plug>(aineo-explain-deep)` does, asking
+			for the potential issues of the code.
+
                                                   *<Plug>(aineo-explain-mark)*
 <Plug>(aineo-explain-mark)
 			In Normal mode, marks the issues above the cursor's
@@ -3138,8 +3206,8 @@ Prefix keys ~
                                                                   *aineo-keys*
 Once the editor has started, aineo maps the prefix (|aineo-config-prefix|)
 followed by these keys to each `<Plug>` mapping but `<Plug>(aineo-claim)`,
-which has none, globally, in Normal mode, and `\s`, `\v`, `\V`, `\vi`, `\VI`
-and `\vm` in Visual mode too:
+which has none, globally, in Normal mode, and `\s`, `\v`, `\V`, `\vi`, `\VI`,
+`\VV`, `\VVI` and `\vm` in Visual mode too:
 
                                                                     *aineo-\s*
 \s		|<Plug>(aineo-send)|
@@ -3195,6 +3263,10 @@ and `\vm` in Visual mode too:
 \vi		|<Plug>(aineo-explain-issues)|
                                                                    *aineo-\VI*
 \VI		|<Plug>(aineo-explain-issues-tools)|
+                                                                   *aineo-\VV*
+\VV		|<Plug>(aineo-explain-deep)|
+                                                                  *aineo-\VVI*
+\VVI		|<Plug>(aineo-explain-deep-issues)|
                                                                    *aineo-\vm*
 \vm		|<Plug>(aineo-explain-mark)|
                                                                   *aineo-v_\s*
@@ -3207,6 +3279,10 @@ and `\vm` in Visual mode too:
 \vi		|<Plug>(aineo-explain-issues)| in Visual mode
                                                                  *aineo-v_\VI*
 \VI		|<Plug>(aineo-explain-issues-tools)| in Visual mode
+                                                                 *aineo-v_\VV*
+\VV		|<Plug>(aineo-explain-deep)| in Visual mode
+                                                                *aineo-v_\VVI*
+\VVI		|<Plug>(aineo-explain-deep-issues)| in Visual mode
                                                                  *aineo-v_\vm*
 \vm		|<Plug>(aineo-explain-mark)| in Visual mode
 
@@ -3541,6 +3617,23 @@ explain.timeout_ms	A whole number of at least 1. Default: `180000`
 			How many milliseconds a request to explain code may
 			run. Past that, its Claude Code is stopped and aineo
 			tells you, once.
+
+                                          *aineo-config-explain.deep_model*
+explain.deep_model	A non-empty string. Default: `'sonnet'`
+			The model of the Claude Code that `\VV` and `\VVI`
+			start (|aineo-explain-deep|), passed as its
+			`--model`: an alias or a model's full name.
+
+                                         *aineo-config-explain.deep_effort*
+explain.deep_effort	One of `'low'`, `'medium'`, `'high'`, `'xhigh'`,
+			`'max'`. Default: `'high'`
+			The effort of the Claude Code that `\VV` and `\VVI`
+			start, passed as its `--effort`.
+
+                                     *aineo-config-explain.deep_timeout_ms*
+explain.deep_timeout_ms	A whole number of at least 1. Default: `300000`
+			How many milliseconds a deep request may run, as
+			`explain.timeout_ms` does for the others.
 
                                         *aineo-config-explain.issues_prompt*
 explain.issues_prompt	A non-empty string. Default: `'Some issues were
@@ -5933,9 +6026,12 @@ Explain code ~
   `claude.cmd`, and what it may use: nothing with `\v` and `\vi`, `Read`,
   `Grep` and `Glob` with `\V` and `\VI`, without asking, no MCP server, no
   settings of aineo, and your own Claude Code settings but never the
-  project's (|aineo-explain|). That `\vm` marks issues for `\s` to send behind
-  `explain.issues_prompt` (|aineo-config-explain.issues_prompt|), and that
-  `]v` and `[v` jump between explanations and issues (|aineo-explain-jump|).
+  project's (|aineo-explain|). The model, the effort and the time limit of
+  `\VV` and `\VVI` (`explain.deep_model`, `explain.deep_effort`,
+  `explain.deep_timeout_ms`, |aineo-explain-deep|). That `\vm` marks issues
+  for `\s` to send behind `explain.issues_prompt`
+  (|aineo-config-explain.issues_prompt|), and that `]v` and `[v` jump between
+  explanations and issues (|aineo-explain-jump|).
   Nothing while the configuration is wrong.
 
 Office ~

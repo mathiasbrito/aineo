@@ -1,5 +1,5 @@
---- What `\v`, `\V`, `\vi`, `\VI`, their `<Plug>` mappings and `:Aineo explain`
---- do: hand the current buffer, a file's, to the explain home
+--- What `\v`, `\V`, `\vi`, `\VI`, `\VV`, `\VVI`, their `<Plug>` mappings and
+--- `:Aineo explain` do: hand the current buffer, a file's, to the explain home
 --- (`aineo.explain`), with the Claude Code command and the settings of the
 --- configuration.
 
@@ -21,11 +21,13 @@ end
 ---@field tools boolean whether Claude Code may read the project with read-only tools
 ---@field kind? 'explanations'|'issues' what is asked for; explanations when absent
 ---@field fresh? boolean whether to ask again whatever answer is kept
+---@field deep? boolean whether it is a deep request: its prompt is edited first, and it runs with `explain.deep_model`, `explain.deep_effort` and `explain.deep_timeout_ms`
 ---@field range? integer[] the first and last lines to explain, from 1; the whole buffer when absent
 
 --- Asks the explain home to explain the current buffer, in the current
 --- window, as `order` says (`aineo.explain`'s `ask()`): with `claude.cmd`,
---- `explain.model` and `explain.timeout_ms`.
+--- `explain.model` and `explain.timeout_ms`, or, for a deep order,
+--- `explain.deep_model`, `explain.deep_effort` and `explain.deep_timeout_ms`.
 ---
 --- Raises an error when the current buffer holds no file, and the
 --- configuration's or the explain home's errors.
@@ -37,6 +39,7 @@ function M.explain(order)
     error('explaining works in the buffer of a file', 0)
   end
   local config = resolved_config()
+  local settings = config.explain
   require('aineo.explain').ask({
     buffer = buffer,
     window = vim.api.nvim_get_current_win(),
@@ -44,16 +47,17 @@ function M.explain(order)
     tools = order.tools,
     kind = order.kind,
     fresh = order.fresh,
+    deep = order.deep and { effort = settings.deep_effort } or nil,
     command = config.claude.cmd,
-    model = config.explain.model,
-    timeout_ms = config.explain.timeout_ms,
+    model = order.deep and settings.deep_model or settings.model,
+    timeout_ms = order.deep and settings.deep_timeout_ms or settings.timeout_ms,
     send_key = config.prefix and config.prefix .. 's' or ':Aineo send',
   })
 end
 
---- What `\v`, `\V`, `\vi` and `\VI` do in Visual mode: leave Visual mode,
---- then ask about the lines the selection spans alone, as `explain()` does
---- with `order`'s tools and kind.
+--- What `\v`, `\V`, `\vi`, `\VI`, `\VV` and `\VVI` do in Visual mode: leave
+--- Visual mode, then ask about the lines the selection spans alone, as
+--- `explain()` does with `order`'s tools, kind and depth.
 ---
 ---@param order aineo.entry.ExplainOrder
 function M.explain_selection(order)
@@ -62,6 +66,7 @@ function M.explain_selection(order)
   M.explain({
     tools = order.tools,
     kind = order.kind,
+    deep = order.deep,
     range = { math.min(first, last), math.max(first, last) },
   })
 end

@@ -167,6 +167,7 @@ resumes it.
 | `\N` | starts a new Claude Code session |
 | `\v`, `\V` | explain the code of the file, or in Visual mode of the selected lines: `\v` hands Claude the code alone, `\V` lets it read the project too |
 | `\vi`, `\VI` | the same, asking for potential issues instead of explanations (`\vi` the code alone, `\VI` with the project readable) |
+| `\VV`, `\VVI` | the deep versions of `\V` and `\VI`: a float with the whole prompt to edit opens first, then the request runs with higher effort |
 | `\vm` | marks the issues on the cursor's line (on each selected line in Visual mode), or unmarks them; `\s` then sends the marked issues to Claude |
 | `]v`, `[v` | jump to the next and the previous explanation or issue of the buffer |
 | `\z` | zooms the window of the right column the cursor is in, and gives the heights back when pressed again |
@@ -410,12 +411,28 @@ handling gaps, security or performance risks, no remarks on style), shown the
 same way in the accent of `DiagnosticWarn` with the label `issue`. Explanations
 and issues are shown together, and each key toggles its own kind; a request of
 each kind may run at once, and a key stops the request of its own kind alone.
-Since `\v` starts `\vi` and `\vm`, Neovim waits `'timeoutlen'` for a following
-`i` or `m` before it runs `\v`. `:Aineo explain [issues] [tools]` with a range, and `:Aineo
+Since `\v` starts `\vi` and `\vm`, and `\V` starts `\VI` and `\VV`, Neovim waits
+`'timeoutlen'` for a following key before it runs `\v` or `\V`. `:Aineo explain [issues] [tools]` with a range, and `:Aineo
 explain clear`, do the same. The model is `explain.model`, `'sonnet'` by
 default, and a request is stopped after `explain.timeout_ms`. If the text of
 the buffer changes while Claude Code works on it (a write changes nothing),
 nothing is shown: ask again.
+
+For a hard question, `\VV` (explanations) and `\VVI` (issues) are deep
+requests that you steer. A float opens in the middle of the editor holding the
+whole prompt, with the file, language and lines filled in, ready to edit;
+`<CR>` in Normal mode sends it, `q` or `<Esc>` cancels with nothing sent, and
+`R` puts the default text back. The last text sent is remembered for each kind
+and starts the next float, with the file and lines of its first line brought up
+to date. There is one float at a time: leaving it closes it and keeps its text
+as the draft of its kind. aineo adds to your text what you do not edit: which
+file and lines are asked about, the rule that ties each item to its first
+line, and the numbered buffer. The
+request reads the project with the read-only tools, runs at `explain.deep_effort`
+(`'high'`) with the model `explain.deep_model` (`'sonnet'`), and is stopped
+after `explain.deep_timeout_ms`. Its answers are labelled `expl+` and
+`issue+`, work with `]v`, `[v`, `\vm` and `\s` as the others do, and are kept
+under a key that includes your text, so a different steer is a new request.
 
 An explanation shows as a band tinted from your colour scheme, its text italic
 in the accent of `DiagnosticInfo`, starting at the explained line's indent,
@@ -619,6 +636,9 @@ vim.g.aineo = {
   explain = {
     model = 'sonnet',
     timeout_ms = 180000,
+    deep_model = 'sonnet',
+    deep_effort = 'high',
+    deep_timeout_ms = 300000,
     issues_prompt = 'Some issues were found in this code, can you check and propose a fix if the issue holds:',
   },
   office = {
@@ -650,6 +670,9 @@ vim.g.aineo = {
 | `find.picker` | `'auto'` | The picker `\f` hands its search to: `'auto'` takes the first installed of snacks.nvim, fzf-lua, telescope.nvim and mini.pick; `'snacks'`, `'fzf-lua'`, `'telescope'` or `'mini.pick'` takes that one alone. With none installed, or the one named missing, aineo lists the files through `vim.ui.select()`. None is a dependency. |
 | `explain.model` | `'sonnet'` | The model of the Claude Code that `\v` and `\V` start to explain code, as `claude --model` takes it: an alias such as `'opus'` or a full name. A non-empty string. |
 | `explain.timeout_ms` | `180000` | How long a request to explain code may run before aineo stops its Claude Code, a whole number of milliseconds of at least 1. |
+| `explain.deep_model` | `'sonnet'` | The model of the Claude Code that `\VV` and `\VVI` start, as `claude --model` takes it. A non-empty string. |
+| `explain.deep_effort` | `'high'` | The effort of that Claude Code, as `claude --effort` takes it: `'low'`, `'medium'`, `'high'`, `'xhigh'` or `'max'`. |
+| `explain.deep_timeout_ms` | `300000` | How long a deep request may run before aineo stops its Claude Code, a whole number of milliseconds of at least 1. |
 | `explain.issues_prompt` | `'Some issues were found in this code, can you check and propose a fix if the issue holds:'` | The words that open the message `\s` sends when issues are marked, before the line for each issue. A non-empty string. |
 | `office.idle_ms` | `180000` | How long the cursor stays out of the right side before the office shows by itself, in milliseconds, a whole number of at least 1; `false` turns that off, and the office then shows only for `\O`. It needs `'termguicolors'`. See `:help aineo-config-office.idle_ms`. |
 | `office.pack` | `'default'` | The pack the office draws: a name of letters, digits, `_` and `-`, or a list of names, one picked at random each time the office shows. `'default'` and `'space_station'` ship with aineo; others are found on `'runtimepath'` under `aineo-office/<name>/`. A pack that cannot be used gives way to the default, with a warning. `:Aineo office pack <name>` replaces it for this Neovim. See `:help aineo-config-office.pack`. |

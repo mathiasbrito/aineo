@@ -17,6 +17,13 @@ local M = {}
 ---@field text string the text of a row and the band behind it
 ---@field gutter string the gutter's `✓` and label
 
+--- What one kind says of a deep request, in place of what it says of any
+--- other.
+---@class aineo.explain.DeepWords
+---@field label string the word that names it in the gutter
+---@field working string what it says while its request runs
+---@field title string what the float that steers the request says it does
+
 --- One kind of virtual line.
 ---@class aineo.explain.Kind
 ---@field name 'explanations'|'issues' what a request names it
@@ -24,6 +31,7 @@ local M = {}
 ---@field column integer the column its extmarks are set at: a kind with a lower one shows above one with a higher on the same line
 ---@field working string what it says while its request runs
 ---@field label string the word that names it in the gutter, on its first row
+---@field deep aineo.explain.DeepWords how it names a deep request's answer, and says it works
 ---@field accent_group string the highlight group whose foreground is its accent
 ---@field accent_fallback integer the accent when that group has no foreground
 ---@field groups aineo.explain.KindGroups
@@ -35,6 +43,11 @@ M.EXPLANATIONS = {
   namespace = 'aineo_explain',
   column = 0,
   working = 'explaining…',
+  deep = {
+    label = 'expl+',
+    working = 'explaining in depth…',
+    title = 'Deep explanation',
+  },
   label = 'expl',
   accent_group = 'DiagnosticInfo',
   accent_fallback = 0x61afef,
@@ -52,6 +65,11 @@ M.ISSUES = {
   namespace = 'aineo_explain_issues',
   column = 1,
   working = 'looking for issues…',
+  deep = {
+    label = 'issue+',
+    working = 'looking for issues in depth…',
+    title = 'Deep issue review',
+  },
   label = 'issue',
   accent_group = 'DiagnosticWarn',
   accent_fallback = 0xe5c07b,

@@ -11,6 +11,7 @@ local marks = require('aineo.explain.marks')
 local message = require('aineo.explain.message')
 local request = require('aineo.explain.request')
 local runs = require('aineo.explain.runs')
+local steer = require('aineo.explain.steer')
 
 local M = {}
 
@@ -26,6 +27,11 @@ marks.on_change(function(buffer, window)
   end
 end)
 
+--- What makes a request deep.
+---@class aineo.explain.Deep
+---@field effort string the effort Claude Code works at, as `--effort` takes it
+---@field steer? string the text the prompt starts with, as the user edited it; asked of the user, in a float, when absent
+
 --- One request to explain code.
 ---@class aineo.explain.Request
 ---@field buffer integer the buffer whose code is explained, a file's
@@ -34,6 +40,7 @@ end)
 ---@field tools boolean whether Claude Code may read the project with read-only tools
 ---@field kind? 'explanations'|'issues' what to ask for; explanations when absent
 ---@field fresh? boolean whether to ask again whatever answer is kept for the same request
+---@field deep? aineo.explain.Deep set for a deep request, which `tools` and `model` describe as any other
 ---@field command string[] the words that run Claude Code, `claude.cmd`
 ---@field model string the model that explains
 ---@field timeout_ms integer how long the request may run
@@ -108,6 +115,7 @@ end
 ---@field path string
 ---@field file string the file's absolute path
 ---@field send_key? string
+---@field deep boolean whether it is a deep request
 ---@field first integer
 ---@field last integer
 ---@field key string what the answer is kept under (`aineo.explain.kept`'s `key()`)
@@ -143,6 +151,7 @@ local function show_answer(asked, ended)
     window = asked.window,
     file = asked.file,
     send_key = asked.send_key,
+    deep = asked.deep,
   })
   kept.keep(
     asked.buffer,
@@ -153,6 +162,45 @@ local function show_answer(asked, ended)
   if #explanations == 0 and asked.kind == kinds.ISSUES then
     vim.notify('aineo: no potential issues found', vim.log.levels.INFO)
   end
+end
+
+--- The key the answer to `explaining`, of `kind`, is kept under
+--- (`aineo.explain.kept`'s `key()`).
+---
+---@param explaining aineo.explain.Request
+---@param kind aineo.explain.Kind
+---@return string
+local function kept_key(explaining, kind)
+  local deep = explaining.deep
+  return kept.key(
+    kind,
+    explaining.tools,
+    explaining.range,
+    deep and { model = explaining.model, effort = deep.effort, steer = deep.steer }
+  )
+end
+
+--- The code `explaining` asks about, as the buffer reads now: its file's
+--- path from the project's folder, its `'filetype'`, the lines asked for, a
+--- deep request's steer when it has one, and every line.
+---
+---@param explaining aineo.explain.Request
+---@param kind aineo.explain.Kind
+---@return aineo.explain.Code
+local function code_of(explaining, kind)
+  local buffer = explaining.buffer
+  local path = vim.api.nvim_buf_get_name(buffer)
+  local lines = vim.api.nvim_buf_get_lines(buffer, 0, -1, false)
+  local range = explaining.range or { 1, #lines }
+  return {
+    path = vim.fs.relpath(project_folder(path), path),
+    language = vim.bo[buffer].filetype,
+    first = range[1],
+    last = range[2],
+    kind = kind.name,
+    lines = lines,
+    steer = explaining.deep and explaining.deep.steer,
+  }
 end
 
 --- Starts Claude Code for `explaining`, showing that it is working above the
@@ -167,32 +215,26 @@ local function start(explaining)
   local buffer = explaining.buffer
   local path = vim.api.nvim_buf_get_name(buffer)
   local folder = project_folder(path)
-  local lines = vim.api.nvim_buf_get_lines(buffer, 0, -1, false)
-  local range = explaining.range or { 1, #lines }
   local kind = kinds.named(explaining.kind)
+  local code = code_of(explaining, kind)
   local asked = {
     kind = kind,
     buffer = buffer,
     window = explaining.window,
-    path = vim.fs.relpath(folder, path),
+    path = code.path,
     file = path,
     send_key = explaining.send_key,
-    first = range[1],
-    last = range[2],
-    key = kept.key(kind, explaining.tools, explaining.range),
+    deep = explaining.deep ~= nil,
+    first = code.first,
+    last = code.last,
+    key = kept_key(explaining, kind),
     tick = vim.api.nvim_buf_get_changedtick(buffer),
-    lines = lines,
+    lines = code.lines,
   }
-  local prompt = request.prompt({
-    path = asked.path,
-    language = vim.bo[buffer].filetype,
-    first = asked.first,
-    last = asked.last,
-    lines = lines,
-    kind = kind.name,
-  })
+  local prompt = request.prompt(code)
   local run = runs.begin({
     kind = kind,
+    deep = asked.deep,
     buffer = buffer,
     window = asked.window,
     line = asked.first,
@@ -209,7 +251,11 @@ local function start(explaining)
   })
   local started, process = pcall(
     vim.system,
-    request.arguments(explaining.command, explaining.model, explaining.tools),
+    request.arguments(explaining.command, {
+      model = explaining.model,
+      tools = explaining.tools,
+      effort = explaining.deep and explaining.deep.effort,
+    }),
     { stdin = prompt, cwd = folder, text = true },
     function(ended)
       vim.schedule(function()
@@ -281,7 +327,7 @@ local function place_kept(explaining, kind)
   local buffer = explaining.buffer
   local lines = vim.api.nvim_buf_get_lines(buffer, 0, -1, false)
   local range = explaining.range or { 1, #lines }
-  local key = kept.key(kind, explaining.tools, explaining.range)
+  local key = kept_key(explaining, kind)
   local explanations = kept.recall(buffer, key, vim.list_slice(lines, range[1], range[2]))
   if not explanations then
     return false
@@ -291,14 +337,46 @@ local function place_kept(explaining, kind)
     window = explaining.window,
     file = vim.api.nvim_buf_get_name(buffer),
     send_key = explaining.send_key,
+    deep = explaining.deep ~= nil,
   })
   vim.notify(
-    ('aineo: the earlier answer, the code unchanged (:Aineo explain %sasks again)'):format(
-      words_that_ask_again(explaining, kind)
-    ),
+    explaining.deep
+        and 'aineo: the earlier answer, the code and the prompt unchanged (change the prompt to ask again)'
+      or ('aineo: the earlier answer, the code unchanged (:Aineo explain %sasks again)'):format(
+        words_that_ask_again(explaining, kind)
+      ),
     vim.log.levels.INFO
   )
   return true
+end
+
+--- Opens the float in which the user edits the prompt of the deep request
+--- `explaining`, of `kind` (`aineo.explain.steer`), starting from the default
+--- text for the lines asked about (`aineo.explain.request`'s
+--- `default_steer()`), and asks again with the text the user sends. Asks
+--- nothing when the user cancels, when the buffer is gone by then, or, with
+--- a word to the user, when the buffer no longer has the lines asked about.
+---
+---@param explaining aineo.explain.Request
+---@param kind aineo.explain.Kind
+local function steer_then_ask(explaining, kind)
+  steer.open({
+    name = kind.name,
+    title = kind.deep.title,
+    default = request.default_steer(code_of(explaining, kind)),
+    on_send = function(text)
+      local buffer = explaining.buffer
+      if not vim.api.nvim_buf_is_valid(buffer) then
+        return
+      end
+      local range = explaining.range
+      if range and range[2] > vim.api.nvim_buf_line_count(buffer) then
+        vim.notify('aineo: the selected lines are no longer in the buffer', vim.log.levels.WARN)
+        return
+      end
+      M.ask(vim.tbl_deep_extend('force', explaining, { deep = { steer = text } }))
+    end,
+  })
 end
 
 --- Explains the code of `explaining.buffer`, its whole text or the lines of
@@ -312,6 +390,11 @@ end
 --- lines while their text reads as it did places that answer again and starts
 --- no request. `explaining.fresh` asks again whatever is kept or shown.
 ---
+--- A deep request (`explaining.deep`) with no `steer` first opens the float in
+--- which the user edits its prompt (`steer_then_ask()`) and asks again with
+--- the text sent; it never clears what its kind shows, and its answer is kept
+--- under a key that holds the text, the model and the effort.
+---
 --- Raises an error naming `claude.cmd` when its command cannot be run.
 ---
 ---@param explaining aineo.explain.Request
@@ -324,11 +407,15 @@ function M.ask(explaining)
     vim.notify('aineo: explaining stopped', vim.log.levels.INFO)
     return
   end
+  if explaining.deep and not explaining.deep.steer then
+    steer_then_ask(explaining, kind)
+    return
+  end
   if explaining.fresh then
     start(explaining)
     return
   end
-  if not explaining.range and marks.is_showing(buffer, kind) then
+  if not explaining.deep and not explaining.range and marks.is_showing(buffer, kind) then
     marks.clear(buffer, kind)
     return
   end

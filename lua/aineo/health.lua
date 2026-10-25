@@ -353,11 +353,15 @@ local PREFIX_KEYS = {
   { key = 'V', plug = '<Plug>(aineo-explain-tools)', mode = 'n' },
   { key = 'vi', plug = '<Plug>(aineo-explain-issues)', mode = 'n' },
   { key = 'VI', plug = '<Plug>(aineo-explain-issues-tools)', mode = 'n' },
+  { key = 'VV', plug = '<Plug>(aineo-explain-deep)', mode = 'n' },
+  { key = 'VVI', plug = '<Plug>(aineo-explain-deep-issues)', mode = 'n' },
   { key = 'vm', plug = '<Plug>(aineo-explain-mark)', mode = 'n' },
   { key = 'v', plug = '<Plug>(aineo-explain)', mode = 'x' },
   { key = 'V', plug = '<Plug>(aineo-explain-tools)', mode = 'x' },
   { key = 'vi', plug = '<Plug>(aineo-explain-issues)', mode = 'x' },
   { key = 'VI', plug = '<Plug>(aineo-explain-issues-tools)', mode = 'x' },
+  { key = 'VV', plug = '<Plug>(aineo-explain-deep)', mode = 'x' },
+  { key = 'VVI', plug = '<Plug>(aineo-explain-deep-issues)', mode = 'x' },
   { key = 'vm', plug = '<Plug>(aineo-explain-mark)', mode = 'x' },
 }
 
@@ -370,6 +374,8 @@ local HAS_NO_TWIN = {
   ['<Plug>(aineo-explain-tools)'] = true,
   ['<Plug>(aineo-explain-issues)'] = true,
   ['<Plug>(aineo-explain-issues-tools)'] = true,
+  ['<Plug>(aineo-explain-deep)'] = true,
+  ['<Plug>(aineo-explain-deep-issues)'] = true,
   ['<Plug>(aineo-explain-mark)'] = true,
 }
 
@@ -964,11 +970,11 @@ local function check_find(resolved_config)
   end
 end
 
---- Reports how `\v`, `\V`, `\vi` and `\VI` ask about code with `resolved_config`'s
---- `explain.model` and `explain.timeout_ms`, and what the Claude Code they
---- start may use; and how `\vm`, `\s`, `]v` and `[v` work on what they
---- answer, with `explain.issues_prompt`. Nothing while the configuration is
---- wrong.
+--- Reports how `\v`, `\V`, `\vi`, `\VI`, `\VV` and `\VVI` ask about code with
+--- `resolved_config`'s `explain.model`, `explain.timeout_ms` and the settings of
+--- the deep requests, and what the Claude Code they start may use; and how
+--- `\vm`, `\s`, `]v` and `[v` work on what they answer, with
+--- `explain.issues_prompt`. Nothing while the configuration is wrong.
 ---
 ---@param resolved_config table|nil the configuration, `nil` when it is wrong
 local function check_explain(resolved_config)
@@ -986,7 +992,14 @@ local function check_explain(resolved_config)
     "\\v hands it the code alone, with no tool; \\V lets it read the project with Read, Grep and Glob, without asking; it gets no other tool, no MCP server and no settings of aineo, loads your own settings but never the project's (--setting-sources user), and asks no permission"
   )
   vim.health.info(
-    "\\vi and \\VI ask the same Claude Code for potential issues instead of explanations, \\vi with the code alone and \\VI with the read-only tools; \\v waits for 'timeoutlen' for a following i or m, and \\V for a following I"
+    "\\vi and \\VI ask the same Claude Code for potential issues instead of explanations, \\vi with the code alone and \\VI with the read-only tools; \\v waits for 'timeoutlen' for a following i or m, and \\V for a following I or V, and \\VV for a following I"
+  )
+  vim.health.info(
+    ('\\VV and \\VVI do what \\V and \\VI do after a float in which you edit the whole prompt (<CR> sends, q or <Esc> cancels, R restores the default text), with model %s (explain.deep_model) at effort %s (explain.deep_effort), stopped after %g s (explain.deep_timeout_ms): :help |aineo-explain-deep|'):format(
+      resolved_config.explain.deep_model,
+      resolved_config.explain.deep_effort,
+      resolved_config.explain.deep_timeout_ms / 1000
+    )
   )
   vim.health.info(
     ('\\vm marks the issues on a line (on each selected line in Visual mode), and \\s then sends the marked issues to the session\'s Claude Code in place of Input, after "%s" (explain.issues_prompt): :help |aineo-explain-mark|'):format(
