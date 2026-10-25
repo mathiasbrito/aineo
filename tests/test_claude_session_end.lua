@@ -124,4 +124,60 @@ T['the session']['is not told the exit of a Claude Code another start took the p
   eq(child.lua_get('_G.ended'), {})
 end
 
+T['the session']['is not told an end of the Claude Code its home stops, by its SessionEnd hook or its exit'] = function()
+  local fake = claude.fake('session-end-stop', 'ready', { AINEO_FAKE_CLAUDE_HOOKS = '1' })
+  start_noting_ends(fake, 'session-end-stop-state')
+  claude.wait_for_status(child, 'ready')
+  claude.wait_for_deliveries(child)
+
+  child.lua([[require('aineo.claude').stop_session()]])
+  claude.wait_for_deliveries(child)
+
+  eq(child.lua_get('_G.ended'), {})
+end
+
+--- The lines of the file at `path`, none when there is no file.
+---
+---@param path string
+---@return string[]
+local function lines_of(path)
+  if vim.fn.filereadable(path) == 0 then
+    return {}
+  end
+  return vim.fn.readfile(path)
+end
+
+T['the session']['is not told an end of the Claude Code that quitting Neovim stops'] = function()
+  local fake = claude.fake('session-end-quit', 'ready')
+  local told = vim.fs.joinpath(fixture.directory('session-end-quit-told'), 'told.txt')
+  child.lua(
+    [[
+      local helper, environment, state, told = dofile(...), select(2, ...)
+      for variable, value in pairs(environment) do
+        vim.env[variable] = value
+      end
+      local settings = helper.stand_in_settings({ new_session = true, state_directory = state })
+      settings.on_session_ended = function(session_id, reason)
+        vim.fn.writefile({ session_id .. ' ' .. tostring(reason) }, told, 'a')
+      end
+      _G.terminal = require('aineo.claude').start_session(settings)
+    ]],
+    {
+      'tests/helpers/claude_session.lua',
+      fake.environment,
+      fixture.directory('session-end-quit-state'),
+      told,
+    }
+  )
+  claude.wait_for_status(child, 'ready')
+
+  claude.quit(child)
+  claude.wait_for_end(fake)
+  vim.wait(claude.STOP_PATIENCE_MS, function()
+    return vim.fn.jobwait({ child.job.id }, 0)[1] ~= -1
+  end, 50)
+
+  eq(lines_of(told), {})
+end
+
 return T
