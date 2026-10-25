@@ -3,6 +3,7 @@
 --- buffer, or of some of its lines, or to find its potential issues.
 
 local answer = require('aineo.explain.answer')
+local fix = require('aineo.explain.fix')
 local kinds = require('aineo.explain.kinds')
 local jump = require('aineo.explain.jump')
 local kept = require('aineo.explain.kept')
@@ -73,18 +74,9 @@ local function project_folder(path)
   return vim.fs.root(path, '.git') or nearest_existing_folder(path)
 end
 
---- The first line of `text` that holds more than white space, or `nil`.
----
----@param text string|nil
----@return string|nil
-local function first_line(text)
-  return (text or ''):match('[^\r\n]*%S[^\r\n]*')
-end
-
 --- The explanations of the lines from `first` to `last` that the run `ended`
 --- of Claude Code answered (`aineo.explain.answer`), or `nil` and what went
---- wrong: an exit with a code other than 0 is told with the error result it
---- printed, else with the first line of its errors.
+--- wrong (`aineo.explain.answer`'s `failure_of()` for a failed run).
 ---
 ---@param ended vim.SystemCompleted
 ---@param first integer
@@ -92,14 +84,9 @@ end
 ---@return aineo.explain.Explanation[]|nil explanations
 ---@return string? problem
 local function explanations_of(ended, first, last)
-  if ended.code ~= 0 then
-    local failure = answer.error_in(ended.stdout or '')
-    if failure then
-      return nil, failure
-    end
-    local said = first_line(ended.stderr)
-    return nil,
-      ('Claude Code exited with code %d%s'):format(ended.code, said and ': ' .. said or '')
+  local failure = answer.failure_of(ended)
+  if failure then
+    return nil, failure
   end
   return answer.explanations_in(ended.stdout, first, last)
 end
@@ -485,6 +472,26 @@ end
 ---@param buffer integer
 function M.clear_issue_marks(buffer)
   marks.clear_issue_marks(buffer)
+end
+
+--- Asks a Claude Code of its own for a fix of the issue `fixing.buffer`
+--- shows above `fixing.line`, and shows the fix as a preview to accept or
+--- reject (`aineo.explain.fix`'s `propose()`), running Claude Code in the
+--- project's folder of the buffer's file (`project_folder()`).
+---
+--- Raises an error naming `claude.cmd` when its command cannot be run.
+---
+---@param fixing aineo.explain.FixRequest
+function M.propose_fix(fixing)
+  fix.propose(fixing, project_folder(vim.api.nvim_buf_get_name(fixing.buffer)))
+end
+
+--- Rejects the fix `buffer` shows, if any: its preview goes and the buffer
+--- stays as it reads (`aineo.explain.fix`'s `reject()`).
+---
+---@param buffer integer
+function M.reject_fix(buffer)
+  fix.reject(buffer)
 end
 
 --- Moves the cursor of `window` to the line of the next or the previous

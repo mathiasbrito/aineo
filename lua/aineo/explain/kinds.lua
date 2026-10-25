@@ -26,7 +26,7 @@ local M = {}
 
 --- One kind of virtual line.
 ---@class aineo.explain.Kind
----@field name 'explanations'|'issues' what a request names it
+---@field name 'explanations'|'issues'|'fix' what a request names it
 ---@field namespace string the name of the namespace its extmarks live in
 ---@field column integer the column its extmarks are set at: a kind with a lower one shows above one with a higher on the same line
 ---@field working string what it says while its request runs
@@ -82,6 +82,31 @@ M.ISSUES = {
   marked_groups = {
     text = 'AineoExplainIssueMarked',
     gutter = 'AineoExplainIssueMarkedGutter',
+  },
+}
+
+--- The kind of a proposed fix: the virtual line that says its request is
+--- working, and the new lines of its preview (`aineo.explain.preview`). Not
+--- one of `ALL`: a fix is not an answer placed above lines.
+---@type aineo.explain.Kind
+M.FIX = {
+  name = 'fix',
+  namespace = 'aineo_explain_fix',
+  column = 2,
+  working = 'proposing a fix…',
+  deep = {
+    label = 'fix',
+    working = 'proposing a fix…',
+    title = 'Propose a fix',
+  },
+  label = 'fix',
+  accent_group = 'DiagnosticOk',
+  accent_fallback = 0x98c379,
+  groups = {
+    text = 'AineoFix',
+    gutter = 'AineoFixGutter',
+    fill = 'AineoFixGutterFill',
+    number = 'AineoFixNr',
   },
 }
 
