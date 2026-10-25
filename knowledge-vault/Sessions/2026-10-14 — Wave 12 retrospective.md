@@ -63,5 +63,5 @@ On 2026-10-12 the user reported a blank Claude window when a folder's kept sessi
 
 ## Commits
 
-- This pass: the pull request `knowledge/w12-landed` into `dev`; hashes are recorded after the merge.
+- This pass: PR #204, `knowledge/w12-landed` into `dev`, merged by rebase as `87e7bf5d` (*Land wave 12: record T48 part 2 and close the wave*), its one commit matched by subject on `dev` (T149, 2026-10-25).
 - The packets' commits: [[Sessions/2026-10-14 — T48 Attach]] (PR #200), [[Sessions/2026-10-12 — T48 Resume elsewhere]] (PR #189), [[Sessions/2026-10-12 — T55 Pane cursor]] (PR #187).
