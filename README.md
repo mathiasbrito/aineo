@@ -518,6 +518,81 @@ aineo also gives Claude Code hooks that tell aineo when you switch session
 inside Claude Code with `/clear`, `/resume` or `/branch`, so the Report,
 Input's draft and the changes pane follow the session Claude Code is on.
 
+## The office
+
+When you leave the right side of the layout alone for three minutes
+(`office.idle_ms`), a screensaver covers it: an office where your Claude Code
+is a jelly bean at a desk and each subagent is another, acting out what the
+session does. It types while a tool call runs, goes to the whiteboard to
+think, to the file cabinet to read, waits with a hand up when Claude Code asks
+you for permission, prints a page when it reports, and, when it has nothing to
+do, gets a coffee, naps on the sofa, plays table tennis with another idle
+agent and pets the cat. `\O` or `:Aineo office` shows it at once, and the
+cursor entering the right side closes it. A report that comes in shows as a
+card in its corner.
+
+It runs on what Claude Code already writes: the session's transcript, and the
+hook that tells the editor Claude Code is asking for permission. It calls no
+Claude, sends nothing to its terminal, makes no network request and spends no
+token. It draws two pixels to a cell, so it needs `'termguicolors'`, and
+`'ambiwidth'` left `single`. `:help aineo-office` has the details.
+
+### Office packs
+
+Everything in the office is drawn from a pack: a folder
+`aineo-office/<name>/` with `pack.lua` (a description in plain data, never
+run), `floor.txt` (the floor plan drawn as text) and `art/*.txt` (pixel art).
+Two ship with aineo, `default` and `space_station` (a starship bridge); set
+`office.pack` to a name, or to a list of names to be drawn at random each
+time, or run `:Aineo office pack <name>` to change it for this Neovim.
+`:Aineo office states` lists what a pack draws for each of the 24 states Claude
+Code can be seen in.
+
+### Make your own pack
+
+```
+:Aineo office new harbour       " copies the default pack to aineo-office/harbour/
+                                " in your Neovim configuration directory
+```
+
+1. Set `office.pack = 'harbour'` (or run `:Aineo office pack harbour`).
+2. Edit `pack.lua` and the files next to it: a colour, a piece of art in
+   `art/`, an activity, the floor plan.
+3. `:Aineo office check harbour` lists what is wrong, with file and line, in
+   the quickfix list.
+4. `:Aineo office preview harbour` plays every state in turn, so you see what
+   you changed; run it again after each save.
+
+A pack can also be a few lines that lay a change over another pack
+(`based_on = 'default'`): one activity and a trigger that plays it when a
+command matches, say. `:help aineo-office-making` walks through it,
+`:help aineo-office-tiny` is a complete small pack, and
+`:help aineo-office-packs` and what follows document every field.
+
+### Sharing your pack
+
+A pack is a repository with the pack at `aineo-office/<name>/`, installed by
+your plugin manager like any plugin; aineo finds it on `'runtimepath'`. With
+lazy.nvim:
+
+```lua
+{ 'someone/aineo-office-harbour', lazy = false }
+```
+
+then `office.pack = 'harbour'`. Start from `:Aineo office new <name>`, check
+with `:Aineo office check <name>`, and add the GitHub topic `aineo-office` to
+the repository so that packs can be found by it. A pack is data only: aineo
+never runs it and reads only files inside its folder (read what else a
+repository holds before you install it: a plugin manager adds the whole
+repository to `'runtimepath'`). `:help aineo-office-sharing` has the details.
+
+Known packs:
+
+| Pack | What it is |
+|---|---|
+| `default` | the office aineo draws: beans at desks, a whiteboard, a file cabinet, a coffee machine, a printer, a sofa, a table-tennis table and a cat; ships with aineo |
+| `space_station` | a starship bridge with crew, service bots and a starhare; ships with aineo, based on `default` |
+
 ## Settings
 
 aineo reads `vim.g.aineo`, a table set before it loads, or the options
@@ -548,6 +623,8 @@ vim.g.aineo = {
   },
   office = {
     idle_ms = 180000,
+    pack = 'default',
+    pieces = {},
     commands = {
       tests = { 'make test', 'make test_file', 'npm test', 'pytest', 'go test', 'cargo test', 'busted', 'mix test', 'rspec' },
       committing = { 'git commit', 'git push', 'gh pr create' },
@@ -575,6 +652,8 @@ vim.g.aineo = {
 | `explain.timeout_ms` | `180000` | How long a request to explain code may run before aineo stops its Claude Code, a whole number of milliseconds of at least 1. |
 | `explain.issues_prompt` | `'Some issues were found in this code, can you check and propose a fix if the issue holds:'` | The words that open the message `\s` sends when issues are marked, before the line for each issue. A non-empty string. |
 | `office.idle_ms` | `180000` | How long the cursor stays out of the right side before the office shows by itself, in milliseconds, a whole number of at least 1; `false` turns that off, and the office then shows only for `\O`. It needs `'termguicolors'`. See `:help aineo-config-office.idle_ms`. |
+| `office.pack` | `'default'` | The pack the office draws: a name of letters, digits, `_` and `-`, or a list of names, one picked at random each time the office shows. `'default'` and `'space_station'` ship with aineo; others are found on `'runtimepath'` under `aineo-office/<name>/`. A pack that cannot be used gives way to the default, with a warning. `:Aineo office pack <name>` replaces it for this Neovim. See `:help aineo-config-office.pack`. |
+| `office.pieces` | `{}` | Art files of your own that replace pieces of the pack, by piece name: `{ desk = '~/art/desk.txt' }`. A file with a problem is left out, with a warning. See `:help aineo-config-office.pieces`. |
 | `office.commands` | the four lists in the example above | How the office tells what a shell command does: `tests`, `committing`, `searching` and `reading`, each a list of matches. A match is plain words (`'make test'`, whole words), a glob (`'cat *.md'`) or `{ lua_pattern = '^make%s+test' }`, a Lua pattern that may repeat (`*`, `+`, `-`) once at most. Heredoc bodies are not read. A command is split at `&&`, `\|\|`, `;` and `\|`, and the first class any part matches names it. A class left out has no match. See `:help aineo-config-office.commands`. |
 
 The highlight groups can be overridden in a colorscheme or with
@@ -623,15 +702,15 @@ version may change the title.
 `:checkhealth aineo` reports the Neovim version, the configuration (an unknown
 key is named), whether `claude` runs, the shell, the server socket, the prefix
 mappings, the tab line, the activity indicator, the picker `\f` uses, how code
-is explained and why the autostart did or did not run. It starts no Claude
-session and opens no layout; the one command it runs is `claude.cmd` with
-`--version` appended.
+is explained, the office packs found and why the autostart did or did not run.
+It starts no Claude session and opens no layout; the one command it runs is
+`claude.cmd` with `--version` appended.
 
 ## More
 
 `:help aineo` is the reference: the layout, every command and mapping, the
 Report, Send, the changes pane, the run pane, tabs, sessions, finding a file,
-explaining code, the autostart and the limits.
+explaining code, the office and its packs, the autostart and the limits.
 
 ## Development
 
