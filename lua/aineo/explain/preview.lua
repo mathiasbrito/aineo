@@ -39,6 +39,7 @@ local CONCEALING = 2
 ---@field diff boolean whether it shows as the diff view
 ---@field edits aineo.explain.ShownEdit[] in the order of their lines
 ---@field saved table<integer, aineo.explain.ConcealOptions> the options of each window it set, before it set them
+---@field set table<integer, aineo.explain.ConcealOptions> the options it set in each window
 
 --- The keys a preview maps in its buffer, each a left-hand side as
 --- `vim.keymap.set()` takes it.
@@ -371,10 +372,11 @@ local function conceal_in(preview, window, before)
   preview.saved[window] = before
   local options = conceal_options_of(window)
   local cursor = options.concealcursor
-  set_conceal_options(window, {
+  preview.set[window] = {
     conceallevel = math.max(options.conceallevel, CONCEALING),
     concealcursor = cursor:find('n', 1, true) and cursor or cursor .. 'n',
-  })
+  }
+  set_conceal_options(window, preview.set[window])
 end
 
 --- Has every window that shows `preview`'s buffer hide its old lines
@@ -384,19 +386,6 @@ end
 local function conceal_in_windows(preview)
   for _, window in ipairs(vim.fn.win_findbuf(preview.buffer)) do
     conceal_in(preview, window, conceal_options_of(window))
-  end
-end
-
---- Gives every window whose options `preview` set, and that still shows its
---- buffer, the options it had; a window gone or showing another buffer is
---- passed over.
----
----@param preview aineo.explain.Preview
-local function restore_windows(preview)
-  for window, options in pairs(preview.saved) do
-    if vim.api.nvim_win_is_valid(window) and vim.api.nvim_win_get_buf(window) == preview.buffer then
-      set_conceal_options(window, options)
-    end
   end
 end
 
@@ -412,15 +401,83 @@ local function buffer_options(preview, window)
   return preview.saved[preview.window] or any_saved or conceal_options_of(window)
 end
 
+--- What a buffer's fix that went left behind in the windows that showed it
+--- and showed another buffer when it went: Neovim keeps, for each window
+--- and buffer, the options the window had when the buffer left it, so such
+--- a window, and a window that takes its options from it, would come back
+--- to the buffer with the options the fix set.
+---@class aineo.explain.LeftBehind
+---@field windows table<integer, aineo.explain.ConcealOptions> each window that left, with the options it had before the fix
+---@field set aineo.explain.ConcealOptions[] the options the fix set in them
+---@field base aineo.explain.ConcealOptions the options the buffer had where the fix was asked
+
+--- What each buffer's fixes left behind (`aineo.explain.LeftBehind`), by
+--- buffer, while a window it lists has not come back.
+---@type table<integer, aineo.explain.LeftBehind>
+local left_behind = {}
+
+--- Gives every window whose options `preview` set, and that still shows its
+--- buffer, the options it had; a window gone is passed over, and one that
+--- shows another buffer, whose own options are not touched, is left behind
+--- (`left_behind`), with those an earlier fix left behind, to get its
+--- options back when it comes back.
+---
+---@param preview aineo.explain.Preview
+local function restore_windows(preview)
+  local behind = left_behind[preview.buffer]
+    or { windows = {}, set = {}, base = buffer_options(preview, preview.window) }
+  for window, options in pairs(preview.saved) do
+    if vim.api.nvim_win_is_valid(window) then
+      if vim.api.nvim_win_get_buf(window) == preview.buffer then
+        set_conceal_options(window, options)
+      else
+        behind.windows[window] = options
+        table.insert(behind.set, preview.set[window])
+      end
+    end
+  end
+  left_behind[preview.buffer] = next(behind.windows) and behind or nil
+end
+
+--- Gives the current window, which starts showing a buffer whose fix went
+--- while windows that showed it showed another (`left_behind`), the options
+--- it had there before the fix when it is one of them; else, when it shows
+--- the buffer with options a fix set, as a window takes them from another,
+--- the options the buffer had. Forgets the buffer once every window it
+--- left behind came back.
+---
+---@param window integer
+---@param buffer integer
+local function restore_left_behind(window, buffer)
+  local behind = left_behind[buffer]
+  if behind.windows[window] then
+    set_conceal_options(window, behind.windows[window])
+    behind.windows[window] = nil
+  elseif
+    vim.iter(behind.set):any(function(set)
+      return vim.deep_equal(set, conceal_options_of(window))
+    end)
+  then
+    set_conceal_options(window, behind.base)
+  end
+  if not next(behind.windows) then
+    left_behind[buffer] = nil
+  end
+end
+
 --- Has the current window hide the old lines of the preview its buffer
 --- shows, if any, when it starts showing it: it gets back the options the
 --- buffer had (`buffer_options()`), as a window would that came to show the
---- buffer without the preview.
+--- buffer without the preview. With no preview shown, gives back what a fix
+--- that went left behind there (`restore_left_behind()`).
 local function conceal_in_current_window()
   local window = vim.api.nvim_get_current_win()
-  local preview = previews[vim.api.nvim_win_get_buf(window)]
+  local buffer = vim.api.nvim_win_get_buf(window)
+  local preview = previews[buffer]
   if preview then
     conceal_in(preview, window, buffer_options(preview, window))
+  elseif left_behind[buffer] then
+    restore_left_behind(window, buffer)
   end
 end
 
@@ -428,6 +485,14 @@ vim.api.nvim_create_autocmd({ 'WinNew', 'BufWinEnter' }, {
   group = vim.api.nvim_create_augroup('aineo_explain_fix_preview', {}),
   desc = 'aineo: hide the old lines of a fix in a window that comes to show them',
   callback = conceal_in_current_window,
+})
+
+vim.api.nvim_create_autocmd('BufWipeout', {
+  group = 'aineo_explain_fix_preview',
+  desc = 'aineo: forget what a fix left behind in the windows of a buffer wiped out',
+  callback = function(event)
+    left_behind[event.buf] = nil
+  end,
 })
 
 --- The `desc` of the keys a preview maps, which tells them from the user's.
@@ -682,6 +747,7 @@ function M.show(buffer, order)
     diff = false,
     edits = {},
     saved = {},
+    set = {},
   }
   for _, edit in ipairs(order.edits) do
     table.insert(preview.edits, {
