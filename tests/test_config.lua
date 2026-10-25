@@ -19,6 +19,9 @@ local DEFAULTS = {
     deep_model = 'sonnet',
     deep_effort = 'high',
     deep_timeout_ms = 300000,
+    fix_model = 'sonnet',
+    fix_effort = 'high',
+    fix_timeout_ms = 300000,
     issues_prompt = 'Some issues were found in this code, can you check and propose a fix if the issue holds:',
   },
   office = {
@@ -449,6 +452,71 @@ T['resolve_config()']['refuses a deep timeout that is not a whole number of mill
   expect.error(function()
     config.resolve_config({ explain = { deep_timeout_ms = timeout } }, nil)
   end, 'explain%.deep_timeout_ms: expected a whole number of milliseconds of at least 1')
+end
+
+T['resolve_config()']['takes the fix settings from either source: Sonnet, effort high and 300000 ms by default'] = function()
+  local from_global = config.resolve_config(
+    { explain = { fix_model = 'opus', fix_effort = 'max', fix_timeout_ms = 1000 } },
+    nil
+  )
+  local from_setup = config.resolve_config(
+    { explain = { fix_model = 'opus', fix_effort = 'max', fix_timeout_ms = 1000 } },
+    { explain = { fix_model = 'haiku', fix_effort = 'low', fix_timeout_ms = 1 } }
+  )
+  local defaults = config.resolve_config(nil, nil).explain
+
+  eq({
+    from_global.explain.fix_model,
+    from_global.explain.fix_effort,
+    from_global.explain.fix_timeout_ms,
+  }, { 'opus', 'max', 1000 })
+  eq({
+    from_setup.explain.fix_model,
+    from_setup.explain.fix_effort,
+    from_setup.explain.fix_timeout_ms,
+  }, { 'haiku', 'low', 1 })
+  eq(
+    { defaults.fix_model, defaults.fix_effort, defaults.fix_timeout_ms },
+    { 'sonnet', 'high', 300000 }
+  )
+end
+
+T['resolve_config()']['refuses a fix model that is not a non-empty string'] = MiniTest.new_set({
+  parametrize = { { '' }, { 5 }, { false }, { { 'sonnet' } } },
+})
+
+T['resolve_config()']['refuses a fix model that is not a non-empty string']['as explain.fix_model'] = function(
+  model
+)
+  expect.error(function()
+    config.resolve_config({ explain = { fix_model = model } }, nil)
+  end, 'explain%.fix_model: expected a non%-empty string naming a model')
+end
+
+T['resolve_config()']['refuses a fix effort that is not low, medium, high, xhigh or max'] =
+  MiniTest.new_set({
+    parametrize = { { '' }, { 'highest' }, { 'High' }, { 5 }, { false } },
+  })
+
+T['resolve_config()']['refuses a fix effort that is not low, medium, high, xhigh or max']['as explain.fix_effort'] = function(
+  effort
+)
+  expect.error(function()
+    config.resolve_config({ explain = { fix_effort = effort } }, nil)
+  end, 'explain%.fix_effort: expected one of low, medium, high, xhigh, max')
+end
+
+T['resolve_config()']['refuses a fix timeout that is not a whole number of milliseconds of at least 1'] =
+  MiniTest.new_set({
+    parametrize = { { 0 }, { -5 }, { 2.5 }, { '100' }, { false }, { math.huge } },
+  })
+
+T['resolve_config()']['refuses a fix timeout that is not a whole number of milliseconds of at least 1']['as explain.fix_timeout_ms'] = function(
+  timeout
+)
+  expect.error(function()
+    config.resolve_config({ explain = { fix_timeout_ms = timeout } }, nil)
+  end, 'explain%.fix_timeout_ms: expected a whole number of milliseconds of at least 1')
 end
 
 T['resolve_config()']['takes the prompt that sends marked issues from either source, a request to check them by default'] = function()
