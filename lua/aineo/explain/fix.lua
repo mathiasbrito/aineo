@@ -199,13 +199,59 @@ local function ask(fixing, issue, folder, steered_text)
   start(fixing, issue, folder, steered_text)
 end
 
+--- A text the user sent from the float, and the default text the float
+--- was opened with.
+---@class aineo.explain.SentSteer
+---@field text string
+---@field default string
+
+--- `sent.text` with its first line, the head that names the issue's line,
+--- replaced by the first line of `default` where it still reads as the
+--- head of `sent.default`, the float's default when it opened.
+---
+---@param sent aineo.explain.SentSteer
+---@param default string the default text for the issue's line now
+---@return string
+local function with_current_head(sent, default)
+  local lines = vim.split(sent.text, '\n', { plain = true })
+  local opened_head = vim.split(sent.default, '\n', { plain = true })[1]
+  if lines[1] == opened_head then
+    lines[1] = vim.split(default, '\n', { plain = true })[1]
+  end
+  return table.concat(lines, '\n')
+end
+
+--- Asks a fix of `issue` with the text `sent` from the float, for the line
+--- the issue is shown above when it is sent (`aineo.explain.marks`'
+--- `issue_line()`), the head aineo wrote brought to that line
+--- (`with_current_head()`). Nothing is sent when the buffer is gone by
+--- then, nor, with a word, when the issue is shown no more.
+---
+---@param fixing aineo.explain.FixRequest
+---@param issue aineo.explain.ShownIssue
+---@param folder string
+---@param sent aineo.explain.SentSteer
+local function ask_steered(fixing, issue, folder, sent)
+  if not vim.api.nvim_buf_is_valid(fixing.buffer) then
+    return
+  end
+  local line = marks.issue_line(fixing.buffer, issue.id)
+  if not line then
+    vim.notify('aineo: the issue is no longer shown', vim.log.levels.INFO)
+    return
+  end
+  local at_send = vim.tbl_extend('force', fixing, { line = line })
+  local default = request.default_fix_steer(code_of(at_send, issue, folder))
+  ask(at_send, issue, folder, with_current_head(sent, default))
+end
+
 --- Asks a fix for the issue `fixing.buffer` shows above `fixing.line`
 --- (`aineo.explain.marks`' `issue_at()`), running Claude Code in `folder`,
 --- the project's folder (`ask()`); tells the user, once, when none is shown
 --- there. A steered request first opens the float in which the user edits
 --- the prompt (`aineo.explain.steer`), from the fix's default text or the
---- text last sent for a fix, and asks with the text sent; nothing when the
---- user cancels or the buffer is gone by then.
+--- text last sent for a fix, and asks with the text sent (`ask_steered()`);
+--- nothing when the user cancels.
 ---
 --- Raises an error naming `claude.cmd` when its command cannot be run.
 ---
@@ -221,14 +267,13 @@ function M.propose(fixing, folder)
     ask(fixing, issue, folder)
     return
   end
+  local default = request.default_fix_steer(code_of(fixing, issue, folder))
   steer.open({
     name = kinds.FIX.name,
     title = kinds.FIX.deep.title,
-    default = request.default_fix_steer(code_of(fixing, issue, folder)),
+    default = default,
     on_send = function(text)
-      if vim.api.nvim_buf_is_valid(fixing.buffer) then
-        ask(fixing, issue, folder, text)
-      end
+      ask_steered(fixing, issue, folder, { text = text, default = default })
     end,
   })
 end

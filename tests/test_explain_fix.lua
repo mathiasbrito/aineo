@@ -1246,6 +1246,37 @@ T['a steered fix']['opens the float with the fix’s default text, and asks with
   )
 end
 
+T['a steered fix']['names the issue’s line as it stands when the text is sent'] = function()
+  start()
+  child.cmd('2')
+  local buffer = child.api.nvim_get_current_buf()
+  explained.answer_with(child, { summary = 'Subtract.', edits = { SUBTRACT } })
+  ask_fix({ steered = true })
+
+  child.api.nvim_buf_set_lines(buffer, 0, 0, false, { '-- one', '-- two' })
+  child.type_keys('<CR>')
+
+  local stdin = vim.split(recorded(4)[4].stdin, '\n')
+  eq({ stdin[1], stdin[4] }, {
+    'Propose a fix for the issue at line 4 of the file src/code.lua (language: lua),'
+      .. ' as numbered below.',
+    'The issue to fix is at line 4 of the file src/code.lua: ' .. ISSUE,
+  })
+end
+
+T['a steered fix']['sends nothing when the issue is no longer shown, with a word'] = function()
+  start()
+  child.cmd('2')
+  local buffer = child.api.nvim_get_current_buf()
+  ask_fix({ steered = true })
+
+  child.lua('require("aineo.explain").clear(...)', { buffer })
+  child.type_keys('<CR>')
+
+  eq(messages()[#messages()], 'aineo: the issue is no longer shown')
+  eq(#recorded(2), 2)
+end
+
 T['a steered fix']['remembers the text sent for the next steered fix'] = function()
   start()
   child.cmd('2')

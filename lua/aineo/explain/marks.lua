@@ -461,6 +461,20 @@ function M.issue_at(buffer, line)
   return chosen and { id = chosen, text = record.texts[chosen] }
 end
 
+--- The line, from 1, the issue `id` of `buffer` is shown above now; `nil`
+--- when it is shown no more.
+---
+---@param buffer integer
+---@param id integer
+---@return integer|nil
+function M.issue_line(buffer, id)
+  local record = issues_of(buffer)
+  if not record or not record.texts[id] then
+    return nil
+  end
+  return line_of(buffer, record.kind, id)
+end
+
 --- Removes the issue `id` `buffer` shows, marked or not, and tells the
 --- listeners (`on_change()`); nothing when it is shown no more.
 ---
