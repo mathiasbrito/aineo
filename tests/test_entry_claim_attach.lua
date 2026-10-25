@@ -2,6 +2,7 @@ local MiniTest = require('mini.test')
 local claude_session = dofile('tests/helpers/claude_session.lua')
 local entry = dofile('tests/helpers/entry.lua')
 local fixture = dofile('tests/helpers/fixture.lua')
+local stand_in = dofile('tests/helpers/office_stand_in.lua')
 local tabs = dofile('tests/helpers/entry_tabs.lua')
 
 local eq = MiniTest.expect.equality
@@ -796,6 +797,50 @@ T[':Aineo claim {id}']['of a session running in the background, once attached, k
   eq(listed.used > before, true)
 
   eq({ listed.session, listed.own }, { CLAIMED, false })
+end
+
+T['the office'] = MiniTest.new_set()
+
+--- How many ends of a session, and changes of it, the stand-in office of the
+--- child's tab has been told since `before` (`stand_in.told()`), waiting for
+--- the hooks of the fakes started meanwhile to be delivered first.
+---
+---@param before aineo.tests.OfficeTold
+---@return { ended: integer, changed: integer }
+local function office_told_since(before)
+  claude_session.wait_for_deliveries(child)
+  local after = stand_in.told(child)
+  return {
+    ended = after.session_ended - before.session_ended,
+    changed = after.session_changed - before.session_changed,
+  }
+end
+
+T['the office']['is told the end of an attached claim the tab moves to another session it attaches to'] = function()
+  stand_in.install(child)
+  local other = background_entry({ id = OTHER_SHORT_ID, sessionId = OTHER })
+  local _, fake = open_listing('claim-attach-office-move', { background_entry(), other })
+  claim_until_attached(fake)
+  local before = stand_in.told(child)
+
+  child.cmd('Aineo claim ' .. OTHER)
+  claude_session.start_arguments(fake, 3)
+  claude_session.wait_for_status(child, 'ready')
+
+  eq(office_told_since(before), { ended = 1, changed = 1 })
+end
+
+T['the office']['is told the end of an attached claim the tab moves to a session it cannot attach to'] = function()
+  stand_in.install(child)
+  local _, fake = open_listing('claim-attach-office-move-ro', { background_entry() })
+  claim_until_attached(fake)
+  local before = stand_in.told(child)
+
+  child.cmd('Aineo claim ' .. OTHER)
+  claude_session.start_arguments(fake, 3)
+  claude_session.wait_for_status(child, 'ready')
+
+  eq(office_told_since(before), { ended = 1, changed = 1 })
 end
 
 return T

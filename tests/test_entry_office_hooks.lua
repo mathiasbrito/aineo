@@ -512,6 +512,23 @@ T['the end of a session']['its SessionEnd hook tells, of a session the tab does 
   eq(stand_in.told(child).session_ended, 0)
 end
 
+T['the end of a session']['of the tab’s own Claude Code is not told to the office while the tab claims another'] = function()
+  open_layout_with_stand_in_offices('office-end-own-under-claim')
+  child.cmd('Aineo claim ' .. claimed_session_numbered(12))
+
+  tell_session_end(tab_session(), 'prompt_input_exit')
+
+  eq(stand_in.told(child).session_ended, 0)
+end
+
+T['the end of a session']['is told to the office once as the tab’s own session switches to another'] = function()
+  open_layout_with_stand_in_offices('office-end-switch')
+
+  tell_switch_to(new_session_numbered(40))
+
+  eq(stand_in.told(child).session_ended, 1)
+end
+
 T['the end of a session']['the tab’s Claude Code exiting is told to the office'] = function()
   open_layout_with_stand_in_offices('office-end-exit')
 

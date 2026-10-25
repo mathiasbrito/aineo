@@ -456,14 +456,18 @@ local function make_tab(homes, key, callbacks)
   --- Makes `id` the session the panes follow (`panes_session`), and, when it
   --- is another than they followed, tells the tab's office, which acts out the
   --- session the panes follow (`aineo.entry.office`'s `session_changed()`):
-  --- when the panes leave a session the tab claimed for its own
-  --- (`holds_other_claim()`) — the claim let go, an attach to it ended — as
-  --- the end of that session first (`session_ended()`).
+  --- when the panes leave a session the tab claims that is not its own
+  --- session (`own_session_id()`) — the claim let go or moved, Claude's
+  --- window attached to it or not, an attach to it ended — as the end of
+  --- that session first (`session_ended()`).
   ---
   ---@param id string
   local function set_panes_session(id)
     local changed = panes_session ~= id
-    if changed and panes_session and holds_other_claim() then
+    local leaves_a_claim = panes_session ~= nil
+      and claimed_by_id == panes_session
+      and panes_session ~= own_session_id()
+    if changed and leaves_a_claim then
       offices.session_ended(tab, panes_session)
     end
     panes_session = id
