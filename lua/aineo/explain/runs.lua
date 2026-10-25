@@ -19,6 +19,7 @@ local FRAME_MS = 100
 --- A request that runs.
 ---@class aineo.explain.Run
 ---@field kind aineo.explain.Kind
+---@field deep boolean whether it is a deep request
 ---@field buffer integer
 ---@field window integer the window the request was made in
 ---@field order integer how many requests started before it
@@ -40,6 +41,7 @@ local started_count = 0
 --- What a request is started with.
 ---@class aineo.explain.RunStart
 ---@field kind aineo.explain.Kind
+---@field deep boolean whether it is a deep request
 ---@field buffer integer
 ---@field window integer the window the request was made in
 ---@field line integer the first line asked for, from 1
@@ -55,13 +57,22 @@ function M.find(buffer, kind)
   return (running[buffer] or {})[kind.name]
 end
 
+--- What `run` says while it works: what its kind says of a deep request, or
+--- of any other.
+---
+---@param run aineo.explain.Run
+---@return string
+local function working_of(run)
+  return run.deep and run.kind.deep.working or run.kind.working
+end
+
 --- What the virtual line above the first line asked for says for `run`: the
 --- frame of its spinner and what its kind says while it works.
 ---
 ---@param run aineo.explain.Run
 ---@return string
 local function progress_text(run)
-  return SPINNER[run.frame] .. ' ' .. run.kind.working
+  return SPINNER[run.frame] .. ' ' .. working_of(run)
 end
 
 --- The requests that run for the window `window`, in the order they started.
@@ -115,7 +126,7 @@ local function show_badge(window)
   for _, run in ipairs(found) do
     local seconds = math.floor((vim.uv.now() - run.started_ms) / 1000)
     table.insert(parts, {
-      text = ('%s %ds'):format(run.kind.working, seconds),
+      text = ('%s %ds'):format(working_of(run), seconds),
       group = run.kind.groups.text,
     })
   end
@@ -149,6 +160,7 @@ function M.begin(start)
   started_count = started_count + 1
   local run = {
     kind = start.kind,
+    deep = start.deep,
     buffer = start.buffer,
     window = start.window,
     order = started_count,

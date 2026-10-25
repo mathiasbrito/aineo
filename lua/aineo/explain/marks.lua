@@ -260,6 +260,7 @@ end
 ---@field texts table<integer, string> the text of each, by extmark id
 ---@field files table<integer, string> the absolute path of the file each was asked about, by extmark id
 ---@field marked table<integer, boolean> the extmark ids of those marked
+---@field deep table<integer, boolean> the extmark ids of those that answer a deep request
 ---@field send_key string what the badge says sends the marked issues
 ---@field pending boolean whether placing them again is scheduled
 
@@ -311,6 +312,7 @@ end
 ---@field line integer from 1
 ---@field text string
 ---@field marked? boolean whether it shows as a marked issue
+---@field deep? boolean whether it answers a deep request, which its label says
 ---@field id? integer the extmark to set again; a new one when absent
 
 --- Shows the explanation `shown` in `buffer` as virtual lines above its
@@ -334,7 +336,7 @@ local function show_explanation(buffer, shown, geometry)
     indent = indent,
     rows = wrapped(shown.text, room),
     geometry = geometry,
-    label = shown.kind.label,
+    label = shown.deep and shown.kind.deep.label or shown.kind.label,
     marked = shown.marked,
   })
 end
@@ -360,12 +362,14 @@ local function place_again(buffer, record)
         line = line,
         text = text,
         marked = record.marked[id],
+        deep = record.deep[id],
         id = id,
       }, geometry)
     else
       record.texts[id] = nil
       record.files[id] = nil
       record.marked[id] = nil
+      record.deep[id] = nil
     end
   end
 end
@@ -386,6 +390,7 @@ local function forget_lost(buffer, record)
       record.texts[id] = nil
       record.files[id] = nil
       record.marked[id] = nil
+      record.deep[id] = nil
       forgot = true
     end
   end
@@ -458,6 +463,7 @@ end
 ---@field window integer the window they were asked in
 ---@field file string the absolute path of the file they were asked about
 ---@field send_key? string what the user presses to send the issues once marked; `\s` when absent
+---@field deep? boolean whether they answer a deep request, which their label says
 
 --- Shows each of `explanations` in `buffer` as virtual lines above its line
 --- (`show_explanation()`) for a window showing it (`geometry_of()`), and
@@ -477,7 +483,8 @@ function M.place(buffer, kind, explanations, origin)
     record.window = window
     place_again(buffer, record)
   end
-  record = record or { kind = kind, texts = {}, files = {}, marked = {}, pending = false }
+  record = record
+    or { kind = kind, texts = {}, files = {}, marked = {}, deep = {}, pending = false }
   record.window, record.textoff = window, geometry.textoff
   record.send_key = origin.send_key or DEFAULT_SEND_KEY
   placed[buffer][kind.name] = record
@@ -486,9 +493,11 @@ function M.place(buffer, kind, explanations, origin)
       kind = kind,
       line = explanation.line,
       text = explanation.text,
+      deep = origin.deep,
     }, geometry)
     record.texts[id] = explanation.text
     record.files[id] = file
+    record.deep[id] = origin.deep
   end
   watch_edits(buffer)
   notify(buffer, window)

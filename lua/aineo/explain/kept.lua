@@ -13,18 +13,27 @@ local M = {}
 ---@type table<integer, table<string, aineo.explain.Kept>>
 local kept = {}
 
+--- What a deep request is asked with, which tells its answer from another's.
+---@class aineo.explain.DeepAsk
+---@field model string
+---@field effort string
+---@field steer string the prompt's text, as the user edited it
+
 --- The key an answer is kept under: what was asked for, with or without
---- tools, and which lines.
+--- tools, which lines, and, for a deep request, its model, effort and prompt
+--- text.
 ---
 ---@param kind aineo.explain.Kind
 ---@param tools boolean
 ---@param range integer[]|nil the first and last line asked about; the whole buffer when absent
+---@param deep? aineo.explain.DeepAsk
 ---@return string
-function M.key(kind, tools, range)
-  return ('%s %s %s'):format(
+function M.key(kind, tools, range, deep)
+  return ('%s %s %s%s'):format(
     kind.name,
     tools and 'tools' or 'code',
-    range and (range[1] .. '-' .. range[2]) or 'all'
+    range and (range[1] .. '-' .. range[2]) or 'all',
+    deep and ' deep ' .. vim.json.encode({ deep.model, deep.effort, deep.steer }) or ''
   )
 end
 
