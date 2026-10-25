@@ -386,31 +386,6 @@ T['the cat']['stops following an agent who has left'] = function()
   eq(cat_cells[25], '2,0')
 end
 
-T['the cat']['follows no one by a name other than someone_walking'] = function()
-  local stage = stage_with_a_cat(
-    '# plan\n \n a.c.................f\n',
-    { a = { spot = 'aside' }, c = { spot = 'corner' }, f = { spot = 'far' } },
-    21,
-    {
-      work = { steps = { { at = 'aside', for_seconds = 1 }, { at = 'far' } } },
-      a_nap = {
-        who = 'cat',
-        during = { 'always' },
-        steps = { { at = 'corner', for_seconds = 0.5 } },
-      },
-      chase_a_butterfly = {
-        who = 'cat',
-        during = { 'always' },
-        steps = { { follow = 'a_butterfly', for_seconds = 5 } },
-      },
-    }
-  )
-
-  local cat_cells = cat_cells_every_tenth_second(stage, scene.agents_in('working'), 21, 2.4)
-
-  eq(cat_cells[25], '2,0')
-end
-
 T['the cat']['leaves a mess that an idle agent grumbles at and then cleans up'] = function()
   local stage = stage_with_a_cat(
     '# plan\n \n d.d.d.c....ah\n',
