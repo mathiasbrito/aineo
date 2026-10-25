@@ -535,6 +535,21 @@ T['the preview']['gives a window that comes to the buffer after the fix went non
   eq(conceal_options(), { 0, '' })
 end
 
+T['the preview']['passes none of its options on from a window closed while it showed'] = function()
+  start()
+  child.cmd('2')
+  local buffer = child.api.nvim_get_current_buf()
+  propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+  child.cmd('split')
+  child.cmd('close')
+  reject_in(buffer)
+
+  child.cmd('new')
+  child.cmd('buffer ' .. buffer)
+
+  eq(conceal_options(), { 0, '' })
+end
+
 T['the preview']['keeps a conceallevel above 2 as it is'] = function()
   start()
   child.cmd('2')
