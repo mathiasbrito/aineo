@@ -432,6 +432,35 @@ function M.marked_issues(buffer)
   end, found)
 end
 
+--- An issue a buffer shows.
+---@class aineo.explain.ShownIssue
+---@field id integer its extmark
+---@field text string
+
+--- The issue `buffer` shows above `line`, from 1: the marked one when one
+--- is, else the first the answer gave; `nil` when none is shown there.
+---
+---@param buffer integer
+---@param line integer
+---@return aineo.explain.ShownIssue|nil
+function M.issue_at(buffer, line)
+  local record = issues_of(buffer)
+  if not record then
+    return nil
+  end
+  local ids = vim.tbl_keys(record.texts)
+  table.sort(ids)
+  local first, first_marked
+  for _, id in ipairs(ids) do
+    if line_of(buffer, record.kind, id) == line then
+      first = first or id
+      first_marked = first_marked or (record.marked[id] and id)
+    end
+  end
+  local chosen = first_marked or first
+  return chosen and { id = chosen, text = record.texts[chosen] }
+end
+
 --- Unmarks every issue `buffer` shows, which stay shown, and tells the
 --- listeners (`on_change()`) when any was marked.
 ---
