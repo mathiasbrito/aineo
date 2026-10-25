@@ -509,10 +509,31 @@ function M.is_shown(buffer)
   return previews[buffer] ~= nil
 end
 
+--- The lines each edit of `preview` spans now (`spans_of()`), when every
+--- edit's old lines are, byte for byte and in number, the lines it spans,
+--- and the edits still stand in the order they were placed in, none sharing
+--- a line with the next; `nil` when any of that no longer holds.
+---
+---@param preview aineo.explain.Preview
+---@return { first: integer, last: integer }[]|nil
+local function standing_spans(preview)
+  local spans = spans_of(preview)
+  for index, span in ipairs(spans) do
+    local lines = vim.api.nvim_buf_get_lines(preview.buffer, span.first, span.last + 1, false)
+    if not vim.deep_equal(lines, preview.edits[index].old) then
+      return nil
+    end
+    if index > 1 and span.first <= spans[index - 1].last then
+      return nil
+    end
+  end
+  return spans
+end
+
 --- Applies the preview `buffer` shows, which must be shown
---- (`is_shown()`): when every edit's old lines are, byte for byte, the
---- lines it spans now, replaces them by its new lines, from the last edit
---- to the first, as one undo step, writes nothing and removes the preview
+--- (`is_shown()`): when its edits still stand (`standing_spans()`),
+--- replaces the old lines of each by its new lines, the edit lowest in the
+--- buffer first, as one undo step, writes nothing and removes the preview
 --- (`clear()`); else tells the user, once, and leaves the buffer and the
 --- preview as they are. Returns whether it applied the edits.
 ---
@@ -520,16 +541,19 @@ end
 ---@return boolean
 function M.apply(buffer)
   local preview = previews[buffer]
-  local spans = {}
-  for index, edit in ipairs(preview.edits) do
-    local first, last = rows_of(preview, edit)
-    if not vim.deep_equal(vim.api.nvim_buf_get_lines(buffer, first, last + 1, false), edit.old) then
-      vim.notify('aineo: the code under the fix changed; ask again', vim.log.levels.WARN)
-      return false
-    end
-    spans[index] = { first = first, last = last }
+  local spans = standing_spans(preview)
+  if not spans then
+    vim.notify('aineo: the code under the fix changed; ask again', vim.log.levels.WARN)
+    return false
   end
-  for index = #preview.edits, 1, -1 do
+  local lowest_first = {}
+  for index in ipairs(spans) do
+    lowest_first[index] = index
+  end
+  table.sort(lowest_first, function(a, b)
+    return spans[a].first > spans[b].first
+  end)
+  for _, index in ipairs(lowest_first) do
     local span = spans[index]
     vim.api.nvim_buf_set_lines(buffer, span.first, span.last + 1, true, preview.edits[index].new)
   end
