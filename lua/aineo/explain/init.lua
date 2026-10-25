@@ -486,6 +486,14 @@ function M.propose_fix(fixing)
   fix.propose(fixing, project_folder(vim.api.nvim_buf_get_name(fixing.buffer)))
 end
 
+--- Accepts the fix `buffer` shows: its edits are applied as one undo step,
+--- and the file is not written (`aineo.explain.fix`'s `accept()`).
+---
+---@param buffer integer
+function M.accept_fix(buffer)
+  fix.accept(buffer)
+end
+
 --- Rejects the fix `buffer` shows, if any: its preview goes and the buffer
 --- stays as it reads (`aineo.explain.fix`'s `reject()`).
 ---
