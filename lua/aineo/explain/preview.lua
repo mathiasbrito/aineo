@@ -118,21 +118,23 @@ local function head_text(preview)
   )
 end
 
---- The rows of the fix explanation of `edit` (`aineo.explain.kinds`'
---- `FIX_WHY`): `summary` on the first, then `edit.why`, each wrapped at the
---- text width of `geometry`, labelled `why` on the first row.
+--- `texts`, each wrapped at the text width of `geometry`, as rows of a band
+--- in `style`, `label` in the gutter of the first.
 ---
----@param summary string
----@param edit aineo.explain.ShownEdit
+---@param texts string[]
 ---@param geometry aineo.explain.Geometry
+---@param label string
+---@param style aineo.explain.Style
 ---@return table[][]
-local function why_rows(summary, edit, geometry)
+local function band_rows(texts, geometry, label, style)
   local width = math.max(geometry.width - geometry.textoff - vim.fn.strdisplaywidth(draw.MARK), 1)
-  local texts = vim.list_extend(draw.wrapped(summary, width), draw.wrapped(edit.why, width))
+  local wrapped = {}
+  for _, text in ipairs(texts) do
+    vim.list_extend(wrapped, draw.wrapped(text, width))
+  end
   local rows = {}
-  for number, text in ipairs(texts) do
-    rows[number] =
-      draw.row(text, '', geometry, number == 1 and kinds.FIX_WHY.label or '', WHY_STYLE)
+  for number, text in ipairs(wrapped) do
+    rows[number] = draw.row(text, '', geometry, number == 1 and label or '', style)
   end
   return rows
 end
@@ -150,9 +152,10 @@ local function spans_of(preview)
 end
 
 --- The virtual lines drawn before the new lines of the edit `index` of
---- `preview` in a window of `geometry`: for the first edit, the head row
---- (`head_text()`) labelled `fix`; then the edit's fix explanation
---- (`why_rows()`).
+--- `preview` in a window of `geometry` (`band_rows()`): for the first edit,
+--- the head (`head_text()`) labelled `fix`; then the edit's fix explanation
+--- (`aineo.explain.kinds`' `FIX_WHY`), the summary first, then the edit's
+--- why, labelled `why`.
 ---
 ---@param preview aineo.explain.Preview
 ---@param index integer
@@ -161,9 +164,10 @@ end
 local function lead_rows(preview, index, geometry)
   local rows = {}
   if index == 1 then
-    table.insert(rows, draw.row(head_text(preview), '', geometry, kinds.FIX.label, FIX_STYLE))
+    rows = band_rows({ head_text(preview) }, geometry, kinds.FIX.label, FIX_STYLE)
   end
-  return vim.list_extend(rows, why_rows(preview.summary, preview.edits[index], geometry))
+  local why = { preview.summary, preview.edits[index].why }
+  return vim.list_extend(rows, band_rows(why, geometry, kinds.FIX_WHY.label, WHY_STYLE))
 end
 
 --- The virtual lines that show the new lines of `edit` in a window of

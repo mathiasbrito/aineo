@@ -47,5 +47,9 @@ M.clear_explanations = explaining.clear_explanations
 M.jump_to_explanation = explaining.jump
 M.mark_issues = explaining.mark_issues
 M.mark_issues_selection = explaining.mark_issues_selection
+M.propose_fix = explaining.propose_fix
+M.accept_fix = explaining.accept_fix
+M.reject_fix = explaining.reject_fix
+M.toggle_fix_diff = explaining.toggle_fix_diff
 
 return M

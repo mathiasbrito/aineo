@@ -1892,10 +1892,11 @@ Visual mode they ask about the lines selected. When it finds none, you are
 told once: `aineo: no potential issues found`. Issues show as explanations do,
 in a namespace of their own and in the look of |hl-AineoExplainIssue|, the
 accent being the foreground of |hl-DiagnosticWarn|, `#e5c07b` without one, and
-the label `issue`. Since `\v` starts `\vi` and `\vm`, `\V` starts `\VI` and
-`\VV`, and `\VV` starts `\VVI`, Neovim waits 'timeoutlen' for a following `i`
-or `m` before it runs `\v`, for a following `I` or `V` before it runs `\V`,
-and for a following `I` before it runs `\VV`.
+the label `issue`. Since `\v` starts `\vi` and `\vm`, `\V` starts `\VI`,
+`\VV` and `\Vf`, and `\VV` starts `\VVI` and `\VVf`, Neovim waits
+'timeoutlen' for a following `i` or `m` before it runs `\v`, for a following
+`I`, `V` or `f` before it runs `\V`, and for a following `I` or `f` before it
+runs `\VV`.
 
 Explanations and issues are shown together on a buffer, and each key toggles
 its own kind: pressed in Normal mode on a buffer that shows what the key asks
@@ -1973,6 +1974,69 @@ A deep answer is kept under a key that includes your text, the model and the
 effort: the same text on unchanged lines places the kept answer, you are told
 so, once, and a different text starts a request.
 
+                                                           *aineo-explain-fix*
+`\Vf` proposes a fix for the issue shown for the cursor's line: the marked one
+when several are and one is marked, else the first; with none, you are told,
+once, `aineo: no issue on this line`. It asks a Claude Code of its own, as
+`\V` does, with the read-only tools `Read`, `Grep` and `Glob` and no other,
+at `explain.fix_effort` (`--effort`), with the model `explain.fix_model` and
+the time limit `explain.fix_timeout_ms` (|aineo-config-explain.fix_model|,
+|aineo-config-explain.fix_effort|, |aineo-config-explain.fix_timeout_ms|).
+While it runs, the line above the issue's line and the badge say `proposing a
+fix…`. `\VVf` first opens the float of |aineo-explain-deep| with the fix's own
+default text, and its own remembered text, and asks with the text you send.
+A fix is never kept: each `\Vf` asks anew.
+
+What is sent is the text (the default asks for the smallest change that
+fixes the issue), then what aineo always adds and you do not edit: the issue,
+by its line, file and text; the rules of the answer, a summary of the whole
+fix and the edits of this file alone, each the first and last line it
+replaces, those lines repeated exactly and without their numbers, the lines
+that replace them, and why the change fixes the issue; and every line of the
+buffer, numbered.
+
+aineo places each edit only where its old lines are the lines sent, byte for
+byte: at the lines it names, else at the one other place they stand as a
+block. Nothing is trimmed or matched loosely: a trailing space, a tab for
+spaces or a carriage return makes a line differ. The whole fix is refused,
+and you are told why, once, when an edit's old lines stand nowhere or in
+several places, when two edits overlap, when an edit has no old lines, holds
+a line break or a NUL, or names lines the file does not have. When the buffer
+changed while the fix was asked, nothing is shown: `aineo: the buffer changed
+while the fix was asked; ask again`. An answer with no edits tells its
+summary.
+
+The fix shows over the code, which does not change until you accept it: the
+old lines of each edit are hidden, and the new lines drawn in their place,
+in the look of |hl-AineoFix| with a `▎` gutter, the accent being the
+foreground of |hl-DiagnosticOk|, `#98c379` without one. Above them, the
+first edit is headed by a row naming the keys, and each edit has its fix
+explanation: the summary on its first row, then why the edit fixes the
+issue, labelled `why`, in the look of |hl-AineoFixWhy|, the accent being the
+foreground of |hl-DiagnosticHint|, `#56b6c2` without one. While the fix is
+shown, every window showing the buffer has a 'conceallevel' of at least 2 and
+an `n` in 'concealcursor', so that the old lines are hidden on the cursor's
+line too; each gets its own values back when the fix goes, and a window that
+comes to show the buffer meanwhile is given the values the buffer had.
+
+While a fix is shown, its buffer has three keys in Normal mode, never mapped
+over a key of yours, local or global, and removed when the fix goes:
+`\Va` accepts it, `\Vr` rejects it, `\Vd` shows it as a diff, the old lines
+struck through in |hl-AineoFixOld| above the new, and back again. Accepting
+first checks again that the lines under each edit are exactly its old
+lines; when one is not, nothing changes and you are told to ask again.
+Otherwise every edit is applied, as one undo step (`u` takes them all back),
+the file is not written, the issue is no longer shown, and you are told
+`aineo: fix applied (u undoes it)`. Rejecting changes nothing. An edit of the
+fix's old lines while it is shown, typing, an undo, a redo, a reload or a
+plugin's, drops it with a word; an edit elsewhere moves it along. A buffer
+unloaded or wiped out drops it without a word. A buffer has one fix at a
+time: `\Vf` again replaces the fix shown and the request that runs, and
+`:Aineo explain clear` removes it with the rest. The keys are
+|<Plug>(aineo-fix-accept)|, |<Plug>(aineo-fix-reject)| and
+|<Plug>(aineo-fix-diff)|, which act on the fix the current buffer shows;
+with |aineo-config-prefix| `false`, none is mapped and the row names them.
+
                                                           *aineo-explain-jump*
 `]v` and `[v` move the cursor to the line of the next and the previous
 explanation or issue of the buffer, of either kind, after and before the
@@ -2041,8 +2105,8 @@ or answers nothing aineo can read: nothing is shown then. When the text of the
 buffer changed while the request ran (a write of it changes nothing), nothing
 is shown and you are told to ask again. The Claude Code of every request that
 runs is stopped when Neovim quits. The buffer must hold a file: in aineo's own
-panes, `\v`, `\V`, `\vi`, `\VI`, `\VV` and `\VVI` tell you so
-(|:Aineo-explain|). The model
+panes, `\v`, `\V`, `\vi`, `\VI`, `\VV`, `\VVI`, `\Vf` and `\VVf` tell you
+so (|:Aineo-explain|). The model
 is `explain.model` (|aineo-config-explain.model|). Each request is a model
 call, billed as Claude Code's own usage is.
 
@@ -2087,6 +2151,26 @@ AineoExplainIssueMarked	As |hl-AineoExplainIssue|, for a marked issue, the
 AineoExplainIssueMarkedGutter
 			As |hl-AineoExplainIssueGutter|, for a marked issue:
 			the `✓` and the label.
+                                                                *hl-AineoFix*
+AineoFix		As |hl-AineoExplain|, for the new lines and the head
+			row of a fix shown (|aineo-explain-fix|), the accent
+			being the foreground of |hl-DiagnosticOk|.
+                                                          *hl-AineoFixGutter*
+AineoFixGutter		As |hl-AineoExplainGutter|, for a fix.
+                                                      *hl-AineoFixGutterFill*
+AineoFixGutterFill	As |hl-AineoExplainGutterFill|, for a fix.
+                                                             *hl-AineoFixOld*
+AineoFixOld		The old lines of a fix in its diff view: struck
+			through, in the foreground of |hl-DiagnosticError|.
+                                                             *hl-AineoFixWhy*
+AineoFixWhy		As |hl-AineoExplain|, for the fix explanation of each
+			edit, the accent being the foreground of
+			|hl-DiagnosticHint|.
+                                                       *hl-AineoFixWhyGutter*
+AineoFixWhyGutter	As |hl-AineoExplainGutter|, for the fix explanation.
+                                                   *hl-AineoFixWhyGutterFill*
+AineoFixWhyGutterFill	As |hl-AineoExplainGutterFill|, for the fix
+			explanation.
 
 Claude's session ~
                                                         *aineo-claude-session*
@@ -3170,6 +3254,30 @@ you turn the prefix off, or when a prefix key is yours: >lua
 			Does what `<Plug>(aineo-explain-deep)` does, asking
 			for the potential issues of the code.
 
+                                                   *<Plug>(aineo-explain-fix)*
+<Plug>(aineo-explain-fix)
+			In Normal mode, proposes a fix for the issue on the
+			cursor's line (|aineo-explain-fix|).
+
+                                           *<Plug>(aineo-explain-fix-steered)*
+<Plug>(aineo-explain-fix-steered)
+			Does what `<Plug>(aineo-explain-fix)` does after the
+			float in which you edit its prompt.
+
+                                                    *<Plug>(aineo-fix-accept)*
+<Plug>(aineo-fix-accept)
+			In Normal mode, accepts the fix the current buffer
+			shows, as one undo step, writing no file.
+
+                                                    *<Plug>(aineo-fix-reject)*
+<Plug>(aineo-fix-reject)
+			In Normal mode, rejects the fix the current buffer
+			shows.
+
+                                                      *<Plug>(aineo-fix-diff)*
+<Plug>(aineo-fix-diff)	In Normal mode, shows the fix the current buffer
+			shows as a diff, or as the overlay again.
+
                                                   *<Plug>(aineo-explain-mark)*
 <Plug>(aineo-explain-mark)
 			In Normal mode, marks the issues above the cursor's
@@ -3206,8 +3314,9 @@ Prefix keys ~
                                                                   *aineo-keys*
 Once the editor has started, aineo maps the prefix (|aineo-config-prefix|)
 followed by these keys to each `<Plug>` mapping but `<Plug>(aineo-claim)`,
-which has none, globally, in Normal mode, and `\s`, `\v`, `\V`, `\vi`, `\VI`,
-`\VV`, `\VVI` and `\vm` in Visual mode too:
+which has none, and those of a fix shown, whose keys are local to its buffer
+(|aineo-explain-fix|), globally, in Normal mode, and `\s`, `\v`, `\V`, `\vi`,
+`\VI`, `\VV`, `\VVI` and `\vm` in Visual mode too:
 
                                                                     *aineo-\s*
 \s		|<Plug>(aineo-send)|
@@ -3269,6 +3378,10 @@ which has none, globally, in Normal mode, and `\s`, `\v`, `\V`, `\vi`, `\VI`,
 \VVI		|<Plug>(aineo-explain-deep-issues)|
                                                                    *aineo-\vm*
 \vm		|<Plug>(aineo-explain-mark)|
+                                                                   *aineo-\Vf*
+\Vf		|<Plug>(aineo-explain-fix)|
+                                                                  *aineo-\VVf*
+\VVf		|<Plug>(aineo-explain-fix-steered)|
                                                                   *aineo-v_\s*
 \s		|<Plug>(aineo-send)| in Visual mode (|aineo-send|)
                                                                   *aineo-v_\v*
@@ -3634,6 +3747,23 @@ explain.deep_effort	One of `'low'`, `'medium'`, `'high'`, `'xhigh'`,
 explain.deep_timeout_ms	A whole number of at least 1. Default: `300000`
 			How many milliseconds a deep request may run, as
 			`explain.timeout_ms` does for the others.
+
+                                            *aineo-config-explain.fix_model*
+explain.fix_model	A non-empty string. Default: `'sonnet'`
+			The model of the Claude Code that `\Vf` and `\VVf`
+			start (|aineo-explain-fix|), passed as its `--model`:
+			an alias or a model's full name.
+
+                                           *aineo-config-explain.fix_effort*
+explain.fix_effort	One of `'low'`, `'medium'`, `'high'`, `'xhigh'`,
+			`'max'`. Default: `'high'`
+			The effort of the Claude Code that `\Vf` and `\VVf`
+			start, passed as its `--effort`.
+
+                                       *aineo-config-explain.fix_timeout_ms*
+explain.fix_timeout_ms	A whole number of at least 1. Default: `300000`
+			How many milliseconds a request for a fix may run,
+			as `explain.timeout_ms` does for the others.
 
                                         *aineo-config-explain.issues_prompt*
 explain.issues_prompt	A non-empty string. Default: `'Some issues were
@@ -6028,7 +6158,10 @@ Explain code ~
   settings of aineo, and your own Claude Code settings but never the
   project's (|aineo-explain|). The model, the effort and the time limit of
   `\VV` and `\VVI` (`explain.deep_model`, `explain.deep_effort`,
-  `explain.deep_timeout_ms`, |aineo-explain-deep|). That `\vm` marks issues
+  `explain.deep_timeout_ms`, |aineo-explain-deep|). The model, the effort and
+  the time limit of `\Vf` and `\VVf` (`explain.fix_model`,
+  `explain.fix_effort`, `explain.fix_timeout_ms`), what they may use, and the
+  keys of a fix shown (|aineo-explain-fix|). That `\vm` marks issues
   for `\s` to send behind `explain.issues_prompt`
   (|aineo-config-explain.issues_prompt|), and that `]v` and `[v` jump between
   explanations and issues (|aineo-explain-jump|).
