@@ -455,11 +455,17 @@ local function make_tab(homes, key, callbacks)
 
   --- Makes `id` the session the panes follow (`panes_session`), and, when it
   --- is another than they followed, tells the tab's office, which acts out the
-  --- session the panes follow (`aineo.entry.office`'s `session_changed()`).
+  --- session the panes follow (`aineo.entry.office`'s `session_changed()`):
+  --- when the panes leave a session the tab claimed for its own
+  --- (`holds_other_claim()`) — the claim let go, an attach to it ended — as
+  --- the end of that session first (`session_ended()`).
   ---
   ---@param id string
   local function set_panes_session(id)
     local changed = panes_session ~= id
+    if changed and panes_session and holds_other_claim() then
+      offices.session_ended(tab, panes_session)
+    end
     panes_session = id
     if changed then
       offices.session_changed(tab)
@@ -571,8 +577,9 @@ local function make_tab(homes, key, callbacks)
   --- is on then (`follow_own_session()`) — unless a claim of another session
   --- holds (`holds_other_claim()`), or Claude's window is attached to the
   --- claimed session (`own_while_attached`), which keep them where they are.
-  --- An attach that waited for the confirmation (`attach_once_confirmed`) is
-  --- made then, while its claim still holds.
+  --- Tells the tab's office that `id` started (`aineo.entry.office`'s
+  --- `session_started()`). An attach that waited for the confirmation
+  --- (`attach_once_confirmed`) is made then, while its claim still holds.
   ---
   ---@param id string
   local function follow_confirmed_start(id)
@@ -580,6 +587,7 @@ local function make_tab(homes, key, callbacks)
     if not holds_other_claim() and not own_while_attached then
       follow_own_session(id)
     end
+    offices.session_started(tab, id)
     local waiting = attach_once_confirmed
     attach_once_confirmed = nil
     if waiting and claimed_by_id == waiting then
@@ -820,9 +828,10 @@ local function make_tab(homes, key, callbacks)
   --- address and program for the session hooks, and the callbacks that make
   --- the panes follow the session (`replacement_callbacks()`,
   --- `follow_confirmed_start()`, `follow_session_elsewhere()`), and those
-  --- that tell the tab's office where its session's transcript is written
-  --- and that an agent waits for the user (`aineo.entry.office`'s
-  --- `note_transcript()` and `take_permission_wait()`). With `new_session`
+  --- that tell the tab's office where its session's transcript is written,
+  --- that a session started or ended, and that an agent waits for the user
+  --- (`aineo.entry.office`'s `note_transcript()`, `session_started()`,
+  --- `session_ended()` and `take_permission_wait()`). With `new_session`
   --- the start is on a new session id.
   ---
   ---@param config table the resolved configuration
@@ -856,6 +865,10 @@ local function make_tab(homes, key, callbacks)
       on_session_elsewhere = follow_session_elsewhere,
       on_transcript = function(session_id, path)
         offices.note_transcript(tab, session_id, path)
+        offices.session_started(tab, session_id)
+      end,
+      on_session_ended = function(session_id)
+        offices.session_ended(tab, session_id)
       end,
       on_permission_wait = function(session_id, agent_id)
         offices.take_permission_wait(tab, session_id, agent_id)

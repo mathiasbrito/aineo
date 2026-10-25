@@ -4,8 +4,9 @@
 --- packs are in, the clock, the settings and the transcript of the tab's
 --- session — and shows it when asked. It keeps the transcript path the tab's
 --- `SessionStart` hooks name, tells the office the tab's permission waits,
---- the reports its Report took and each change of the session the tab shows
---- or of that session's transcript, and lets it go when the tab closes.
+--- the reports its Report took, each change of the session the tab shows or
+--- of that session's transcript, and the end and the start of the session
+--- the tab shows, and lets it go when the tab closes.
 ---
 --- Loading it loads no other home: `aineo.office` is required when an office
 --- is first made.
@@ -259,6 +260,43 @@ function M.session_changed(tab)
   local office = offices[tab]
   if office then
     office.session_changed()
+  end
+end
+
+--- Whether `session_id` is the session `tab` shows: the one its panes follow,
+--- which is another than its own Claude Code's while the tab claims one, else
+--- its own.
+---
+---@param tab aineo.entry.Tab
+---@param session_id string
+---@return boolean
+local function is_shown_by(tab, session_id)
+  return session_id == (tab.panes_session() or tab.session_id())
+end
+
+--- Tells the office `tab` has, if it has one, that the session `session_id`
+--- ended, when it is the session the tab shows: the office's main agent
+--- leaves (`aineo.office`'s `session_ended()`).
+---
+---@param tab aineo.entry.Tab
+---@param session_id string
+function M.session_ended(tab, session_id)
+  local office = offices[tab]
+  if office and is_shown_by(tab, session_id) then
+    office.session_ended()
+  end
+end
+
+--- Tells the office `tab` has, if it has one, that the session `session_id`
+--- started, when it is the session the tab shows: after an end, the
+--- office's main agent walks in (`aineo.office`'s `session_started()`).
+---
+---@param tab aineo.entry.Tab
+---@param session_id string
+function M.session_started(tab, session_id)
+  local office = offices[tab]
+  if office and is_shown_by(tab, session_id) then
+    office.session_started()
   end
 end
 
