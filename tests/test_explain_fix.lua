@@ -1106,6 +1106,33 @@ T['while shown']['reloading the file drops it'] = function()
   eq(conceal_options(), { 0, '' })
 end
 
+T['while shown']['its marks cleared by another plugin, an edit drops it once, with a word and no error'] = function()
+  start()
+  child.cmd('2')
+  propose(SUBTRACT_AND_DROP)
+  child.api.nvim_buf_clear_namespace(0, -1, 0, -1)
+
+  local edits = child.lua([[
+    local failed = {}
+    for _, command in ipairs({ '4normal! ix', '4normal! iy', '1normal! Az' }) do
+      local done, problem = pcall(vim.cmd, command)
+      if not done then
+        table.insert(failed, problem)
+      end
+    end
+    return failed
+  ]])
+  wait_until_told('aineo: the fix was dropped: its lines were edited')
+  accept()
+
+  eq(edits, {})
+  eq(messages(), {
+    'aineo: the fix was dropped: its lines were edited',
+    'aineo: no fix is shown in this buffer',
+  })
+  eq(conceal_options(), { 0, '' })
+end
+
 T['while shown']['wiping the buffer out drops it without a word'] = function()
   start()
   child.cmd('2')

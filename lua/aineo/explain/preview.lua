@@ -79,19 +79,6 @@ local WHY_STYLE = {
   fill = kinds.FIX_WHY.groups.fill,
 }
 
---- The first and last line, from 0, `edit` spans in `preview`'s buffer now.
----
----@param preview aineo.explain.Preview
----@param edit aineo.explain.ShownEdit
----@return integer first
----@return integer last
-local function rows_of(preview, edit)
-  local mark = vim.api.nvim_buf_get_extmark_by_id(preview.buffer, RANGES, edit.mark, {
-    details = true,
-  })
-  return mark[1], mark[3].end_row - 1
-end
-
 --- The virtual line that shows `text`, a new line of an edit, after the
 --- gutter of a window whose text starts `textoff` columns in, padded to its
 --- width.
@@ -145,16 +132,25 @@ local function band_rows(texts, geometry, label, style)
   return rows
 end
 
---- The first and last line, from 0, of each edit of `preview` now
---- (`rows_of()`), in the order of the edits.
+--- The first and last line, from 0, of each edit of `preview` now, read
+--- from the extmark that spans its old lines, in the order of the edits;
+--- `nil` when an extmark is gone, as when another plugin clears every
+--- namespace of the buffer.
 ---
 ---@param preview aineo.explain.Preview
----@return { first: integer, last: integer }[]
+---@return { first: integer, last: integer }[]|nil
 local function spans_of(preview)
-  return vim.tbl_map(function(edit)
-    local first, last = rows_of(preview, edit)
-    return { first = first, last = last }
-  end, preview.edits)
+  local spans = {}
+  for index, edit in ipairs(preview.edits) do
+    local mark = vim.api.nvim_buf_get_extmark_by_id(preview.buffer, RANGES, edit.mark, {
+      details = true,
+    })
+    if not mark[1] then
+      return nil
+    end
+    spans[index] = { first = mark[1], last = mark[3].end_row - 1 }
+  end
+  return spans
 end
 
 --- The virtual lines drawn before the new lines of the edit `index` of
@@ -320,6 +316,9 @@ local function render(preview)
   vim.api.nvim_buf_clear_namespace(buffer, DRAWN, 0, -1)
   local geometry = draw.geometry_of(buffer, preview.window)
   local spans = spans_of(preview)
+  if not spans then
+    return
+  end
   local places = { order = {}, rows = {} }
   if preview.diff then
     for index, span in ipairs(spans) do
@@ -617,6 +616,9 @@ end
 ---@return { first: integer, last: integer }[]|nil
 local function standing_spans(preview)
   local spans = spans_of(preview)
+  if not spans then
+    return nil
+  end
   for index, span in ipairs(spans) do
     local lines = vim.api.nvim_buf_get_lines(preview.buffer, span.first, span.last + 1, false)
     if not vim.deep_equal(lines, preview.edits[index].old) then
@@ -715,6 +717,12 @@ local function watch_edits(preview)
         end
       end
       spans = spans_of(preview)
+      if not spans then
+        vim.schedule(function()
+          drop_edited(preview)
+        end)
+        return true
+      end
       vim.schedule(function()
         if previews[preview.buffer] ~= preview then
           return
