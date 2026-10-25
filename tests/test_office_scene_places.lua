@@ -115,6 +115,149 @@ T['an agent whose spot is taken']['stays seated behind the desk of its seat whil
   eq(where_are(stage, 6), { '2,0', 'nowhere', 'nowhere', 'nowhere' })
 end
 
+--- The colour of the pose agents think in at the board, `pondering`, which
+--- draws them in it instead of their own.
+local PONDERING = '#0000ff'
+
+--- The colour of the pose agents rest in on the sofa, `lounging`, which draws
+--- them in it instead of their own.
+local LOUNGING = '#ff0000'
+
+--- A corridor between two posts, `p`, with a sofa (`f`) and a seat (`s`)
+--- near each end, so that an agent going from the left post to the seat
+--- and one going from the right post to the sofa meet halfway, between two
+--- shelves (`k`); and, below, a board (`b`) and floor.
+local CROSSING_CORRIDOR = '# plan\n \n pfk.ksp\n b......\n'
+
+local CROSSING_CORRIDOR_LEGEND = {
+  p = { spot = 'post' },
+  f = { spot = 'sofa' },
+  k = { spot = 'shelf' },
+  s = { spot = 'seat' },
+  b = { spot = 'board' },
+}
+
+--- A stage of `plan`, `CROSSING_CORRIDOR` by default, whose agents stand at
+--- a post, work at the seat, rest on the sofa, `lounging`, and think at the
+--- board, `pondering`, in four colours.
+---
+---@param plan? string a plan of two rows and `CROSSING_CORRIDOR_LEGEND`'s letters
+---@param width? integer the plan's width, 7 by default
+---@return aineo.office_scene.Stage
+local function crossing_corridor(plan, width)
+  local pack = scene.people_pack(plan or CROSSING_CORRIDOR, CROSSING_CORRIDOR_LEGEND, {
+    characters = vim.tbl_deep_extend(
+      'force',
+      FOUR_COLOURS,
+      { agent = { poses = { pondering = { art = { 'right' } }, lounging = { art = { 'left' } } } } }
+    ),
+    activities = {
+      stand = { steps = { { at = 'post' } } },
+      work = { steps = { { at = 'seat' } } },
+      rest = { steps = { { at = 'sofa', pose = 'lounging' } } },
+      think = { steps = { { at = 'board', pose = 'pondering' } } },
+    },
+    states = { standing = 'stand', working = 'work', resting = 'rest', thinking = 'think' },
+  })
+  return scene.stage_of(pack, width or 7, 2)
+end
+
+--- Where the first two agents, the one pondering and the one lounging are
+--- drawn on the crossing corridor's stage.
+---
+---@param stage aineo.office_scene.Stage
+---@return string[]
+local function where_on_the_corridor(stage)
+  local picture = stage.picture()
+  return vim.tbl_map(function(colour)
+    return scene.agent_cell(picture, 7, 2, colour)
+  end, { scene.AGENT, scene.SECOND_AGENT, PONDERING, LOUNGING })
+end
+
+--- Has the first two agents of `crossing_corridor()` walk towards each other,
+--- the third at the board, until they meet on the corridor's middle cell.
+---
+---@param stage aineo.office_scene.Stage
+local function meet_halfway(stage)
+  stage.advance(crew('standing', 'standing', 'thinking'), 0)
+  stage.advance(crew('working', 'resting', 'thinking'), 0)
+  stage.advance(crew('working', 'resting', 'thinking'), 3 / 14)
+end
+
+T['agents whose spot is taken on their way'] = MiniTest.new_set()
+
+T['agents whose spot is taken on their way']['never wait for it on one cell: the one that halts second steps to a free cell no spot is on, standing'] = function()
+  local stage = crossing_corridor()
+  meet_halfway(stage)
+
+  stage.advance(crew('thinking', 'thinking', 'thinking'), 0.5)
+  stage.advance(crew('thinking', 'thinking', 'thinking'), 2)
+
+  eq(where_on_the_corridor(stage), { '3,0', '3,1', '0,1', 'nowhere' })
+end
+
+T['agents whose spot is taken on their way']['wait where they halt while another only walks over their cell'] = function()
+  local stage = crossing_corridor()
+  meet_halfway(stage)
+
+  stage.advance(crew('thinking', 'resting', 'thinking'), 0.5)
+  stage.advance(crew('thinking', 'resting', 'thinking'), 2)
+
+  eq(where_on_the_corridor(stage), { '3,0', 'nowhere', '0,1', '1,0' })
+end
+
+T['agents whose spot is taken on their way']['go to it once it is let go, the one that stepped out of the way in the spot’s pose'] = function()
+  local stage = crossing_corridor()
+  meet_halfway(stage)
+  stage.advance(crew('thinking', 'thinking', 'thinking'), 0.5)
+
+  stage.advance(crew('standing', 'thinking', 'standing'), 1)
+  stage.advance(crew('standing', 'thinking', 'standing'), 4)
+
+  eq(where_on_the_corridor(stage), { '0,0', 'nowhere', '0,1', 'nowhere' })
+end
+
+T['agents whose spot is taken on their way']['take the pose of a step they begin while stepping out of the way'] = function()
+  local stage = crossing_corridor()
+  meet_halfway(stage)
+  stage.advance(crew('thinking', 'thinking', 'thinking'), 3 / 14 + 0.01)
+
+  stage.advance(crew('thinking', 'resting', 'thinking'), 3 / 14 + 0.02)
+  stage.advance(crew('thinking', 'resting', 'thinking'), 2)
+
+  eq(where_on_the_corridor(stage), { '3,0', 'nowhere', '0,1', '1,0' })
+end
+
+--- A corridor as `CROSSING_CORRIDOR`, 35 cells wide, whose agents meet on
+--- its middle cell, the only cell of floor no spot is on but one, 18 cells
+--- away at the end of a row of shelves.
+local LONG_CROSSING_CORRIDOR = '# plan\n \n pf'
+  .. ('k'):rep(15)
+  .. '.'
+  .. ('k'):rep(15)
+  .. 'sp\n b'
+  .. ('k'):rep(33)
+  .. '.\n'
+
+T['agents whose spot is taken on their way']['go to it when it is let go while they step out of the way, in the spot’s pose'] = function()
+  local stage = crossing_corridor(LONG_CROSSING_CORRIDOR, 35)
+  local met = 17 / 14
+  stage.advance(crew('standing', 'standing', 'thinking'), 0)
+  stage.advance(crew('working', 'resting', 'thinking'), 0)
+  stage.advance(crew('working', 'resting', 'thinking'), met)
+  stage.advance(crew('thinking', 'thinking', 'thinking'), met + 0.01)
+
+  stage.advance(crew('standing', 'thinking', 'standing'), met + 0.5)
+  stage.advance(crew('standing', 'thinking', 'standing'), met + 1.05)
+  stage.advance(crew('standing', 'thinking', 'standing'), met + 6)
+
+  local picture = stage.picture()
+  eq({
+    scene.agent_cell(picture, 35, 2, scene.SECOND_AGENT),
+    scene.agent_cell(picture, 35, 2, PONDERING),
+  }, { 'nowhere', '0,1' })
+end
+
 T['an agent'] = MiniTest.new_set()
 
 T['an agent']['keeps its place, and so its desk and colour, while others come and go'] = function()
