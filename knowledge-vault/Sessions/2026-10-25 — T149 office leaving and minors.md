@@ -112,6 +112,33 @@ The reviewer's harness (`review363-harness.lua`, copied to `.tests/`), its 9- an
 - A halted walker still holds the spot it was heading to while it waits elsewhere (as on `dev`); D121 (d) did not ask to change it.
 - `test_office_scene_cat`'s *follows no one by a name other than someone_walking* now passes because the check refuses that activity before the scene sees it.
 - The entry's attach-ended path is covered through the same `set_panes_session()` rule as the claim let go; no entry test drives a real attach's end.
+- `test_entry_run_follow`'s *follows the output of a shell added below, by \\X* failed once in the fix round's whole run and once alone (then 4 of 4 green): a timing case outside this packet.
+
+## Fix round (review370, ruling A624)
+
+Each item red first, except where a pin is named with the mutant that kills it.
+
+1. **aineo's own stop is never a session end.** `tell_session_ended()` now leaves out a `SessionEnd` of a start its home's stop stopped, as `tell_exit()` does: the Ctrl-C of the stop has Claude Code run that hook, and its deliverer can reach the editor while the stop still waits. Red: *is not told an end of the Claude Code its home stops, by its SessionEnd hook or its exit* (the reviewer's probe-stop, `{ { <id>, "prompt_input_exit" } }`). The `is_shown_by()` filter is pinned by *of the tab's own Claude Code is not told to the office while the tab claims another* (kills Mx3).
+2. **Moving an attached claim tells the office the end.** `set_panes_session()` treats the panes leaving a session as an end when the tab claims it and it is not the tab's own session (`claimed_by_id == panes_session and panes_session ~= own_session_id()`, the reviewer's measured fix); `holds_other_claim()` was false while attached. Red: *the office is told the end of an attached claim the tab moves to another session it attaches to / to a session it cannot attach to* (`ended = 0`). *is told to the office once as the tab's own session switches to another* pins the claim condition (Mf4: 2 ends).
+3. **The quit check of `tell_exit()`** is pinned by *is not told an end of the Claude Code that quitting Neovim stops* (the reviewer's probe-quit; kills Mx1).
+4. **A reset after the session ended** keeps the main agent gone (`leaving`) until a session starts; the case that pinned the opposite became *and is reset keeps the main agent gone* (red: `arriving`), and *and is reset, then starts again, has the main agent walk in* was added. The help's state 24, state 1 and `:Aineo office reset` say so; state 24 also says aineo's own stop is no end.
+5. **The unknown-`follow` cat case** moved from `test_office_scene_cat` to the pack-field cases, asserting the check's report (*a cat's step that follows someone the office does not know*; killed by `follow = schema.name`). Mx4 stays equivalent through `load()`: no loaded step carries another name.
+6. **The fake's record is never read half-written.** Fakes that start at once (the first open of three tabs) append to one record; the C library wrote each line 4096 bytes at a time, and another fake's line fell between, which the helper then failed to decode (`Expected comma or array end … at character 4099`). The fake now writes each line with one `write` to the file opened `O_APPEND` (`vim.uv.fs_write`). Red: `test_fake_claude_record` — twelve fakes appending 20 KB lines at once — failed 6 of 10 runs before (the same decode error) and 0 of 10 after. Running `test_entry_tab_reopen` several times side by side does not measure this: the copies share their fixtures' record files by name.
+
+| ID | Literal edit | Result |
+|---|---|---|
+| Mx1 | `claude/init.lua`: `  if vim.v.exiting == vim.NIL and not ended.stopped then` → `  if not ended.stopped then` | killed by assertion: *… that quitting Neovim stops* (`{ "<id> nil" }`) |
+| Mx3 | `entry/office.lua`: `  return session_id == (tab.panes_session() or tab.session_id())` → `  return session_id == tab.panes_session() or session_id == tab.session_id()` | killed by assertion: *… while the tab claims another* (1 end) |
+| Mx4 | `following.lua`: `  return step.follow == M.SOMEONE_WALKING` → `  return step.follow ~= nil` | survives `test_office_scene_cat`; equivalent through `load()`, which refuses any other name (pinned at the check instead) |
+| Mf1 | `claude/init.lua`: the `and not running.stopped` line removed | killed by assertion: *… its home stops …* |
+| Mf2 | `pack_format.lua`: `  follow = schema.choice(FOLLOWED),` → `  follow = schema.name,` | killed by assertion: both `follow` field cases |
+| Mf3 | `tab.lua`: `      and panes_session ~= own_session_id()` → `      and holds_other_claim()` | killed by assertion: both attached-move cases |
+| Mf4 | `tab.lua`: the `      and claimed_by_id == panes_session` line removed | killed by assertion: *once as the tab's own session switches* (2) |
+| Mf5 | `office/init.lua`: `    if (from_now and not session_is_over) or arrives then` → `    if from_now or arrives then` | killed by assertion: *and is reset keeps the main agent gone* |
+
+Ma6 of the first round named code this round removed (a reset no longer forgets the end); Mf5 takes its place.
+
+Runs of the fix round, Neovim 0.12.5, host: every file the round touches green alone (`test_claude_session_end`, `test_entry_office_hooks`, `test_entry_claim_attach`, `test_office_session_end`, `test_office_pack_fields`, `test_office_scene_cat`, `test_fake_claude_record`, `test_doc`, `test_entry_office_life`, `test_claude_attach`, `test_entry_session_switch`, `test_entry_office_reset`, `test_office_session_switch`); `make lint` clean. Whole suite on `258183b6`: 8210 cases, 249 groups, `Fails (1)` — `test_entry_run_follow` *follows the output of a shell added below, by \X* (`follows = false`). That file is not touched by the packet; run alone it failed once and then passed 4 of 4, so it is a timing case of the run pane's shell, left as an open thread. `test_entry_tab_reopen` and `test_health` passed.
 
 ## Commits
 
