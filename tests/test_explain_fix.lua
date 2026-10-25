@@ -915,6 +915,68 @@ end
 
 T['while shown'] = MiniTest.new_set()
 
+T['while shown']['a command that changes its old lines drops it, with a word'] = MiniTest.new_set({
+  parametrize = {
+    { '5normal! J' },
+    { '2normal! J' },
+    { '6m0' },
+  },
+}, {
+  test = function(command)
+    start()
+    child.cmd('2')
+    propose(SUBTRACT_AND_DROP)
+
+    child.cmd(command)
+    wait_until_told('aineo: the fix was dropped: its lines were edited')
+
+    eq(messages()[#messages()], 'aineo: the fix was dropped: its lines were edited')
+    eq(conceal_options(), { 0, '' })
+  end,
+})
+
+T['while shown']['moving an old line up, still below the other edit’s, moves the fix with it'] = function()
+  start()
+  child.cmd('2')
+  propose(SUBTRACT_AND_DROP)
+
+  child.cmd('6m4')
+  vim.wait(500, function()
+    return #messages() > 0
+  end, 20)
+  accept()
+
+  eq(messages(), { 'aineo: fix applied (u undoes it)' })
+  eq(buffer_lines(), {
+    'local function sub(a, b)',
+    '  return a - b',
+    'end',
+    '',
+    'local function mul(a, b)',
+    'end',
+  })
+end
+
+T['while shown']['moving an old line up with :m .-2 keys drops it, with a word'] = function()
+  start()
+  child.cmd('2')
+  propose(SUBTRACT_AND_DROP)
+
+  child.type_keys('6G', ':m .-2<CR>', ':m .-2<CR>', ':m .-2<CR>', ':m .-2<CR>')
+  wait_until_told('aineo: the fix was dropped: its lines were edited')
+
+  eq(messages()[#messages()], 'aineo: the fix was dropped: its lines were edited')
+  eq(buffer_lines(), {
+    'local function sub(a, b)',
+    '  return a + b',
+    '  return a + b',
+    'end',
+    '',
+    'local function mul(a, b)',
+    'end',
+  })
+end
+
 T['while shown']['an edit of its old lines drops it, with a word'] = function()
   start()
   child.cmd('2')
