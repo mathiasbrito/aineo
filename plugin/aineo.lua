@@ -407,13 +407,16 @@ local PREFIX_KEYS = {
 
 --- What explaining code asks for, by the words of its `<Plug>` mappings
 --- after `aineo-`, in Normal mode and in Visual mode: explanations or
---- potential issues, from the code alone or with read-only tools
---- (`aineo.entry`'s `explain()`).
+--- potential issues, from the code alone or with read-only tools, or as a
+--- deep request whose prompt the user edits first (`aineo.entry`'s
+--- `explain()`).
 local EXPLAIN_ORDERS = {
   explain = { tools = false },
   ['explain-tools'] = { tools = true },
   ['explain-issues'] = { tools = false, kind = 'issues' },
   ['explain-issues-tools'] = { tools = true, kind = 'issues' },
+  ['explain-deep'] = { tools = true, deep = true },
+  ['explain-deep-issues'] = { tools = true, kind = 'issues', deep = true },
 }
 
 --- The keys that follow the prefix for each of `EXPLAIN_ORDERS` and for
@@ -423,6 +426,8 @@ local EXPLAIN_KEYS = {
   ['explain-tools'] = 'V',
   ['explain-issues'] = 'vi',
   ['explain-issues-tools'] = 'VI',
+  ['explain-deep'] = 'VV',
+  ['explain-deep-issues'] = 'VVI',
   ['explain-mark'] = 'vm',
 }
 
