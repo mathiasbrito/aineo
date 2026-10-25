@@ -487,6 +487,66 @@ local function reject()
   child.lua('require("aineo.explain").reject_fix(vim.api.nvim_get_current_buf())')
 end
 
+--- Rejects the fix the child's buffer `buffer` shows.
+---
+---@param buffer integer
+local function reject_in(buffer)
+  child.lua('require("aineo.explain").reject_fix(...)', { buffer })
+end
+
+T['the preview']['gives a window that left the buffer while shown its options back when it returns after the fix goes'] = function()
+  start()
+  child.cmd('2')
+  local buffer = child.api.nvim_get_current_buf()
+  propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+
+  child.cmd('enew')
+  local in_other = conceal_options()
+  reject_in(buffer)
+  child.cmd('buffer ' .. buffer)
+
+  eq({ in_other, conceal_options() }, { { 0, '' }, { 0, '' } })
+end
+
+T['the preview']['leaves a window that left the buffer its options for the buffer it shows'] = function()
+  start()
+  child.cmd('2')
+  local buffer = child.api.nvim_get_current_buf()
+  propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+  child.cmd('enew')
+  child.cmd('setlocal conceallevel=1 concealcursor=v')
+
+  reject_in(buffer)
+
+  eq(conceal_options(), { 1, 'v' })
+end
+
+T['the preview']['gives a window that comes to the buffer after the fix went none of its options'] = function()
+  start()
+  child.cmd('2')
+  local buffer = child.api.nvim_get_current_buf()
+  propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+  child.cmd('enew')
+  reject_in(buffer)
+
+  child.cmd('new')
+  child.cmd('buffer ' .. buffer)
+
+  eq(conceal_options(), { 0, '' })
+end
+
+T['the preview']['keeps a conceallevel above 2 as it is'] = function()
+  start()
+  child.cmd('2')
+  child.wo.conceallevel = 3
+
+  propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+  local while_shown = conceal_options()
+  reject()
+
+  eq({ while_shown, conceal_options() }, { { 3, 'n' }, { 3, '' } })
+end
+
 T['the preview']['hides the old lines in a window split from one showing it, until rejected'] = function()
   start()
   child.cmd('2')
