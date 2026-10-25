@@ -592,8 +592,12 @@ end
 --- Watches the edits of `preview`'s buffer while it shows `preview`: one
 --- that touches the old lines of an edit (`touches()`), or a reload, which
 --- detaches the watch, drops it (`drop_edited()`) when the event loop has
---- turned; one elsewhere moves it with its extmarks, and it is drawn again
---- there (`render()`). An unload removes it without a word.
+--- turned; one elsewhere moves it with its extmarks and, once the change is
+--- whole, when the event loop has turned, either it still stands
+--- (`standing_spans()`) and is drawn again there (`render()`), or it is
+--- dropped: a command Neovim reports in parts, such as `J` or `:m` upward,
+--- can change old lines that no part touches. An unload removes it without
+--- a word.
 ---
 ---@param preview aineo.explain.Preview
 local function watch_edits(preview)
@@ -613,8 +617,13 @@ local function watch_edits(preview)
       end
       spans = spans_of(preview)
       vim.schedule(function()
-        if previews[preview.buffer] == preview then
+        if previews[preview.buffer] ~= preview then
+          return
+        end
+        if standing_spans(preview) then
           render(preview)
+        else
+          drop_edited(preview)
         end
       end)
     end,
