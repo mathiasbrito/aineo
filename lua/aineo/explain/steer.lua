@@ -100,49 +100,90 @@ local function close(window)
   end
 end
 
+--- The window of the float that is open, if any: there is one float at a
+--- time.
+---@type integer|nil
+local open_window = nil
+
+--- The text `buffer` holds, white space at its ends cut off.
+---
+---@param buffer integer
+---@return string
+local function text_of(buffer)
+  return vim.trim(table.concat(vim.api.nvim_buf_get_lines(buffer, 0, -1, false), '\n'))
+end
+
 --- Opens a centred float holding a scratch buffer of the markdown filetype,
---- with the text last sent under `steering.name`, else `steering.default`.
---- In Normal mode `<CR>` sends the text, `q` and `<Esc>` close the float with
---- nothing sent, and `R` puts `steering.default` back; Insert mode is plain
---- editing. A text of white space alone is not sent: the user is told, once,
---- and the float stays. Sending closes the float, remembers the text under
---- `steering.name` and calls `steering.on_send` with it.
+--- starting from the text last written under `steering.name`, else from
+--- `steering.default`. In Normal mode `<CR>` sends the text, `q` and `<Esc>`
+--- close the float with nothing sent and nothing kept, and `R` puts
+--- `steering.default` back; Insert mode is plain editing. A text of white
+--- space alone is not sent: the user is told, once, and the float stays.
+--- Sending closes the float, remembers the text under `steering.name` and
+--- calls `steering.on_send` with it. Leaving the float closes it with nothing
+--- sent and keeps its text under `steering.name` as a draft, which starts the
+--- next float of that name as a text sent does. While a float is open, a call
+--- focuses it and opens no other.
 ---
 ---@param steering aineo.explain.Steering
 function M.open(steering)
+  if open_window and vim.api.nvim_win_is_valid(open_window) then
+    vim.api.nvim_set_current_win(open_window)
+    return
+  end
   local buffer = vim.api.nvim_create_buf(false, true)
   vim.bo[buffer].filetype = 'markdown'
   vim.bo[buffer].bufhidden = 'wipe'
   local lines = starting_lines(steering)
   vim.api.nvim_buf_set_lines(buffer, 0, -1, false, lines)
   local window = vim.api.nvim_open_win(buffer, true, float_config(#lines, steering.title))
+  open_window = window
   vim.wo[window].wrap = true
   vim.wo[window].linebreak = true
 
+  local finished = false
+  local function finish()
+    finished = true
+    close(window)
+  end
   local function send()
-    local text = vim.trim(table.concat(vim.api.nvim_buf_get_lines(buffer, 0, -1, false), '\n'))
+    local text = text_of(buffer)
     if text == '' then
       vim.notify('aineo: the prompt is empty: nothing is sent', vim.log.levels.WARN)
       return
     end
     remembered[steering.name] = { text = text, default = steering.default }
-    close(window)
+    finish()
     steering.on_send(text)
   end
   local function restore_default()
     vim.api.nvim_buf_set_lines(buffer, 0, -1, false, lines_of(steering.default))
   end
-  local function cancel()
-    close(window)
-  end
+  vim.api.nvim_create_autocmd('WinLeave', {
+    buffer = buffer,
+    once = true,
+    desc = 'aineo: close the steering float and keep its text as a draft',
+    callback = function()
+      if finished then
+        return
+      end
+      local text = text_of(buffer)
+      if text ~= '' then
+        remembered[steering.name] = { text = text, default = steering.default }
+      end
+      vim.schedule(function()
+        close(window)
+      end)
+    end,
+  })
   vim.keymap.set(
     'n',
     '<CR>',
     send,
     { buffer = buffer, nowait = true, desc = 'aineo: send the prompt' }
   )
-  vim.keymap.set('n', 'q', cancel, { buffer = buffer, nowait = true, desc = 'aineo: cancel' })
-  vim.keymap.set('n', '<Esc>', cancel, { buffer = buffer, nowait = true, desc = 'aineo: cancel' })
+  vim.keymap.set('n', 'q', finish, { buffer = buffer, nowait = true, desc = 'aineo: cancel' })
+  vim.keymap.set('n', '<Esc>', finish, { buffer = buffer, nowait = true, desc = 'aineo: cancel' })
   vim.keymap.set(
     'n',
     'R',

@@ -354,7 +354,8 @@ end
 --- `explaining`, of `kind` (`aineo.explain.steer`), starting from the default
 --- text for the lines asked about (`aineo.explain.request`'s
 --- `default_steer()`), and asks again with the text the user sends. Asks
---- nothing when the user cancels or the buffer is gone by then.
+--- nothing when the user cancels, when the buffer is gone by then, or, with
+--- a word to the user, when the buffer no longer has the lines asked about.
 ---
 ---@param explaining aineo.explain.Request
 ---@param kind aineo.explain.Kind
@@ -364,9 +365,16 @@ local function steer_then_ask(explaining, kind)
     title = kind.deep.title,
     default = request.default_steer(code_of(explaining, kind)),
     on_send = function(text)
-      if vim.api.nvim_buf_is_valid(explaining.buffer) then
-        M.ask(vim.tbl_deep_extend('force', explaining, { deep = { steer = text } }))
+      local buffer = explaining.buffer
+      if not vim.api.nvim_buf_is_valid(buffer) then
+        return
       end
+      local range = explaining.range
+      if range and range[2] > vim.api.nvim_buf_line_count(buffer) then
+        vim.notify('aineo: the selected lines are no longer in the buffer', vim.log.levels.WARN)
+        return
+      end
+      M.ask(vim.tbl_deep_extend('force', explaining, { deep = { steer = text } }))
     end,
   })
 end
