@@ -183,7 +183,7 @@ T['\\VVI']['in Visual mode opens the float for the selected lines, and sends an 
   eq(
     vim.startswith(
       vim.split(recorded(2)[2].stdin, '\n')[4],
-      'Tie each issue to the first line it concerns: its line is that line’s number, from 2 to 3.'
+      'The code asked about is the file src/code.lua, lines 2 to 3. Tie each issue to the first line it concerns: its line is that line’s number, from 2 to 3.'
     ),
     true
   )

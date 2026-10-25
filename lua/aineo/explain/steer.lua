@@ -16,15 +16,20 @@ local MOST_ROWS = 20
 --- What the float's title says after what the caller names, which keys do.
 local KEYS_TITLE = '<CR> sends · q or <Esc> cancels · R restores the default'
 
---- The text last sent, by the name of what it steered.
----@type table<string, string>
+--- A text the user wrote and the default text it was written over.
+---@class aineo.explain.Remembered
+---@field text string
+---@field default string the default text of the float it was written in
+
+--- What the user last wrote, by the name of what it steered.
+---@type table<string, aineo.explain.Remembered>
 local remembered = {}
 
 --- What a float is opened with.
 ---@class aineo.explain.Steering
 ---@field name string what it steers: the text sent is remembered under it and starts the next float of that name
 ---@field title string what the request it steers does, said in the float's title
----@field default string the text to start from when none was sent under `name`, and what `R` brings back
+---@field default string the text to start from when none was sent under `name`, and what `R` brings back; its first line is the head that names what the request is about
 ---@field on_send fun(text: string) called with the text sent, after the float is closed
 
 --- The lines of `text`, the way a buffer holds them.
@@ -33,6 +38,34 @@ local remembered = {}
 ---@return string[]
 local function lines_of(text)
   return vim.split(text, '\n', { plain = true })
+end
+
+--- The first line of `text`.
+---
+---@param text string
+---@return string
+local function head_of(text)
+  return lines_of(text)[1]
+end
+
+--- The lines a float starts with: the default text, or the text remembered
+--- under `steering.name`, whose head is replaced by the head of
+--- `steering.default` when it still reads as the default it was written over
+--- had it, so that a text written for another file or other lines names this
+--- request's.
+---
+---@param steering aineo.explain.Steering
+---@return string[]
+local function starting_lines(steering)
+  local last = remembered[steering.name]
+  if not last then
+    return lines_of(steering.default)
+  end
+  local lines = lines_of(last.text)
+  if lines[1] == head_of(last.default) then
+    lines[1] = head_of(steering.default)
+  end
+  return lines
 end
 
 --- The configuration of a float that holds `line_count` lines, centred in the
@@ -80,7 +113,7 @@ function M.open(steering)
   local buffer = vim.api.nvim_create_buf(false, true)
   vim.bo[buffer].filetype = 'markdown'
   vim.bo[buffer].bufhidden = 'wipe'
-  local lines = lines_of(remembered[steering.name] or steering.default)
+  local lines = starting_lines(steering)
   vim.api.nvim_buf_set_lines(buffer, 0, -1, false, lines)
   local window = vim.api.nvim_open_win(buffer, true, float_config(#lines, steering.title))
   vim.wo[window].wrap = true
@@ -92,7 +125,7 @@ function M.open(steering)
       vim.notify('aineo: the prompt is empty: nothing is sent', vim.log.levels.WARN)
       return
     end
-    remembered[steering.name] = text
+    remembered[steering.name] = { text = text, default = steering.default }
     close(window)
     steering.on_send(text)
   end

@@ -21,14 +21,16 @@ local CODE = {
 --- explanation of line 1.
 ---
 ---@param config? table more of `vim.g.aineo`
+---@return string folder the project's folder
 local function start(config)
-  explained.start(
+  local folder = explained.start(
     child,
     'explain-deep',
     CODE,
     vim.tbl_deep_extend('force', { claude = { cmd = explained.FAKE_CLAUDE } }, config or {})
   )
   explained.answer(child, { { line = 1, text = 'adds' } })
+  return folder
 end
 
 --- Asks the explain home, in the child, for a deep request about the
@@ -123,7 +125,8 @@ T['a deep request']['hands Claude Code the edited text, then the rule that ties 
       'Dig into add.',
       'Mention the call paths.',
       '',
-      'Tie each explanation to the first line it explains: its line is that line’s number,'
+      'The code asked about is the file src/code.lua, lines 1 to 5.'
+        .. ' Tie each explanation to the first line it explains: its line is that line’s number,'
         .. ' from 1 to 5.',
       '',
       '1 | local function add(a, b)',
@@ -143,7 +146,8 @@ T['a deep request']['for issues ties each issue to its first line, from the firs
   eq(vim.list_slice(vim.split(recorded(2)[2].stdin, '\n'), 1, 4), {
     'Look hard.',
     '',
-    'Tie each issue to the first line it concerns: its line is that line’s number,'
+    'The code asked about is the file src/code.lua, lines 2 to 3.'
+      .. ' Tie each issue to the first line it concerns: its line is that line’s number,'
       .. ' from 2 to 3. Give each issue as an item of the answer’s list.',
     '',
   })
@@ -332,7 +336,13 @@ T['the steering float']['sends the text in Normal mode with <CR>, closes, and st
 
   press('<CR>')
 
-  eq(vim.startswith(recorded(2)[2].stdin, 'Dig deep.\nMention the callers.\n\nTie each'), true)
+  eq(
+    vim.startswith(
+      recorded(2)[2].stdin,
+      'Dig deep.\nMention the callers.\n\nThe code asked about is the file src/code.lua, lines 1 to 5. Tie each'
+    ),
+    true
+  )
   eq(float(), {})
   eq(explanation_lines_held() > 0, true)
 end
@@ -417,6 +427,88 @@ T['the steering float']['remembers the text sent for each kind apart'] = functio
   ask_steered({ kind = 'issues' })
 
   eq(vim.startswith(float().lines[1], 'Review the code of the file src/code.lua'), true)
+end
+
+--- Sends a steer of `head` and `steer` from the float of the current
+--- explanations request and waits until its answer is shown.
+---
+---@param head string
+---@param steer string
+local function send_steer(head, steer)
+  ask_steered()
+  set_float_text({ head, steer })
+  press('<CR>')
+  explained.wait_for(child, 'explanations', 1)
+end
+
+T['the steering float']['keeps the steer sent but names the new file and language in the head when it opens for another file'] = function()
+  local folder = start()
+  send_steer(
+    'Explain the code of the file src/code.lua (language: lua), lines 1 to 5 as numbered below, thoroughly.',
+    'My steer.'
+  )
+  vim.fn.writefile({ 'x = 1', 'y = 2', 'print(x + y)' }, folder .. '/src/other.py')
+  child.cmd('edit ' .. folder .. '/src/other.py')
+
+  ask_steered()
+
+  eq(float().lines, {
+    'Explain the code of the file src/other.py (language: python), lines 1 to 3 as numbered below, thoroughly.',
+    'My steer.',
+  })
+end
+
+T['the steering float']['sends, for another file, a prompt that names that file and its lines alone'] = function()
+  local folder = start()
+  send_steer(
+    'Explain the code of the file src/code.lua (language: lua), lines 1 to 5 as numbered below, thoroughly.',
+    'My steer.'
+  )
+  vim.fn.writefile({ 'x = 1', 'y = 2', 'print(x + y)' }, folder .. '/src/other.py')
+  child.cmd('edit ' .. folder .. '/src/other.py')
+  ask_steered()
+
+  press('<CR>')
+
+  eq(
+    recorded(4)[4].stdin,
+    table.concat({
+      'Explain the code of the file src/other.py (language: python), lines 1 to 3 as numbered below, thoroughly.',
+      'My steer.',
+      '',
+      'The code asked about is the file src/other.py, lines 1 to 3.'
+        .. ' Tie each explanation to the first line it explains: its line is that line’s number,'
+        .. ' from 1 to 3.',
+      '',
+      '1 | x = 1',
+      '2 | y = 2',
+      '3 | print(x + y)',
+    }, '\n')
+  )
+end
+
+T['the steering float']['keeps the steer sent but names the new lines in the head when it opens for another range of the same file'] = function()
+  start()
+  send_steer(
+    'Explain the code of the file src/code.lua (language: lua), lines 1 to 5 as numbered below, thoroughly.',
+    'My steer.'
+  )
+
+  ask_steered({ range = { 2, 3 } })
+
+  eq(float().lines, {
+    'Explain the code of the file src/code.lua (language: lua), lines 2 to 3 as numbered below, thoroughly.',
+    'My steer.',
+  })
+end
+
+T['the steering float']['leaves a head the user rewrote as it was written'] = function()
+  start()
+  send_steer('My own head.', 'My steer.')
+
+  ask_steered({ range = { 2, 3 } })
+
+  eq(float().lines, { 'My own head.', 'My steer.' })
 end
 
 T['the look'] = MiniTest.new_set()
