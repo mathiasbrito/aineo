@@ -4046,26 +4046,24 @@ window it was in.
 What the office knows comes from the files Claude Code writes: the transcript
 of the session, `projects/<folder>/<session id>.jsonl` under
 `$CLAUDE_CONFIG_DIR`, or under `~/.claude` when that is not set, and, in the
-folder `<session id>/subagents` beside it, the transcript and the meta file
-of each subagent. The office reads the end of the transcript when it opens,
-and each line added while it shows; a subagent that runs when it opens, or
-starts while it shows, is followed until its meta file says it finished or
-the user stopped it. A subagent quiet for ten minutes is not in the office:
-one whose transcript was last written ten minutes or more before the office
-opens is left out, and one that writes nothing the office reads for ten
-minutes while it shows walks out, unless the session's agent still waits on
-the call that started it or the subagent waits for your permission; either
-walks in again with its next line. A transcript cut short or replaced by
-another is read again from its end. It calls no Claude, sends nothing to its
-terminal, makes no MCP call or network request, writes nothing and spends no
-token. While it
+folder `<session id>/subagents` beside it, the transcript and the meta file of
+each subagent. The office reads the end of the transcript when it opens, and
+each line added while it shows; a subagent that runs when it opens, or starts
+while it shows, is followed until its meta file says it finished or the user
+stopped it. A subagent quiet for ten minutes is not in the office: one whose
+transcript was last written ten minutes or more before the office opens is
+left out, and one that writes nothing the office reads for ten minutes while
+it shows walks out, unless the session's agent still waits on the call that
+started it or the subagent waits for your permission; either walks in again
+with its next line. A transcript cut short or replaced by another is read
+again from its end. It calls no Claude, sends nothing to its terminal, makes
+no MCP call or network request, writes nothing and spends no token. While it
 shows, one timer draws 12 frames a second, one file watch follows the
 transcript, one the subagents' folder and one each subagent it follows, 64 at
-most; where the system gives no file
-watch, or the file or folder is not there yet, aineo looks at it every half
-second instead. Closing the office stops all of them. A session with no
-transcript yet shows its agent standing, and the office follows the file
-from its first line once Claude Code writes it.
+most; where the system gives no file watch, or the file or folder is not there
+yet, aineo looks at it every half second instead. Closing the office stops all
+of them. A session with no transcript yet shows its agent standing, and the
+office follows the file from its first line once Claude Code writes it.
 
 The office draws two pixels to a cell, with half blocks, in the colours of
 the art, so it needs `'termguicolors'` and `'ambiwidth'` left `single` (which
@@ -4080,6 +4078,123 @@ office that shows stays shown through that, even when the cursor was in the
 right side it covers (shown with `\O` while there); it closes only when the
 cursor enters the right side afterwards. In a window smaller than 60 columns
 by 24 rows the office draws one line saying so in place of the scene.
+
+The rest of this chapter has two halves. For the person who uses the office:
+what it tells apart (|aineo-office-states|), the report cards
+(|aineo-office-cards|), which session it acts out (|aineo-office-session|),
+the hooks it takes (|aineo-office-hooks|) and the bounds it keeps
+(|aineo-office-limits|). For the person who makes a pack: |aineo-office-packs|
+says what a pack is and how it is found, and each file of it has its section
+(|aineo-office-pack-lua|, |aineo-office-characters|, |aineo-office-effects|,
+|aineo-office-art|, |aineo-office-floor|, |aineo-office-activities|,
+|aineo-office-triggers|); |aineo-office-check| tells what is wrong with a
+pack. Three packs to read: |aineo-office-tiny| is a complete small one,
+|aineo-office-default| is the worked example and |aineo-office-space-station|
+the second. |aineo-office-making| is a walk through making one and
+|aineo-office-sharing| tells how to give it to others.
+
+                                                        *aineo-office-states*
+States ~
+Each agent, the main one and every subagent, is in one state at a time. The
+state comes from what the transcript says and from the permission hook
+(|aineo-office|); what the state looks like comes from the pack
+(|aineo-office-pack-states|). There are 24 states, numbered as `:Aineo office
+states` numbers them (|:Aineo-office-states|), and four parents that are no
+state of an agent's life: `standing`, `working`, `waiting` and `resting`. A
+pack that maps no activity to a state falls back to the state named below, and
+that one to its own, down to `standing`, which every pack maps. A pack that
+maps the four parents therefore covers all 24. The status list says a state
+in its name with spaces for `_`, except `background_job` (running a background
+job) and `error` (hit an error), unless the activity played has a `label`.
+
+ #  State (and the state it falls back to) ~
+ 1  `arriving` (falls back to `standing`)
+    The main agent: the office begins to follow a new session (after a
+    session switch or `:Aineo office reset`). A subagent: its transcript
+    appears while the office shows (one that already runs when the office
+    opens is at its place, not arriving). Lasts 4 seconds; what the agent
+    does meanwhile waits for it to end.
+ 2  `getting_a_task` (falls back to `thinking`)
+    The user's prompt, for the main agent; a subagent's first line, its
+    prompt. A prompt is a user line whose text is not a notice (`<…`), a
+    bracketed message (`[…`) or the summary a compaction leaves. Lasts 3
+    seconds.
+ 3  `thinking` (falls back to `working`)
+    The model at work: a `thinking` block, or the time from a prompt or a
+    tool's result until the next call starts.
+ 4  `planning` (falls back to `thinking`)
+    A call of `TaskCreate`, `TaskUpdate`, `TodoWrite`, `EnterPlanMode` or
+    `ExitPlanMode`.
+ 5  `reading` (falls back to `working`)
+    A call of `Read`, `NotebookRead` or `LSP`, or a shell command of the
+    class `reading`.
+ 6  `searching` (falls back to `reading`)
+    A call of `Grep`, `Glob` or `ToolSearch`, or a shell command of the class
+    `searching`.
+ 7  `writing_code` (falls back to `working`)
+    A call of `Edit`, `Write` or `NotebookEdit`.
+ 8  `running_a_command` (falls back to `writing_code`)
+    A `Bash` or `PowerShell` call of no other class.
+ 9  `running_tests` (falls back to `running_a_command`)
+    A shell command of the class `tests`. Its result shows a green `✓` or a
+    red `✗` at the top left of the agent's monitor screen for three seconds
+    (|aineo-office-live|); a failed test run is not an `error`.
+10  `background_job` (falls back to `running_a_command`)
+    A `Bash` call with `run_in_background`, or a `Monitor` call, until the
+    notice of the finished task (a user line opening `<task-notification`).
+    A job whose notice never comes stays until the session ends.
+11  `on_the_web` (falls back to `reading`)
+    A call of `WebSearch` or `WebFetch`; the monitor shows what it looks up.
+12  `delegating` (falls back to `working`)
+    A call of `Agent`.
+13  `waiting_for_subagents` (falls back to `waiting`)
+    The main agent only: some subagents run, and the `Agent` call is the call
+    it started last, or its turn has ended.
+14  `needs_permission` (falls back to `waiting`)
+    The `PermissionRequest` hook for that agent (|aineo-office-hooks|), until
+    the agent's next line in its transcript.
+15  `asking_you` (falls back to `waiting`)
+    A call of `AskUserQuestion` still open.
+16  `reporting` (falls back to `working`)
+    A call of aineo's report tool (|aineo-report|); a page also comes out of
+    the piece that shows `printing` (|aineo-office-live|).
+17  `committing` (falls back to `running_a_command`)
+    A shell command of the class `committing`.
+18  `compacting` (falls back to `working`)
+    A `compact_boundary` line, which the transcript writes after the fact, so
+    it lasts 5 seconds from when it is read.
+19  `error` (falls back to `standing`)
+    A tool call whose result is an error, other than a test run's. Lasts 3
+    seconds.
+20  `interrupted` (falls back to `error`)
+    A user line opening `[Request interrupted by user`. Lasts 4 seconds, and
+    ends the agent's turn.
+21  `done` (falls back to `resting`)
+    The end of the agent's turn: for the main agent a `turn_duration` line,
+    for a subagent the text that ends its turn (`end_turn`). A subagent whose
+    meta file says it finished is `done` too. Lasts 4 seconds.
+22  `idle` (falls back to `resting`)
+    The turn ended and `done` is over, with nothing new since.
+23  `asleep` (falls back to `idle`)
+    `idle` for 10 minutes, by the clock.
+24  `leaving` (falls back to `standing`)
+    A subagent only: its meta file says it finished or the user stopped it,
+    after `done`; or it has been quiet for ten minutes
+    (|aineo-office|). It is listed for about half a minute more, to walk out.
+
+A state shorter than 1.2 seconds is held until 1.2 seconds have passed, and
+the latest state then wins, so a run of rapid calls does not flicker. An agent
+nothing has been heard of stands. What an agent did before the office opened
+is read from the end of the transcript and puts the agent in the state it is
+in now, but brings none of the states that last seconds (`getting_a_task`,
+`error`, `interrupted`, `done`, `compacting`): they are past.
+
+The classes of shell commands, `tests`, `committing`, `searching` and
+`reading`, are `office.commands` (|aineo-config-office.commands|). A command
+is split at `&&`, `||`, `;`, `|` and new lines, and the first class, in that
+order, that any part matches names it; a command of no class is
+`running_a_command`. What a pack does for one command in particular is a
+trigger (|aineo-office-triggers|).
 
                                                           *aineo-office-cards*
 Report cards ~
@@ -4149,9 +4264,33 @@ folder's, and `pack.lua` says it too. `office.pack`
 (|aineo-config-office.pack|) chooses the pack, and `office.pieces`
 (|aineo-config-office.pieces|) replaces single pieces of it.
 
-A pack is `based_on` another, the default pack when it says nothing: what it
-leaves out it takes from that pack, name by name. A pack of its own art, its
-floor and a few activities can leave the rest to the default.
+A pack is these files, and nothing else is read:
+>
+    aineo-office/harbour/
+      pack.lua       the description (|aineo-office-pack-lua|)
+      floor.txt      the floor plan (|aineo-office-floor|)
+      art/desk.txt   one piece of pixel art a file (|aineo-office-art|)
+<
+A pack is `based_on` another (a chain of at most 8 packs, a loop is told), the
+default pack when it says nothing, and none for `false`: what it leaves out it
+takes from that pack. A pack of its own art, its floor and a few activities
+can leave the rest to the default. What a pack lays over the pack it is based
+on, and how:
+
+Of the pack	It lays over the base's ~
+`colours`, `effects`, `activities`, `things`, `states`	name by name
+Art files (the pieces)	by the piece's name
+`text_colours`	role by role
+`characters`	by kind; a character's `poses` name by name, its `colours`
+		whole
+`triggers`	the pack's first, then the base's, 64 together at most
+`floor`	not at all: a pack with a `floor` gives the plan, its colours and its
+		legend whole, and one without takes the base's floor whole
+
+So a pack that changes one activity redefines that activity whole, a pack that
+lays out another room gives the legend whole, and the activities it takes from
+the pack it is based on go to the spots its floor has by name
+(|aineo-office-spots|).
 
 A pack's name is letters, digits, `_` and `-`. A pack reads its own files
 only: `floor.plan` and the art files must lie in the pack's folder, a link
@@ -4187,43 +4326,166 @@ read to 256 KiB.
 Field	Default	Means ~
 `format`	required	`1`, the version of the pack format
 `name`	required	the pack's name, its folder's
-`about`, `author`	`''`	one sentence, and who made it
+`about`, `author`	`''`	one sentence, and who made it; one line each
 `based_on`	`'default'`	a pack's name; `false` for none
 `colours`	`{}`	`#rrggbb` by name, at most 64 names
-`text_colours`	highlight groups	by role: `name`, `status`,
-		`thought`, `warning`; each `#rrggbb` or a highlight
-		group's name (`Comment`, `Normal`, `Special`, `WarningMsg`)
-`characters`	the agent's	`agent`, `subagent` and `cat`
-`effects`	`{}`	text a character shows
-`floor`	required	the plan, its colours and its legend
-`activities`	`{}`	what characters do
-`things`	`{}`	what an activity leaves behind
+		(|aineo-office-art|, |aineo-office-floor|)
+`text_colours`	highlight groups	by role, each `#rrggbb` or a highlight
+		group's name: `name` (`Comment`), `status`
+		(`Normal`), `thought` (`Special`), `warning`
+		(`WarningMsg`)
+`characters`	the base pack's	`agent`, `subagent` and `cat`
+		(|aineo-office-characters|)
+`effects`	`{}`	text a character shows (|aineo-office-effects|)
+`floor`	required, or the base pack's	the plan, its colours and its
+		legend (|aineo-office-floor|)
+`activities`	`{}`	what characters do (|aineo-office-activities|)
+`things`	`{}`	what an activity leaves behind (|aineo-office-things|)
 `states`	the parent's	the activity for each state
+		(|aineo-office-pack-states|)
 `triggers`	`{}`	custom matches, before a state's activity
+		(|aineo-office-triggers|)
+
+A pack written for a `format` other than `1` is told, and not read. The order
+above is the order of the default pack's `pack.lua`. The fields of a pack, as
+a skeleton: >lua
+    return {
+      format = 1,
+      name = 'harbour',
+      about = 'A harbour master\'s office.',
+      author = 'someone',
+      based_on = 'default',
+
+      colours = { sea = '#1e66f5', rope = '#b4875a' },
+      text_colours = { thought = '#b4befe', warning = 'WarningMsg' },
+      characters = { agent = { colours = { '#a6e3a1', '#fab387' } } },
+      effects = { ... },
+      floor = { plan = 'floor.txt', floor_colour = 'sea', ... },
+      activities = { ... },
+      things = { ... },
+      states = { ... },
+      triggers = { ... },
+    }
+<
+The `...` stand for the tables each section below describes; no field is
+needed but `format` and `name`, when the pack is based on another.
 
                                                      *aineo-office-characters*
 Characters and poses ~
-`characters` holds `agent`, `subagent` and `cat`. A character has `colours`,
-a list of `#rrggbb` it takes in turn (one grey when it gives none), `poses`,
-by name, and `like`, another kind it takes the poses and colours of unless it
-gives its own. A subagent that is like nothing is like the agent; a pack that
-names no cat has none; `how_many` is the cat's number, `1` by default.
+`characters` holds `agent`, `subagent` and `cat`. A character has:
 
-The agent needs poses `standing` and `walking`: the engine uses them between
-steps. A pose has `art`, a list of pieces drawn bottom first, or `like`,
-another pose whose fields it takes unless it gives its own, up to 8 poses
-deep; and `sitting` (drawn seated, its feet hidden behind what stands in
-front), `effect`, `screen` (what the character's own monitor shows), `holding`
-(a prop at the art's `hand` area) and `rises` (pixels it rises by, one number
-for each frame).
+Field	Default	Means ~
+`colours`	one grey	a list of `#rrggbb`, taken in turn: the art
+		names them `agent`, `agent_light`, `agent_shade` and
+		`agent_blush` (|aineo-office-art|)
+`poses`	none	the character's poses, by name
+`like`	none	another kind (`agent`, `subagent`, `cat`) it takes the poses
+		and colours of unless it gives its own
+`how_many`	`1`	for the cat: how many there are, at most 4
+
+A character takes the colours and poses of the character of its kind in the
+pack it is based on, or of the kind it is `like`, and lays its own over them:
+its colours whole, its poses name by name. A subagent that is like nothing is
+like the agent; a pack that names no cat has none. The agent needs poses
+`standing` and `walking`: the engine uses them between steps. Every other pose
+is named by the steps that take it (|aineo-office-steps|), by any name of
+lowercase words joined by `_`.
+>lua
+    characters = {
+      agent = {
+        colours = { '#a6e3a1', '#89b4fa', '#fab387' },
+        poses = {
+          standing = {
+            art = { 'bean', 'bean_face_front', 'bean_legs_stand' },
+          },
+          walking = { art = { 'bean', 'bean_face_side', 'bean_legs_walk' } },
+          sitting = { art = { 'bean_seated', 'bean_face_front' },
+                      screen = 'screen_cursor' },
+        },
+      },
+      subagent = { like = 'agent', colours = { '#9fb4c8', '#c8a46a' } },
+    },
+<
+                                                          *aineo-office-poses*
+Poses ~
+A pose has:
+
+Field	Default	Means ~
+`art`	required, or `like`	a list of pieces drawn bottom first, each in
+		the character's colours: a body, a face, legs, an arm
+`like`	none	another pose of the character, whose fields this pose takes
+		unless it gives its own, up to 8 poses deep; a pose that
+		is like itself, or like a pose the pack does not describe,
+		is a problem
+`sitting`	`false`	drawn seated, its feet hidden behind what stands in
+		front of it (the desk)
+`effect`	none	an effect shown over the pose (|aineo-office-effects|)
+`screen`	none	the piece the character's own monitor shows while it
+		holds the pose; the monitor is the piece with a `screen`
+		area nearest to the character's `desk` spot
+`holding`	none	a prop drawn at the `hand` area of the first
+		layer that has one, mirrored with that layer
+		and as the prop's own `faces` says
+`rises`	none	pixels the pose lifts the character by, one number for
+		each frame of the first layer, one after the other from
+		the moment the pose begins; negative numbers sink
+>lua
+    typing_code = {
+      art = { 'bean_seated', 'bean_face_side', 'bean_hands_fast' },
+      screen = 'screen_code',
+    },
+    drumming = {
+      art = { 'bean_seated', 'bean_face_side', 'bean_hands_fast' },
+      effect = 'drumming_fingers',
+      screen = 'screen_cursor',
+    },
+    drumming_seated = { like = 'drumming', screen = 'screen_permission' },
+    startled = {
+      art = { 'bean_jumping', 'bean_face_startled', 'papers_flying' },
+      effect = 'interrupted_marks',
+      screen = 'screen_interrupted',
+      rises = { 0, 3, 5, 6, 6, 5, 3, 1, 0, 0 },
+    },
+<
+A pose whose art has frames, or whose `rises` lifts it, begins at its first
+frame when the agent takes the pose. Art faces right unless its header says
+`faces: left`, and is drawn mirrored for a character that faces the other way.
+The cat has poses of its own, which its activities name, and walks in its pose
+`walking`.
 
                                                         *aineo-office-effects*
 Effects ~
-An effect is text a character shows: `text`, a list of frames, each of
-characters one cell wide on your screen; `colour`, a role of `text_colours`, a
-`#rrggbb` or a highlight group, `'status'` by default; `place`: `above`,
-`above_left`, `above_right` or `beside`, `'above'` by default;
-`seconds_per_frame`, `0.25`; and `bold`, `false`.
+An effect is text a character shows over its pose, a few characters that
+change by frame: a thought bubble, a `!`, the `zZ` of sleep.
+
+Field	Default	Means ~
+`text`	required	a list of frames, each text of characters one
+		cell wide on your screen (a wide character, a
+		combining mark or a control character is a problem)
+`colour`	`'status'`	a role of `text_colours` (`name`, `status`,
+		`thought`, `warning`), a `#rrggbb` or a highlight
+		group
+`place`	`'above'`	`above`, `above_left`, `above_right` or `beside`:
+		where the text is, relative to the character
+`seconds_per_frame`	`0.25`	how long each frame shows, a number above 0
+`bold`	`false`	bold text
+>lua
+    effects = {
+      thought_bubble = {
+        text = { '.', '. ∘', '. ∘ o' },
+        colour = 'thought',
+        place = 'above_right',
+        seconds_per_frame = 0.4167,
+      },
+      permission_hand = {
+        text = { '! y/n?', ' ' },
+        colour = 'warning',
+        bold = true,
+      },
+    },
+<
+A pose names an effect by its `effect` (|aineo-office-poses|), and a step by
+its own (|aineo-office-steps|), which shows over the pose's.
 
                                                             *aineo-office-art*
 Art files ~
@@ -4258,6 +4520,28 @@ Header field	Means ~
 		`sky`, `page` or `query`
 `seconds per frame`	how long each frame shows, `0.25` by default
 
+The areas are where aineo draws into a piece; a piece with none is only
+drawn:
+Area	aineo draws there ~
+`screen`	the `screen` of the pose of the character whose monitor the
+	piece is (|aineo-office-poses|); a test run's `✓` or `✗` at its top
+	left
+`query`	a web search's query, or the host of an address it fetches
+`hand`	the prop (`holding`) of a pose, at the first layer of the pose that
+	has the area
+`name`	the name of the agent whose desk it is
+`plan`	the session's tasks, a row each
+`time`, `date`	the time and the date
+`sky`	the sky of the hour (|aineo-office-live|)
+`page`	the page that prints out of a printer
+
+|aineo-office-live| says how each is written. Art is drawn in the colours it
+names: those of the pack's `colours`, and, for a piece of a character, the
+character's own by `agent` (the colour taken in turn from the character's
+`colours`), `agent_light`, `agent_shade` and `agent_blush`. The art of a
+character faces right; `faces: left` says it does not, and a character facing
+the other way is drawn mirrored.
+
 An art file is read to 256 KiB, 400 pixels wide, 200 tall and 64 frames; of a
 pack's art files the first 500, by name, are read and the rest told. The
 files of a pack and of the packs it is based on are read up to 2 MiB together,
@@ -4267,10 +4551,17 @@ when one of its files, or the folders it looked in, changed.
 
                                                           *aineo-office-floor*
 The floor plan ~
-`floor` in `pack.lua` has `plan`, the file (`'floor.txt'`), `floor_colour`
-and `wall_colour`, names from `colours`, and `legend`, what each letter of
-the plan is. `floor.txt` draws the plan, one character to a cell, a cell one
-pixel wide and two tall.
+`floor` in `pack.lua` is a table:
+
+Field	Default	Means ~
+`plan`	`'floor.txt'`	the file that draws the plan, in the pack's folder
+`floor_colour`	required	a name from `colours`: the colour of the floor
+`wall_colour`	required	a name from `colours`: the colour of the wall
+`legend`	required	what each letter of the plan is: a table
+		of entries by letter (below)
+
+`floor.txt` draws the plan, one character to a cell, a cell one pixel wide
+and two tall. The plan is drawn once and laid out to the size of the window:
 >
     # Comment lines start with # and come first.
     # The next line marks with ~ the columns that repeat to fill the width.
@@ -4288,12 +4579,26 @@ floor to walk on, `#` wall, a space floor nobody walks on, and any other
 character a letter of the legend. A row shorter than the widest is read as
 ending in spaces. A plan is read to 400 cells wide and 200 rows.
 
+The plan above is 4 columns by 3 rows; columns 2 and 3 repeat, and so does
+the last row. Laid out 8 columns wide, the block repeats as many whole times
+as fit, here 3, so each desk spot `s` comes three times in the last row, and
+what is left over is padded with the row's last cell when that is wall or
+floor, else with floor. As many rows as the height holds follow the first two:
+>
+    ########
+    D......#
+    ..s.s.s.
+    ..s.s.s.
+<
+The rows before the marked block and the rows after it are drawn once, the
+block as many whole times as fits between them, and the rows left over are
+floor.
+
 A legend entry has:
 `piece`	the piece standing there, its bottom left corner on the cell; a
 	run of the letter on one row stretches a piece that stretches to
 	the run
-`spot`	a place characters go to, by name; `door` is where they come in and
-	go out, `desk` each agent's own
+`spot`	a place characters go to, by name (|aineo-office-spots|)
 `sitting`	a character at the spot is seated (`false`)
 `facing`	`left` or `right` (`'right'`)
 `walk_over`	the piece lies on the floor and is walked over (`false`)
@@ -4306,7 +4611,28 @@ A legend entry has:
 	columns wide
 `shows`	live content aineo draws into the piece's area of that name
 	(|aineo-office-live|); for a run of `decorations`, into each
-	decoration that has such an area
+	decoration that has such an area: `time`, `date`, `sky`, `plan`,
+	`printing` or `name`
+
+A letter is one character that is none of `.`, `#`, space and `~`. An entry
+has a `piece`, a `spot`, both, or `decorations`; every other field qualifies
+those.
+>lua
+    legend = {
+      D = { piece = 'door', in_use = 'door_open' },
+      d = { piece = 'baseboard', spot = 'door', walk_over = true },
+      T = { piece = 'desk', shows = 'name' },
+      s = { spot = 'desk' },
+      Q = { spot = 'sofa', sitting = true, facing = 'left' },
+      ['*'] = {
+        decorations = { 'window', 'water_cooler', 'snake_plant' },
+        shows = 'sky',
+      },
+    },
+<
+The wall of the default pack carries a piece (`D`, the door) and below it the
+baseboard (`d`), a piece one cell wide that is walked over and holds the spot
+`door`: the piece stands where nobody walks, the spot where characters do.
 
                                                            *aineo-office-live*
 Live content ~
@@ -4344,186 +4670,1013 @@ wide, a combining mark among them, or is a control character, shows as `?`.
 Nothing is written below the plan: the rows under it are the status list's.
 
                                                      *aineo-office-activities*
-Activities, things and states ~
-`activities` says what characters do, by name. An activity has `steps`, in
-order, and `about`, `label`, `who` (`'agents'` or `'cat'`), `during` (the
-states, `always` among them, in which it may be picked at random), `chance`
-(a weight, `1`) and `players` (how many play it together, `1`). A step has
-`at` (the spot it is at), `pose` (`'standing'`), `for_seconds` (a number, or
-two for a random time between them), `facing`, `effect`, `even_if_taken`,
-`the_one_moved_plays` (an activity), `leave` and `remove` (a thing) and
-`follow`. Spots aineo knows without a legend: `anywhere`, `an_empty_desk`,
-`an_idle_agents_desk`, `next_to_an_agent` and `next_to_the_cat`, and each
-thing's name.
+Activities ~
+`activities` says what characters do, by name. An activity is a list of
+`steps` and a few fields about it:
+
+Field	Default	Means ~
+`steps`	required	the steps, in order (|aineo-office-steps|)
+`about`	`''`	what the activity looks like, in a sentence; `:Aineo
+		office states` shows it
+`label`	none	the words the status list says while a character plays
+		it; without one, the state's own words
+`who`	`'agents'`	`'agents'` or `'cat'`
+`during`	none	the states, `always` among them, in which a character
+		may pick the activity at random
+		(|aineo-office-random-life|)
+`chance`	`1`	the weight of that pick, a number above 0
+`players`	`1`	how many characters play it together
+>lua
+    activities = {
+      look_out_of_the_window = {
+        about = 'Goes to the window and looks out at the sky.',
+        label = 'looks out of the window',
+        during = { 'idle' },
+        chance = 2,
+        steps = {
+          { at = 'window', pose = 'looking_out', for_seconds = { 2.5, 4 } },
+        },
+      },
+    },
+<
+An activity is played because a state asks for it
+(|aineo-office-pack-states|), because a trigger names it
+(|aineo-office-triggers|), because an agent with nothing to do picks it at
+random (|aineo-office-random-life|), or because a thing or a step names it
+(|aineo-office-things|, |aineo-office-cat|). One that none of these reaches is
+never played.
+
+                                                         *aineo-office-steps*
+Steps ~
+A step is one thing a character does: it goes somewhere, takes a pose, and
+stays a while.
+
+Field	Default	Means ~
+`at`	none	the spot it goes to (|aineo-office-spots|); without one,
+		it stays where it is
+`pose`	`'standing'`	the pose it takes there (|aineo-office-characters|)
+`for_seconds`	none	how long the step lasts: one number above 0, or two,
+		the shortest first and from 0, for a random time between
+		them. Without it the step lasts until the character's
+		activity changes, so a step that another follows has it
+`facing`	the spot's	`'left'` or `'right'`, in place of the
+		way the spot faces
+`effect`	the pose's	an effect shown over the pose's
+		(|aineo-office-effects|)
+`even_if_taken`	`false`	go to the nearest spot of the name though
+		another character has it
+`the_one_moved_plays`	none	with `even_if_taken`: the activity the
+		character that was moved plays
+`leave`	none	a thing (|aineo-office-things|) laid on the floor at the
+		character's feet as the step ends
+`remove`	none	a thing taken away from the cell the character stands
+		on as the step ends
+`follow`	none	`'someone_walking'`, the only name there is: the
+		character trails the nearest one on the move
 
 How an agent plays an activity: it takes the steps in order. For a step it
 goes to the nearest spot called `at` that no other agent has taken, walking
 the shortest way over floor (`.`), spots and pieces with `walk_over`, never
-over a wall, a space or a piece that stands on the floor, and takes the
-step's `pose`, facing the spot's way or the step's `facing`. A spot called
-`desk` is the agent's own. An agent whose place has no desk in the plan (more
-agents than the plan has desks, as in a small window) works at the nearest
-desk no agent has, else at the desk of an agent that is idle and away from
-it, and, with neither, waits as for a spot that other agents have; when the
-owner of the desk it works at comes back, it steps off, to another such desk
-or else beside a desk, where it stands, and the owner sits. Two agents never
-stand on one desk. An agent has a place from its arrival to its
-leaving, the lowest number no other agent has, and its desk, its monitor and
-its colour go by it: the agent with the first place has the first desk, the
-first monitor and the first colour. After `for_seconds` from its arrival (a
-random time between the two numbers when it has two) the next step begins; the
-last step lasts until the agent's activity changes, or, when it has
-`for_seconds`, until they are over (see below). An agent whose step names
-a spot that other agents have keeps the spot it stands on and looks again
-every second. An agent that has no place yet, whose step names a spot that
-other agents have, or that the plan lacks (as in a room too small for the
-desks), or that cannot be walked to, is put on the free floor cell nearest the
-spot `door` (the one the random source picks when the plan has no door) and
-plays the step there, so that it is always drawn; it is not drawn only when a
-character stands on every floor cell, and then it is put on a cell as soon as
-one is free. An agent that has a place keeps it: a spot that cannot be walked
-to leaves it where it is and its activity goes on. An agent first appears at
-the first spot of its first step without walking there, or at the spot `door`
-when the step has no `at`.
-A step's `effect` shows over the pose's. When the office is resized, each
-agent keeps its activity and its step, at the spot of the same name and
-number in the new plan.
+over a wall, a space or a piece that stands on the floor, and takes the step's
+`pose`, facing the spot's way or the step's `facing`. After `for_seconds` from
+its arrival (a random time between the two numbers when it has two) the next
+step begins; the last step lasts until the agent's activity changes, or, when
+it has `for_seconds`, until they are over (|aineo-office-random-life|). A
+step's `effect` shows over the pose's. A pose whose art has frames, or whose
+`rises` lifts it, begins at its first frame when the agent takes the pose.
+When the office is resized, each agent keeps its activity and its step, at the
+spot of the same name and number in the new plan.
+>lua
+    hand_a_task_over = {
+      steps = {
+        { at = 'beside_desk', pose = 'holding_a_task', facing = 'left',
+          for_seconds = 1.2 },
+        { at = 'beside_desk', pose = 'giving_a_task', for_seconds = 1 },
+        { at = 'beside_desk', pose = 'standing' },
+      },
+    },
+<
+An agent whose step names a spot that other agents have keeps the spot it
+stands on and looks again every second. An agent that has no place yet, whose
+step names a spot that other agents have, or that the plan lacks (as in a
+room too small for the desks), or that cannot be walked to, is put on the free
+floor cell nearest the spot `door` (the one the random source picks when the
+plan has no door) and plays the step there, so that it is always drawn; it is
+not drawn only when a character stands on every floor cell, and then it is put
+on a cell as soon as one is free. An agent that has a place keeps it: a spot
+that cannot be walked to leaves it where it is and its activity goes on. An
+agent first appears at the first spot of its first step without walking there,
+or at the spot `door` when the step has no `at`.
 
+                                                         *aineo-office-spots*
+Spots ~
+A spot is a place a step goes to, by name. The floor plan makes them: a legend
+entry with `spot = 'name'` (|aineo-office-floor|) makes every cell of its
+letter a spot of that name, and a decoration makes a spot named after its
+piece on the first floor row below it. A name that more than one cell has is
+every one of them, and the character goes to the nearest the others have not
+taken. The names the engine itself uses are:
+
+`door`	the entrance: an agent whose first step has no `at` first appears
+	there, and an agent with no place yet is put on the free cell nearest
+	to it. The activities that bring agents in and out (`walk_in`,
+	`pack_up_and_leave`) go to it. A plan without a `door` is not told
+	by any check, and the agents then appear on cells the random source
+	picks.
+`desk`	each agent's own (|aineo-office-desks|).
+`beside_desk`	where an agent that has to leave a desk it does not own
+	steps to, and stands.
+
+The names aineo knows without any legend:
+
+`anywhere`	a floor cell the random source picks
+`an_empty_desk`	a desk of the plan no agent has
+`an_idle_agents_desk`	the desk of another agent in the state `idle` who is
+	away from it
+`next_to_an_agent`	a cell beside another agent who stands still
+`next_to_the_cat`	a cell beside a cat that stands still, facing it,
+	which then keeps its pose and its place until the agent's step is over
+A thing's name	the cell where a thing of that name lies
+	(|aineo-office-things|)
+
+Any other name is a spot a legend or a decoration gives; an activity with a
+step to a name the floor lacks is told never to play (|aineo-office-check|).
+Every spot must be walkable to from the door (|aineo-office-check|).
+
+                                                         *aineo-office-desks*
+Desks ~
+A spot called `desk` is the agent's own. An agent has a place from its arrival
+to its leaving, the lowest number no other agent has, and its desk, its
+monitor and its colour go by it: the agent with the first place has the first
+desk, the first monitor and the first colour. Its monitor is the piece with a
+`screen` area nearest to its `desk` spot, and shows the `screen` of the pose
+it takes (|aineo-office-characters|). A plan without `desk` spots gives the
+n-th piece with a `screen` area to the agent with the n-th place, and the n-th
+piece that shows names (|aineo-office-live|) its name plate.
+
+An agent whose place has no desk in the plan (more agents than the plan has
+desks, as in a small window) works at the nearest desk no agent owns (an empty
+desk), else at the desk of an agent that is idle and away from it, and, with
+neither, waits as for a spot that other agents have. When the owner of the
+desk it works at comes back, it steps off, to another such desk or else to a
+spot `beside_desk`, where it stands, and the owner sits. Two agents never
+stand on one desk. A cat, which has no place, has no desk, and sits at one
+only by `an_empty_desk` or `an_idle_agents_desk`.
+
+                                                    *aineo-office-random-life*
+Random life, and games ~
 When the last step of an activity has `for_seconds` and they are over while
 the agent's state goes on, the agent plays another activity: one whose
-`during` names its state, picked at random in proportion to its `chance`
-(`1` unless it says), never the one the agent has just played, and only one it
-can play now. It can play an activity when the plan has as many free spots as
-`players` for its first step with a spot and a spot for each step after, when
-the others that must play it are free, and, for a step that follows someone,
-when someone is on the move. An activity with `players = 2` takes along
-another agent, picked at random among the free ones in a state its `during`
-names (not in a game, upset, sent to clean, or doing this very activity
-now): both begin it together, each at a spot of its own of the name, and
-each step lasts the same time for both; with no such agent it is not picked.
-When one player leaves it, called away by its state, sent to clean or leaving
-the office, it ends for the others too: two play it, or none. An agent with
-nothing to pick keeps its last pose and looks again every second. When the
-agent's state changes, what it picked at random is dropped for what the new
-state asks for.
+`during` names its state, picked at random in proportion to its `chance` (`1`
+unless it says), never the one the agent has just played, and only one it can
+play now. `during` names a state exactly: a parent does not stand for its
+states, so an activity for waiting names each state it is for (`waiting`,
+`waiting_for_subagents`). It can play an activity when the plan has as many
+free spots as `players` for its first step with a spot and a spot for each
+step after, when the others that must play it are free, and, for a step that
+follows someone, when someone is on the move. An agent with nothing to pick
+keeps its last pose and looks again every second. When the agent's state
+changes, what it picked at random is dropped for what the new state asks for.
 
-A step's `at` may name a spot aineo knows without a legend: `anywhere` is a
-floor cell the random source picks; `an_empty_desk` a desk of the plan no
-agent has; `an_idle_agents_desk` the desk of another agent in the state `idle`
-who is away from it; `next_to_an_agent` a cell beside another agent who stands
-still; `next_to_the_cat` a cell beside a cat that stands still, facing it,
-which then keeps its pose and its place until the agent's step is over; and
-a thing's name is the cell where a thing of that name lies. With
-`even_if_taken` a step goes to the nearest spot of its name, taken or not:
-the character that has it is moved when the one coming arrives, and plays the
-activity `the_one_moved_plays` names, or, when the step names none, looks for
-another spot of the name and, finding none, is done with its step. A chain of
-characters moved one by another stops at the fourth, who is left where it
-stands.
+An activity with `players = 2` is a game. It takes along another agent, picked
+at random among the free ones in a state its `during` names (not in a game,
+upset, sent to clean, or doing this very activity now): both begin it
+together, each at a spot of its own of the name, and each step lasts the same
+time for both; with no such agent it is not picked. When one player leaves it,
+called away by its state, sent to clean or leaving the office, it ends for the
+others too: two play it, or none. The default pack's table tennis is one: the
+plan has the spot `table_tennis` at each end of the table, facing each other,
+and `play_table_tennis` has `players = 2`.
+>lua
+    play_table_tennis = {
+      label = 'plays table tennis',
+      during = { 'idle' },
+      players = 2,
+      steps = {
+        { at = 'table_tennis', pose = 'playing_table_tennis',
+          for_seconds = { 6, 10 } },
+      },
+    },
+<
 
-A pose whose art has frames, or whose `rises` lifts it, begins at its first
-frame when the agent takes the pose. A pose with `screen` shows that piece in
-the `screen` area of the agent's own monitor, the one nearest to the agent's
-`desk` spot (in a plan without `desk` spots, the n-th piece of the plan with a
-`screen` area for the agent with the n-th place). `holding` draws a piece at
-the `hand` area of the first layer that has one, mirrored with that layer and
-as the piece's own `faces` says.
-
+                                                         *aineo-office-things*
+Things and the mess ~
 `things` says what an activity leaves behind: `piece`, and optionally
 `upsets_agents_within` (cells), `upset_agents_play` and `cleaned_up_by` (an
 activity each). A step with `leave` lays that thing on the floor at the
 character's feet as the step ends, and a step with `remove` takes away the
 thing of that name on the cell the character stands on as it ends; a step
 that never ends leaves and removes nothing. A thing is drawn under what stands
-on its cell. When one is left, the agents at most `upsets_agents_within` cells
-from it, in a straight line, play `upset_agents_play`. The idle agent (the
-state `idle`) nearest to it that can walk to it goes to clean it up; with no
-idle agent that can, the nearest other agent that is in the office (not
-arriving, not leaving, not in an interlude) goes. That agent plays
-`upset_agents_play` first, then `cleaned_up_by`, and a thing no agent can walk
-to waits where it lies. Both are interludes: when they are over, or when the
-agent's state changes, the agent goes back to what its state asks for, a
-working agent to its work. At
-most 64 things lie at a time, and a resize drops those on cells the new plan
-cannot be walked on.
+on its cell. At most 64 things lie at a time, and a resize drops those on
+cells the new plan cannot be walked on.
+>lua
+    things = {
+      mess = {
+        piece = 'cat_mess',
+        upsets_agents_within = 40,
+        upset_agents_play = 'grumble',
+        cleaned_up_by = 'clean_up_the_mess',
+      },
+    },
+<
+What follows a thing laid on the floor, which the cat of the default pack does
+in `leave_a_mess` and `leave_a_puddle` (a step with `leave` named for a
+thing):
+1. The agents at most `upsets_agents_within` cells from it, in a straight
+   line, play `upset_agents_play`.
+2. A cleaner is chosen: the idle agent (the state `idle`) nearest to it that
+   can walk to it; with no idle agent that can, the nearest other agent that
+   is in the office (not arriving, not leaving, not in an interlude), even
+   one that is working. A subagent counts as an agent.
+3. The cleaner plays `upset_agents_play` first, then `cleaned_up_by`, whose
+   step goes `at` the thing's own name (`at = 'mess'`) and `remove`s it. A
+   thing no agent can walk to waits where it lies.
+4. Both are interludes: when they are over, or when the agent's state
+   changes, the agent goes back to what its state asks for, a working agent
+   to its work.
 
+                                                            *aineo-office-cat*
+The cat ~
 `characters.cat` draws a cat, `how_many` of them (at most 4), once the pack
 has activities with `who = 'cat'`. The cat has no state: it plays those
-activities at random, as agents do, the ones whose `during` names `always`.
-It takes no place among the agents, so it has no desk, no monitor and no row
-in the status list, and its colour goes by its number among the cats. A cat's
-step may `follow = 'someone_walking'`, the only name there is: the cat trails
-the nearest character on the move for `for_seconds` or until it stops. A cat
-needs at least one activity with a spot to come into the office: it is placed
-by that, and a cat whose every activity follows someone is never placed. A cat
-that takes a seat an agent is on, with `even_if_taken`, angers the agent and
-the agent leaves, if the pack says so by `the_one_moved_plays`.
+activities at random, as agents do, the ones whose `during` names `always`
+(weighted by `chance`, never the one it has just played). It takes no place
+among the agents, so it has no desk, no monitor and no row in the status list,
+and its colour goes by its number among the cats. A cat's step may `follow =
+'someone_walking'`, the only name there is: the cat trails the nearest
+character on the move for `for_seconds` or until it stops. A cat needs at
+least one activity with a spot to come into the office: it is placed by that,
+and a cat whose every activity follows someone is never placed.
 
-`states` maps the name of a state to an activity; a state it leaves out takes
-its parent's. An agent that thinks right after a tool call, while the model
-chooses its next one, goes on with the activity of that call's state where
-the call took it, for the first ten seconds of its thinking, and plays what
-`thinking` maps to after them: a run of short calls at the desk, tests between
-edits, keeps the agent at its desk. A call that asks you (`asking_you`) or
-hands a task over (`delegating`) is not gone on with, and the end of a turn
-ends it.
+The default pack's cat does these, with the weight of each: wander the aisles
+(4), sit and wash (3), sleep on a free sofa seat for one to three minutes (5),
+jump on an empty desk (2), sit on an idle agent's desk (2), rub against the
+legs of an agent who stands still (2), follow someone who walks (2), stare at
+the fish tank (2), leave a mess (1), leave a puddle (1) and take a sofa seat
+an agent sits on (1). An agent petting the cat (`pet_the_cat`, an idle
+activity that goes `next_to_the_cat`) keeps the cat still until the petting
+ends.
+
+A step with `even_if_taken` goes to the nearest spot of its name, taken or
+not: the character that has it is moved when the one coming arrives, and plays
+the activity `the_one_moved_plays` names, or, when the step names none, looks
+for another spot of the name and, finding none, is done with its step. A chain
+of characters moved one by another stops at the fourth, who is left where it
+stands. A cat that takes a seat an agent is on, with `even_if_taken`, angers
+the agent and the agent leaves, if the pack says so by `the_one_moved_plays`.
+>lua
+    take_an_occupied_seat = {
+      who = 'cat',
+      during = { 'always' },
+      steps = {
+        { at = 'sofa', pose = 'sleeping_on_a_seat', for_seconds = { 30, 90 },
+          even_if_taken = true, the_one_moved_plays = 'leave_in_a_huff' },
+      },
+    },
+<
+
+                                                    *aineo-office-pack-states*
+What each state plays ~
+`states` maps the name of a state to an activity (|aineo-office-states|); a
+state it leaves out takes its parent's, and a pack that is based on another
+takes what it leaves out from that pack. The pack must map `standing`.
+>lua
+    states = {
+      standing = 'stand_by_the_desk',
+      working = 'write_code',
+      reading = 'read_from_the_cabinet',
+      done = 'finish_up',
+    },
+<
+An agent that thinks right after a tool call, while the model chooses its next
+one, goes on with the activity of that call's state where the call took it,
+for the first ten seconds of its thinking, and plays what `thinking` maps to
+after them: a run of short calls at the desk, tests between edits, keeps the
+agent at its desk. A call that asks you (`asking_you`) or hands a task over
+(`delegating`) is not gone on with, and the end of a turn ends it.
 
                                                        *aineo-office-triggers*
 Triggers ~
 `triggers` is a list, tried in order whenever a tool call starts, before the
-activity of the state. Each has `when`, the call it matches, and `play`, the
-activity it plays while the call runs. `when` holds `tool`, `agent` (`main` or
-`subagent`) and any of `command`, `description`, `file_path`, `url`, `query`,
-`subagent_type`, `pattern`, `path`, `status`, `summary` and `task`. A value of
-plain words matches a value that contains them as whole words, `'docker'`
-matches `sudo docker compose up` and not `dockerfile`; a value with `*` or `?`
-is a glob over the whole value; `{ lua_pattern = '^make%s+test' }` is a Lua
-pattern, which may hold at most one repetition item (`*`, `+`, `-` or `?`,
-after a character, a class or a set) so that no match can take long; a
-pattern Lua rejects, or with more, is a problem at its line. A trigger costs a
-string match on a call already read: a pack and the packs it is based on
-hold at most 64 triggers together, the rest told and left out, and the
-triggers of one call are tried for 20 ms at most, the rest of them skipped
-and told once each time the office shows.
+activity of the state: the first whose `when` matches the call decides what
+the agent plays while the call runs, in place of the activity of the call's
+state (|aineo-office-states|). A pack gives what a state looks like; a trigger
+gives what one call looks like, as `docker` at a server rack.
+
+Field	Means ~
+`when`	required: the call it matches; every field of it must match, and it
+	must have one
+`play`	required: the activity it plays while the call runs
+
+`when` holds `tool` (the tool's name, as `Bash`, `Read`, `Edit`), `agent`
+(`main` or `subagent`) and any of the fields of the tool's input: `command`,
+`description`, `file_path`, `url`, `query`, `subagent_type`, `pattern`,
+`path`, `status`, `summary` and `task`. They are the names of the tool's own
+input, as Claude Code writes it (2.1.308 was recorded): `Bash` has `command`
+and `description`; `Read` and `Edit` have `file_path`; `Agent` has
+`subagent_type` and `description`; `WebSearch` has `query`; the report tool
+(|aineo-report|) has `task`, `status` and `summary`. A call that lacks a field
+a trigger asks for does not match it.
+
+A value matches in one of three ways:
+- Plain words match a value that contains them as whole words, in that order:
+  `'docker'` matches `sudo docker compose up` and not `dockerfile`; a letter,
+  a digit and `_` make a word.
+- A value with `*` (any run of characters) or `?` (any one character) is a
+  glob over the whole value: `'*.md'` matches a path that ends in `.md`.
+- `{ lua_pattern = '^make%s+test' }` is a Lua pattern, found anywhere in the
+  value. It may hold at most one repetition item (`*`, `+`, `-` or `?`, after
+  a character, a class or a set) so that no match can take long; a pattern Lua
+  rejects, or with more, is a problem at its line (|aineo-office-check|).
+
+A trigger costs a string match on a call already read. A value is matched to
+its first 4096 bytes, a Lua pattern to its first 1024. A pack and the packs it
+is based on hold at most 64 triggers together, the rest told and left out, and
+the triggers of one call are tried for 20 ms at most, the rest of them skipped
+and told once each time the office shows. Those of the pack come before those
+of the pack it is based on.
 >lua
     triggers = {
       { when = { tool = 'Bash', command = 'docker' },
         play = 'tend_the_rack' },
+      { when = { tool = 'Read', file_path = '*.md' },
+        play = 'read_a_book_on_the_sofa' },
+      { when = { tool = 'Edit', agent = 'main', file_path = '*.md' },
+        play = 'plan_on_the_whiteboard' },
+      { when = { tool = 'Bash',
+                 command = { lua_pattern = '^git%s+push%f[%s%z;&|]' } },
+        play = 'send_a_transmission' },
     }
 <
+The activity of a trigger is any activity of the pack, one a state also plays
+included, and it needs its spots like any other. Triggers that do not name
+`agent` apply to the main agent and to each subagent alike. `:Aineo office
+states` lists the pack's triggers in the order they are tried
+(|:Aineo-office-states|).
+
                                                          *aineo-office-check*
 Checking a pack ~
 `:Aineo office check [name]` (|:Aineo-office-check|) puts every problem of a
 pack in the quickfix list as `file:line: problem`, the file's whole path in
-the list, so `:cnext` goes to it.
+the list, so `:cnext` goes to it. A problem names the entry by its path and
+says what it must be:
+>
+    art/desk.txt:3: the anchor lies outside the art
+    art/desk.txt:6: this row is 5 pixels wide, and the first row is 6
+    art/desk.txt:7: the letter “X” is not named in the colours header
+    pack.lua:9: characters.agent.poses.typing_code.art[2] names the piece
+        “no_such_piece”, which the pack does not have
+    pack.lua:10: characters.agent.poses.pacing.like names the pose
+        “strolling”, which the pack does not have
+    pack.lua:16: effects.wide.text[1] “漢字” has characters wider than one
+        cell on this screen
+    pack.lua:21: activities.visit_the_vault.steps[1].for_seconds must be a
+        number above 0, or two numbers, the shortest and the longest
+    pack.lua:24: activities.hum.steps[1].effect names the effect
+        “hum_noise”, which the pack does not have
+    pack.lua:28: states.running_tests names the activity “nothing_like_it”,
+        which the pack does not have
+    pack.lua:31: triggers[1].when.command.lua_pattern must be a Lua pattern
+        Lua reads whole that repeats once at most: it repeats 2 times
+<
+A problem in art is told at its row of the art file, one in a floor plan at
+its row of `floor.txt`, and a spot the floor lacks at the step that goes to it
+or, for an activity the pack takes from the pack it is based on, at the pack's
+`floor`. A piece, an effect, a pose, an activity or a state with a problem is
+left out of the pack, so that the one of its name in the pack it is based on
+shows through. A pack that checks clean is told so, once.
 
-The office shows the main agent and its subagents, and shows when you ask
-for it, not by itself. It stays over the right column as the screen
-or a window is resized, and closes when the layout shows no right column, as
-under `\Z`; it makes its colours again after a colorscheme. It does not
-pause for a tab page you leave or return to.
-It follows the transcript Claude Code's `SessionStart` hook names; when no
-hook ran, it looks for the session's transcript in `projects/` under Claude
-Code's configuration directory, and when none is there, it waits for the file
-Claude Code makes in the folder named after the directory Neovim started in.
-It acts out the session the tab's panes follow, which is the session of a
-claim (|:Aineo-claim|) while the tab claims one, not the session of the tab's
-own Claude Code. When the panes follow another session (the tab's Claude Code
-switched session with a `/resume` or a `/clear`, or a fork of it was named by
-its hooks, or a claim was made), the agents of the old session leave and the
-office follows the new session's transcript at once, or when it next shows.
-When a transcript holds `continued-in` lines, which every Claude Code that
-resumes the session writes as it goes on with it in a new session, the
-office follows the session the first of them stamped at or after the moment
-the tab began following (its Claude Code started, or its session switched)
-names, up to 10 seconds before it, and the one that file's first such line
-names, and so on: not the last line, and not the file written last, which are
-those of other editors, terminals and background sessions. It looks for the
-lines in the last 8 MiB of each file when it starts to follow, and a line
-written while it follows the file makes it follow again. With no such line it
-follows the transcript itself.
+                                                          *aineo-office-tiny*
+A complete small pack ~
+`aineo-office/tiny/` is a whole pack: six pieces of art, a floor plan, a
+character with five poses, three effects, eight activities, the states they
+play for and one custom trigger. It stands alone (`based_on = false`), so it
+has everything a pack needs; every other state falls back to what it maps. It
+passes `:Aineo office check tiny` with no problem. In the blocks below every
+line is indented by four spaces that the files do not have.
+
+`pack.lua`: >lua
+    -- The tiny office: a door, a whiteboard, a server rack and as many
+    -- desks as fit.
+    return {
+      format = 1,
+      name = 'tiny',
+      about = 'The smallest office: a door, a whiteboard, a rack and desks.',
+      author = 'aineo',
+      based_on = false,
+
+      colours = {
+        wall = '#292c3c',
+        floor = '#303446',
+        wood = '#b4875a',
+        dark_wood = '#7a5634',
+        board = '#eff1f5',
+        board_frame = '#a5adcb',
+        rack = '#45475a',
+        light = '#a6e3a1',
+        ink = '#1e1e2e',
+      },
+
+      text_colours = { thought = '#b4befe', name = 'Comment' },
+
+      characters = {
+        agent = {
+          colours = { '#a6e3a1', '#89b4fa', '#f9e2af', '#f5c2e7' },
+          poses = {
+            standing = { art = { 'person' } },
+            walking = { art = { 'person_walking' } },
+            sitting = { art = { 'person' }, sitting = true },
+            typing = { like = 'sitting', effect = 'busy_dots' },
+            thinking = { like = 'standing', effect = 'thought_bubble' },
+          },
+        },
+      },
+
+      effects = {
+        thought_bubble = {
+          text = { '·', '· ∘', '· ∘ ○' },
+          colour = 'thought',
+          place = 'above_right',
+          seconds_per_frame = 0.4,
+        },
+        busy_dots = { text = { '.', '..', '...' }, place = 'above' },
+        raised_hand = {
+          text = { '!', ' ' },
+          colour = 'warning',
+          bold = true,
+        },
+      },
+
+      floor = {
+        plan = 'floor.txt',
+        floor_colour = 'floor',
+        wall_colour = 'wall',
+        legend = {
+          D = { piece = 'door' },
+          B = { piece = 'whiteboard' },
+          R = { piece = 'server_rack' },
+          T = { piece = 'desk' },
+          d = { spot = 'door' },
+          b = { spot = 'whiteboard' },
+          r = { spot = 'server_rack' },
+          s = { spot = 'desk', sitting = true },
+        },
+      },
+
+      activities = {
+        come_in = {
+          about = 'Walks in through the door and sits down at its desk.',
+          steps = {
+            { at = 'door', for_seconds = 0.5 },
+            { at = 'desk', pose = 'sitting' },
+          },
+        },
+        work_at_the_desk = {
+          about = 'Types at its desk.',
+          steps = { { at = 'desk', pose = 'typing' } },
+        },
+        think_at_the_board = {
+          about = 'Stands at the whiteboard with a thought bubble.',
+          steps = { { at = 'whiteboard', pose = 'thinking' } },
+        },
+        wait_with_a_raised_hand = {
+          about = 'Sits at its desk with a blinking "!".',
+          steps = {
+            { at = 'desk', pose = 'sitting', effect = 'raised_hand' },
+          },
+        },
+        sit_back = {
+          about = 'Sits at its desk, doing nothing, for a while.',
+          steps = {
+            { at = 'desk', pose = 'sitting', for_seconds = { 5, 10 } },
+          },
+        },
+        stretch_its_legs = {
+          about = 'Gets up, walks to the whiteboard and back, sits down.',
+          during = { 'idle' },
+          chance = 1,
+          steps = {
+            { at = 'whiteboard', for_seconds = { 2, 4 } },
+            { at = 'desk', pose = 'sitting', for_seconds = { 10, 20 } },
+          },
+        },
+        go_home = {
+          about = 'Walks out through the door.',
+          steps = { { at = 'door' } },
+        },
+        tend_the_server_rack = {
+          about = 'Stands at the server rack while a docker command runs.',
+          steps = { { at = 'server_rack', pose = 'thinking' } },
+        },
+      },
+
+      states = {
+        standing = 'sit_back',
+        arriving = 'come_in',
+        working = 'work_at_the_desk',
+        thinking = 'think_at_the_board',
+        waiting = 'wait_with_a_raised_hand',
+        resting = 'sit_back',
+        leaving = 'go_home',
+      },
+
+      triggers = {
+        { when = { tool = 'Bash', command = 'docker' },
+          play = 'tend_the_server_rack' },
+      },
+    }
+<
+`floor.txt` is 40 columns by 10 rows, not counting the marker column and the
+marker line: the door, the whiteboard and the rack on the wall, and one desk
+in the block of columns 19 to 32 and rows 7 to 9 that repeat to fill the width
+and the height. >
+    # The tiny office. One character per cell; a cell is one pixel wide and
+    # two tall.
+    # Line 1 marks with ~ the columns that repeat; column 1 marks with ~ the
+    # rows that repeat.
+    # . floor  # wall  space: floor nobody walks on  letters: the legend
+                       ~~~~~~~~~~~~~~
+     ########################################
+     ########################################
+     ########################################
+     ########################################
+     D######BBBBBBBBBB#################R#####
+     ..d........b........................r...
+    ~........................................
+    ~................... s          .........
+    ~                   T
+     ........................................
+<
+`art/person.txt`, drawn facing right in the agent's own colours (`agent`,
+`agent_light`, `agent_shade`): >
+    about: A person, facing right, in the agent's own colours.
+    colours: L = agent_light, A = agent, S = agent_shade, k = ink
+    ---
+    .LAA.
+    LAAAS
+    AkAkS
+    AAAAS
+    .AAS.
+    .AAS.
+    .A.S.
+    .A.S.
+<
+`art/person_walking.txt`, two frames, 0.2 second each: >
+    about: A person walking, two frames.
+    colours: L = agent_light, A = agent, S = agent_shade, k = ink
+    seconds per frame: 0.2
+    ---
+    .LAA.
+    LAAAS
+    AkAkS
+    AAAAS
+    .AAS.
+    .AAS.
+    A...S
+    A...S
+    ---
+    .LAA.
+    LAAAS
+    AkAkS
+    AAAAS
+    .AAS.
+    .AAS.
+    ..AS.
+    ..AS.
+<
+`art/desk.txt`, with an area for the agent's name: >
+    about: A plain desk; the agent sits behind it.
+    colours: W = wood, D = dark_wood
+    area name: 1, 2, 10 x 2
+    ---
+    WWWWWWWWWWWW
+    DDDDDDDDDDDD
+    .D........D.
+    .D........D.
+<
+`art/whiteboard.txt`, which stretches to the width the plan draws and has an
+area for the session's tasks: >
+    about: A whiteboard on the wall; it stretches to the width the plan draws.
+    colours: F = board_frame, w = board
+    stretch: columns 2-5
+    area plan: 1, 1, 4 x 6
+    ---
+    FFFFFF
+    FwwwwF
+    FwwwwF
+    FwwwwF
+    FwwwwF
+    FwwwwF
+    FwwwwF
+    FFFFFF
+<
+`art/door.txt`: >
+    about: A door.
+    colours: D = dark_wood, W = wood
+    ---
+    DDDDDD
+    DWWWWD
+    DWWWWD
+    DWWWWD
+    DWWWWD
+    DWWWWD
+    DWWWWD
+    DWWWWD
+    DWWWWD
+    DWWWWD
+<
+`art/server_rack.txt`, whose lights blink: >
+    about: A server rack whose lights blink.
+    colours: R = rack, l = light, k = ink
+    seconds per frame: 0.5
+    ---
+    RRRRRR
+    RklkkR
+    RkkklR
+    RklkkR
+    RRRRRR
+    RRRRRR
+    ---
+    RRRRRR
+    RkkklR
+    RklkkR
+    RkkklR
+    RRRRRR
+    RRRRRR
+<
+What `:Aineo office states tiny` tells of it (|:Aineo-office-states|), among
+its 28 lines: >
+     1  arriving               draws come_in: Walks in through the door ...
+     3  thinking               draws think_at_the_board: Stands at the ...
+     5  reading                falls back to working, which draws
+                               work_at_the_desk: Types at its desk.
+    14  needs_permission       falls back to waiting, which draws
+                               wait_with_a_raised_hand: Sits at its desk ...
+    19  error                  falls back to standing, which draws sit_back
+    24  leaving                draws go_home: Walks out through the door.
+
+    Triggers, tried in this order before a state’s own activity:
+      tool = Bash, command = docker → tend_the_server_rack: Stands at ...
+<
+`searching` falls back to `reading` and that to `working`, so a search plays
+`work_at_the_desk`; `needs_permission` falls back to `waiting`, so it plays
+`wait_with_a_raised_hand`. There is no cat, so no cat activity plays. Only
+`stretch_its_legs` has a `during`: an idle agent sits at its desk for 5 to 10
+seconds (`sit_back`, which `idle` falls back to through `resting`), gets up
+and walks to the whiteboard and back, and sits down again. Having played
+`stretch_its_legs` it picks nothing else, since an activity is never played
+twice in a row (|aineo-office-random-life|); give more activities a `during`
+that names `idle` and it picks among them.
+
+                                                        *aineo-office-default*
+The default pack, as the worked example ~
+`aineo-office/default/` is the office aineo draws, written in the format this
+chapter describes and with nothing else behind it: open its files next to the
+chapter (`:Aineo office new` copies them into your configuration,
+|:Aineo-office-new|). It is `pack.lua`, `floor.txt` and some ninety files in
+`art/`. `pack.lua` reads top to bottom: `colours`, the colours of the text,
+`characters` (the agent, a bean, and the cat; the subagent is like the agent),
+`effects`, `floor` with its legend, `activities`, `things` and `states`.
+
+The room. The wall runs along the top and carries, from the left, the door
+(`D`), the whiteboard (`B`, which shows the session's tasks), the file cabinet
+(`C`), a bin (`N`) under a wall clock (`K`, which shows the time), the coffee
+machine (`M`) and the printer (`P`, which prints a page when an agent
+reports) under a wall calendar (`A`, which shows the date). Along the wall, a
+run of `*` places, as many as the room is wide enough for and in this order of
+preference, a window (whose sky follows the time of day), a water cooler, a
+snake plant, a bookshelf, a poster and a fish tank. Below the wall, rows of
+desks (`T`, with a monitor `V`) fill the height, as many to a row as the width
+holds, the first of each row at the left; the agent with the first place sits
+at the first desk. A lounge (`Q`, `q`, `u`, `f`, `t`, `r`) with a three-seat
+sofa lies beside the first desk, and in a tall room another lounge, with a
+table-tennis table (`X`), lies in the strip at the bottom. The legend gives
+every letter its piece and its spot:
+>
+    letters   what they are
+    B C M N   pieces on the wall; the baseboard cell below each (b c m n)
+              is the spot whiteboard, file_cabinet, coffee_machine,
+              trash_bin
+    D d       the door, and the spot door below it
+    P p       the printer, and the spot printer
+    G o       a corner plant, and the spot corner_plant
+    K A       the clock and the calendar, shows = 'time' and 'date'
+    *         a run of decorations, shows = 'sky'; each decoration's spot
+              is named after its piece (window, water_cooler, snake_plant,
+              bookshelf, poster, fish_tank)
+    T V s     a desk, shows = 'name'; its monitor; the spot desk
+    w v a     the spots left_of_desk, right_of_desk, beside_desk
+    x y e z   baseboard cells (walk_over) with those spots, and with none
+    Q q       sofa seats, sitting, facing left and right: the spot sofa
+    u f t r   the back and the front of the sofa, a low table, a rug
+              (walk_over)
+    X i j     the table-tennis table, in_use = 'table_tennis_playing', and
+              the spot table_tennis at its two ends, facing each other
+    l L       a ceiling lamp, a floor lamp
+<
+
+A thing on the wall and a spot on the floor below it go together: the piece
+stands where no one walks, and the baseboard cell under it is where the
+character stands. The pieces below are the main ones, in pixels (a cell is one
+pixel wide and two tall):
+>
+    piece                   pixels      is
+    bean, bean_seated       11 x 12     the body, standing and at a desk
+    bean_face_*             about 9x9   faces: front, side, back, down,
+                                        think, wait, error, happy,
+                                        startled, sleep, yawn
+    bean_legs_*             about 7x2   legs; two frames when they move
+    bean_hands_*            about 7x3   hands; two frames
+    arm_*                   about 10x10 arms and props: drink, marker,
+                                        paddle, watch, ...
+    screen_*                10 x 4      what a monitor shows: code,
+                                        command, tests, cursor, error,
+                                        permission, interrupted, web
+    desk                    26 x 6      area name 20 x 2
+    monitor                 12 x 9      areas screen 10 x 4, query 10 x 2
+    whiteboard              26 x 16     stretches by columns 15 to 16;
+                                        area plan 22 x 10
+    file_cabinet            21 x 24     file_cabinet_open 23 x 24, 4 frames
+    door                    10 x 24     door_open
+    coffee_machine          25 x 26     coffee_machine_brewing, 31 frames
+    printer                 14 x 14     area page 8 x 4; printed_page 8 x 4
+    window                  24 x 13     area sky 22 x 10; sky_night,
+                                        sky_dawn, sky_day, sky_dusk 22 x 10
+    sofa_back, sofa_front   44 x 12, 16 the three-seat sofa
+    table_tennis            26 x 9      table_tennis_playing, 24 frames
+    cat_*                   about 11x6  the cat's poses; cat_mess 4 x 2,
+                                        cat_puddle 6 x 3
+<
+
+What each state plays. The agents' activities, each with the spot and pose it
+takes:
+>
+    state                    activity: where, and how
+    standing                 stand_by_the_desk: beside_desk, standing
+    arriving                 walk_in: door, then desk, sitting
+    getting_a_task           receive_a_task: desk; a sheet of paper drops
+                             on the desk and is picked up
+    thinking                 think_at_the_whiteboard: whiteboard
+    planning                 plan_on_the_whiteboard: whiteboard, writing
+    reading                  read_from_the_cabinet: file_cabinet; a drawer
+                             opens
+    searching                search_the_cabinet: file_cabinet; the drawers
+                             open one by one
+    working, writing_code    write_code: desk, typing fast
+    running_a_command        run_a_command: desk, typing
+    running_tests            run_the_tests: desk; dots, then the verdict
+    background_job           keep_a_job_running: desk; a spinner over the
+                             head
+    on_the_web               browse_the_web: desk; a browser on the monitor
+    delegating               hand_a_task_over: beside_desk; holds a paper
+                             out
+    waiting,                 wait_for_subagents: taps a foot beside the
+    waiting_for_subagents    desk, then sits at the desk
+    needs_permission         wait_for_permission: desk; a hand up and
+                             "! y/n?"
+    asking_you               ask_a_question: desk; a hand up and "?"
+    reporting                report_at_the_printer: printer; a page prints
+    committing               commit_changes: desk; "git" blinks over the
+                             head
+    compacting               tidy_up_the_notes: desk; papers into a stack
+    error                    hit_an_error: desk; scratching its head, the
+                             screen red
+    interrupted              get_interrupted: desk; jumps up, papers fly
+    done                     finish_up: stretches, gets a cup at the coffee
+                             machine, goes to the sofa
+    resting, idle            rest_on_the_sofa: sofa; a cup, chatting
+    asleep                   sleep_on_the_sofa: sofa, asleep
+    leaving                  pack_up_and_leave: packs a box, goes to the
+                             door, waves goodbye
+<
+
+The random life of an idle agent, once `rest_on_the_sofa` is over, is a pick
+by weight among `stretch` (3), `yawn` (3), `spin_in_the_chair` (2),
+`look_out_of_the_window` (2), `read_a_book_on_the_sofa` (2),
+`water_the_snake_plant` (2), `water_the_corner_plant` (1),
+`throw_a_paper_ball_in_the_bin` (1.4) and `throw_a_paper_ball_and_miss` (0.6),
+which leaves the ball on the floor, `get_a_drink_at_the_water_cooler` (2),
+`doodle_on_the_whiteboard` (1), `tidy_the_desk` (2), `nap_on_the_sofa` (1),
+`play_table_tennis` (1, two players) and `pet_the_cat` (1). A waiting agent
+(`waiting`, `waiting_for_subagents`) picks among `drum_its_fingers` (3),
+`look_at_its_watch` (2), `pace_beside_the_desk` (2), `glance_at_the_door` (2)
+and `tap_a_foot` (2); one that needs permission, among
+`drum_its_fingers_and_wait` (3), `look_at_its_watch_and_wait` (2) and
+`glance_at_the_door_and_wait` (2), each with the hand up. The cat's life and
+the mess are in |aineo-office-cat| and |aineo-office-things|: `mess` and
+`puddle` are the two things, each upsetting agents within 40 cells, who play
+`grumble`, and cleaned by `clean_up_the_mess` and `mop_up_the_puddle`.
+
+                                                *aineo-office-space-station*
+The space-station pack, as the second example ~
+`aineo-office/space_station/` is a starship bridge, and what a pack that is
+`based_on` another looks like: it draws everything anew and leaves the rest to
+the default. Set `office.pack = 'space_station'` or run `:Aineo office pack
+space_station` to see it, and `:Aineo office states space_station` to read
+what it plays. What it does with the format:
+- Its crew in flight suits are the agents, small service bots the subagents (a
+  `subagent` character of their own, where the default pack lets the subagent
+  be like the agent) and a starhare the pet (`cat`). Its poses name its own
+  pieces (`crew_seated`, `crew_visor_wait`, `bot_lens_side`,
+  `starhare_sleep_on_a_seat`) and the default's arms, legs and hands
+  (`arm_raise_far`, `bean_legs_stand`, `bean_hands_slow`) too, since a pack
+  takes the pieces it does not draw from the pack it is based on.
+- Its floor is its own: a plan of a bridge, a legend of its own pieces (a
+  holo-table for the whiteboard, cargo crates for the file cabinet, an airlock
+  door, a food dispenser for the coffee machine, a message terminal for the
+  printer, a viewport and a hydroponics rack among the decorations), and the
+  same spot names the default pack uses (`door`, `desk`, `whiteboard`,
+  `file_cabinet`, `coffee_machine`, `printer`, `sofa`, `table_tennis`, ...),
+  so most of the default's activities play here as they are, each walking to
+  the station's piece that has the spot.
+- It redefines an activity whole where it wants other words or other art
+  (`think_at_the_whiteboard`, 'Stands at the holo-table with a thought bubble
+  over its head.'; `play_table_tennis`, 'steer a glowing orb'). A pack that
+  defines an activity of the pack it is based on replaces that activity as a
+  whole: there is no way to change one field of it.
+- It adds a spot, `comms_console` (`k` in its legend, on the hull trim), an
+  effect, `transmitting` (radio arcs), an activity, `send_a_transmission`, and
+  a trigger that plays it:
+>lua
+    triggers = {
+      {
+        when = {
+          tool = 'Bash',
+          command = { lua_pattern = '^git%s+push%f[%s%z;&|]' },
+        },
+        play = 'send_a_transmission',
+      },
+      {
+        when = {
+          tool = 'Bash',
+          command = { lua_pattern = '[;&|]%s*git push%f[%s%z;&|]' },
+        },
+        play = 'send_a_transmission',
+      },
+    },
+<
+  Plain words, `command = 'git push'`, would match `echo git push` and `git
+  commit -m "then git push"` too, since they match whole words anywhere in the
+  command. The first pattern matches a command that begins with `git push`;
+  the second one that follows a `;`, `&` or `|`; the frontier `%f[%s%z;&|]`
+  ends the match where a space, the end of the command or one of those
+  follows, so `git push-something` is not a push either. Each pattern has one
+  repetition (`%s+`, `%s*`), the most a pattern may have
+  (|aineo-office-triggers|).
+- Its `floor` replaces the default's whole: a pack with a `floor` of its own
+  gives the plan, its colours and its legend, and takes none of the default's.
+  An activity it inherits whose step goes to a spot its floor lacks is told
+  never to play (|aineo-office-check|); it is why the spots keep the default's
+  names.
+
+                                                         *aineo-office-making*
+Making a pack ~
+A pack starts as a copy of one that works, and changes one thing at a time.
+1. Copy the default pack under a name of your own: >
+    :Aineo office new harbour
+<
+   `aineo-office/harbour/` is made in Neovim's configuration directory
+   (|stdpath()|), with `pack.lua`, `floor.txt` and `art/` in it, each file
+   writable by you, and the command tells where. A name is letters, digits,
+   `_` and `-`, and no pack found may have it, `default` among them.
+2. Have the office draw it, by setting `office.pack`
+   (|aineo-config-office.pack|) in your configuration: >lua
+    vim.g.aineo = { office = { pack = 'harbour' } }
+<
+   or, for this Neovim only, by running `:Aineo office pack harbour`
+   (|:Aineo-office-pack|).
+3. Change one thing: a colour under `colours` in `pack.lua`, an effect's text
+   (|aineo-office-effects|), a piece of art in `art/` (|aineo-office-art|).
+   `about` and `author` are yours to fill in.
+4. Look at what you did. `:Aineo office check harbour` puts every problem in
+   the quickfix list as `file:line: problem` (|aineo-office-check|); `:Aineo
+   office states harbour` lists what each of the 24 states draws, and the
+   custom triggers (|aineo-office-states|); `:Aineo office preview harbour`
+   plays every state in turn over the right side, nine seconds each, the
+   state's name on the first row. The office reads a pack again as soon as one
+   of its files changed: save a file and run the preview again.
+5. Go on to what you care about: the floor plan (|aineo-office-floor|), the
+   activities (|aineo-office-activities|), the poses (|aineo-office-poses|).
+   Start at the room: change a letter in `floor.txt` and the piece it names
+   in the legend, and check.
+
+A pack made with `:Aineo office new` holds everything a pack needs. A smaller
+pack is written by hand, and takes the rest from another: `based_on =
+'default'` (the default when a pack says nothing) lets a pack of a few lines
+give a single activity and the trigger that plays it, with no floor, no art
+and no character, because it takes those of the default pack:
+>lua
+    -- aineo-office/harbour/pack.lua
+    return {
+      format = 1,
+      name = 'harbour',
+      about = 'The default office, where a push goes to the printer.',
+      author = 'someone',
+      based_on = 'default',
+
+      activities = {
+        post_the_push = {
+          about = 'Walks to the printer and waits there for the push.',
+          label = 'posts the push',
+          steps = { { at = 'printer', pose = 'glancing', facing = 'left' } },
+        },
+      },
+
+      triggers = {
+        {
+          when = { tool = 'Bash', command = 'git push' },
+          play = 'post_the_push',
+        },
+      },
+    }
+<
+The activity goes `at` a spot the default floor has (`printer`) and takes a
+pose the default agent has (`glancing`). A pack written from nothing is shown
+by the tiny pack (|aineo-office-tiny|), and the default pack is the one to
+copy from (|aineo-office-default|). Every problem `:Aineo office check` tells
+names the entry by its path and says what it must be (|aineo-office-check|).
+
+                                                        *aineo-office-sharing*
+Sharing your pack ~
+A pack is a folder, so it is shared as a repository. aineo has no installer:
+the plugin manager that installs your plugins installs a pack, because a pack
+is found on 'runtimepath' (|aineo-office-packs|).
+1. Make the repository with the pack at its root as `aineo-office/<name>/`:
+>
+    aineo-office-harbour/
+      aineo-office/
+        harbour/
+          pack.lua
+          floor.txt
+          art/
+            desk.txt
+            ...
+      README.md
+<
+   One repository may hold several packs, one folder each. The name of the
+   pack is its folder's and `name` in `pack.lua`'s; a name is letters, digits,
+   `_` and `-`. Start from `:Aineo office new <name>` (|aineo-office-making|).
+2. Check it: `:Aineo office check <name>` tells no problem
+   (|aineo-office-check|), and `:Aineo office preview <name>` looks right in
+   the narrowest window you mean it for (60 columns by 24 rows is the smallest
+   the office draws) and in a wide one. Fill in `about` and `author`. A pack
+   based on one other than the default says so in its README: the pack it is
+   based on must be installed too, or aineo draws the default pack in its
+   place, with a warning.
+3. Publish it, with a picture in the README, and add the GitHub topic
+   `aineo-office` to the repository, so that packs are found by that topic.
+4. The user installs it as a plugin, in lazy.nvim's way (`lazy = false` keeps
+   a manager that loads lazily by default from leaving the pack off
+   'runtimepath'): >lua
+    { 'someone/aineo-office-harbour', lazy = false }
+<
+   and picks it with `:Aineo office pack harbour` or `office.pack`
+   (|aineo-config-office.pack|): >lua
+    vim.g.aineo = { office = { pack = 'harbour' } }
+<
+   A list picks one of them at random each time the office shows:
+   `pack = { 'default', 'space_station', 'harbour' }`.
+
+A pack is data and nothing else. `pack.lua` is read by a parser of tables that
+never runs it (|aineo-office-pack-lua|), art and plan are text, and a pack
+reads files only inside its own folder (|aineo-office-packs|): installing one
+runs none of its code in aineo. The repository around the pack is another
+matter: a plugin manager puts the whole repository on 'runtimepath', and
+Neovim runs a `plugin/` folder it holds. Read what a repository holds beside
+`aineo-office/` before installing it.
+
+The packs known to aineo are the two that come with it, `default` and
+`space_station`, and the README lists the others.
+
+                                                        *aineo-office-session*
+The session it acts out ~
+The office stays over the right column as the screen or a window is resized,
+and closes when the layout shows no right column, as under `\Z`; it makes its
+colours again after a colorscheme. It follows the transcript Claude Code's
+`SessionStart` hook names; when no hook ran, it looks for the session's
+transcript in `projects/` under Claude Code's configuration directory, and
+when none is there, it waits for the file Claude Code makes in the folder
+named after the directory Neovim started in. It acts out the session the tab's
+panes follow, which is the session of a claim (|:Aineo-claim|) while the tab
+claims one, not the session of the tab's own Claude Code. When the panes
+follow another session (the tab's Claude Code switched session with a
+`/resume` or a `/clear`, or a fork of it was named by its hooks, or a claim
+was made), the agents of the old session leave and the office follows the new
+session's transcript at once, or when it next shows. When a transcript holds
+`continued-in` lines, which every Claude Code that resumes the session writes
+as it goes on with it in a new session, the office follows the session the
+first of them stamped at or after the moment the tab began following (its
+Claude Code started, or its session switched) names, up to 10 seconds before
+it, and the one that file's first such line names, and so on: not the last
+line, and not the file written last, which are those of other editors,
+terminals and background sessions. It looks for the lines in the last 8 MiB of
+each file when it starts to follow, and a line written while it follows the
+file makes it follow again. With no such line it follows the transcript
+itself. `:Aineo office reset` (|:Aineo-office-reset|) forgets the agents and
+follows from the end of the transcripts.
 
                                                           *aineo-office-hooks*
+Hooks ~
 Two of the hooks aineo gives the Claude Code it starts in `--settings`
 (|aineo-report|) serve the office:
 - the `SessionStart` hook, which also tells the editor when Claude Code
@@ -4547,6 +5700,60 @@ answered in Claude's terminal. It is kept for 64 agents at most.
 The hook was recorded on Claude Code 2.1.308; aineo knows no lowest version
 that runs it. Claude Code runs no `PermissionRequest` hook for a sandboxed
 command's network request, so the office shows no wait for that prompt.
+
+                                                        *aineo-office-limits*
+Limits ~
+What the office reads and what a pack may ask is bounded, so that no
+transcript and no pack can hold the editor. Each bound is told where it
+applies; they are together here.
+
+What it reads:
+- The tail of a transcript, 256 KiB when the office starts to follow it, or
+  more, up to 4 MiB, while it holds no whole line; a line over 1 MiB is
+  skipped. The search for `continued-in` lines reaches 8 MiB of each file, at
+  most 8 files one after another (|aineo-office-session|).
+- 64 subagents followed at a time, each with a file watch of its own, and a
+  subagent's meta file to 64 KiB. 64 agents' waits for permission kept while
+  the office is hidden (|aineo-office-hooks|).
+- A subagent quiet for ten minutes is not in the office, or leaves it
+  (|aineo-office|). A background job whose notice never comes stays until the
+  session ends.
+- What Claude Code writes is not a documented format. A line the office cannot
+  read gives no state and is counted, never quoted. `TaskUpdate` names a task
+  by a number the transcript does not carry, so the board counts the creations
+  it has read and, when the part of the transcript it reads at the start
+  begins after some of them, an update can tick another row or none
+  (|aineo-office-live|). Claude Code runs no hook for a sandboxed command's
+  network request, so a wait for that prompt is not shown.
+
+What a pack may hold:
+- `pack.lua` and each art file, 256 KiB; the files of a pack and of the packs
+  it is based on, 2 MiB together; at most 500 art files, the rest told.
+- Art 400 pixels wide, 200 tall, 64 frames. A plan 400 cells wide, 200 rows.
+  64 colours.
+- `based_on` and `like` (of a pose) chains of at most 8; a loop is told.
+- 64 triggers across a pack and the packs it is based on; the triggers of one
+  call are tried for 20 ms, the rest skipped and told; a text is matched to
+  its first 4096 bytes, and by a Lua pattern, which repeats once at most, to
+  its first 1024.
+- Text a pack gives holds no control character; `about` and `author` are one
+  line.
+
+What a frame may ask:
+- A plan places at most 2000 pieces, and the pieces together paint at most
+  sixteen times the pixels of the plan's area; beyond that aineo leaves out
+  first the decorations, then the furniture, and last the pieces that stand on
+  a spot, show something, have a screen or have art for when they are in use,
+  and says so once each time the office shows.
+- An agent begins at most eight steps in one update; looking for a spot stops
+  at the nearest. At most 4 cats, 64 things on the floor, a chain of 4 moved
+  characters, 4 lines of agents in the status list and 3 report cards.
+- 12 frames a second, one timer, from 60 columns by 24 rows; below that one
+  line saying so replaces the scene.
+
+What it tells you: when a pack has problems, one warning when the office
+shows, naming the first problem of each file, for five files at most
+(|aineo-office-packs|).
 
 ==============================================================================
 10. THE AUTOSTART                                            *aineo-autostart*
