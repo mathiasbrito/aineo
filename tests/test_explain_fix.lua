@@ -901,6 +901,23 @@ T['the keys']['accept, reject and show the diff in the buffer while the preview 
   eq(buffer_keys(), { ['\\Va'] = '', ['\\Vr'] = '', ['\\Vd'] = '' })
 end
 
+T['the keys']['leave a global key of the user’s alone, and the head row names the <Plug> mapping instead'] = function()
+  start()
+  child.cmd('2')
+  child.lua([[vim.keymap.set('n', '\\Va', '<Cmd>let g:mine = 1<CR>')]])
+
+  propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+
+  eq(child.lua_get([[vim.fn.maparg('\\Va', 'n', false, true).buffer]]), 0)
+  eq(
+    count_of(
+      screen(),
+      '┊ <Plug>(aineo-fix-accept) accepts · \\Vr rejects · \\Vd shows the diff'
+    ),
+    1
+  )
+end
+
 T['the keys']['never replace a key of the user’s, which stays when the preview goes'] = function()
   start()
   child.cmd('2')
