@@ -99,10 +99,11 @@ M.anything = { kind = 'anything', expected = 'anything' }
 --- `false`, the way to say none.
 M.none = { kind = 'none', expected = 'false' }
 
---- A time in seconds: one number above 0, or two for a random time between.
+--- A time in seconds: one number above 0, or two from 0, the shortest first,
+--- for a random time between.
 M.seconds = {
   kind = 'seconds',
-  expected = 'a number above 0, or two numbers, the shortest and the longest',
+  expected = 'a number above 0, or two numbers from 0, the shortest first',
 }
 
 --- One of `values`.
@@ -168,11 +169,12 @@ function M.map(item, options)
 end
 
 --- A table with the entries `spec` names, each a node, and no others.
---- `options.at_least_one_of` names entries of which one must be there.
+--- `options.at_least_one_of` names entries of which one must be there;
+--- `options.at_least_one_field`, that one of them, any, must be.
 ---
 ---@param what string how the table is called in a problem, such as `a pose`
 ---@param spec table<string, aineo.office_pack.SchemaNode>
----@param options? { at_least_one_of?: string[] }
+---@param options? { at_least_one_of?: string[], at_least_one_field?: boolean }
 ---@return aineo.office_pack.SchemaNode
 function M.fields(what, spec, options)
   return {
@@ -180,6 +182,7 @@ function M.fields(what, spec, options)
     what = what,
     spec = spec,
     at_least_one_of = options and options.at_least_one_of,
+    at_least_one_field = options and options.at_least_one_field,
     expected = 'a table',
   }
 end
@@ -462,6 +465,10 @@ local function check_fields(value, node, context, path, line)
         value[key] = vim.deepcopy(spec.default)
       end
     end
+  end
+  if node.at_least_one_field and next(value) == nil then
+    tell(context, line, path, 'needs at least one field')
+    ok = false
   end
   if node.at_least_one_of then
     local given = vim.tbl_filter(function(key)
