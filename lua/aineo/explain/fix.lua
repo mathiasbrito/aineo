@@ -12,6 +12,10 @@ local runs = require('aineo.explain.runs')
 
 local M = {}
 
+--- The issue each preview shown fixes, by its buffer.
+---@type table<integer, integer>
+local fixed_issues = {}
+
 --- One request for a fix.
 ---@class aineo.explain.FixRequest
 ---@field buffer integer the buffer of a file whose issue is fixed
@@ -29,6 +33,7 @@ local M = {}
 ---@field buffer integer
 ---@field window integer
 ---@field tick integer the buffer's `b:changedtick` when it was asked
+---@field issue integer the extmark of the issue to fix
 ---@field lines string[] every line of the buffer, as sent
 
 --- The fix the run `ended` of Claude Code answered (`aineo.explain.answer`'s
@@ -75,6 +80,7 @@ local function show_answer(asked, ended)
     vim.notify('aineo: the fix was refused: ' .. refusal, vim.log.levels.WARN)
     return
   end
+  fixed_issues[asked.buffer] = asked.issue
   preview.show(asked.buffer, {
     window = asked.window,
     summary = answered.summary,
@@ -101,6 +107,7 @@ local function start(fixing, issue, folder)
     buffer = buffer,
     window = fixing.window,
     tick = vim.api.nvim_buf_get_changedtick(buffer),
+    issue = issue.id,
     lines = vim.api.nvim_buf_get_lines(buffer, 0, -1, false),
   }
   local prompt = request.fix_prompt({
@@ -172,10 +179,29 @@ function M.propose(fixing, folder)
   start(fixing, issue, folder)
 end
 
+--- Accepts the fix `buffer` shows (`aineo.explain.preview`'s `apply()`):
+--- its edits are applied as one undo step, the file is not written, and the
+--- issue it fixes is no longer shown; the user is told so, once. Tells the
+--- user when `buffer` shows no fix.
+---
+---@param buffer integer
+function M.accept(buffer)
+  if not preview.is_shown(buffer) then
+    vim.notify('aineo: no fix is shown in this buffer', vim.log.levels.INFO)
+    return
+  end
+  if preview.apply(buffer) then
+    marks.remove_issue(buffer, fixed_issues[buffer])
+    fixed_issues[buffer] = nil
+    vim.notify('aineo: fix applied (u undoes it)', vim.log.levels.INFO)
+  end
+end
+
 --- Rejects the fix `buffer` shows: its preview goes, and nothing changes.
 ---
 ---@param buffer integer
 function M.reject(buffer)
+  fixed_issues[buffer] = nil
   preview.clear(buffer)
 end
 

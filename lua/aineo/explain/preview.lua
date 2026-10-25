@@ -116,37 +116,103 @@ local function render(preview)
   end
 end
 
---- Gives every window that shows `preview`'s buffer a 'conceallevel' that
---- hides its old lines, and a 'concealcursor' that hides them in Normal mode
---- on the cursor's line too, keeping what each had.
+--- The options of `window` that hide old lines, its own for the buffer it
+--- shows, as `:setlocal` sees them.
+---
+---@param window integer
+---@return aineo.explain.ConcealOptions
+local function conceal_options_of(window)
+  local scope = { win = window, scope = 'local' }
+  return {
+    conceallevel = vim.api.nvim_get_option_value('conceallevel', scope),
+    concealcursor = vim.api.nvim_get_option_value('concealcursor', scope),
+  }
+end
+
+--- Sets `options` as `window`'s own for the buffer it shows, as `:setlocal`
+--- does, so that another buffer the window comes to show keeps its own.
+---
+---@param window integer
+---@param options aineo.explain.ConcealOptions
+local function set_conceal_options(window, options)
+  local scope = { win = window, scope = 'local' }
+  vim.api.nvim_set_option_value('conceallevel', options.conceallevel, scope)
+  vim.api.nvim_set_option_value('concealcursor', options.concealcursor, scope)
+end
+
+--- Has `window` hide `preview`'s old lines: a 'conceallevel' of at least
+--- `CONCEALING`, and an `n` in 'concealcursor' so that they are hidden in
+--- Normal mode on the cursor's line too. Keeps `before` as the options to
+--- give it back, once for each window.
+---
+---@param preview aineo.explain.Preview
+---@param window integer
+---@param before aineo.explain.ConcealOptions
+local function conceal_in(preview, window, before)
+  if preview.saved[window] then
+    return
+  end
+  preview.saved[window] = before
+  local options = conceal_options_of(window)
+  local cursor = options.concealcursor
+  set_conceal_options(window, {
+    conceallevel = math.max(options.conceallevel, CONCEALING),
+    concealcursor = cursor:find('n', 1, true) and cursor or cursor .. 'n',
+  })
+end
+
+--- Has every window that shows `preview`'s buffer hide its old lines
+--- (`conceal_in()`), each keeping its own options to get back.
 ---
 ---@param preview aineo.explain.Preview
 local function conceal_in_windows(preview)
   for _, window in ipairs(vim.fn.win_findbuf(preview.buffer)) do
-    local options = vim.wo[window]
-    preview.saved[window] = {
-      conceallevel = options.conceallevel,
-      concealcursor = options.concealcursor,
-    }
-    options.conceallevel = math.max(options.conceallevel, CONCEALING)
-    if not options.concealcursor:find('n', 1, true) then
-      options.concealcursor = options.concealcursor .. 'n'
-    end
+    conceal_in(preview, window, conceal_options_of(window))
   end
 end
 
---- Gives every window whose options `preview` set its own back, as they
---- were before; a window gone is passed over.
+--- Gives every window whose options `preview` set, and that still shows its
+--- buffer, the options it had; a window gone or showing another buffer is
+--- passed over.
 ---
 ---@param preview aineo.explain.Preview
 local function restore_windows(preview)
   for window, options in pairs(preview.saved) do
-    if vim.api.nvim_win_is_valid(window) then
-      vim.wo[window].conceallevel = options.conceallevel
-      vim.wo[window].concealcursor = options.concealcursor
+    if vim.api.nvim_win_is_valid(window) and vim.api.nvim_win_get_buf(window) == preview.buffer then
+      set_conceal_options(window, options)
     end
   end
 end
+
+--- The options the buffer of `preview` had, before it, in a window: the
+--- window the fix was asked in, else another it hid the old lines in, else
+--- `window`'s own.
+---
+---@param preview aineo.explain.Preview
+---@param window integer
+---@return aineo.explain.ConcealOptions
+local function buffer_options(preview, window)
+  local _, any_saved = next(preview.saved)
+  return preview.saved[preview.window] or any_saved or conceal_options_of(window)
+end
+
+--- Has the current window hide the old lines of the preview its buffer
+--- shows, if any, when it starts showing it: it gets back the options the
+--- buffer had (`buffer_options()`), as a window would that came to show the
+--- buffer without the preview.
+local function conceal_in_current_window()
+  local window = vim.api.nvim_get_current_win()
+  local preview = previews[vim.api.nvim_win_get_buf(window)]
+  if preview then
+    conceal_in(preview, window, buffer_options(preview, window))
+  end
+end
+
+vim.api.nvim_create_autocmd({ 'WinNew', 'BufWinEnter' }, {
+  group = vim.api.nvim_create_augroup('aineo_explain_fix_preview', {}),
+  desc = 'aineo: hide the old lines of a fix in a window that comes to show them',
+  callback = conceal_in_current_window,
+})
 
 --- Removes the preview `buffer` shows, if any, leaving the buffer as it
 --- reads and every window's options as they were before it.
@@ -163,6 +229,123 @@ function M.clear(buffer)
     vim.api.nvim_buf_clear_namespace(buffer, DRAWN, 0, -1)
     vim.api.nvim_buf_clear_namespace(buffer, RANGES, 0, -1)
   end
+end
+
+--- Whether `buffer` shows a preview.
+---
+---@param buffer integer
+---@return boolean
+function M.is_shown(buffer)
+  return previews[buffer] ~= nil
+end
+
+--- Applies the preview `buffer` shows, which must be shown
+--- (`is_shown()`): when every edit's old lines are, byte for byte, the
+--- lines it spans now, replaces them by its new lines, from the last edit
+--- to the first, as one undo step, writes nothing and removes the preview
+--- (`clear()`); else tells the user, once, and leaves the buffer and the
+--- preview as they are. Returns whether it applied the edits.
+---
+---@param buffer integer
+---@return boolean
+function M.apply(buffer)
+  local preview = previews[buffer]
+  local spans = {}
+  for index, edit in ipairs(preview.edits) do
+    local first, last = rows_of(preview, edit)
+    if not vim.deep_equal(vim.api.nvim_buf_get_lines(buffer, first, last + 1, false), edit.old) then
+      vim.notify('aineo: the code under the fix changed; ask again', vim.log.levels.WARN)
+      return false
+    end
+    spans[index] = { first = first, last = last }
+  end
+  for index = #preview.edits, 1, -1 do
+    local span = spans[index]
+    vim.api.nvim_buf_set_lines(buffer, span.first, span.last + 1, true, preview.edits[index].new)
+  end
+  M.clear(buffer)
+  return true
+end
+
+--- The first and last line, from 0, of each edit of `preview` now
+--- (`rows_of()`), in the order of the edits.
+---
+---@param preview aineo.explain.Preview
+---@return { first: integer, last: integer }[]
+local function spans_of(preview)
+  return vim.tbl_map(function(edit)
+    local first, last = rows_of(preview, edit)
+    return { first = first, last = last }
+  end, preview.edits)
+end
+
+--- Whether a change of the lines from `first` to before `last`, from 0, as
+--- `nvim_buf_attach()`'s `on_lines` tells it, touches the lines `span`
+--- names: it replaced one of them, or inserted lines between two of them.
+--- Lines inserted right above or below them do not touch them.
+---
+---@param span { first: integer, last: integer }
+---@param first integer
+---@param last integer
+---@return boolean
+local function touches(span, first, last)
+  if last > first then
+    return first <= span.last and last > span.first
+  end
+  return first > span.first and first <= span.last
+end
+
+--- Removes `preview`, when it is still the one its buffer shows, and tells
+--- the user, once, that an edit of its lines dropped it.
+---
+---@param preview aineo.explain.Preview
+local function drop_edited(preview)
+  if previews[preview.buffer] ~= preview then
+    return
+  end
+  M.clear(preview.buffer)
+  vim.notify('aineo: the fix was dropped: its lines were edited', vim.log.levels.WARN)
+end
+
+--- Watches the edits of `preview`'s buffer while it shows `preview`: one
+--- that touches the old lines of an edit (`touches()`), or a reload, which
+--- detaches the watch, drops it (`drop_edited()`) when the event loop has
+--- turned; one elsewhere moves it with its extmarks, and it is drawn again
+--- there (`render()`). An unload removes it without a word.
+---
+---@param preview aineo.explain.Preview
+local function watch_edits(preview)
+  local spans = spans_of(preview)
+  vim.api.nvim_buf_attach(preview.buffer, false, {
+    on_lines = function(_, _, _, first, last)
+      if previews[preview.buffer] ~= preview then
+        return true
+      end
+      for _, span in ipairs(spans) do
+        if touches(span, first, last) then
+          vim.schedule(function()
+            drop_edited(preview)
+          end)
+          return true
+        end
+      end
+      spans = spans_of(preview)
+      vim.schedule(function()
+        if previews[preview.buffer] == preview then
+          render(preview)
+        end
+      end)
+    end,
+    on_detach = function()
+      vim.schedule(function()
+        if vim.api.nvim_buf_is_loaded(preview.buffer) then
+          drop_edited(preview)
+        elseif previews[preview.buffer] == preview then
+          M.clear(preview.buffer)
+        end
+      end)
+    end,
+  })
 end
 
 --- What a preview is shown with.
@@ -199,6 +382,7 @@ function M.show(buffer, order)
   previews[buffer] = preview
   conceal_in_windows(preview)
   render(preview)
+  watch_edits(preview)
 end
 
 return M

@@ -461,6 +461,24 @@ function M.issue_at(buffer, line)
   return chosen and { id = chosen, text = record.texts[chosen] }
 end
 
+--- Removes the issue `id` `buffer` shows, marked or not, and tells the
+--- listeners (`on_change()`); nothing when it is shown no more.
+---
+---@param buffer integer
+---@param id integer
+function M.remove_issue(buffer, id)
+  local record = issues_of(buffer)
+  if not record or not record.texts[id] then
+    return
+  end
+  record.texts[id] = nil
+  record.files[id] = nil
+  record.marked[id] = nil
+  record.deep[id] = nil
+  M.remove(buffer, record.kind, id)
+  notify(buffer, record.window)
+end
+
 --- Unmarks every issue `buffer` shows, which stay shown, and tells the
 --- listeners (`on_change()`) when any was marked.
 ---
