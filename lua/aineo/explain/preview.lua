@@ -34,8 +34,26 @@ local CONCEALING = 2
 ---@field buffer integer
 ---@field window integer the window the fix was asked in
 ---@field summary string
+---@field keys? aineo.explain.FixKeys the keys mapped for it; none when absent
+---@field diff boolean whether it shows as the diff view
 ---@field edits aineo.explain.ShownEdit[] in the order of their lines
 ---@field saved table<integer, aineo.explain.ConcealOptions> the options of each window it set, before it set them
+
+--- The keys a preview maps in its buffer, each a left-hand side as
+--- `vim.keymap.set()` takes it.
+---@class aineo.explain.FixKeys
+---@field accept string
+---@field reject string
+---@field diff string
+
+--- The `<Plug>` mappings that do what a preview's keys do, said in its head
+--- row when it maps no key.
+---@type aineo.explain.FixKeys
+local PLUG_KEYS = {
+  accept = '<Plug>(aineo-fix-accept)',
+  reject = '<Plug>(aineo-fix-reject)',
+  diff = '<Plug>(aineo-fix-diff)',
+}
 
 --- The preview each buffer shows.
 ---@type table<integer, aineo.explain.Preview>
@@ -48,6 +66,15 @@ local FIX_STYLE = {
   text = kinds.FIX.groups.text,
   gutter = kinds.FIX.groups.gutter,
   fill = kinds.FIX.groups.fill,
+}
+
+--- The style the fix explanation's rows are drawn in.
+---@type aineo.explain.Style
+local WHY_STYLE = {
+  gutter_mark = draw.GUTTER_MARK,
+  text = kinds.FIX_WHY.groups.text,
+  gutter = kinds.FIX_WHY.groups.gutter,
+  fill = kinds.FIX_WHY.groups.fill,
 }
 
 --- The first and last line, from 0, `edit` spans in `preview`'s buffer now.
@@ -77,43 +104,223 @@ local function new_line_row(text, geometry)
   return chunks
 end
 
---- The virtual lines drawn for `edit` in a window of `geometry`: its new
---- lines.
+--- What the head row of `preview` says: the keys that accept it, reject it
+--- and show its diff, or their `<Plug>` mappings when it maps none.
 ---
+---@param preview aineo.explain.Preview
+---@return string
+local function head_text(preview)
+  local keys = preview.keys or PLUG_KEYS
+  return ('%s accepts · %s rejects · %s shows the diff'):format(
+    keys.accept,
+    keys.reject,
+    keys.diff
+  )
+end
+
+--- The rows of the fix explanation of `edit` (`aineo.explain.kinds`'
+--- `FIX_WHY`): `summary` on the first, then `edit.why`, each wrapped at the
+--- text width of `geometry`, labelled `why` on the first row.
+---
+---@param summary string
 ---@param edit aineo.explain.ShownEdit
 ---@param geometry aineo.explain.Geometry
 ---@return table[][]
-local function rows_for(edit, geometry)
+local function why_rows(summary, edit, geometry)
+  local width = math.max(geometry.width - geometry.textoff - vim.fn.strdisplaywidth(draw.MARK), 1)
+  local texts = vim.list_extend(draw.wrapped(summary, width), draw.wrapped(edit.why, width))
   local rows = {}
-  for _, line in ipairs(edit.new) do
-    table.insert(rows, new_line_row(line, geometry))
+  for number, text in ipairs(texts) do
+    rows[number] =
+      draw.row(text, '', geometry, number == 1 and kinds.FIX_WHY.label or '', WHY_STYLE)
   end
   return rows
 end
 
---- Draws `preview`: hides the old lines of each edit and shows its rows
---- (`rows_for()`) below the line before them, or above the line after them
---- when they start the buffer.
+--- The first and last line, from 0, of each edit of `preview` now
+--- (`rows_of()`), in the order of the edits.
+---
+---@param preview aineo.explain.Preview
+---@return { first: integer, last: integer }[]
+local function spans_of(preview)
+  return vim.tbl_map(function(edit)
+    local first, last = rows_of(preview, edit)
+    return { first = first, last = last }
+  end, preview.edits)
+end
+
+--- The virtual lines drawn before the new lines of the edit `index` of
+--- `preview` in a window of `geometry`: for the first edit, the head row
+--- (`head_text()`) labelled `fix`; then the edit's fix explanation
+--- (`why_rows()`).
+---
+---@param preview aineo.explain.Preview
+---@param index integer
+---@param geometry aineo.explain.Geometry
+---@return table[][]
+local function lead_rows(preview, index, geometry)
+  local rows = {}
+  if index == 1 then
+    table.insert(rows, draw.row(head_text(preview), '', geometry, kinds.FIX.label, FIX_STYLE))
+  end
+  return vim.list_extend(rows, why_rows(preview.summary, preview.edits[index], geometry))
+end
+
+--- The virtual lines that show the new lines of `edit` in a window of
+--- `geometry` (`new_line_row()`).
+---
+---@param edit aineo.explain.ShownEdit
+---@param geometry aineo.explain.Geometry
+---@return table[][]
+local function new_rows(edit, geometry)
+  return vim.tbl_map(function(line)
+    return new_line_row(line, geometry)
+  end, edit.new)
+end
+
+--- The places of a buffer where virtual lines are drawn, each below or above
+--- a line, with the rows drawn there, in the order they were added. One
+--- extmark draws every row of a place: Neovim draws the virtual lines of
+--- several extmarks at one place in no order it promises.
+---@class aineo.explain.Places
+---@field order string[] the keys of the places, in the order first added
+---@field rows table<string, { row: integer, above: boolean, rows: table[][] }>
+
+--- Adds `rows` to what is drawn below line `row`, from 0, or above it.
+---
+---@param places aineo.explain.Places
+---@param row integer
+---@param above boolean
+---@param rows table[][]
+local function add_rows(places, row, above, rows)
+  local key = row .. (above and 'above' or 'below')
+  if not places.rows[key] then
+    places.rows[key] = { row = row, above = above, rows = {} }
+    table.insert(places.order, key)
+  end
+  vim.list_extend(places.rows[key].rows, rows)
+end
+
+--- The column the extmarks that draw a preview's rows are set at: after
+--- those of the answers (`aineo.explain.kinds`), which a line's virtual
+--- lines above it then show before.
+local AFTER_ANSWERS_COLUMN = 2
+
+--- Draws every place of `places` in `buffer`, one extmark each.
+---
+---@param buffer integer
+---@param places aineo.explain.Places
+local function draw_places(buffer, places)
+  for _, key in ipairs(places.order) do
+    local place = places.rows[key]
+    vim.api.nvim_buf_set_extmark(buffer, DRAWN, place.row, AFTER_ANSWERS_COLUMN, {
+      virt_lines = place.rows,
+      virt_lines_above = place.above,
+      virt_lines_leftcol = true,
+      strict = false,
+    })
+  end
+end
+
+--- Adds to `places` the edit `index` of `preview`, spanning the lines of
+--- `span`, as the diff view shows it: its old lines stay, struck through
+--- (`AineoFixOld`), its head and explanation (`lead_rows()`) above them,
+--- after what the answers show above its first line, and its new lines
+--- below them.
+---
+---@param preview aineo.explain.Preview
+---@param index integer
+---@param span { first: integer, last: integer }
+---@param geometry aineo.explain.Geometry
+---@param places aineo.explain.Places
+local function add_diff(preview, index, span, geometry, places)
+  vim.api.nvim_buf_set_extmark(preview.buffer, DRAWN, span.first, 0, {
+    end_row = span.last + 1,
+    end_col = 0,
+    hl_group = kinds.FIX.struck.group,
+  })
+  add_rows(places, span.first, true, lead_rows(preview, index, geometry))
+  add_rows(places, span.last, false, new_rows(preview.edits[index], geometry))
+end
+
+--- The edits of `preview` grouped in blocks of edits that touch, one
+--- ending on the line before the next starts, each block the indexes of its
+--- edits and the lines it spans, from 0.
+---
+---@param spans { first: integer, last: integer }[] the lines of each edit, in order
+---@return { indexes: integer[], first: integer, last: integer }[]
+local function blocks_of(spans)
+  local blocks = {}
+  for index, span in ipairs(spans) do
+    local block = blocks[#blocks]
+    if block and span.first == block.last + 1 then
+      table.insert(block.indexes, index)
+      block.last = span.last
+    else
+      table.insert(blocks, { indexes = { index }, first = span.first, last = span.last })
+    end
+  end
+  return blocks
+end
+
+--- Adds to `places` the edits of `block` as the overlay shows them: their
+--- old lines hidden, and their rows — each edit's head and explanation
+--- (`lead_rows()`), then its new lines — below the line before the block,
+--- else above the line after it. A block that spans the whole buffer has no
+--- line to hang them on and shows as the diff view does (`add_diff()`).
+---
+---@param preview aineo.explain.Preview
+---@param block { indexes: integer[], first: integer, last: integer }
+---@param spans { first: integer, last: integer }[]
+---@param geometry aineo.explain.Geometry
+---@param places aineo.explain.Places
+local function add_overlay(preview, block, spans, geometry, places)
+  local buffer = preview.buffer
+  local line_count = vim.api.nvim_buf_line_count(buffer)
+  if block.first == 0 and block.last == line_count - 1 then
+    for _, index in ipairs(block.indexes) do
+      add_diff(preview, index, spans[index], geometry, places)
+    end
+    return
+  end
+  local rows = {}
+  for _, index in ipairs(block.indexes) do
+    vim.list_extend(rows, lead_rows(preview, index, geometry))
+    vim.list_extend(rows, new_rows(preview.edits[index], geometry))
+  end
+  vim.api.nvim_buf_set_extmark(buffer, DRAWN, block.first, 0, {
+    end_row = block.last,
+    end_col = #vim.api.nvim_buf_get_lines(buffer, block.last, block.last + 1, true)[1],
+    conceal_lines = '',
+  })
+  if block.first > 0 then
+    add_rows(places, block.first - 1, false, rows)
+  else
+    add_rows(places, block.last + 1, true, rows)
+  end
+end
+
+--- Draws `preview` as it shows now: the overlay, its edits' old lines
+--- hidden and their rows in their place (`add_overlay()`), or the diff view
+--- (`add_diff()`).
 ---
 ---@param preview aineo.explain.Preview
 local function render(preview)
   local buffer = preview.buffer
   vim.api.nvim_buf_clear_namespace(buffer, DRAWN, 0, -1)
   local geometry = draw.geometry_of(buffer, preview.window)
-  for _, edit in ipairs(preview.edits) do
-    local first, last = rows_of(preview, edit)
-    vim.api.nvim_buf_set_extmark(buffer, DRAWN, first, 0, {
-      end_row = last,
-      end_col = #vim.api.nvim_buf_get_lines(buffer, last, last + 1, true)[1],
-      conceal_lines = '',
-    })
-    local below = first > 0
-    vim.api.nvim_buf_set_extmark(buffer, DRAWN, below and first - 1 or last + 1, 0, {
-      virt_lines = rows_for(edit, geometry),
-      virt_lines_above = not below,
-      virt_lines_leftcol = true,
-    })
+  local spans = spans_of(preview)
+  local places = { order = {}, rows = {} }
+  if preview.diff then
+    for index, span in ipairs(spans) do
+      add_diff(preview, index, span, geometry, places)
+    end
+  else
+    for _, block in ipairs(blocks_of(spans)) do
+      add_overlay(preview, block, spans, geometry, places)
+    end
   end
+  draw_places(buffer, places)
 end
 
 --- The options of `window` that hide old lines, its own for the buffer it
@@ -267,18 +474,6 @@ function M.apply(buffer)
   return true
 end
 
---- The first and last line, from 0, of each edit of `preview` now
---- (`rows_of()`), in the order of the edits.
----
----@param preview aineo.explain.Preview
----@return { first: integer, last: integer }[]
-local function spans_of(preview)
-  return vim.tbl_map(function(edit)
-    local first, last = rows_of(preview, edit)
-    return { first = first, last = last }
-  end, preview.edits)
-end
-
 --- Whether a change of the lines from `first` to before `last`, from 0, as
 --- `nvim_buf_attach()`'s `on_lines` tells it, touches the lines `span`
 --- names: it replaced one of them, or inserted lines between two of them.
@@ -348,11 +543,25 @@ local function watch_edits(preview)
   })
 end
 
+--- Shows the preview `buffer` shows as the diff view, its old lines struck
+--- through above its new lines, or as the overlay again; nothing when
+--- `buffer` shows none.
+---
+---@param buffer integer
+function M.toggle_diff(buffer)
+  local preview = previews[buffer]
+  if preview then
+    preview.diff = not preview.diff
+    render(preview)
+  end
+end
+
 --- What a preview is shown with.
 ---@class aineo.explain.PreviewOrder
 ---@field window integer the window the fix was asked in
 ---@field summary string the whole fix in one sentence
 ---@field edits aineo.explain.PlacedEdit[] placed in the buffer's text as it reads, in the order of their lines
+---@field keys? aineo.explain.FixKeys the keys that accept, reject and show the diff
 
 --- Shows the edits of `order` in `buffer` as a preview: the buffer is not
 --- changed; each edit's old lines are hidden in every window showing it
@@ -365,6 +574,8 @@ function M.show(buffer, order)
     buffer = buffer,
     window = order.window,
     summary = order.summary,
+    keys = order.keys,
+    diff = false,
     edits = {},
     saved = {},
   }

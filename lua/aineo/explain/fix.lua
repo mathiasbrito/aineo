@@ -34,6 +34,7 @@ local fixed_issues = {}
 ---@field window integer
 ---@field tick integer the buffer's `b:changedtick` when it was asked
 ---@field issue integer the extmark of the issue to fix
+---@field keys? aineo.explain.FixKeys
 ---@field lines string[] every line of the buffer, as sent
 
 --- The fix the run `ended` of Claude Code answered (`aineo.explain.answer`'s
@@ -85,6 +86,7 @@ local function show_answer(asked, ended)
     window = asked.window,
     summary = answered.summary,
     edits = edits,
+    keys = asked.keys,
   })
 end
 
@@ -108,6 +110,7 @@ local function start(fixing, issue, folder)
     window = fixing.window,
     tick = vim.api.nvim_buf_get_changedtick(buffer),
     issue = issue.id,
+    keys = fixing.keys,
     lines = vim.api.nvim_buf_get_lines(buffer, 0, -1, false),
   }
   local prompt = request.fix_prompt({
@@ -195,6 +198,14 @@ function M.accept(buffer)
     fixed_issues[buffer] = nil
     vim.notify('aineo: fix applied (u undoes it)', vim.log.levels.INFO)
   end
+end
+
+--- Shows the fix `buffer` shows as the diff view, or as the overlay again
+--- (`aineo.explain.preview`'s `toggle_diff()`).
+---
+---@param buffer integer
+function M.toggle_diff(buffer)
+  preview.toggle_diff(buffer)
 end
 
 --- Rejects the fix `buffer` shows: its preview goes, and nothing changes.
