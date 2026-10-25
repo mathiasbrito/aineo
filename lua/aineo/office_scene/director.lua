@@ -107,6 +107,27 @@ local function wait_for_a_spot(performer, time)
   performer.looks_again_at = time + SECONDS_BETWEEN_LOOKS
 end
 
+--- Has the performer, which waits for a spot of its step on a cell another
+--- character stands on or is going to, walk to the nearest floor cell out of
+--- the way (`named_spots.choose_cell_out_of_the_way()`) and wait there; it
+--- waits where it is when no other character holds its cell, or no cell is
+--- out of the way.
+---
+---@param context aineo.office_scene.DirectorContext
+---@param performer aineo.office_scene.Performer
+---@param time number
+local function step_out_of_the_way(context, performer, time)
+  local choice = named_spots.choose_cell_out_of_the_way(context, performer)
+  local route = choice and spots.route(context.layout, choice, performer)
+  if not (route and #route.path > 0) then
+    return
+  end
+  performer.path = route.path
+  performer.pose, performer.pose_since = walking.POSE, time
+  performer.at_a_seat = false
+  performer.steps_out_of_the_way = true
+end
+
 local settle_at_spot
 
 --- Starts the performer on its step once it has a place on the plan: draws
@@ -172,6 +193,7 @@ local function begin_step(context, performer, index, time)
   performer.path = {}
   performer.following = nil
   performer.stands_aside = nil
+  performer.steps_out_of_the_way = nil
   if following.is_followed_by(step) and performer.column then
     following.start(context, performer, step, time)
     return
@@ -189,6 +211,7 @@ local function begin_step(context, performer, index, time)
   end
   if spot_name and not route and why == spots.TAKEN then
     wait_for_a_spot(performer, time)
+    step_out_of_the_way(context, performer, time)
     return
   end
   start_step(context, performer, step, time)
@@ -214,6 +237,7 @@ local function look_again(context, performer, now)
   if route then
     holding.take_route(context, performer, route)
     performer.stands_aside = nil
+    performer.steps_out_of_the_way = nil
   elseif why == spots.TAKEN then
     wait_for_a_spot(performer, now)
     return
@@ -429,7 +453,10 @@ local function bring_up_to(context, performer, now)
       if #performer.path > 0 and not performer.following then
         break
       end
-      if #performer.path == 0 and not performer.following then
+      if #performer.path == 0 and performer.steps_out_of_the_way then
+        performer.steps_out_of_the_way = nil
+        performer.pose, performer.pose_since = STANDING_ASIDE_POSE, clock
+      elseif #performer.path == 0 and not performer.following then
         settle_at_spot(context, performer, performer.activity.steps[performer.step_index], clock)
       end
     end

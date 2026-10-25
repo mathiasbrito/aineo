@@ -52,6 +52,7 @@ local MOST_CATS = 4
 ---@field steps_begun integer how many steps it has begun in this update
 ---@field looks_again_at? number when an agent waiting for a spot looks for one again; none when it is not waiting
 ---@field stands_aside? boolean whether it has stepped aside beside a desk, standing, its step's desk taken back by its owner, until it finds a desk again or begins another step
+---@field steps_out_of_the_way? boolean whether it walks, waiting for a spot, to a cell out of the way of a character that held the cell it was on, until it gets there, finds the spot or begins another step
 
 --- The lowest place no agent has.
 ---
