@@ -124,6 +124,10 @@ local TIES = {
     .. ' from %d to %d.',
 }
 
+--- What a deep prompt says first of the code asked about, as a `string.format()`
+--- pattern given the file and the first and last line's numbers.
+local CODE_ASKED_ABOUT = 'The code asked about is the file %s, lines %d to %d. '
+
 --- What tells Claude Code to give each issue as an item of the answer's list.
 local ISSUES_AS_ITEMS = 'Give each issue as an item of the answer’s list.'
 
@@ -149,12 +153,13 @@ local ASKS = {
 }
 
 --- What a deep prompt always says after the text the user edited, by the
---- kind's name, as `string.format()` patterns given the first and last
---- line's numbers: the tie to the first line (`TIES`) and, for issues, the
---- items of the list.
+--- kind's name, as `string.format()` patterns given the file, the first and
+--- last line, and those two again: which code is asked about, whatever the
+--- text above says, then the tie to the first line (`TIES`) and, for issues,
+--- the items of the list.
 local DEEP_FIXED_RULES = {
-  explanations = TIES.explanations,
-  issues = TIES.issues .. ' ' .. ISSUES_AS_ITEMS,
+  explanations = CODE_ASKED_ABOUT .. TIES.explanations,
+  issues = CODE_ASKED_ABOUT .. TIES.issues .. ' ' .. ISSUES_AS_ITEMS,
 }
 
 --- The text of a deep prompt that the user edits, by the kind's name, as
@@ -201,7 +206,7 @@ function M.prompt(code)
     return table.concat({
       code.steer,
       '',
-      DEEP_FIXED_RULES[code.kind]:format(code.first, code.last),
+      DEEP_FIXED_RULES[code.kind]:format(code.path, code.first, code.last, code.first, code.last),
       '',
       table.concat(numbered(code.lines), '\n'),
     }, '\n')
