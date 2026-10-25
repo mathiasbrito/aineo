@@ -4739,9 +4739,9 @@ Field	Default	Means ~
 		character's feet as the step ends
 `remove`	none	a thing taken away from the cell the character stands
 		on as the step ends
-`follow`	none	`'someone_walking'`, the only name that does anything
-		(the check does not tell another): the character
-		trails the nearest one on the move
+`follow`	none	`'someone_walking'`, the only name there is (the
+		check tells another): the character trails the
+		nearest one on the move
 
 How an agent plays an activity: it takes the steps in order. For a step it
 goes to the nearest spot called `at` that no other agent has taken, walking
@@ -4912,7 +4912,7 @@ activities at random, as agents do, the ones whose `during` names `always`
 (weighted by `chance`, never the one it has just played). It takes no place
 among the agents, so it has no desk, no monitor and no row in the status list,
 and its colour goes by its number among the cats. A cat's step may `follow =
-'someone_walking'`, the only name that does anything: the cat trails the
+'someone_walking'`, the only name there is: the cat trails the
 nearest character on the move for `for_seconds` or until it stops. A cat
 needs at least one activity with a spot to come into the office: it is placed
 by that, and a cat whose every activity follows someone is never placed.
@@ -4974,7 +4974,7 @@ gives what one call looks like, as `docker` at a server rack.
 
 Field	Means ~
 `when`	required: the call it matches; every field of it must match. A
-	`when` with no field matches no call, and the check does not tell it
+	`when` with no field is told by the check, and matches no call
 `play`	required: the activity it plays while the call runs
 
 `when` holds `tool` (the tool's name, as `Bash`, `Read`, `Edit`), `agent`
@@ -5041,7 +5041,7 @@ its whole path, and its last message goes on (`…; at most one is taken`):
     pack.lua:16: effects.wide.text[1] “漢字” has characters wider than one
         cell on this screen
     pack.lua:21: activities.visit_the_vault.steps[1].for_seconds must be a
-        number above 0, or two numbers, the shortest and the longest
+        number above 0, or two numbers from 0, the shortest first
     pack.lua:24: activities.hum.steps[1].effect names the effect
         “hum_noise”, which the pack does not have
     pack.lua:28: states.running_tests names the activity “nothing_like_it”,
