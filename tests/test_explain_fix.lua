@@ -628,6 +628,86 @@ T['accepting']['changes nothing when the code under the fix changed meanwhile'] 
   })
 end
 
+--- A fix of two edits: line 2 subtracts, and line 6, the same text, goes.
+local SUBTRACT_AND_DROP = {
+  summary = 'Subtract, and drop the copy.',
+  edits = {
+    SUBTRACT,
+    { line = 6, last = 6, old = { '  return a + b' }, new = {}, why = 'Drops the copy.' },
+  },
+}
+
+T['accepting']['after an old line moved up with :m .-2, still below the other, applies each edit where its lines are now'] = function()
+  start()
+  child.cmd('2')
+  propose(SUBTRACT_AND_DROP)
+
+  child.lua([[
+    vim.cmd('6')
+    vim.cmd('m .-2')
+    vim.cmd('m .-2')
+    vim.cmd('m .-2')
+    require('aineo.explain').accept_fix(vim.api.nvim_get_current_buf())
+  ]])
+
+  eq(buffer_lines(), {
+    'local function sub(a, b)',
+    '  return a - b',
+    'end',
+    '',
+    'local function mul(a, b)',
+    'end',
+  })
+end
+
+T['accepting']['changes nothing when :m .-2 moved an old line above another edit’s'] = function()
+  start()
+  child.cmd('2')
+  propose(SUBTRACT_AND_DROP)
+
+  child.lua([[
+    vim.cmd('6')
+    vim.cmd('m .-2')
+    vim.cmd('m .-2')
+    vim.cmd('m .-2')
+    vim.cmd('m .-2')
+    require('aineo.explain').accept_fix(vim.api.nvim_get_current_buf())
+  ]])
+
+  eq(messages()[1], 'aineo: the code under the fix changed; ask again')
+  eq(buffer_lines(), {
+    'local function sub(a, b)',
+    '  return a + b',
+    '  return a + b',
+    'end',
+    '',
+    'local function mul(a, b)',
+    'end',
+  })
+end
+
+T['accepting']['changes nothing when an old line moved above another edit’s with :6m0'] = function()
+  start()
+  child.cmd('2')
+  propose(SUBTRACT_AND_DROP)
+
+  child.lua([[
+    vim.cmd('6m0')
+    require('aineo.explain').accept_fix(vim.api.nvim_get_current_buf())
+  ]])
+
+  eq(messages()[1], 'aineo: the code under the fix changed; ask again')
+  eq(buffer_lines(), {
+    '  return a + b',
+    'local function sub(a, b)',
+    '  return a + b',
+    'end',
+    '',
+    'local function mul(a, b)',
+    'end',
+  })
+end
+
 T['accepting']['changes nothing when an old line was edited in place meanwhile'] = function()
   start()
   child.cmd('2')
