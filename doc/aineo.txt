@@ -4111,9 +4111,12 @@ job) and `error` (hit an error), unless the activity played has a `label`.
 
  #  State (and the state it falls back to) ~
  1  `arriving` (falls back to `standing`)
-    The main agent: `:Aineo office reset` begins its session afresh (a
-    session switch does not: the office then follows the new session's
-    transcript, and the agent shows the state that transcript gives).
+    The main agent: `:Aineo office reset` begins its session afresh, and
+    the session the tab shows starting again after it ended (`leaving`),
+    or the tab going on to another session then, has it walk in. A switch
+    of session that follows no end does not: the office then follows the
+    new session's transcript, and the agent shows the state that
+    transcript gives.
     A subagent: its transcript
     appears while the office shows (one that already runs when the office
     opens is at its place, not arriving). Lasts 4 seconds; what the agent
@@ -4184,9 +4187,13 @@ job) and `error` (hit an error), unless the activity played has a `label`.
 23  `asleep` (falls back to `idle`)
     `idle` for 10 minutes, by the clock.
 24  `leaving` (falls back to `standing`)
-    A subagent only: its meta file says it finished or the user stopped it,
+    A subagent: its meta file says it finished or the user stopped it,
     after `done`; or it has been quiet for ten minutes
     (|aineo-office|). It is listed for about half a minute more, to walk out.
+    The main agent: the session the tab shows ended — its `SessionEnd` hook
+    says so, the tab's Claude Code exits by itself, or the tab lets go of a
+    session it claimed, an attach to it included. It stays so, and is shown
+    so each time the office shows, until a session starts.
 
 A state shorter than 1.2 seconds is held until 1.2 seconds have passed, and
 the latest state then wins, so a run of rapid calls does not flicker. An agent
@@ -5679,7 +5686,11 @@ claims one, not the session of the tab's own Claude Code. When the panes
 follow another session (the tab's Claude Code switched session with a
 `/resume` or a `/clear`, or a fork of it was named by its hooks, or a claim
 was made), the agents of the old session leave and the office follows the new
-session's transcript at once, or when it next shows. When a transcript holds
+session's transcript at once, or when it next shows. When the session the
+panes follow ends (its `SessionEnd` hook, the tab's Claude Code exiting by
+itself, the panes leaving a claim), the main agent leaves; when that session
+starts again (its `SessionStart` hook, the tab's Claude Code ready), or the
+panes go on to another session, it walks in. When a transcript holds
 `continued-in` lines, which every Claude Code that resumes the session writes
 as it goes on with it in a new session, the office follows the session the
 first of them stamped at or after the moment the tab began following (its
@@ -5694,13 +5705,18 @@ follows from the end of the transcripts.
 
                                                           *aineo-office-hooks*
 Hooks ~
-Two of the hooks aineo gives the Claude Code it starts in `--settings`
+Three of the hooks aineo gives the Claude Code it starts in `--settings`
 (|aineo-report|) serve the office:
 - the `SessionStart` hook, which also tells the editor when Claude Code
   switches session (|aineo-claude-session|), passes on the path of the
-  transcript that Claude Code names in its input. A session whose hook
-  never ran, as in a folder Claude Code does not trust yet, has its
-  transcript looked for in `projects/` when the office shows;
+  transcript that Claude Code names in its input, and has the main agent
+  walk in when the session had ended. A session whose hook never ran, as in
+  a folder Claude Code does not trust yet, has its transcript looked for in
+  `projects/` when the office shows;
+- the `SessionEnd` hook, which tells the editor the session ended, has the
+  main agent leave; an end whose hook ran before a `SessionStart` of the
+  same session the editor was told of already, as an in-session `/resume`
+  of it gives, is not told;
 - the `PermissionRequest` hook, which Claude Code runs in the background as
   it is about to ask you to allow a tool. It tells the editor which agent
   asks, the main one or the subagent whose `agent_id` the input names, and
