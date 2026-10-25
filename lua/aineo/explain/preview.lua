@@ -34,7 +34,8 @@ local CONCEALING = 2
 ---@field buffer integer
 ---@field window integer the window the fix was asked in
 ---@field summary string
----@field keys? aineo.explain.FixKeys the keys mapped for it; none when absent
+---@field keys? aineo.explain.FixKeys the keys to map for it; none when absent
+---@field mapped table<string, boolean> the actions it mapped a key for in its buffer
 ---@field diff boolean whether it shows as the diff view
 ---@field edits aineo.explain.ShownEdit[] in the order of their lines
 ---@field saved table<integer, aineo.explain.ConcealOptions> the options of each window it set, before it set them
@@ -104,17 +105,21 @@ local function new_line_row(text, geometry)
   return chunks
 end
 
---- What the head row of `preview` says: the keys that accept it, reject it
---- and show its diff, or their `<Plug>` mappings when it maps none.
+--- What the head row of `preview` says: for accepting it, rejecting it and
+--- showing its diff, the key it mapped in its buffer, or the `<Plug>`
+--- mapping when it mapped none for that, the key being the user's or none
+--- being given.
 ---
 ---@param preview aineo.explain.Preview
 ---@return string
 local function head_text(preview)
-  local keys = preview.keys or PLUG_KEYS
+  local function named(action)
+    return preview.mapped[action] and preview.keys[action] or PLUG_KEYS[action]
+  end
   return ('%s accepts · %s rejects · %s shows the diff'):format(
-    keys.accept,
-    keys.reject,
-    keys.diff
+    named('accept'),
+    named('reject'),
+    named('diff')
   )
 end
 
@@ -428,22 +433,23 @@ vim.api.nvim_create_autocmd({ 'WinNew', 'BufWinEnter' }, {
 --- The `desc` of the keys a preview maps, which tells them from the user's.
 local KEYS_DESCRIPTION = 'aineo: a key of the fix shown'
 
---- Each key of `preview` (`aineo.explain.FixKeys`) with the `<Plug>`
---- mapping it is mapped to.
+--- Each key of `preview` (`aineo.explain.FixKeys`) with its action and the
+--- `<Plug>` mapping it is mapped to.
 ---
 ---@param preview aineo.explain.Preview
----@return { key: string, plug: string }[]
+---@return { action: string, key: string, plug: string }[]
 local function key_mappings(preview)
   local found = {}
   for _, action in ipairs({ 'accept', 'reject', 'diff' }) do
-    table.insert(found, { key = preview.keys[action], plug = PLUG_KEYS[action] })
+    table.insert(found, { action = action, key = preview.keys[action], plug = PLUG_KEYS[action] })
   end
   return found
 end
 
 --- Maps in Normal mode, for `preview`'s buffer alone, each of its keys to
 --- the `<Plug>` mapping that does what it says, but a key already mapped
---- there, locally or globally: the user's.
+--- there, locally or globally: the user's. Records in `preview.mapped` the
+--- actions it mapped a key for.
 ---
 ---@param preview aineo.explain.Preview
 local function map_keys(preview)
@@ -460,6 +466,7 @@ local function map_keys(preview)
         remap = true,
         desc = KEYS_DESCRIPTION,
       })
+      preview.mapped[mapping.action] = true
     end
   end
 end
@@ -671,6 +678,7 @@ function M.show(buffer, order)
     window = order.window,
     summary = order.summary,
     keys = order.keys,
+    mapped = {},
     diff = false,
     edits = {},
     saved = {},
@@ -688,8 +696,8 @@ function M.show(buffer, order)
   end
   previews[buffer] = preview
   conceal_in_windows(preview)
-  render(preview)
   map_keys(preview)
+  render(preview)
   watch_edits(preview)
 end
 
