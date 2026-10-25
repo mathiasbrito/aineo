@@ -118,13 +118,13 @@ end
 ---@field permission_wait fun(agent: string) tells the office the agent, `main` or a subagent's id, waits for the user to answer a permission prompt, until its next line in the transcript; it is kept, and handed over each time the office starts running unless the transcript shows the agent went on since
 ---@field report_arrived fun(report: aineo.office.Report) keeps the report as a card the office draws in its bottom right corner until the cursor enters the right side, and starts the idle countdown again; keeps nothing when the cursor is in the right side and the office is hidden, where the Report shows it
 ---@field session_changed fun() tells the office the session it acts out is another now: the agents of the old session leave, its permission waits are forgotten, and an office that is running follows the transcript `options.transcript` names now at once, its main agent walking in when the old session had ended (`session_ended()`); one that is hidden or paused follows it when it next starts
----@field session_ended fun() tells the office the session it acts out has ended: its main agent leaves, and leaves again each time the office starts following it, until a session starts (`session_started()`, `session_changed()`) or the office is reset
+---@field session_ended fun() tells the office the session it acts out has ended: its main agent leaves, and leaves again each time the office starts following it, a reset included, until a session starts (`session_started()`, `session_changed()`)
 ---@field session_started fun() tells the office the session it acts out has started again after it ended (`session_ended()`): an office that is running has its main agent walk in, as when a session begins, the session's earlier agents forgotten; nothing when it had not ended
 ---@field follows_session fun(session: string): boolean whether `session` is one of the sessions of the chain the office followed last: the session of the transcript it was given and those it went on in; false before it has followed any
 ---@field show_now fun() shows the office over the right side at once, and does nothing when it shows
 ---@field preview fun(pack?: string) shows the pack, or the one the settings name, over the right side with every state of the vocabulary acted out in turn, each named, in place of the office that shows, which stays when the pack cannot be shown; the preview follows no transcript
 ---@field reload fun() shows the office again with what the settings name now, when it shows, and does nothing when it is hidden, previews a pack or has no right side; a pack that cannot be shown is told, and the office that shows stays
----@field reset fun() shows the office over the right side as if the session began now: every agent is forgotten but for a permission wait not answered, the main agent walks in, and only what the transcripts say from then on is acted out, then and whenever an office of this Neovim follows the session again; with no right side, a pack that cannot be loaded or a stage that cannot be made, it tells the user why and the office that shows stays
+---@field reset fun() shows the office over the right side as if the session began now: every agent is forgotten but for a permission wait not answered, the main agent walks in (or, once the session has ended, `session_ended()`, stays gone until a session starts), and only what the transcripts say from then on is acted out, then and whenever an office of this Neovim follows the session again; with no right side, a pack that cannot be loaded or a stage that cannot be made, it tells the user why and the office that shows stays
 ---@field let_go fun() closes the office, stops its timer and its watch, and forgets the session
 
 --- Makes the office of one tab.
@@ -345,10 +345,11 @@ function M.new_office(options)
   --- transcript `options.transcript` names; none when it names none, or the
   --- file cannot be followed. After `reset()`, the tracker leaves out what the
   --- follower replays of before the reset, then and each time the session is
-  --- followed again in this Neovim, and has the main agent walk in, as it
-  --- does when the office went on to another session after the last ended
-  --- (`arrives_next`); while the session it follows has ended
-  --- (`session_is_over`), the main agent leaves once the tail is replayed. A
+  --- followed again in this Neovim, and has the main agent walk in, unless
+  --- the session has ended, as it does when the office went on to another
+  --- session after the last ended (`arrives_next`); while the session it
+  --- follows has ended (`session_is_over`), the main agent leaves once the
+  --- tail is replayed. A
   --- line the follower reads as news that says the session was continued in
   --- another has the office follow again, once the current event is over
   --- (`office.session_changed()`); one it replays does not, since the
@@ -371,9 +372,6 @@ function M.new_office(options)
     if from_now and path then
       reset_at_of_transcript[path] = wall_clock()
     end
-    if from_now then
-      session_is_over = false
-    end
     local tracker = require('aineo.office_states').new_tracker({
       commands = open.commands,
       report_tool = options.report_tool,
@@ -387,7 +385,7 @@ function M.new_office(options)
       wall_clock = wall_clock,
       forgotten_before = from_now and wall_clock() or reset_at_of_transcript[path or ''],
     })
-    if from_now or arrives then
+    if (from_now and not session_is_over) or arrives then
       tracker.take({ agent = 'main', kind = 'session_started' }, options.clock())
     end
     local went_on_at = {}

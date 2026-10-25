@@ -2964,7 +2964,10 @@ keeps the tab's claim, and the next start takes it up again (|aineo-tabs|).
 			Shows the office over the right side of the layout as
 			if the tab's session began now: every agent it showed
 			is forgotten, the main agent walks in through the
-			door, and only what the transcripts say from then on
+			door (not when the session has ended: it stays gone
+			until a session starts, state 24 of
+			|aineo-office-states|), and only what the transcripts
+			say from then on
 			is acted out, a subagent walking in with its next
 			line (|aineo-office|). A permission prompt not yet
 			answered stays shown. It works whether the office
@@ -4111,12 +4114,12 @@ job) and `error` (hit an error), unless the activity played has a `label`.
 
  #  State (and the state it falls back to) ~
  1  `arriving` (falls back to `standing`)
-    The main agent: `:Aineo office reset` begins its session afresh, and
-    the session the tab shows starting again after it ended (`leaving`),
-    or the tab going on to another session then, has it walk in. A switch
-    of session that follows no end does not: the office then follows the
-    new session's transcript, and the agent shows the state that
-    transcript gives.
+    The main agent: `:Aineo office reset` begins its session afresh
+    (unless it has ended, 24), and the session the tab shows starting
+    again after it ended (`leaving`), or the tab going on to another
+    session then, has it walk in. A switch of session that follows no end
+    does not: the office then follows the new session's transcript, and
+    the agent shows the state that transcript gives.
     A subagent: its transcript
     appears while the office shows (one that already runs when the office
     opens is at its place, not arriving). Lasts 4 seconds; what the agent
@@ -4193,7 +4196,10 @@ job) and `error` (hit an error), unless the activity played has a `label`.
     The main agent: the session the tab shows ended — its `SessionEnd` hook
     says so, the tab's Claude Code exits by itself, or the tab lets go of a
     session it claimed, an attach to it included. It stays so, and is shown
-    so each time the office shows, until a session starts.
+    so each time the office shows, an `:Aineo office reset` included, until
+    a session starts: the office then has no main agent at work. aineo's
+    own stop of Claude Code (a restart, a switch of session, an attach) is
+    no end.
 
 A state shorter than 1.2 seconds is held until 1.2 seconds have passed, and
 the latest state then wins, so a run of rapid calls does not flicker. An agent

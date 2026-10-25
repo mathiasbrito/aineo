@@ -12,10 +12,6 @@ local T = MiniTest.new_set({ hooks = { post_once = child.stop } })
 --- How long a wait for something that should happen may last, in milliseconds.
 local PATIENCE_MS = 4000
 
---- How long a wait for the main agent to be done walking in may last, in
---- milliseconds: its arrival lasts 4 seconds.
-local ARRIVAL_PATIENCE_MS = 8000
-
 --- How long the main agent is watched not to come to a state, in
 --- milliseconds: longer than the 1.2 seconds a state is held before the next
 --- shows.
@@ -77,9 +73,11 @@ end
 ---@param patience_ms? integer
 ---@return boolean
 local function main_comes_to(state, patience_ms)
-  return vim.wait(patience_ms or PATIENCE_MS, function()
-    return main_state() == state
-  end, 20)
+  return (
+    vim.wait(patience_ms or PATIENCE_MS, function()
+      return main_state() == state
+    end, 20)
+  )
 end
 
 T['a session that ends'] = MiniTest.new_set()
@@ -123,19 +121,25 @@ T['a session that ends']['and is followed by another has the new main agent walk
   eq(main_state(), 'arriving')
 end
 
-T['a session that ends']['and is reset has the main agent walk in and stay'] = function()
+T['a session that ends']['and is reset keeps the main agent gone'] = function()
   open_office_following(transcript_with_a_turn('ends-reset'))
   child.lua([[_G.office.show_now()]])
   child.lua([[_G.office.session_ended()]])
 
   child.lua([[_G.office.reset()]])
 
-  eq(
-    vim.wait(ARRIVAL_PATIENCE_MS, function()
-      return main_state() == 'standing'
-    end, 20),
-    true
-  )
+  eq({ main_state(), main_comes_to('standing', HELD_STATE_PATIENCE_MS) }, { 'leaving', false })
+end
+
+T['a session that ends']['and is reset, then starts again, has the main agent walk in'] = function()
+  open_office_following(transcript_with_a_turn('ends-reset-starts'))
+  child.lua([[_G.office.show_now()]])
+  child.lua([[_G.office.session_ended()]])
+  child.lua([[_G.office.reset()]])
+
+  child.lua([[_G.office.session_started()]])
+
+  eq(main_state(), 'arriving')
 end
 
 T['a session that ends']['and then starts again is not left again when the office shows again'] = function()
