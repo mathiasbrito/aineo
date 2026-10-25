@@ -356,7 +356,7 @@ local WRONG_FIELDS = {
       }),
     },
     'activities',
-    'activities.spare.steps[1].for_seconds must be a number above 0, or two numbers, the shortest and the longest',
+    'activities.spare.steps[1].for_seconds must be a number above 0, or two numbers from 0, the shortest first',
   },
   {
     'a step of a time that runs backwards',
@@ -366,7 +366,7 @@ local WRONG_FIELDS = {
       }),
     },
     'activities',
-    'activities.spare.steps[1].for_seconds must be a number above 0, or two numbers, the shortest and the longest',
+    'activities.spare.steps[1].for_seconds must be a number above 0, or two numbers from 0, the shortest first',
   },
   {
     'a step that leaves a thing the pack lacks',
@@ -507,6 +507,36 @@ local WRONG_FIELDS = {
     'triggers',
     'triggers[1].when.command must be text, or a table with lua_pattern',
   },
+  {
+    'a trigger that matches by no field',
+    { triggers = { { when = {}, play = 'work' } } },
+    'triggers',
+    'triggers[1].when needs at least one field',
+  },
+  {
+    'a cat’s step that follows someone the office does not know',
+    {
+      activities = activities_with({
+        chase_a_butterfly = {
+          who = 'cat',
+          during = { 'always' },
+          steps = { { follow = 'a_butterfly', for_seconds = 5 } },
+        },
+      }),
+    },
+    'activities',
+    'activities.chase_a_butterfly.steps[1].follow must be one of someone_walking',
+  },
+  {
+    'a step that follows someone the office does not know',
+    {
+      activities = activities_with({
+        spare = { steps = { { at = 'desk', follow = 'someone_running' } } },
+      }),
+    },
+    'activities',
+    'activities.spare.steps[1].follow must be one of someone_walking',
+  },
 }
 
 T['pack.lua']['with something wrong in a field is told with the line of the field'] =
@@ -525,6 +555,16 @@ T['pack.lua']['with something wrong in a field is told with the line of the fiel
   local told, text = pack_problems(changes)
 
   eq(told, { { files.line_of(text, key), message } })
+end
+
+T['pack.lua']['accepts a step of a time between two numbers from 0, both 0'] = function()
+  local told = pack_problems({
+    activities = activities_with({
+      spare = { steps = { { at = 'desk', for_seconds = { 0, 0 } } } },
+    }),
+  })
+
+  eq(told, {})
 end
 
 --- Lua patterns a trigger may match with: one repetition at most, and

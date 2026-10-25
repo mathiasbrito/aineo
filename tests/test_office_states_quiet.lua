@@ -167,6 +167,47 @@ T['a subagent followed']['that walked out quiet walks in again with its next lin
   eq({ story.state('sub'), story.state_after(5, 'sub') }, { 'arriving', 'reading' })
 end
 
+--- What the agent `id` shows `seconds` after the story's last signal: its
+--- state, and the state of the call it thinks right after, if it does.
+---
+---@param story aineo.tests.Story
+---@param seconds number
+---@param id string
+---@return { state: string, after_call: string|nil }
+local function shown_after(story, seconds, id)
+  local agent = vim.iter(story.agents_after(seconds)):find(function(each)
+    return each.id == id
+  end)
+  return { state = agent.state, after_call = agent.after_call }
+end
+
+T['a subagent followed']['that walked out quiet during a long call walks in on its result at that call'] = function()
+  local story = with_a_subagent_followed()
+  story.hear('tool_started', { agent = 'sub', call = 'look', tool = 'Read', input = {} })
+
+  story.hear_after(QUIET_SECONDS + 60, 'tool_finished', { agent = 'sub', call = 'look' })
+
+  eq({ shown_after(story, 5, 'sub'), shown_after(story, 12, 'sub') }, {
+    { state = 'thinking', after_call = 'reading' },
+    { state = 'thinking', after_call = 'reading' },
+  })
+end
+
+T['a subagent followed']['that walked out quiet during a long call walks in with a new call at the new call'] = function()
+  local story = with_a_subagent_followed()
+  story.hear('tool_started', { agent = 'sub', call = 'find', tool = 'Grep', input = {} })
+  story.hear('tool_finished', { agent = 'sub', call = 'find' })
+  story.hear('tool_started', { agent = 'sub', call = 'look', tool = 'Read', input = {} })
+
+  story.hear_after(
+    QUIET_SECONDS + 60,
+    'tool_started',
+    { agent = 'sub', call = 'find_again', tool = 'Grep', input = {} }
+  )
+
+  eq(story.state_after(5, 'sub'), 'searching')
+end
+
 T['a subagent followed']['that walked out quiet and then finishes does not come back'] = function()
   local story = with_a_subagent_followed()
 

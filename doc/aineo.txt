@@ -2964,7 +2964,10 @@ keeps the tab's claim, and the next start takes it up again (|aineo-tabs|).
 			Shows the office over the right side of the layout as
 			if the tab's session began now: every agent it showed
 			is forgotten, the main agent walks in through the
-			door, and only what the transcripts say from then on
+			door (not when the session has ended: it stays gone
+			until a session starts, state 24 of
+			|aineo-office-states|), and only what the transcripts
+			say from then on
 			is acted out, a subagent walking in with its next
 			line (|aineo-office|). A permission prompt not yet
 			answered stays shown. It works whether the office
@@ -4055,8 +4058,10 @@ transcript was last written ten minutes or more before the office opens is
 left out, and one that writes nothing the office reads for ten minutes while
 it shows walks out, unless the session's agent still waits on the call that
 started it or the subagent waits for your permission; either walks in again
-with its next line. A transcript cut short or replaced by another is read
-again from its end. It calls no Claude, sends nothing to its terminal, makes
+with its next line, one that walked out during a call of its own still in
+that call, so that the call's result shows it at that call's spot. A
+transcript cut short or replaced by another is read again from its end.
+It calls no Claude, sends nothing to its terminal, makes
 no MCP call or network request, writes nothing and spends no token. While it
 shows, one timer draws 12 frames a second, one file watch follows the
 transcript, one the subagents' folder and one each subagent it follows, 64 at
@@ -4109,9 +4114,12 @@ job) and `error` (hit an error), unless the activity played has a `label`.
 
  #  State (and the state it falls back to) ~
  1  `arriving` (falls back to `standing`)
-    The main agent: `:Aineo office reset` begins its session afresh (a
-    session switch does not: the office then follows the new session's
-    transcript, and the agent shows the state that transcript gives).
+    The main agent: `:Aineo office reset` begins its session afresh
+    (unless it has ended, 24), and the session the tab shows starting
+    again after it ended (`leaving`), or the tab going on to another
+    session then, has it walk in. A switch of session that follows no end
+    does not: the office then follows the new session's transcript, and
+    the agent shows the state that transcript gives.
     A subagent: its transcript
     appears while the office shows (one that already runs when the office
     opens is at its place, not arriving). Lasts 4 seconds; what the agent
@@ -4182,9 +4190,16 @@ job) and `error` (hit an error), unless the activity played has a `label`.
 23  `asleep` (falls back to `idle`)
     `idle` for 10 minutes, by the clock.
 24  `leaving` (falls back to `standing`)
-    A subagent only: its meta file says it finished or the user stopped it,
+    A subagent: its meta file says it finished or the user stopped it,
     after `done`; or it has been quiet for ten minutes
     (|aineo-office|). It is listed for about half a minute more, to walk out.
+    The main agent: the session the tab shows ended — its `SessionEnd` hook
+    says so, the tab's Claude Code exits by itself, or the tab lets go of a
+    session it claimed, an attach to it included. It stays so, and is shown
+    so each time the office shows, an `:Aineo office reset` included, until
+    a session starts: the office then has no main agent at work. aineo's
+    own stop of Claude Code (a restart, a switch of session, an attach) is
+    no end.
 
 A state shorter than 1.2 seconds is held until 1.2 seconds have passed, and
 the latest state then wins, so a run of rapid calls does not flicker. An agent
@@ -4739,9 +4754,9 @@ Field	Default	Means ~
 		character's feet as the step ends
 `remove`	none	a thing taken away from the cell the character stands
 		on as the step ends
-`follow`	none	`'someone_walking'`, the only name that does anything
-		(the check does not tell another): the character
-		trails the nearest one on the move
+`follow`	none	`'someone_walking'`, the only name there is (the
+		check tells another): the character trails the
+		nearest one on the move
 
 How an agent plays an activity: it takes the steps in order. For a step it
 goes to the nearest spot called `at` that no other agent has taken, walking
@@ -4766,7 +4781,11 @@ spot of the same name and number in the new plan.
     },
 <
 An agent whose step names a spot that other agents have keeps the spot it
-stands on and looks again every second. An agent that has no place yet, whose
+stands on and looks again every second. When another character stands still
+on its cell, or is on its way to that cell, it first steps, standing, to the
+nearest floor cell that is no spot's and that no other character stands on or
+is on its way to, so that two agents never wait on one cell; one that only
+walks over its cell does not move it. An agent that has no place yet, whose
 step names a spot that other agents have, or that the plan lacks (as in a
 room too small for the desks), or that cannot be walked to, is put on the free
 floor cell nearest the spot `door` (the one the random source picks when the
@@ -4912,7 +4931,7 @@ activities at random, as agents do, the ones whose `during` names `always`
 (weighted by `chance`, never the one it has just played). It takes no place
 among the agents, so it has no desk, no monitor and no row in the status list,
 and its colour goes by its number among the cats. A cat's step may `follow =
-'someone_walking'`, the only name that does anything: the cat trails the
+'someone_walking'`, the only name there is: the cat trails the
 nearest character on the move for `for_seconds` or until it stops. A cat
 needs at least one activity with a spot to come into the office: it is placed
 by that, and a cat whose every activity follows someone is never placed.
@@ -4974,7 +4993,7 @@ gives what one call looks like, as `docker` at a server rack.
 
 Field	Means ~
 `when`	required: the call it matches; every field of it must match. A
-	`when` with no field matches no call, and the check does not tell it
+	`when` with no field is told by the check, and matches no call
 `play`	required: the activity it plays while the call runs
 
 `when` holds `tool` (the tool's name, as `Bash`, `Read`, `Edit`), `agent`
@@ -5041,7 +5060,7 @@ its whole path, and its last message goes on (`…; at most one is taken`):
     pack.lua:16: effects.wide.text[1] “漢字” has characters wider than one
         cell on this screen
     pack.lua:21: activities.visit_the_vault.steps[1].for_seconds must be a
-        number above 0, or two numbers, the shortest and the longest
+        number above 0, or two numbers from 0, the shortest first
     pack.lua:24: activities.hum.steps[1].effect names the effect
         “hum_noise”, which the pack does not have
     pack.lua:28: states.running_tests names the activity “nothing_like_it”,
@@ -5673,7 +5692,11 @@ claims one, not the session of the tab's own Claude Code. When the panes
 follow another session (the tab's Claude Code switched session with a
 `/resume` or a `/clear`, or a fork of it was named by its hooks, or a claim
 was made), the agents of the old session leave and the office follows the new
-session's transcript at once, or when it next shows. When a transcript holds
+session's transcript at once, or when it next shows. When the session the
+panes follow ends (its `SessionEnd` hook, the tab's Claude Code exiting by
+itself, the panes leaving a claim), the main agent leaves; when that session
+starts again (its `SessionStart` hook, the tab's Claude Code ready), or the
+panes go on to another session, it walks in. When a transcript holds
 `continued-in` lines, which every Claude Code that resumes the session writes
 as it goes on with it in a new session, the office follows the session the
 first of them stamped at or after the moment the tab began following (its
@@ -5688,13 +5711,18 @@ follows from the end of the transcripts.
 
                                                           *aineo-office-hooks*
 Hooks ~
-Two of the hooks aineo gives the Claude Code it starts in `--settings`
+Three of the hooks aineo gives the Claude Code it starts in `--settings`
 (|aineo-report|) serve the office:
 - the `SessionStart` hook, which also tells the editor when Claude Code
   switches session (|aineo-claude-session|), passes on the path of the
-  transcript that Claude Code names in its input. A session whose hook
-  never ran, as in a folder Claude Code does not trust yet, has its
-  transcript looked for in `projects/` when the office shows;
+  transcript that Claude Code names in its input, and has the main agent
+  walk in when the session had ended. A session whose hook never ran, as in
+  a folder Claude Code does not trust yet, has its transcript looked for in
+  `projects/` when the office shows;
+- the `SessionEnd` hook, which tells the editor the session ended, has the
+  main agent leave; an end whose hook ran before a `SessionStart` of the
+  same session the editor was told of already, as an in-session `/resume`
+  of it gives, is not told;
 - the `PermissionRequest` hook, which Claude Code runs in the background as
   it is about to ask you to allow a tool. It tells the editor which agent
   asks, the main one or the subagent whose `agent_id` the input names, and

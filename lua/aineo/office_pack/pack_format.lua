@@ -36,6 +36,10 @@ local PLACES = { 'above', 'above_left', 'above_right', 'beside' }
 local FACINGS = { 'left', 'right' }
 local SHOWN = { 'time', 'date', 'sky', 'plan', 'printing', 'name' }
 
+--- Whom a step may follow: the names `aineo.office_scene`'s `following`
+--- acts on.
+local FOLLOWED = { 'someone_walking' }
+
 --- A match: plain words, a glob, or `{ lua_pattern = … }`.
 local MATCH = schema.text_or_table(
   schema.fields('a match', { lua_pattern = schema.required(schema.pattern) }),
@@ -127,7 +131,7 @@ M.STEP = schema.fields('a step', {
   the_one_moved_plays = schema.reference('activity'),
   leave = schema.reference('thing'),
   remove = schema.reference('thing'),
-  follow = schema.name,
+  follow = schema.choice(FOLLOWED),
 })
 
 M.ACTIVITY = schema.fields('an activity', {
@@ -156,7 +160,9 @@ for _, field in ipairs(M.MATCHED_INPUT_FIELDS) do
 end
 
 M.TRIGGER = schema.fields('a trigger', {
-  when = schema.required(schema.fields('what a trigger matches', MATCHED_FIELDS)),
+  when = schema.required(
+    schema.fields('what a trigger matches', MATCHED_FIELDS, { at_least_one_field = true })
+  ),
   play = schema.required(schema.reference('activity')),
 })
 

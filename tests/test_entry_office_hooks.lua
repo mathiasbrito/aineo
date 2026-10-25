@@ -477,6 +477,116 @@ T['a claimed session']['is told to the office once, not again by a claim of the 
   eq(stand_in.told(child).session_changed - at_start, 1)
 end
 
+--- Tells the child's Claude home, as the hook relay does for a `SessionEnd`
+--- of `session`, that the session ended for `reason`, the tab's own start
+--- token with it.
+---
+---@param session string
+---@param reason string
+local function tell_session_end(session, reason)
+  run_and_settle(
+    [[
+      local claude = require('aineo.claude')
+      local session, reason = ...
+      claude.receive_session_event('SessionEnd', session, reason, claude.start_token(), nil, nil, nil)
+    ]],
+    { session, reason }
+  )
+end
+
+T['the end of a session'] = MiniTest.new_set()
+
+T['the end of a session']['its SessionEnd hook tells, of the session the tab shows, is told to the office'] = function()
+  open_layout_with_stand_in_offices('office-end-hook')
+
+  tell_session_end(tab_session(), 'prompt_input_exit')
+
+  eq(stand_in.told(child).session_ended, 1)
+end
+
+T['the end of a session']['its SessionEnd hook tells, of a session the tab does not show, is not told to the office'] = function()
+  open_layout_with_stand_in_offices('office-end-hook-other')
+
+  tell_session_end(OTHER_SESSION, 'prompt_input_exit')
+
+  eq(stand_in.told(child).session_ended, 0)
+end
+
+T['the end of a session']['of the tab’s own Claude Code is not told to the office while the tab claims another'] = function()
+  open_layout_with_stand_in_offices('office-end-own-under-claim')
+  child.cmd('Aineo claim ' .. claimed_session_numbered(12))
+
+  tell_session_end(tab_session(), 'prompt_input_exit')
+
+  eq(stand_in.told(child).session_ended, 0)
+end
+
+T['the end of a session']['is told to the office once as the tab’s own session switches to another'] = function()
+  open_layout_with_stand_in_offices('office-end-switch')
+
+  tell_switch_to(new_session_numbered(40))
+
+  eq(stand_in.told(child).session_ended, 1)
+end
+
+T['the end of a session']['the tab’s Claude Code exiting is told to the office'] = function()
+  open_layout_with_stand_in_offices('office-end-exit')
+
+  child.lua(END_TERMINALS)
+  vim.wait(claude_session.PATIENCE_MS, function()
+    return stand_in.told(child).session_ended > 0
+  end, 20)
+
+  eq(stand_in.told(child).session_ended, 1)
+end
+
+T['the end of a session']['is told to the office as the panes leave a session the tab claimed for its own'] = function()
+  open_layout_with_stand_in_offices('office-end-claim')
+  child.cmd('Aineo claim ' .. claimed_session_numbered(10))
+  local before = stand_in.told(child)
+
+  child.cmd('Aineo claim')
+
+  eq(
+    { stand_in.told(child).session_ended, stand_in.told(child).session_changed },
+    { before.session_ended + 1, before.session_changed + 1 }
+  )
+end
+
+T['the end of a session']['is not told to the office as the panes claim another session'] = function()
+  open_layout_with_stand_in_offices('office-end-claim-made')
+
+  child.cmd('Aineo claim ' .. claimed_session_numbered(11))
+
+  eq(stand_in.told(child).session_ended, 0)
+end
+
+T['the start of a session'] = MiniTest.new_set()
+
+T['the start of a session']['its SessionStart hook tells, of the session the tab shows, is told to the office'] = function()
+  open_layout_with_stand_in_offices('office-start-hook')
+  local before = stand_in.told(child).session_started
+
+  tell_transcript(tab_session(), '/named/by/the/start.jsonl')
+
+  eq(stand_in.told(child).session_started, before + 1)
+end
+
+T['the start of a session']['its SessionStart hook tells, of a session the tab does not show, is not told to the office'] = function()
+  open_layout_with_stand_in_offices('office-start-hook-other')
+  local before = stand_in.told(child).session_started
+
+  tell_transcript(OTHER_SESSION, '/named/by/the/start.jsonl')
+
+  eq(stand_in.told(child).session_started, before)
+end
+
+T['the start of a session']['is told to the office as the tab’s Claude Code is first ready'] = function()
+  open_layout_with_stand_in_offices('office-start-ready')
+
+  eq(stand_in.told(child).session_started, 1)
+end
+
 T['a permission wait'] = MiniTest.new_set()
 
 T['a permission wait']['reaches the office of the tab, as the main agent or as the subagent that asks'] = function()

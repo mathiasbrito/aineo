@@ -349,6 +349,66 @@ function M.choose_free_floor_cell(world)
   return free_floor_cell_nearest(world, cells_characters_stand_on(world), M.ENTRANCE)
 end
 
+--- The cells, as `row * width + column`, that characters other than
+--- `character` hold: the cell each one that stands still is on, and the
+--- cell each one that walks is going to.
+---
+---@param world aineo.office_scene.SpotWorld
+---@param character table
+---@return table<integer, true>
+local function cells_others_hold(world, character)
+  local held = {}
+  for _, group in ipairs({ world.agents, world.cats or {} }) do
+    for _, other in ipairs(group) do
+      if other ~= character and other.column then
+        local last = other.path[#other.path]
+        local column = last and last.column or math.floor(other.column + 0.5)
+        local row = last and last.row or math.floor(other.row + 0.5)
+        held[row * world.layout.width + column] = true
+      end
+    end
+  end
+  return held
+end
+
+--- The cells of the plan's spots, as `row * width + column`.
+---
+---@param layout aineo.office_scene.FloorLayout
+---@return table<integer, true>
+local function spot_cells(layout)
+  local cells = {}
+  for _, named in pairs(layout.spots) do
+    for _, spot in ipairs(named) do
+      cells[spot.row * layout.width + spot.column] = true
+    end
+  end
+  return cells
+end
+
+--- Where `character`, placed and waiting for a spot, steps out of the way of
+--- a character that holds the cell it is on (`cells_others_hold()`): the
+--- floor cells that are no spot's and that no other character holds. Nil
+--- when no other character holds its cell, and it waits where it is.
+---
+---@param world aineo.office_scene.SpotWorld
+---@param character { column: number, row: number, path: aineo.office_scene.Cell[] }
+---@return aineo.office_scene.SpotChoice|nil
+function M.choose_cell_out_of_the_way(world, character)
+  local width = world.layout.width
+  local held = cells_others_hold(world, character)
+  if not held[math.floor(character.row + 0.5) * width + math.floor(character.column + 0.5)] then
+    return nil
+  end
+  local spots = spot_cells(world.layout)
+  local open = {}
+  for _, key in ipairs(walkable_keys(world.layout)) do
+    if not held[key] and not spots[key] then
+      table.insert(open, spot_on_cell(M.ANYWHERE, key, width))
+    end
+  end
+  return { open = open, any = #open > 0 }
+end
+
 --- The spots named `name` that `character` may go to, and whether there are
 --- any of the name. For `anywhere`, the one floor cell the random source
 --- picks; for `desk`, the character's own, or, when the plan has none for its
