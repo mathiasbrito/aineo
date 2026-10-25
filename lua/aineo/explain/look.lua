@@ -1,5 +1,6 @@
 --- The colours of the explain home's virtual lines: the highlight groups of
---- each kind (`aineo.explain.Kind`), computed from the theme.
+--- each look (`aineo.explain.Look`): each kind's and the fix explanation's, computed
+--- from the theme.
 
 local M = {}
 
@@ -87,7 +88,7 @@ end
 --- `LineNr`'s `ctermbg` in the gutter, and `CursorLine`'s `ctermbg` behind
 --- the text, none when the theme has none.
 ---
----@param kind aineo.explain.Kind
+---@param kind aineo.explain.Look
 ---@param groups { text: string, gutter: string }
 ---@param blend number from 0 to 1
 local function define_band(kind, groups, blend)
@@ -112,10 +113,11 @@ end
 
 --- Defines the groups of `kind`: its text and gutter (`define_band()`), the
 --- columns its gutter fills in `LineNr`'s background alone, and the number
---- of its line in the accent, bold; and, for a kind that can be marked, the
+--- of its line in the accent, bold; for a look that strikes lines through,
+--- its struck group in the struck accent; and, for a kind that can be marked, the
 --- text and gutter of a marked one, its band blended further.
 ---
----@param kind aineo.explain.Kind
+---@param kind aineo.explain.Look
 local function define_kind(kind)
   local accent_group = resolved(kind.accent_group)
   local accent = accent_group.fg or kind.accent_fallback
@@ -123,6 +125,14 @@ local function define_kind(kind)
   define_band(kind, kind.groups, BAND_BLEND)
   define_group(kind.groups.fill, { bg = number_column.bg, ctermbg = number_column.ctermbg })
   define_group(kind.groups.number, { fg = accent, ctermfg = accent_group.ctermfg, bold = true })
+  if kind.struck then
+    local struck_accent = resolved(kind.struck.accent_group)
+    define_group(kind.struck.group, {
+      fg = struck_accent.fg or kind.struck.accent_fallback,
+      ctermfg = struck_accent.ctermfg,
+      strikethrough = true,
+    })
+  end
   if kind.marked_groups then
     define_band(kind, kind.marked_groups, MARKED_BAND_BLEND)
   end
@@ -132,7 +142,7 @@ end
 --- every change of 'background', which loads no colour scheme under Neovim's
 --- own. Called again, it leaves the autocommands it made.
 ---
----@param kinds aineo.explain.Kind[]
+---@param kinds aineo.explain.Look[]
 function M.keep_defined(kinds)
   local function define_all()
     for _, kind in ipairs(kinds) do

@@ -16,7 +16,7 @@ local steer = require('aineo.explain.steer')
 
 local M = {}
 
-look.keep_defined(kinds.ALL)
+look.keep_defined(kinds.LOOKS)
 marks.keep_aligned()
 marks.on_change(function(buffer, window)
   jump.sync_keys(buffer)
@@ -492,6 +492,15 @@ end
 ---@param buffer integer
 function M.accept_fix(buffer)
   fix.accept(buffer)
+end
+
+--- Shows the fix `buffer` shows as the diff view, its old lines struck
+--- through above its new lines, or as the overlay again
+--- (`aineo.explain.fix`'s `toggle_diff()`).
+---
+---@param buffer integer
+function M.toggle_fix_diff(buffer)
+  fix.toggle_diff(buffer)
 end
 
 --- Rejects the fix `buffer` shows, if any: its preview goes and the buffer

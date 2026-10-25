@@ -380,6 +380,90 @@ local function conceal_options()
   return { child.wo.conceallevel, child.wo.concealcursor }
 end
 
+--- Starts the child as `start()` does, its current window showing line
+--- numbers six columns wide, so that the gutter has room for a label.
+local function start_with_gutter()
+  start()
+  child.wo.number = true
+  child.wo.numberwidth = 6
+end
+
+T['the preview']['shows the keys, then explains each edit after the summary, then its new lines'] = function()
+  start_with_gutter()
+  child.cmd('2')
+
+  propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+
+  local rows = screen()
+  local first = row_of(rows, '    1 local function sub(a, b)')
+  eq(vim.list_slice(rows, first, first + 5), {
+    '    1 local function sub(a, b)',
+    '▎ fix ┊ \\Va accepts · \\Vr rejects · \\Vd shows the diff',
+    '▎ why ┊ Subtract.',
+    '▎     ┊ Subtracts b from a.',
+    '▎       return a - b',
+    '    3 end',
+  })
+end
+
+--- The highlight group of the first chunk of the preview's virtual lines
+--- whose text is `text`, or `nil`.
+---
+---@param text string
+---@return string|nil
+local function group_of(text)
+  return child.lua(
+    [[
+    local text = ...
+    local namespace = vim.api.nvim_create_namespace('aineo_explain_fix_drawn')
+    for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(0, namespace, 0, -1, { details = true })) do
+      for _, line in ipairs(mark[4].virt_lines or {}) do
+        for _, chunk in ipairs(line) do
+          if vim.trim(chunk[1]) == text then
+            return chunk[2]
+          end
+        end
+      end
+    end
+  ]],
+    { text }
+  )
+end
+
+T['the preview']['draws the fix explanation in its own groups, and the keys and new lines in the fix’s'] = function()
+  start_with_gutter()
+  child.cmd('2')
+
+  propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+
+  eq({
+    why_label = group_of('why'),
+    why = group_of('┊ Subtract.'),
+    fix_label = group_of('fix'),
+    keys = group_of('┊ \\Va accepts · \\Vr rejects · \\Vd shows the diff'),
+    new = group_of('return a - b'),
+  }, {
+    why_label = 'AineoFixWhyGutter',
+    why = 'AineoFixWhy',
+    fix_label = 'AineoFixGutter',
+    keys = 'AineoFix',
+    new = 'AineoFix',
+  })
+end
+
+T['the preview']['colours the fix explanation with the hint accent, apart from the fix’s green'] = function()
+  start()
+
+  local colours = child.lua_get([[{
+    why = vim.api.nvim_get_hl(0, { name = 'AineoFixWhy' }).fg,
+    hint = vim.api.nvim_get_hl(0, { name = 'DiagnosticHint', link = false }).fg,
+    fix = vim.api.nvim_get_hl(0, { name = 'AineoFix' }).fg,
+    ok = vim.api.nvim_get_hl(0, { name = 'DiagnosticOk', link = false }).fg,
+  }]])
+
+  eq({ colours.why, colours.fix }, { colours.hint, colours.ok })
+end
+
 T['the preview']['hides the old lines in every window, which get their own options back when rejected'] = function()
   start()
   child.cmd('2')
@@ -542,6 +626,142 @@ T['accepting']['changes nothing when the code under the fix changed meanwhile'] 
     '  return a + b + 0',
     'end',
   })
+end
+
+--- Toggles the diff view of the fix the child's current buffer shows, as
+--- `\Vd` does.
+local function toggle_diff()
+  child.lua('require("aineo.explain").toggle_fix_diff(vim.api.nvim_get_current_buf())')
+end
+
+--- The highlight groups the preview sets over lines of the child's current
+--- buffer, each with the lines it spans, from 1.
+---
+---@return table[]
+local function line_highlights()
+  return child.lua_get([[(function()
+    local namespace = vim.api.nvim_create_namespace('aineo_explain_fix_drawn')
+    local found = {}
+    for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(0, namespace, 0, -1, { details = true })) do
+      if mark[4].hl_group then
+        table.insert(found, { group = mark[4].hl_group, first = mark[2] + 1, last = mark[4].end_row })
+      end
+    end
+    return found
+  end)()]])
+end
+
+T['the preview']['shows edits that touch one after the other, the old lines of both hidden'] = function()
+  start_with_gutter()
+  child.cmd('2')
+
+  propose({
+    summary = 'Subtract.',
+    edits = {
+      SUBTRACT,
+      { line = 3, last = 3, old = { 'end' }, new = { 'end -- sub' }, why = 'Names the end.' },
+    },
+  })
+
+  local rows = screen()
+  local first = row_of(rows, '    1 local function sub(a, b)')
+  eq(vim.list_slice(rows, first, first + 9), {
+    '    1 local function sub(a, b)',
+    '▎ fix ┊ \\Va accepts · \\Vr rejects · \\Vd shows the diff',
+    '▎ why ┊ Subtract.',
+    '▎     ┊ Subtracts b from a.',
+    '▎       return a - b',
+    '▎ why ┊ Subtract.',
+    '▎     ┊ Names the end.',
+    '▎     end -- sub',
+    '    4',
+    '    5 local function mul(a, b)',
+  })
+end
+
+T['the preview']['hangs the rows of an edit of the first line above the line after it'] = function()
+  start_with_gutter()
+  child.cmd('2')
+
+  propose({
+    summary = 'Rename.',
+    edits = {
+      {
+        line = 1,
+        last = 1,
+        old = { 'local function sub(a, b)' },
+        new = { 'local function subtract(a, b)' },
+        why = 'Names it.',
+      },
+    },
+  })
+
+  local rows = screen()
+  eq(count_of(rows, '    1 local function sub(a, b)'), 0)
+  eq(row_after(rows, '▎     local function subtract(a, b)'), '    2   return a + b')
+end
+
+T['the preview']['of an edit of every line shows it as the diff view does'] = function()
+  start_with_gutter()
+  child.cmd('2')
+  local all_new = vim.tbl_map(string.upper, CODE)
+
+  propose({
+    summary = 'Shout.',
+    edits = { { line = 1, last = 7, old = CODE, new = all_new, why = 'Louder.' } },
+  })
+
+  local rows = screen()
+  eq(line_highlights(), { { group = 'AineoFixOld', first = 1, last = 7 } })
+  eq(row_after(rows, '    7 end'), '▎     LOCAL FUNCTION SUB(A, B)')
+end
+
+T['the diff view'] = MiniTest.new_set()
+
+T['the diff view']['shows the old lines struck through under the issue and above the new, and toggles back'] = function()
+  start_with_gutter()
+  child.cmd('2')
+  propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+
+  toggle_diff()
+  local rows = screen()
+  local highlights = line_highlights()
+  toggle_diff()
+
+  local first = row_of(rows, '    1 local function sub(a, b)')
+  eq(vim.list_slice(rows, first, first + 7), {
+    '    1 local function sub(a, b)',
+    '▎issu   ┊ Adds where it should subtract.',
+    '▎ fix ┊ \\Va accepts · \\Vr rejects · \\Vd shows the diff',
+    '▎ why ┊ Subtract.',
+    '▎     ┊ Subtracts b from a.',
+    '    2   return a + b',
+    '▎       return a - b',
+    '    3 end',
+  })
+  eq(highlights, { { group = 'AineoFixOld', first = 2, last = 2 } })
+  eq(count_of(screen(), '    2   return a + b'), 0)
+end
+
+T['the diff view']['strikes the old lines through in the error accent'] = function()
+  start()
+
+  local looks = child.lua_get([[{
+    old = vim.api.nvim_get_hl(0, { name = 'AineoFixOld' }),
+    error = vim.api.nvim_get_hl(0, { name = 'DiagnosticError', link = false }).fg,
+  }]])
+
+  eq({ looks.old.strikethrough, looks.old.fg }, { true, looks.error })
+end
+
+T['the diff view']['keeps the fix explanation and its colours'] = function()
+  start_with_gutter()
+  child.cmd('2')
+  propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+
+  toggle_diff()
+
+  eq({ group_of('why'), group_of('┊ Subtract.') }, { 'AineoFixWhyGutter', 'AineoFixWhy' })
 end
 
 T['while shown'] = MiniTest.new_set()
