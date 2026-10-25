@@ -2036,7 +2036,9 @@ the file is not written, the issue is no longer shown, and you are told
 fix's old lines while it is shown, typing, an undo, a redo, a reload or a
 plugin's, or a command such as `J` or `:m` that leaves an old line other
 than it was or the edits out of their order, drops it with a word; an edit
-elsewhere moves it along. A buffer
+elsewhere moves it along. A command Neovim reports in parts, such as `:m`
+or `J` near the fix's lines, may also drop a fix whose lines still stand:
+ask again then. A buffer
 unloaded or wiped out drops it without a word. A buffer has one fix at a
 time: `\Vf` again replaces the fix shown and the request that runs, and
 `:Aineo explain clear` removes it with the rest. The keys are

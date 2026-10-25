@@ -665,7 +665,11 @@ end
 --- Whether a change of the lines from `first` to before `last`, from 0, as
 --- `nvim_buf_attach()`'s `on_lines` tells it, touches the lines `span`
 --- names: it replaced one of them, or inserted lines between two of them.
---- Lines inserted right above or below them do not touch them.
+--- Lines inserted right above or below them do not touch them. `span` is
+--- read from the extmarks once a part of a change is handled, and Neovim
+--- moves them for a whole command at once: the second part of a command it
+--- reports in parts, such as `:m` or `J`, is told in the lines between the
+--- parts and can seem to touch lines it did not.
 ---
 ---@param span { first: integer, last: integer }
 ---@param first integer
@@ -697,8 +701,10 @@ end
 --- whole, when the event loop has turned, either it still stands
 --- (`standing_spans()`) and is drawn again there (`render()`), or it is
 --- dropped: a command Neovim reports in parts, such as `J` or `:m` upward,
---- can change old lines that no part touches. An unload removes it without
---- a word.
+--- can change old lines that no part touches. Such a command can also drop
+--- a fix that still stands, a part seeming to touch its lines (`touches()`):
+--- never unsafe, since the user is told and asks again. A gone extmark
+--- drops it too. An unload removes it without a word.
 ---
 ---@param preview aineo.explain.Preview
 local function watch_edits(preview)
