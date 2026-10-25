@@ -421,6 +421,64 @@ vim.api.nvim_create_autocmd({ 'WinNew', 'BufWinEnter' }, {
   callback = conceal_in_current_window,
 })
 
+--- The `desc` of the keys a preview maps, which tells them from the user's.
+local KEYS_DESCRIPTION = 'aineo: a key of the fix shown'
+
+--- Each key of `preview` (`aineo.explain.FixKeys`) with the `<Plug>`
+--- mapping it is mapped to.
+---
+---@param preview aineo.explain.Preview
+---@return { key: string, plug: string }[]
+local function key_mappings(preview)
+  local found = {}
+  for _, action in ipairs({ 'accept', 'reject', 'diff' }) do
+    table.insert(found, { key = preview.keys[action], plug = PLUG_KEYS[action] })
+  end
+  return found
+end
+
+--- Maps in Normal mode, for `preview`'s buffer alone, each of its keys to
+--- the `<Plug>` mapping that does what it says, but a key already mapped
+--- there, locally or globally: the user's.
+---
+---@param preview aineo.explain.Preview
+local function map_keys(preview)
+  if not preview.keys then
+    return
+  end
+  for _, mapping in ipairs(key_mappings(preview)) do
+    local taken = vim.api.nvim_buf_call(preview.buffer, function()
+      return next(vim.fn.maparg(mapping.key, 'n', false, true)) ~= nil
+    end)
+    if not taken then
+      vim.keymap.set('n', mapping.key, mapping.plug, {
+        buffer = preview.buffer,
+        remap = true,
+        desc = KEYS_DESCRIPTION,
+      })
+    end
+  end
+end
+
+--- Removes the keys `map_keys()` mapped for `preview`'s buffer, told by
+--- their `desc`: a key the user mapped stays.
+---
+---@param preview aineo.explain.Preview
+local function unmap_keys(preview)
+  if not preview.keys or not vim.api.nvim_buf_is_valid(preview.buffer) then
+    return
+  end
+  for _, mapping in ipairs(key_mappings(preview)) do
+    local ours = vim.api.nvim_buf_call(preview.buffer, function()
+      local found = vim.fn.maparg(mapping.key, 'n', false, true)
+      return found.buffer == 1 and found.desc == KEYS_DESCRIPTION
+    end)
+    if ours then
+      vim.keymap.del('n', mapping.key, { buffer = preview.buffer })
+    end
+  end
+end
+
 --- Removes the preview `buffer` shows, if any, leaving the buffer as it
 --- reads and every window's options as they were before it.
 ---
@@ -432,6 +490,7 @@ function M.clear(buffer)
   end
   previews[buffer] = nil
   restore_windows(preview)
+  unmap_keys(preview)
   if vim.api.nvim_buf_is_valid(buffer) then
     vim.api.nvim_buf_clear_namespace(buffer, DRAWN, 0, -1)
     vim.api.nvim_buf_clear_namespace(buffer, RANGES, 0, -1)
@@ -593,6 +652,7 @@ function M.show(buffer, order)
   previews[buffer] = preview
   conceal_in_windows(preview)
   render(preview)
+  map_keys(preview)
   watch_edits(preview)
 end
 

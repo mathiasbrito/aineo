@@ -411,12 +411,13 @@ function M.ask(explaining)
   end
 end
 
---- Removes every explanation and every issue `buffer` shows, and stops the
---- requests that run for it, if any, without a word.
+--- Removes every explanation and every issue `buffer` shows, and the fix it
+--- shows, and stops the requests that run for it, if any, without a word.
 ---
 ---@param buffer integer
 function M.clear(buffer)
   runs.stop_all_of(buffer)
+  fix.reject(buffer)
   for _, kind in ipairs(kinds.ALL) do
     marks.clear(buffer, kind)
   end

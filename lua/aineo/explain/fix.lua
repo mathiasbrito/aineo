@@ -9,6 +9,7 @@ local placement = require('aineo.explain.placement')
 local preview = require('aineo.explain.preview')
 local request = require('aineo.explain.request')
 local runs = require('aineo.explain.runs')
+local steer = require('aineo.explain.steer')
 
 local M = {}
 
@@ -90,6 +91,26 @@ local function show_answer(asked, ended)
   })
 end
 
+--- The code the fix of `issue`, shown above `fixing.line` of
+--- `fixing.buffer`, is asked for, as the buffer reads now: its file's path
+--- from `folder`, the project's folder, its `'filetype'`, the issue and
+--- every line.
+---
+---@param fixing aineo.explain.FixRequest
+---@param issue aineo.explain.ShownIssue
+---@param folder string
+---@return aineo.explain.FixCode
+local function code_of(fixing, issue, folder)
+  local path = vim.api.nvim_buf_get_name(fixing.buffer)
+  return {
+    path = vim.fs.relpath(folder, path) or path,
+    language = vim.bo[fixing.buffer].filetype,
+    issue_line = fixing.line,
+    issue = issue.text,
+    lines = vim.api.nvim_buf_get_lines(fixing.buffer, 0, -1, false),
+  }
+end
+
 --- Starts Claude Code for a fix of `issue`, shown above `fixing.line` of
 --- `fixing.buffer`, from `folder`, the project's folder, with the read-only
 --- tools, `fixing.model` and `fixing.effort`, showing above that line that
@@ -102,9 +123,9 @@ end
 ---@param fixing aineo.explain.FixRequest
 ---@param issue aineo.explain.ShownIssue
 ---@param folder string
-local function start(fixing, issue, folder)
+---@param steered_text? string the text the prompt starts with, as the user edited it; the default text when absent
+local function start(fixing, issue, folder, steered_text)
   local buffer = fixing.buffer
-  local path = vim.api.nvim_buf_get_name(buffer)
   local asked = {
     buffer = buffer,
     window = fixing.window,
@@ -113,13 +134,9 @@ local function start(fixing, issue, folder)
     keys = fixing.keys,
     lines = vim.api.nvim_buf_get_lines(buffer, 0, -1, false),
   }
-  local prompt = request.fix_prompt({
-    path = vim.fs.relpath(folder, path) or path,
-    language = vim.bo[buffer].filetype,
-    issue_line = fixing.line,
-    issue = issue.text,
-    lines = asked.lines,
-  })
+  local code = code_of(fixing, issue, folder)
+  code.steer = steered_text
+  local prompt = request.fix_prompt(code)
   local run = runs.begin({
     kind = kinds.FIX,
     deep = false,
@@ -165,9 +182,30 @@ local function start(fixing, issue, folder)
   run.process = process
 end
 
+--- Asks a fix of `issue` (`start()`), replacing the fix request that runs
+--- for `fixing.buffer` and the fix it shows, both without a word: a buffer
+--- has one fix at a time.
+---
+---@param fixing aineo.explain.FixRequest
+---@param issue aineo.explain.ShownIssue
+---@param folder string
+---@param steered_text? string
+local function ask(fixing, issue, folder, steered_text)
+  local running = runs.find(fixing.buffer, kinds.FIX)
+  if running then
+    runs.stop(running)
+  end
+  M.reject(fixing.buffer)
+  start(fixing, issue, folder, steered_text)
+end
+
 --- Asks a fix for the issue `fixing.buffer` shows above `fixing.line`
 --- (`aineo.explain.marks`' `issue_at()`), running Claude Code in `folder`,
---- the project's folder; tells the user, once, when none is shown there.
+--- the project's folder (`ask()`); tells the user, once, when none is shown
+--- there. A steered request first opens the float in which the user edits
+--- the prompt (`aineo.explain.steer`), from the fix's default text or the
+--- text last sent for a fix, and asks with the text sent; nothing when the
+--- user cancels or the buffer is gone by then.
 ---
 --- Raises an error naming `claude.cmd` when its command cannot be run.
 ---
@@ -179,7 +217,20 @@ function M.propose(fixing, folder)
     vim.notify('aineo: no issue on this line', vim.log.levels.INFO)
     return
   end
-  start(fixing, issue, folder)
+  if not fixing.steered then
+    ask(fixing, issue, folder)
+    return
+  end
+  steer.open({
+    name = kinds.FIX.name,
+    title = kinds.FIX.deep.title,
+    default = request.default_fix_steer(code_of(fixing, issue, folder)),
+    on_send = function(text)
+      if vim.api.nvim_buf_is_valid(fixing.buffer) then
+        ask(fixing, issue, folder, text)
+      end
+    end,
+  })
 end
 
 --- Accepts the fix `buffer` shows (`aineo.explain.preview`'s `apply()`):

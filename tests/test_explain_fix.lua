@@ -21,6 +21,15 @@ local CODE = {
 --- The issue the fake `claude` finds on line 2.
 local ISSUE = 'Adds where it should subtract.'
 
+--- The edit of line 2 that fixes `ISSUE`.
+local SUBTRACT = {
+  line = 2,
+  last = 2,
+  old = { '  return a + b' },
+  new = { '  return a - b' },
+  why = 'Subtracts b from a.',
+}
+
 --- The record the fake `claude` writes (`explained.start()` makes its folder).
 local RECORD = vim.fs.joinpath(
   vim.fn.fnamemodify('.', ':p'):gsub('/$', ''),
@@ -219,15 +228,6 @@ local function propose(fix, fields)
   ask_fix(fields)
   wait_for_answer()
 end
-
---- The edit of line 2 that fixes `ISSUE`.
-local SUBTRACT = {
-  line = 2,
-  last = 2,
-  old = { '  return a + b' },
-  new = { '  return a - b' },
-  why = 'Subtracts b from a.',
-}
 
 --- The rows of the child's screen once redrawn, white space at their ends
 --- cut off.
@@ -764,6 +764,52 @@ T['the diff view']['keeps the fix explanation and its colours'] = function()
   eq({ group_of('why'), group_of('┊ Subtract.') }, { 'AineoFixWhyGutter', 'AineoFixWhy' })
 end
 
+--- What each of the keys `\Va`, `\Vr` and `\Vd` is mapped to in Normal mode
+--- for the child's current buffer alone: its right-hand side, `''` when it
+--- is not mapped for the buffer.
+---
+---@return table<string, string>
+local function buffer_keys()
+  return child.lua_get([[(function()
+    local found = {}
+    for _, key in ipairs({ '\\Va', '\\Vr', '\\Vd' }) do
+      local mapping = vim.fn.maparg(key, 'n', false, true)
+      found[key] = mapping.buffer == 1 and (mapping.rhs or 'callback') or ''
+    end
+    return found
+  end)()]])
+end
+
+T['the keys'] = MiniTest.new_set()
+
+T['the keys']['accept, reject and show the diff in the buffer while the preview is shown'] = function()
+  start()
+  child.cmd('2')
+
+  propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+  local while_shown = buffer_keys()
+  reject()
+
+  eq(while_shown, {
+    ['\\Va'] = '<Plug>(aineo-fix-accept)',
+    ['\\Vr'] = '<Plug>(aineo-fix-reject)',
+    ['\\Vd'] = '<Plug>(aineo-fix-diff)',
+  })
+  eq(buffer_keys(), { ['\\Va'] = '', ['\\Vr'] = '', ['\\Vd'] = '' })
+end
+
+T['the keys']['never replace a key of the user’s, which stays when the preview goes'] = function()
+  start()
+  child.cmd('2')
+  child.lua([[vim.keymap.set('n', '\\Va', ':echo "mine"<CR>', { buffer = true })]])
+
+  propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+  local while_shown = buffer_keys()['\\Va']
+  reject()
+
+  eq({ while_shown, buffer_keys()['\\Va'] }, { ':echo "mine"<CR>', ':echo "mine"<CR>' })
+end
+
 T['while shown'] = MiniTest.new_set()
 
 T['while shown']['an edit of its old lines drops it, with a word'] = function()
@@ -853,6 +899,136 @@ T['accepting']['tells the user when the buffer shows no fix'] = function()
   accept()
 
   eq(messages(), { 'aineo: no fix is shown in this buffer' })
+end
+
+T['asking again'] = MiniTest.new_set()
+
+T['a fix request'] = MiniTest.new_set()
+
+--- How many extmarks the child's current buffer holds in the namespace
+--- named `name`.
+---
+---@param name string
+---@return integer
+local function marks_in(name)
+  return child.lua_get(
+    '#vim.api.nvim_buf_get_extmarks(0, vim.api.nvim_create_namespace(...), 0, -1, {})',
+    { name }
+  )
+end
+
+--- The edit of line 2 that the second answer of a case makes.
+local SWAP = vim.tbl_extend('force', SUBTRACT, { new = { '  return b - a' }, why = 'Swaps.' })
+
+T['asking again']['while a fix is shown replaces it'] = function()
+  start()
+  child.cmd('2')
+  propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+
+  propose({ summary = 'Swap.', edits = { SWAP } })
+
+  local rows = screen()
+  eq({ count_of(rows, '  return a - b'), count_of(rows, '  return b - a') }, { 0, 1 })
+  eq(marks_in('aineo_explain_fix_preview'), 1)
+end
+
+T['asking again']['while a fix is asked stops that request and asks anew'] = function()
+  start()
+  child.cmd('2')
+  explained.answer_with(child, { summary = 'Subtract.', edits = { SUBTRACT } })
+  child.lua('vim.env.AINEO_FAKE_CLAUDE_PRINT_MS = "1500"')
+  ask_fix()
+  explained.answer_with(child, { summary = 'Swap.', edits = { SWAP } })
+  child.lua('vim.env.AINEO_FAKE_CLAUDE_PRINT_MS = nil')
+
+  ask_fix()
+  wait_for_answer()
+  vim.wait(2000, function()
+    return count_of(screen(), '  return a - b') > 0
+  end, 50)
+
+  local rows = screen()
+  eq({ count_of(rows, '  return a - b'), count_of(rows, '  return b - a') }, { 0, 1 })
+  eq(marks_in('aineo_explain_fix'), 0)
+end
+
+T['a fix request']['that outlasts its time limit is stopped, with a word'] = function()
+  start()
+  child.cmd('2')
+  explained.answer_with(child, { summary = 'Subtract.', edits = { SUBTRACT } })
+  child.lua('vim.env.AINEO_FAKE_CLAUDE_PRINT_MS = "3000"')
+
+  ask_fix({ timeout_ms = 200 })
+  wait_until_told('aineo: proposing a fix failed: Claude Code did not answer within 0.2 s')
+
+  eq(explained.told(child)[#explained.told(child)], {
+    message = 'aineo: proposing a fix failed: Claude Code did not answer within 0.2 s',
+    level = vim.log.levels.ERROR,
+  })
+  eq(marks_in('aineo_explain_fix'), 0)
+end
+
+--- The lines of the float the child is in; none when it is in none.
+---
+---@return string[]
+local function float_text()
+  return child.lua_get([[(function()
+    local window = vim.api.nvim_get_current_win()
+    if vim.api.nvim_win_get_config(window).relative == '' then
+      return {}
+    end
+    return vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(window), 0, -1, false)
+  end)()]])
+end
+
+T['a steered fix'] = MiniTest.new_set()
+
+T['a steered fix']['opens the float with the fix’s default text, and asks with the text sent'] = function()
+  start()
+  child.cmd('2')
+  explained.answer_with(child, { summary = 'Subtract.', edits = { SUBTRACT } })
+
+  ask_fix({ steered = true })
+  local opened_with = float_text()
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { 'Fix it my way.' })
+  child.type_keys('<CR>')
+
+  eq(opened_with, {
+    'Propose a fix for the issue at line 2 of the file src/code.lua (language: lua),'
+      .. ' as numbered below.',
+    'Make the smallest change that fixes it, reading the project with the tools where it helps.',
+  })
+  eq(
+    vim.list_slice(vim.split(recorded(4)[4].stdin, '\n'), 1, 3),
+    { 'Fix it my way.', '', FIXED_PART }
+  )
+end
+
+T['a steered fix']['remembers the text sent for the next steered fix'] = function()
+  start()
+  child.cmd('2')
+  explained.answer_with(child, { summary = 'Subtract.', edits = { SUBTRACT } })
+  ask_fix({ steered = true })
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { 'Fix it my way.' })
+  child.type_keys('<CR>')
+  wait_for_answer()
+
+  ask_fix({ steered = true })
+
+  eq(float_text(), { 'Fix it my way.' })
+end
+
+T['clearing'] = MiniTest.new_set()
+
+T['clearing']['what the buffer shows removes the fix it shows too'] = function()
+  start()
+  child.cmd('2')
+  propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+
+  child.lua('require("aineo.explain").clear(vim.api.nvim_get_current_buf())')
+
+  eq(count_of(screen(), '  return a - b'), 0)
+  eq(conceal_options(), { 0, '' })
 end
 
 return T
