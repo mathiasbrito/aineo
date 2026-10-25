@@ -56,11 +56,11 @@ function M.start(child, name, lines, config)
 end
 
 --- Has the fake `claude` answer a successful result whose structured output
---- holds `explanations`, from a file of its own.
+--- is `object`, from a file of its own.
 ---
 ---@param child table
----@param explanations { line: integer, text: string }[]
-local function answer(child, explanations)
+---@param object table
+function M.answer_with(child, object)
   answers_made = answers_made + 1
   local path =
     fixture.write(('explain-child/answer-%d-%d.json'):format(vim.fn.getpid(), answers_made), {
@@ -69,10 +69,19 @@ local function answer(child, explanations)
         subtype = 'success',
         is_error = false,
         result = '',
-        structured_output = { explanations = explanations },
+        structured_output = object,
       }),
     })
   child.lua('vim.env.AINEO_FAKE_CLAUDE_PRINT = ...', { path })
+end
+
+--- Has the fake `claude` answer a successful result whose structured output
+--- holds `explanations` (`answer_with()`).
+---
+---@param child table
+---@param explanations { line: integer, text: string }[]
+local function answer(child, explanations)
+  M.answer_with(child, { explanations = explanations })
 end
 
 M.answer = answer
