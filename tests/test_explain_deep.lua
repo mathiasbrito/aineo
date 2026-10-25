@@ -458,6 +458,116 @@ T['the steering float']['keeps the steer sent but names the new file and languag
   })
 end
 
+T['the steering float']['refuses lines the buffer no longer has when sent: one message, nothing sent, the float closed'] = function()
+  start()
+  ask_steered({ range = { 4, 5 } })
+  child.lua([[vim.api.nvim_buf_set_lines(vim.fn.bufnr('src/code.lua'), 2, -1, false, {})]])
+
+  press('<CR>')
+
+  eq({ float(), explanation_lines_held() }, { {}, 0 })
+  eq(explained.told(child), {
+    {
+      message = 'aineo: the selected lines are no longer in the buffer',
+      level = vim.log.levels.WARN,
+    },
+  })
+end
+
+T['the steering float']['sends nothing and raises nothing when the buffer is gone by then'] = function()
+  start()
+  child.cmd('new')
+  child.cmd('wincmd j')
+  local source = child.api.nvim_get_current_buf()
+  ask_steered()
+  child.api.nvim_buf_delete(source, { force = true })
+
+  local sent_without_error = child.lua_get([[(function()
+    local send = vim.fn.maparg('<CR>', 'n', false, true).callback
+    return (pcall(send))
+  end)()]])
+
+  eq(sent_without_error, true)
+  eq({ float(), explained.told(child) }, { {}, {} })
+  eq(#recorded(0), 0)
+end
+
+--- How many floating windows the child has open.
+---
+---@return integer
+local function floats_open()
+  return child.lua_get([[#vim.tbl_filter(function(window)
+    return vim.api.nvim_win_get_config(window).relative ~= ''
+  end, vim.api.nvim_list_wins())]])
+end
+
+--- Waits until the child has no floating window open, or `PATIENCE_MS`.
+local function wait_until_no_float()
+  vim.wait(explained.PATIENCE_MS, function()
+    return floats_open() == 0
+  end, 20)
+end
+
+T['the steering float']['closes when the user leaves it, sends nothing, and keeps its text as the draft of the next float of the kind'] = function()
+  start()
+  ask_steered()
+  set_float_text({
+    'Explain the code of the file src/code.lua (language: lua), lines 1 to 5 as numbered below, thoroughly.',
+    'Draft steer.',
+  })
+
+  press('<C-w>p')
+  wait_until_no_float()
+
+  eq(explanation_lines_held(), 0)
+  ask_steered({ range = { 2, 3 } })
+  eq(float().lines, {
+    'Explain the code of the file src/code.lua (language: lua), lines 2 to 3 as numbered below, thoroughly.',
+    'Draft steer.',
+  })
+end
+
+T['the steering float']['leaves no buffer behind when it closes, however it closes'] =
+  MiniTest.new_set({
+    parametrize = { { 'q' }, { '<Esc>' }, { '<CR>' }, { '<C-w>p' }, { ':q<CR>' } },
+  })
+
+T['the steering float']['leaves no buffer behind when it closes, however it closes']['by'] = function(
+  key
+)
+  start()
+  local buffers_before = #child.api.nvim_list_bufs()
+  ask_steered()
+
+  press(key)
+  wait_until_no_float()
+
+  eq(#child.api.nvim_list_bufs(), buffers_before)
+end
+
+T['the steering float']['does not keep what was typed when the user cancels it'] = function()
+  start()
+  ask_steered()
+  set_float_text({ 'Typed and cancelled.' })
+
+  press('q')
+  ask_steered()
+
+  eq(vim.startswith(float().lines[1], 'Explain the code of the file src/code.lua'), true)
+end
+
+T['the steering float']['is the only one: another deep key while it is open focuses it and opens no other'] = function()
+  start()
+  local source = child.api.nvim_get_current_buf()
+  ask_steered()
+  child.cmd('noautocmd wincmd p')
+
+  ask_steered({ buffer = source, kind = 'issues' })
+
+  eq(floats_open(), 1)
+  eq(vim.startswith(float().lines[1], 'Explain the code of the file src/code.lua'), true)
+end
+
 T['the steering float']['sends, for another file, a prompt that names that file and its lines alone'] = function()
   local folder = start()
   send_steer(
