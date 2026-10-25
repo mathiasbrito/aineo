@@ -32,6 +32,13 @@ local M = {}
 ---@field details aineo.office_states.AgentDetails what the agent knows of the world it works in, which the pieces of the office show
 ---@field after_call? string while the agent thinks right after a call, the state of that call; none otherwise
 
+--- What the tracker keeps of a subagent that walked out quiet, or that it
+--- left out as quiet, until a line of it is heard.
+---@class aineo.office_states.Rest
+---@field started_by? string the id of the main agent's call that started it
+---@field open_calls? table<string, aineo.office_states.OpenCall> the calls of its own that ran as it walked out; none for one left out
+---@field started_calls? integer how many calls it had started as it walked out
+
 ---@class aineo.office_states.Tracker
 ---@field take fun(signal: aineo.transcript.Signal, now: number) takes in what an agent did, heard at `now`, in seconds on the caller's clock
 ---@field agents fun(now: number): aineo.office_states.Agent[] each agent and its state at `now`, the main agent first, the others in the order they were first heard of; a subagent that left is listed for a while, then not
@@ -145,7 +152,7 @@ function M.new_tracker(options)
   local by_id
   ---@type table<string, true>
   local gone
-  ---@type table<string, { started_by?: string }> the subagents left out for being quiet, until a line of theirs is heard, each with the main agent's call that started it
+  ---@type table<string, aineo.office_states.Rest> the subagents left out for being quiet, until a line of theirs is heard
   local resting
 
   local function start_over()
@@ -224,7 +231,13 @@ function M.new_tracker(options)
       if finished or walked_out then
         by_id[record.id] = nil
         gone[record.id] = finished or nil
-        resting[record.id] = walked_out and { started_by = record.started_by } or nil
+        resting[record.id] = walked_out
+            and {
+              started_by = record.started_by,
+              open_calls = record.open_calls,
+              started_calls = record.started_calls,
+            }
+          or nil
       end
       return not (finished or walked_out)
     end, records)
@@ -357,8 +370,9 @@ function M.new_tracker(options)
   --- does (`replays_what_was_forgotten()`), which is left out for the main
   --- agent too.
   --- A signal heard as it happens ends the rest: the subagent walks in again,
-  --- as if it arrived, with the main agent's call that started it, before it
-  --- hears the signal; the end of the subagent has it gone for good instead.
+  --- as if it arrived, with the main agent's call that started it and the
+  --- calls of its own that ran as it walked out, before it hears the signal;
+  --- the end of the subagent has it gone for good instead.
   ---
   ---@param signal aineo.transcript.Signal
   ---@param now number
@@ -388,6 +402,9 @@ function M.new_tracker(options)
     end
     if signal.kind ~= 'subagent_started' then
       let_hear({ agent = signal.agent, kind = 'subagent_started', call = rest.started_by }, now)
+      local walked_in = by_id[signal.agent]
+      walked_in.open_calls = rest.open_calls or {}
+      walked_in.started_calls = rest.started_calls or 0
     end
     return false
   end
