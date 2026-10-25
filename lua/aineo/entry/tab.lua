@@ -44,6 +44,13 @@ local NO_OWN_SESSION = 'aineo: Claude Code has not started in this Neovim;'
 --- one.
 local NOT_READY_TO_CLAIM = 'aineo: Claude Code is not ready yet; nothing claimed'
 
+--- What a claim of a session Claude Code's background service runs tells
+--- the user, as a warning, when it does not attach Claude's window to it
+--- because the tab's own Claude Code is busy with a turn, which stopping it
+--- would end: the claimed session, in `%s`.
+local NOT_ATTACHED_WHILE_BUSY = 'aineo: not attached — this tab’s Claude Code is busy with a turn;'
+  .. ' the claim of %s stays read-only until you claim it again'
+
 --- What `:Aineo sessions` tells the user, as a warning, by the status of
 --- the Claude session (`aineo.claude`'s `session_status()`; `not_started`
 --- when there is none) when it does nothing because Claude Code is not ready.
@@ -164,10 +171,12 @@ end
 ---@field claimed_session fun(): string? the session the tab's panes follow by a claim of it; nil while they follow its own Claude terminal's
 ---@field runs_session fun(id: string): boolean whether the tab's Claude Code runs the session `id`
 ---@field start_token fun(): string? see `aineo.claude.Session`'s `start_token()`
+---@field has_start_token fun(token: string): boolean whether `token` names the start of the tab's Claude Code (`aineo.claude.Session`'s `has_start_token()`)
 ---@field start_in_new_tab fun() what `:Aineo tab new` does once the tab page exists
 ---@field start_on_session fun(listed: aineo.claude.ListedSession, sessions: aineo.claude.ListedSession[]) what a pick of `\S` does once the tab page exists: starts Claude Code on that session
 ---@field open_on_session fun(id: string, kept_claim: string?) what reopening the folder's tabs does for each tab once its tab page exists: starts Claude Code on the session `id`, resumed or attached to where it runs in the background, in a layout of its own, and takes up `kept_claim`, the claim the folder's list kept for it, as `open_on_session()` says
 ---@field session_id fun(): string? the session the tab's Claude Code follows, nil before it has started
+---@field own_session fun(): string? the tab's own session: the one its Claude Code follows, or, while Claude's window is attached to a claimed session, the one it resumes when the claim ends; nil before it has started
 ---@field session_name fun(): string? the name of the session the tab's Claude terminal shows (`b:aineo_session_name`), nil before it has one
 ---@field is_busy fun(): boolean whether the Claude Code on the tab's terminal is busy
 ---@field page fun(): integer? the tab page the tab is in, nil before its layout opens
@@ -328,7 +337,9 @@ local function make_tab(homes, key, callbacks)
   --- Writes, unless Neovim is quitting (`v:exiting`), the tab's entry in the
   --- list of running editors (`aineo.mcp`'s `write_editor_entry()`): the
   --- editor's address, the directory it started in, the session the panes
-  --- follow, whether that is its own terminal's (`holds_other_claim()`), now as
+  --- follow, whether that is the tab's own session — not while a claim of
+  --- another session holds (`holds_other_claim()`), nor while Claude's
+  --- window is attached to the claimed one (`own_while_attached`) — now as
   --- its last use, and the tab's key. It writes none before the panes follow a
   --- session, nor for a Neovim with no server address. An entry that cannot be
   --- written is told to the user as a warning. Defined below, with the
@@ -340,6 +351,54 @@ local function make_tab(homes, key, callbacks)
   --- where it is (`show_pane()`). Defined below, with it.
   ---@type fun()
   local show_changes_pane
+
+  --- While Claude's window is attached to the session a claim holds
+  --- (`attach_to_claim()`): the tab's own session, which its Claude Code
+  --- resumes when the claim ends; nil otherwise.
+  ---@type string?
+  local own_while_attached = nil
+
+  --- The tab's own session: the one its Claude Code follows, or, while
+  --- Claude's window is attached to a claimed session, the one it resumes
+  --- when the claim ends (`own_while_attached`); nil before Claude Code has
+  --- started.
+  ---
+  ---@return string?
+  local function own_session_id()
+    return own_while_attached or homes.claude.session_id()
+  end
+
+  --- Attaches Claude's window to `id`, the session the tab has just claimed,
+  --- where Claude Code's background service runs it: reads the folder's
+  --- sessions (`aineo.claude`'s `list_sessions()`) and, when they show `id`
+  --- there with a short id, stops the tab's own Claude Code and runs `claude
+  --- attach` in its place (`attach_listed_claim()`). Attaches nothing when
+  --- the tab has no own session to return to, when the window is attached to
+  --- `id` already, and while the tab's own Claude Code is busy with a turn
+  --- when the list answers (`refuses_attach_while_busy()`). Until the start
+  --- of the tab's Claude Code is confirmed, as at a start that takes a kept
+  --- claim up again, the attach waits for it (`attach_once_confirmed`), so
+  --- that the own Claude Code is launched, ready and stopped by its keys,
+  --- never stopped half started. Defined
+  --- below, with the swap of Claude's terminal it makes.
+  ---@type fun(id: string)
+  local attach_to_claim
+
+  --- The claimed session whose attach waits for the start of the tab's own
+  --- Claude Code to be confirmed (`attach_to_claim()`,
+  --- `follow_confirmed_start()`); nil when none waits.
+  ---@type string?
+  local attach_once_confirmed = nil
+
+  --- Puts the tab's own Claude Code back in Claude's window in place of the
+  --- attach to a claimed session: resumes the tab's own session there
+  --- (`aineo.claude`'s `resume_session()`), which detaches the attach and
+  --- attaches instead where a background host runs that session by then, and
+  --- forgets the attach (`own_while_attached`). The panes are left where
+  --- they are. Raises the error the swap raises, the attach going on then.
+  --- Defined below, with the swap of Claude's terminal it makes.
+  ---@type fun()
+  local resume_own_terminal
 
   --- Makes this Neovim the claimant of `session` (`aineo.mcp`'s
   --- `claim_session()`) for the tab, letting go any session the tab claimed
@@ -476,7 +535,7 @@ local function make_tab(homes, key, callbacks)
         address = vim.v.servername,
         working_directory = places.kept_places().working_directory,
         session = panes_session,
-        own = not holds_other_claim(),
+        own = not holds_other_claim() and not own_while_attached,
         used = microseconds_now(),
         tab = key,
       })
@@ -510,13 +569,21 @@ local function make_tab(homes, key, callbacks)
   --- Confirms the start of Claude Code that has become ready for input
   --- (`start_confirmed`), and makes the panes the session `id`'s, the one it
   --- is on then (`follow_own_session()`) — unless a claim of another session
-  --- holds (`holds_other_claim()`), which keeps them where they are.
+  --- holds (`holds_other_claim()`), or Claude's window is attached to the
+  --- claimed session (`own_while_attached`), which keep them where they are.
+  --- An attach that waited for the confirmation (`attach_once_confirmed`) is
+  --- made then, while its claim still holds.
   ---
   ---@param id string
   local function follow_confirmed_start(id)
     start_confirmed = true
-    if not holds_other_claim() then
+    if not holds_other_claim() and not own_while_attached then
       follow_own_session(id)
+    end
+    local waiting = attach_once_confirmed
+    attach_once_confirmed = nil
+    if waiting and claimed_by_id == waiting then
+      attach_to_claim(waiting)
     end
   end
 
@@ -554,8 +621,10 @@ local function make_tab(homes, key, callbacks)
   --- fork does not continue: Input then shows `id`'s draft. The tab's own
   --- Claude terminal runs on its own session meanwhile, and a confirmation
   --- of its start that comes later leaves the panes on the claim
-  --- (`follow_confirmed_start()`). Notes that the tab's office begins
-  --- following then (`aineo.entry.office`'s `began_following()`).
+  --- (`follow_confirmed_start()`), unless Claude's window attaches to the
+  --- fork, as it does when Claude Code's background service runs it
+  --- (`attach_to_claim()`). Notes that the tab's office begins following
+  --- then (`aineo.entry.office`'s `began_following()`).
   ---
   ---@param id string
   local function follow_session_elsewhere(id)
@@ -563,6 +632,7 @@ local function make_tab(homes, key, callbacks)
     local carry = not holds_other_claim() and 'replace' or nil
     follow_claimed_session(id, carry)
     claim(id)
+    attach_to_claim(id)
   end
 
   --- Hands what aineo keeps for the Claude session `dead`, whose resume
@@ -679,6 +749,20 @@ local function make_tab(homes, key, callbacks)
     callbacks.on_bound(tab)
   end
 
+  --- Ends the claim Claude's window was attached to, the attach having ended
+  --- by itself and the tab's Claude Code having resumed `own`, the tab's own
+  --- session, in its place (`aineo.claude`'s `attach_session()`): the panes
+  --- follow `own` as its own session and the tab claims it, as `:Aineo claim`
+  --- with no word does; the resumed start is confirmed once it is ready.
+  ---
+  ---@param own string
+  local function return_after_attach_ended(own)
+    own_while_attached = nil
+    start_confirmed = false
+    follow_own_session(own)
+    claim(own)
+  end
+
   --- The two callbacks a start of Claude Code in `working_directory` hands
   --- the claude home (`aineo.claude`'s `start_session()`) for a resume Claude
   --- Code finds no conversation for. `on_terminal_replaced`, which the claude
@@ -689,7 +773,9 @@ local function make_tab(homes, key, callbacks)
   --- source is `startup` is that new session taking the dead one's place: it
   --- is handed what aineo kept for the dead one (`hand_over_dead_session()`)
   --- and is not followed now. Every other switch goes to
-  --- `follow_switch_once_confirmed()`.
+  --- `follow_switch_once_confirmed()`, but a switch back to the tab's own
+  --- session while Claude's window is attached to a claimed one, which the
+  --- end of the attach makes (`return_after_attach_ended()`).
   ---
   --- The note is the new id, not a flag, and each start has its own: a
   --- handler that raised before its switch was told leaves the note set, and
@@ -713,6 +799,10 @@ local function make_tab(homes, key, callbacks)
         if id == replacing_session and source == 'startup' then
           replacing_session = nil
           hand_over_dead_session(left, id, working_directory)
+          return
+        end
+        if own_while_attached and id == own_while_attached then
+          return_after_attach_ended(id)
           return
         end
         follow_switch_once_confirmed(id, source, left)
@@ -1122,10 +1212,19 @@ local function make_tab(homes, key, callbacks)
   --- Makes the panes follow the session of the tab's own Claude terminal
   --- (`aineo.claude`'s `session_id()`), as its own, and claims that session
   --- (`claim()`): what `:Aineo claim` with no argument does, whether a claim
-  --- of another session holds or not. In a Neovim whose terminal runs no
+  --- of another session holds or not. While Claude's window is attached to
+  --- the claimed session, the tab's own session is resumed there first
+  --- (`resume_own_terminal()`). In a Neovim whose terminal runs no
   --- session (`NO_OWN_SESSION`), or before the running start is confirmed
   --- (`NOT_READY_TO_CLAIM`), it warns once and changes nothing.
   local function claim_own_session()
+    if own_while_attached then
+      local own = own_while_attached
+      resume_own_terminal()
+      follow_own_session(own)
+      claim(own)
+      return
+    end
     local own = homes.claude.session_id()
     if not own then
       vim.notify(NO_OWN_SESSION, vim.log.levels.WARN)
@@ -1146,8 +1245,10 @@ local function make_tab(homes, key, callbacks)
   --- whose terminal runs on its own session. The report home is given its
   --- environment first (`give_report_environment()`), so that it takes the
   --- session's reports before aineo's layout has opened. The id of the tab's
-  --- own terminal's session claims it as `claim_own_session()` does, and
-  --- carries nothing. A choice made once the tab is released claims nothing.
+  --- own session (`own_session_id()`) claims it as `claim_own_session()`
+  --- does, and carries nothing. A choice made once the tab is released claims
+  --- nothing. Claude's window then attaches to the session where Claude
+  --- Code's background service runs it (`attach_to_claim()`).
   ---
   --- Raises an error naming `id` when it is not a session id of the form
   --- Claude Code gives (`aineo.claude`'s `is_session_id()`), and changes
@@ -1159,7 +1260,7 @@ local function make_tab(homes, key, callbacks)
     if not require('aineo.claude').is_session_id(id) then
       error((':Aineo claim takes a Claude session id, not %s'):format(id), 0)
     end
-    if id == homes.claude.session_id() then
+    if id == own_session_id() then
       claim_own_session()
       return
     end
@@ -1170,6 +1271,7 @@ local function make_tab(homes, key, callbacks)
       end
       follow_claimed_session(id, carry)
       claim(id)
+      attach_to_claim(id)
     end)
   end
 
@@ -1365,12 +1467,10 @@ local function make_tab(homes, key, callbacks)
   --- is not confirmed until the new Claude Code is ready, so that the panes
   --- follow it then (`follow_confirmed_start()`); when `replace` raises, the
   --- confirmation stays as it was, since the Claude Code that ran goes on, and
-  --- the error is raised again. Terminal mode is asked for in Claude's window
-  --- once the swap has left it: swapping the buffer ends Terminal mode, and the
-  --- old terminal's exit ends it again.
+  --- the error is raised again.
   ---
   ---@param replace fun(claude: table, settings: aineo.claude.Settings): integer
-  local function replace_claude_terminal(replace)
+  local function swap_claude_terminal(replace)
     local claude = homes.claude
     local settings = claude_settings(resolved_config(), claude.session_directory())
     local was_confirmed = start_confirmed
@@ -1383,6 +1483,17 @@ local function make_tab(homes, key, callbacks)
     claude_terminal = terminal
     follow_claude_terminal_activity(terminal)
     homes.layout.follow_claude_terminal(claude_terminal)
+  end
+
+  --- Swaps Claude's terminal for the one `replace` makes
+  --- (`swap_claude_terminal()`), from a key the user pressed in Claude's
+  --- window, and asks for Terminal mode there once the swap has left it:
+  --- swapping the buffer ends Terminal mode, and the old terminal's exit ends
+  --- it again.
+  ---
+  ---@param replace fun(claude: table, settings: aineo.claude.Settings): integer
+  local function replace_claude_terminal(replace)
+    swap_claude_terminal(replace)
     vim.api.nvim_create_autocmd('ModeChanged', {
       pattern = 't:*',
       once = true,
@@ -1392,11 +1503,98 @@ local function make_tab(homes, key, callbacks)
     })
   end
 
+  --- Whether an attach to the claimed session `id` must not stop the tab's
+  --- own Claude Code because it is busy with a turn (`is_busy()`), which
+  --- stopping it would end; tells the user why, once, as a warning
+  --- (`NOT_ATTACHED_WHILE_BUSY`). An attach to another claimed session in
+  --- place of one already made stops no own Claude Code, and is never
+  --- refused.
+  ---
+  ---@param id string
+  ---@return boolean refused
+  local function refuses_attach_while_busy(id)
+    if own_while_attached or not is_busy() then
+      return false
+    end
+    vim.notify(NOT_ATTACHED_WHILE_BUSY:format(id), vim.log.levels.WARN)
+    return true
+  end
+
+  --- Acts on `sessions`, the folder's sessions read for the claim of `id`,
+  --- `own` being the tab's own session when the claim was made: when they
+  --- show `id` running in Claude Code's background service with a short id,
+  --- Claude's window attaches to it (`aineo.claude`'s `attach_session()`),
+  --- the session the end of the attach resumes being the tab's own session
+  --- now — the one its Claude Code switched to meanwhile, if it did — and the
+  --- folder's list keeps the claim under it; unless the tab's own Claude Code
+  --- turned busy meanwhile (`refuses_attach_while_busy()`). When they do not —
+  --- a session with no short id, a list that failed — the claim stays
+  --- read-only, and a window attached to an earlier claim gets the tab's own
+  --- session back (`resume_own_terminal()`). Nothing is done once the tab is
+  --- released, Neovim quits, or the claim has moved on.
+  ---
+  ---@param id string
+  ---@param own string
+  ---@param sessions aineo.claude.ListedSession[]
+  local function attach_listed_claim(id, own, sessions)
+    if is_released or vim.v.exiting ~= vim.NIL or claimed_by_id ~= id then
+      return
+    end
+    local background = require('aineo.claude').background_session(sessions, id)
+    if not background and own_while_attached then
+      resume_own_terminal()
+      return
+    end
+    if not background or refuses_attach_while_busy(id) then
+      return
+    end
+    own = own_session_id() or own
+    swap_claude_terminal(function(session, settings)
+      return session.attach_session(settings, background, own)
+    end)
+    own_while_attached = own
+    folder_tabs.keep_folder_tabs()
+  end
+
+  attach_to_claim = function(id)
+    local own = own_session_id()
+    if not own or (own_while_attached and homes.claude.session_id() == id) then
+      return
+    end
+    if not start_confirmed then
+      attach_once_confirmed = id
+      return
+    end
+    require('aineo.claude').list_sessions(
+      resolved_config().claude.cmd,
+      places.kept_places().working_directory,
+      function(sessions)
+        errors.run(function()
+          attach_listed_claim(id, own, sessions or {})
+        end)
+      end
+    )
+  end
+
+  resume_own_terminal = function()
+    local own = own_while_attached
+    own_while_attached = nil
+    local resumed, failure = pcall(swap_claude_terminal, function(session, settings)
+      return session.resume_session(settings, own)
+    end)
+    if not resumed then
+      own_while_attached = own
+      error(failure, 0)
+    end
+  end
+
   --- Replaces Claude's window's Claude Code, which is attached to a background
   --- session, with a start of aineo's own (`aineo.claude`'s `replace_session()`):
   --- a new session when `choice` is nil, else the session it names, resumed. A
   --- command written into an attached Claude Code would reach the background
-  --- session. Only at an empty prompt (`at_empty_prompt()`).
+  --- session. Only at an empty prompt (`at_empty_prompt()`). An attach to a
+  --- claimed session ends the claim with it: the tab lets the claim go, and
+  --- the panes follow the new start once it is ready, as the tab's own.
   ---
   ---@param outcome string the words that begin a warning of what was not done
   ---@param prompt_holds_text string
@@ -1406,6 +1604,11 @@ local function make_tab(homes, key, callbacks)
       replace_claude_terminal(function(claude, settings)
         return claude.replace_session(settings, choice)
       end)
+      if own_while_attached then
+        own_while_attached = nil
+        claimed_by_id = nil
+        release_claim()
+      end
     end)
   end
 
@@ -1807,14 +2010,16 @@ local function make_tab(homes, key, callbacks)
 
   --- Takes up the first tab again, as the tab the next tab opened is made of
   --- once it has closed: what the closed tab held — the session its panes
-  --- followed, its claim, the confirmation of its start, the sessions it
-  --- warned of — is forgotten, so that it follows its new session at once
-  --- (`start_in_new_tab()`) and starts in the folder.
+  --- followed, its claim and an attach to it, the confirmation of its start,
+  --- the sessions it warned of — is forgotten, so that it follows its new
+  --- session at once (`start_in_new_tab()`) and starts in the folder.
   local function reopen()
     is_released = false
     is_reopened = true
     panes_session = nil
     claimed_by_id = nil
+    own_while_attached = nil
+    attach_once_confirmed = nil
     start_confirmed = false
     shared_session_told = {}
   end
@@ -1865,6 +2070,9 @@ local function make_tab(homes, key, callbacks)
   tab.start_token = function()
     return homes.claude.start_token()
   end
+  tab.has_start_token = function(token)
+    return homes.claude.has_start_token(token)
+  end
   tab.start_in_new_tab = function()
     start_in_new_tab(start_new_session)
   end
@@ -1881,6 +2089,7 @@ local function make_tab(homes, key, callbacks)
   tab.session_id = function()
     return homes.claude.session_id()
   end
+  tab.own_session = own_session_id
   tab.session_name = function()
     if claude_terminal and vim.api.nvim_buf_is_valid(claude_terminal) then
       return vim.b[claude_terminal].aineo_session_name
