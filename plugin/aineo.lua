@@ -458,6 +458,45 @@ vim.keymap.set('x', '<Plug>(aineo-explain-mark)', function()
   end)
 end, { desc = 'aineo: mark the issues on the selected lines' })
 
+--- What asking a fix asks for, by the words of its `<Plug>` mappings after
+--- `aineo-`, in Normal mode: a fix of the issue on the cursor's line, its
+--- prompt edited first or not (`aineo.entry`'s `propose_fix()`).
+local FIX_ORDERS = {
+  ['explain-fix'] = { steered = false },
+  ['explain-fix-steered'] = { steered = true },
+}
+
+--- The keys that follow the prefix for each of `FIX_ORDERS`, in Normal mode.
+local FIX_KEYS = {
+  ['explain-fix'] = 'Vf',
+  ['explain-fix-steered'] = 'VVf',
+}
+
+for words, order in pairs(FIX_ORDERS) do
+  vim.keymap.set('n', ('<Plug>(aineo-%s)'):format(words), function()
+    run(function()
+      require('aineo.entry').propose_fix(order)
+    end)
+  end, { desc = 'aineo: ' .. words })
+end
+
+--- The `<Plug>` mappings of a fix shown, which the keys of its buffer map
+--- to while it is shown, by the words after `aineo-fix-`: what each does
+--- (`aineo.entry`'s `accept_fix()`, `reject_fix()` and `toggle_fix_diff()`).
+local FIX_ACTIONS = {
+  accept = 'accept_fix',
+  reject = 'reject_fix',
+  diff = 'toggle_fix_diff',
+}
+
+for words, action in pairs(FIX_ACTIONS) do
+  vim.keymap.set('n', ('<Plug>(aineo-fix-%s)'):format(words), function()
+    run(function()
+      require('aineo.entry')[action]()
+    end)
+  end, { desc = 'aineo: fix ' .. words })
+end
+
 --- The `<Plug>` mappings that jump to the next and the previous explanation
 --- or issue of the current buffer, by the direction they go, in Normal,
 --- Visual and Operator-pending mode (`aineo.entry`'s `jump_to_explanation()`).
@@ -522,7 +561,9 @@ end
 --- sequence the user has mapped globally in that mode already — a mapping
 --- of only the start of a sequence, of a longer one, or in the other mode,
 --- does not count; maps nothing when `prefix` is `false`. An action with no
---- keys there, `claim`, gets none.
+--- keys there, `claim`, gets none. Explaining code gets its keys
+--- (`EXPLAIN_KEYS`) in both modes, and asking a fix its own (`FIX_KEYS`) in
+--- Normal mode.
 ---
 ---@param prefix string|false
 local function map_prefix(prefix)
@@ -540,6 +581,9 @@ local function map_prefix(prefix)
   for words, keys in pairs(EXPLAIN_KEYS) do
     map_unless_mapped('n', prefix .. keys, words, '')
     map_unless_mapped('x', prefix .. keys, words, '')
+  end
+  for words, keys in pairs(FIX_KEYS) do
+    map_unless_mapped('n', prefix .. keys, words, '')
   end
 end
 
