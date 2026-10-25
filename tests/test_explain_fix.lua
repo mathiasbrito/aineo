@@ -90,6 +90,15 @@ end
 --- edit.
 local FIXED_PART = 'The issue to fix is at line 2 of the file src/code.lua: ' .. ISSUE
 
+--- Waits until the child was told `message`, or `PATIENCE_MS` is over.
+---
+---@param message string
+local function wait_until_told(message)
+  vim.wait(explained.PATIENCE_MS, function()
+    return vim.tbl_contains(messages(), message)
+  end, 20)
+end
+
 T['asking a fix'] = MiniTest.new_set()
 
 T['asking a fix']['runs Claude Code with the read-only tools alone, the model and the effort asked for'] = function()
@@ -387,6 +396,243 @@ T['the preview']['hides the old lines in every window, which get their own optio
   eq(buffer_lines(), CODE)
   eq(count_of(rows, '  return a + b'), 2)
   eq(count_of(rows, '  return a - b'), 0)
+end
+
+--- Rejects the fix the child's current buffer shows, as `\Vr` does.
+local function reject()
+  child.lua('require("aineo.explain").reject_fix(vim.api.nvim_get_current_buf())')
+end
+
+T['the preview']['hides the old lines in a window split from one showing it, until rejected'] = function()
+  start()
+  child.cmd('2')
+  propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+
+  child.cmd('split')
+  local in_split = conceal_options()
+  reject()
+
+  eq(in_split, { 2, 'n' })
+  eq(conceal_options(), { 0, '' })
+  child.cmd('wincmd p')
+  eq(conceal_options(), { 0, '' })
+end
+
+T['the preview']['hides the old lines in a window that comes to show the buffer, which gets the buffer’s own options back'] = function()
+  start()
+  child.cmd('2')
+  local buffer = child.api.nvim_get_current_buf()
+  propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+  child.cmd('new')
+  child.wo.conceallevel = 1
+  child.wo.concealcursor = 'i'
+
+  child.cmd('buffer ' .. buffer)
+  local while_shown = conceal_options()
+  child.api.nvim_set_current_buf(buffer)
+  reject()
+
+  eq(while_shown, { 2, 'n' })
+  eq(conceal_options(), { 0, '' })
+end
+
+--- A fix of two edits, the first of which adds a line.
+local TWO_EDITS = {
+  summary = 'Subtract, and multiply.',
+  edits = {
+    {
+      line = 2,
+      last = 2,
+      old = { '  return a + b' },
+      new = { '  local difference = a - b', '  return difference' },
+      why = 'Subtracts.',
+    },
+    {
+      line = 6,
+      last = 6,
+      old = { '  return a + b' },
+      new = { '  return a * b' },
+      why = 'Multiplies.',
+    },
+  },
+}
+
+--- Accepts the fix the child's current buffer shows, as `\Va` does.
+local function accept()
+  child.lua('require("aineo.explain").accept_fix(vim.api.nvim_get_current_buf())')
+end
+
+T['accepting'] = MiniTest.new_set()
+
+T['accepting']['applies every edit, writes nothing, and one undo takes them all back'] = function()
+  start()
+  child.cmd('2')
+  propose(TWO_EDITS)
+
+  accept()
+  local accepted = buffer_lines()
+  child.cmd('undo')
+
+  eq(accepted, {
+    'local function sub(a, b)',
+    '  local difference = a - b',
+    '  return difference',
+    'end',
+    '',
+    'local function mul(a, b)',
+    '  return a * b',
+    'end',
+  })
+  eq(child.fn.readfile(child.api.nvim_buf_get_name(0)), CODE)
+  eq(messages()[#messages()], 'aineo: fix applied (u undoes it)')
+  eq(buffer_lines(), CODE)
+end
+
+--- How many issues the child's current buffer shows.
+---
+---@return integer
+local function issues_shown()
+  return child.lua_get([[#vim.api.nvim_buf_get_extmarks(0,
+    vim.api.nvim_create_namespace('aineo_explain_issues'), 0, -1, {})]])
+end
+
+T['accepting']['no longer shows the issue it fixes, even when its edits leave the issue’s line'] = function()
+  start()
+  child.cmd('2')
+  propose({
+    summary = 'Rename.',
+    edits = {
+      {
+        line = 1,
+        last = 1,
+        old = { 'local function sub(a, b)' },
+        new = { 'local function subtract(a, b)' },
+        why = 'Names it.',
+      },
+    },
+  })
+  local before = issues_shown()
+
+  accept()
+
+  eq({ before, issues_shown() }, { 1, 0 })
+end
+
+T['accepting']['changes nothing when the code under the fix changed meanwhile'] = function()
+  start()
+  child.cmd('2')
+  propose(TWO_EDITS)
+
+  child.lua([[
+    vim.api.nvim_buf_set_lines(0, 5, 6, false, { '  return a + b + 0' })
+    require('aineo.explain').accept_fix(vim.api.nvim_get_current_buf())
+  ]])
+  wait_until_told('aineo: the fix was dropped: its lines were edited')
+
+  eq(messages(), {
+    'aineo: the code under the fix changed; ask again',
+    'aineo: the fix was dropped: its lines were edited',
+  })
+  eq(buffer_lines(), {
+    'local function sub(a, b)',
+    '  return a + b',
+    'end',
+    '',
+    'local function mul(a, b)',
+    '  return a + b + 0',
+    'end',
+  })
+end
+
+T['while shown'] = MiniTest.new_set()
+
+T['while shown']['an edit of its old lines drops it, with a word'] = function()
+  start()
+  child.cmd('2')
+  propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+
+  child.api.nvim_buf_set_text(0, 1, 2, 1, 2, { 'local x = 1; ' })
+  wait_until_told('aineo: the fix was dropped: its lines were edited')
+
+  eq(messages()[#messages()], 'aineo: the fix was dropped: its lines were edited')
+  eq(conceal_options(), { 0, '' })
+  eq(count_of(screen(), '  return a - b'), 0)
+end
+
+T['while shown']['an undo that changes its old lines drops it'] = function()
+  start()
+  child.cmd('2')
+  child.cmd('2s/b/b/')
+  propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+
+  child.cmd('undo')
+  wait_until_told('aineo: the fix was dropped: its lines were edited')
+
+  eq(messages()[#messages()], 'aineo: the fix was dropped: its lines were edited')
+end
+
+T['while shown']['reloading the file drops it'] = function()
+  start()
+  child.cmd('2')
+  propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+
+  child.cmd('edit!')
+  wait_until_told('aineo: the fix was dropped: its lines were edited')
+
+  eq(messages()[#messages()], 'aineo: the fix was dropped: its lines were edited')
+  eq(conceal_options(), { 0, '' })
+end
+
+T['while shown']['wiping the buffer out drops it without a word'] = function()
+  start()
+  child.cmd('2')
+  propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+  local told_before = #messages()
+
+  child.cmd('bwipeout!')
+  vim.wait(explained.PATIENCE_MS, function()
+    return child.wo.conceallevel == 0
+  end, 20)
+
+  eq(conceal_options(), { 0, '' })
+  eq(#messages(), told_before)
+end
+
+T['while shown']['an edit above it moves it, and accepting applies it where its lines are now'] = function()
+  start()
+  child.cmd('2')
+  propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+
+  child.api.nvim_buf_set_lines(0, 0, 0, false, { '-- head' })
+  accept()
+
+  eq(vim.list_slice(buffer_lines(), 1, 4), {
+    '-- head',
+    'local function sub(a, b)',
+    '  return a - b',
+    'end',
+  })
+end
+
+T['while shown']['deleting the line before it keeps its new lines in view'] = function()
+  start()
+  child.cmd('2')
+  propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+
+  child.api.nvim_buf_set_lines(0, 0, 1, false, {})
+
+  vim.wait(explained.PATIENCE_MS, function()
+    return count_of(screen(), '  return a - b') == 1
+  end, 20)
+  eq(row_after(screen(), '  return a - b'), 'end')
+end
+
+T['accepting']['tells the user when the buffer shows no fix'] = function()
+  start()
+
+  accept()
+
+  eq(messages(), { 'aineo: no fix is shown in this buffer' })
 end
 
 return T
