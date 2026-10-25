@@ -423,8 +423,11 @@ requests that you steer. A float opens in the middle of the editor holding the
 whole prompt, with the file, language and lines filled in, ready to edit;
 `<CR>` in Normal mode sends it, `q` or `<Esc>` cancels with nothing sent, and
 `R` puts the default text back. The last text sent is remembered for each kind
-and starts the next float. aineo adds to your text what you do not edit: the
-rule that ties each item to its first line, and the numbered buffer. The
+and starts the next float, with the file and lines of its first line brought up
+to date. There is one float at a time: leaving it closes it and keeps its text
+as the draft of its kind. aineo adds to your text what you do not edit: which
+file and lines are asked about, the rule that ties each item to its first
+line, and the numbered buffer. The
 request reads the project with the read-only tools, runs at `explain.deep_effort`
 (`'high'`) with the model `explain.deep_model` (`'sonnet'`), and is stopped
 after `explain.deep_timeout_ms`. Its answers are labelled `expl+` and

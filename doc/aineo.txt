@@ -1937,11 +1937,24 @@ nothing sent, and `R` puts the default text back; Insert mode is plain
 editing. A text of white space alone is not sent: you are told, once, and the
 float stays. The text last sent is remembered for each kind, for the Neovim
 session, and starts the next float of that kind; `R` brings back the default.
+The first line of the default names the file, its language and the lines;
+when a remembered text starts the float of another file or other lines, that
+line is replaced by the new one where it still reads as aineo wrote it, and
+a line you rewrote is left alone.
+
+There is one float at a time. Leaving it, with a window command or `:q`,
+closes it with nothing sent and keeps its text as the draft of its kind, which
+starts the next float of that kind as a text sent does (`q` and `<Esc>` keep
+nothing). A deep key pressed while a float is open focuses it. If the lines
+asked about are no longer in the buffer when you press `<CR>`, you are told,
+once, `aineo: the selected lines are no longer in the buffer`, nothing is sent
+and the float closes.
 
 What is sent is your text, then what aineo always adds and you do not edit:
-the rule that ties each item of the answer to the first line it concerns,
-from the first to the last line asked, so that the answers stay anchored to
-their lines, and every line of the buffer, numbered, as `\V` hands it. The
+which file and lines are asked about, whatever your text says, the rule that
+ties each item of the answer to the first line it concerns, from the first to
+the last line asked, so that the answers stay anchored to their lines, and
+every line of the buffer, numbered, as `\V` hands it. The
 request always has the read-only tools `Read`, `Grep` and `Glob`, as `\V`
 does, and runs at `explain.deep_effort` (`--effort`) with the model
 `explain.deep_model` and the time limit `explain.deep_timeout_ms`
