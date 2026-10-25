@@ -323,6 +323,24 @@ local SETTINGS = {
     expected = 'a whole number of milliseconds of at least 1',
   },
   {
+    name = 'explain.fix_model',
+    default = 'sonnet',
+    validator = is_model_name,
+    expected = 'a non-empty string naming a model',
+  },
+  {
+    name = 'explain.fix_effort',
+    default = 'high',
+    validator = is_effort,
+    expected = 'one of ' .. table.concat(EXPLAIN_EFFORTS, ', '),
+  },
+  {
+    name = 'explain.fix_timeout_ms',
+    default = 300000,
+    validator = is_positive_count,
+    expected = 'a whole number of milliseconds of at least 1',
+  },
+  {
     name = 'explain.issues_prompt',
     default = 'Some issues were found in this code, can you check and propose a fix if the issue holds:',
     validator = is_prompt,
