@@ -47,7 +47,7 @@ Mutants, each one literal edit applied to a pristine copy, run alone and restore
 | Mutant | Literal edit | Result |
 |---|---|---|
 | C1 | `return_after_attach()`: drop `or ended.stopped` | killed: replaced attach, home's stop |
-| C2 | drop `or home.session ~= ended` | survived the group and the whole suite — equivalent on the state it guards: any start in the ended start's place goes through `become_the_session()`, which wipes the ended start's terminal, so the next guard holds too |
+| C2 | drop `or home.session ~= ended` | survived the packet's cases and the whole suite; called equivalent here, which the review refuted (finding 3: a swap an autocommand breaks leaves the ended terminal valid); killed by the fix round's case |
 | C23 | drop both C2's and C3's lines | not an assertion kill: the overtaken case hangs and the runner's time limit ends it |
 | C3 | drop `or not vim.api.nvim_buf_is_valid(ended.buffer)` | killed: wiped terminal |
 | C4 | `vim.v.exiting ~= vim.NIL` → `false` | killed: quit with a waiting `VimLeavePre` |
@@ -71,7 +71,7 @@ Mutants, each one literal edit applied to a pristine copy, run alone and restore
 | T9 | `claim_own_session()`: attached branch `if false` | killed: 4 cases |
 | T10 | the switch back's detection `if false` | killed: 3 cases |
 | T11, T11b | drop `claim(own)` at the attach's end / at the release | killed |
-| T12 | `return_after_attach_ended()`: drop `start_confirmed = false` | survived the file and the whole suite: the resumed start is confirmed within about a second against the fake, and nothing observable reads the flag in between without racing it |
+| T12 | `return_after_attach_ended()`: drop `start_confirmed = false` | survived the packet's cases and the whole suite; called unobservable here, which the review refuted (finding 4: a resumed start that never becomes ready); killed by the fix round's case |
 | T13 | `:Aineo new` claim end `if false` | killed |
 | T14 | `reopen()`: drop `own_while_attached = nil` | killed |
 | T15, T16 | drop `attach_to_claim(id)` after a fork / a claim | killed (1 / 16 cases) |
@@ -81,9 +81,39 @@ Mutants, each one literal edit applied to a pristine copy, run alone and restore
 | T20 | drop `own_while_attached = own` after the swap | killed: 10 cases |
 | T21 | `if not background or …` → `if refuses_attach_while_busy(id)` | killed: interactive session |
 
+## Fix round — the review of PR #366 (A621, 2026-10-25)
+
+The attack review found that an attach to a fork of the tab's session cut the fork off from what aineo routes by start token (finding 1), that the session returned to was read at the claim rather than when the list answered (2), that C2 and T12 were not equivalent (3, 4: the reviewer built inputs that kill them), that a return resumed the own session without reading the list (7), and that the restart case did not pin whether the own Claude Code launched (8). A621 ruled each; 5 and 6 stay limits.
+
+- **Finding 1**: the attach start holds the token of the start it stopped (`held_token`); `has_start_token()` (run calls and announcements through `routing.tab_for_work()`), the permission-wait lookup and a held `SessionStart` of another session accept it. The held `SessionStart` is taken only as a session elsewhere — no pid, no switch, nothing kept — as the review cautioned. Seen red: P5b's case (`run_answered = false, waits = {}`), the fork of the fork (no third start).
+- **Finding 2**: `own = own_session_id() or own` before the swap (the reviewer's line), and the folder's list kept then. Seen red: `--resume <old own>` against the session switched to.
+- **Finding 7**: the return after an attach ends goes through `start_after_list()`, the release through the new `resume_session()`; both list first and attach where a background host runs the own session. Seen red: `--resume` against `attach <short>`, in the claude home and in the tab.
+- **Finding 8**: an attach waits for the own start's confirmation (`attach_once_confirmed`), so at a restart the own Claude Code launches, becomes ready and is stopped by its keys, then the attach starts. Seen red: one start (`attach`) against two. The case's helper first counted starts through a waiting helper inside `vim.wait()`, which hung under F8b; it now reads the record.
+- **Findings 3, 4**: the reviewer's probes are cases (arrived green; killers C2 and T12, run).
+- **Help**: *aineo-claim-attach* corrected (what a fork's token reaches while attached; the return reading the list; the restart's order); the busy-title limit (5) written in the limits.
+
+Fix-round mutants, each alone from a pristine copy, on `0f45a4ed` (F8, F8b re-run on `69003bee` after the helper fix), each killed by an equality assertion:
+
+| Mutant | Literal edit | Killed by |
+|---|---|---|
+| C2 | drop `or home.session ~= ended` | the broken-swap overtaken case |
+| T12 | drop `start_confirmed = false` at the attach's end | the not-ready warning case |
+| F1a | permission-wait lookup without `or home_holding(start_token)` | the fork-token case |
+| F1b | `has_start_token()` without `or home.session.held_token == token` | the fork-token case |
+| F1c | `held_token = nil` in `attach_session()` | fork-token and fork-of-fork cases |
+| F1d | `take_session_event()` returns without `take_held_session_event(told)` | the fork-of-fork case |
+| F2 | drop `own = own_session_id() or own` | the switched-own case |
+| F2b | drop `folder_tabs.keep_folder_tabs()` after the attach | the switched-own case |
+| F7a | `start_after_list` → `start_in_place` in `return_after_attach()` | two claude cases (own in background; the end's switch) |
+| F7b | `resume_session(settings, own)` → `replace_session(settings, { id = own, resumed = true })` | the own-in-background release case |
+| F8 | `if not start_confirmed then` → `if false then` | the restart case |
+| F8b | the waiting attach's `if waiting and claimed_by_id == waiting then` → `if false then` | the restart case |
+
 ## Suites
 
 `make test` on the tree pushed (`a6283e20`, before this note): 8146 cases, `Fails (0)`, on Neovim 0.12.5, the host's — 0.12.6 is the newest release (D29) and the host does not have it yet. `make lint` clean; `tests/test_doc.lua` green. An earlier whole run that overlapped a second run of the same suite failed two cases on load (`test_entry_tabs_routing.lua`'s Send while claimed, `test_git_process.lua`'s limit); both passed alone and in the final run.
+
+Fix round: `make test` at `69003bee`: 8153 cases, `Fails (1)` — `test_entry_run_follow.lua` › *a window of the run pane follows the output of a shell added below, by \X* (`follows = false`), a case this branch does not touch; the file passed 3 times out of 3 alone right after. Neovim 0.12.5 (the host's; 0.12.6 not on the host, D29). `make lint` clean; `test_doc` green; `test_claude_attach.lua` and `test_entry_claim_attach.lua` green.
 
 ## Open threads
 
