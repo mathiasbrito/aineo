@@ -1106,6 +1106,60 @@ T['while shown']['wiping the buffer out drops it without a word'] = function()
   eq(#messages(), told_before)
 end
 
+--- The first and last line, from 1, of each edit of the fix the child's
+--- current buffer shows.
+---
+---@return integer[][]
+local function ranges()
+  return child.lua_get([[(function()
+    local namespace = vim.api.nvim_create_namespace('aineo_explain_fix_preview')
+    local found = {}
+    for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(0, namespace, 0, -1, { details = true })) do
+      table.insert(found, { mark[2] + 1, mark[4].end_row })
+    end
+    return found
+  end)()]])
+end
+
+--- Lets the child's scheduled callbacks run: a drop the case expects not to
+--- happen would have happened by then.
+local function settle()
+  vim.wait(300, function()
+    return false
+  end, 20)
+end
+
+T['while shown']['a line inserted right above or below its old lines moves it, or leaves it, and drops nothing'] = MiniTest.new_set(
+  {
+    parametrize = { { 1, { { 3, 3 } } }, { 2, { { 2, 2 } } } },
+  },
+  {
+    test = function(row, moved_to)
+      start()
+      child.cmd('2')
+      propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+
+      child.api.nvim_buf_set_lines(0, row, row, false, { '-- inserted' })
+      settle()
+
+      eq({ ranges(), messages() }, { moved_to, {} })
+    end,
+  }
+)
+
+T['while shown']['after an edit above it, an edit of the line now above its old lines drops nothing'] = function()
+  start()
+  child.cmd('2')
+  propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+  child.api.nvim_buf_set_lines(0, 0, 0, false, { '-- head' })
+  settle()
+
+  child.api.nvim_buf_set_text(0, 1, 0, 1, 0, { '-- ' })
+  settle()
+
+  eq({ ranges(), messages() }, { { { 3, 3 } }, {} })
+end
+
 T['while shown']['an edit above it moves it, and accepting applies it where its lines are now'] = function()
   start()
   child.cmd('2')
