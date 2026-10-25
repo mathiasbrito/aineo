@@ -584,12 +584,17 @@ T['the next start'] = MiniTest.new_set()
 ---@param count integer
 ---@return string[][]
 local function first_words_of_starts(fake, count)
+  local function starts_so_far()
+    return vim.tbl_filter(function(recorded)
+      return recorded.argv ~= nil and recorded.argv[1] ~= 'agents'
+    end, claude_session.record(fake))
+  end
   vim.wait(claude_session.STOP_PATIENCE_MS, function()
-    return #claude_session.wait_for_starts(fake, 0) >= count
+    return #starts_so_far() >= count
   end, 20)
   return vim.tbl_map(function(start)
     return { start.argv[1], start.argv[2] }
-  end, vim.list_slice(claude_session.wait_for_starts(fake, 0), 1, count))
+  end, vim.list_slice(starts_so_far(), 1, count))
 end
 
 --- The session the folder's list keeps for the tab in the restart cases.
