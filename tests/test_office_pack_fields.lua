@@ -514,6 +514,20 @@ local WRONG_FIELDS = {
     'triggers[1].when needs at least one field',
   },
   {
+    'a cat’s step that follows someone the office does not know',
+    {
+      activities = activities_with({
+        chase_a_butterfly = {
+          who = 'cat',
+          during = { 'always' },
+          steps = { { follow = 'a_butterfly', for_seconds = 5 } },
+        },
+      }),
+    },
+    'activities',
+    'activities.chase_a_butterfly.steps[1].follow must be one of someone_walking',
+  },
+  {
     'a step that follows someone the office does not know',
     {
       activities = activities_with({
