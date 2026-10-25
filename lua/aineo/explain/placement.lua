@@ -74,8 +74,10 @@ local function first_line_of(lines, edit)
   return found[1]
 end
 
---- Whether one of `lines` holds a line break, `\n` or `\r`, or a NUL, which
---- no line of a buffer holds.
+--- Whether one of `lines` holds a line break, `\n` or `\r`, or a NUL. A
+--- buffer's line can end in `\r` (a file with CRLF line ends read as
+--- `'fileformat'` unix), and an edit of such a line is refused as one holding
+--- a line break, which leaves it untouched.
 ---
 ---@param lines string[]
 ---@return boolean
