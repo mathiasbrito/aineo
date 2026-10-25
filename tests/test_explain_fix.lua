@@ -628,6 +628,29 @@ T['accepting']['changes nothing when the code under the fix changed meanwhile'] 
   })
 end
 
+T['accepting']['changes nothing when an old line was edited in place meanwhile'] = function()
+  start()
+  child.cmd('2')
+  propose(TWO_EDITS)
+
+  child.lua([[
+    vim.api.nvim_buf_set_text(0, 5, 9, 5, 14, { 'b + a' })
+    require('aineo.explain').accept_fix(vim.api.nvim_get_current_buf())
+  ]])
+  wait_until_told('aineo: the fix was dropped: its lines were edited')
+
+  eq(messages()[1], 'aineo: the code under the fix changed; ask again')
+  eq(buffer_lines(), {
+    'local function sub(a, b)',
+    '  return a + b',
+    'end',
+    '',
+    'local function mul(a, b)',
+    '  return b + a',
+    'end',
+  })
+end
+
 --- Toggles the diff view of the fix the child's current buffer shows, as
 --- `\Vd` does.
 local function toggle_diff()
