@@ -11,6 +11,19 @@ M.SCHEMA = '{"type":"object","properties":{"explanations":{"type":"array","items
   .. '"required":["line","text"],"additionalProperties":false}}},'
   .. '"required":["explanations"],"additionalProperties":false}'
 
+--- The JSON Schema the answer of a fix must match: an object holding a
+--- summary of the whole fix and its list of edits, each the first and last
+--- line it replaces, the old lines and the new, and why, and nothing else.
+--- Written as text so that its keys keep one order.
+M.FIX_SCHEMA = '{"type":"object","properties":{"summary":{"type":"string"},'
+  .. '"edits":{"type":"array","items":{"type":"object","properties":{'
+  .. '"line":{"type":"integer"},"last":{"type":"integer"},'
+  .. '"old":{"type":"array","items":{"type":"string"}},'
+  .. '"new":{"type":"array","items":{"type":"string"}},'
+  .. '"why":{"type":"string"}},'
+  .. '"required":["line","last","old","new","why"],"additionalProperties":false}}},'
+  .. '"required":["summary","edits"],"additionalProperties":false}'
+
 --- The read-only tools a request with tools may use, each without asking.
 local READ_ONLY_TOOLS = 'Read,Grep,Glob'
 
@@ -37,12 +50,14 @@ end
 ---@field model string
 ---@field tools boolean whether it may read the project with read-only tools
 ---@field effort? string the effort it works at, as `--effort` takes it; its own default when absent
+---@field schema? string the JSON Schema its answer matches; `SCHEMA`, the explanations', when absent
 
 --- The words that start Claude Code for one request: the program of
 --- `command` (`program_of()`) in print mode, answering one JSON result that
---- holds the structured output `SCHEMA` describes, keeping no session, using
---- no MCP server, loading the user's own settings alone, never the
---- project's, and the model `options.model`; with no tool, or, when
+--- holds the structured output `options.schema` describes, else `SCHEMA`,
+--- keeping no session, using no MCP server, loading the user's own settings
+--- alone, never the project's, and the model `options.model`; with no tool,
+--- or, when
 --- `options.tools` is set, with the read-only tools alone (`READ_ONLY_TOOLS`),
 --- each allowed without asking; at `options.effort` when it is set.
 ---
@@ -55,7 +70,7 @@ function M.arguments(command, options)
     '--output-format',
     'json',
     '--json-schema',
-    M.SCHEMA,
+    options.schema or M.SCHEMA,
     '--no-session-persistence',
     '--strict-mcp-config',
     '--model',
@@ -218,6 +233,70 @@ function M.prompt(code)
     asks.answer:format(code.first, code.last),
     '',
     table.concat(numbered(code.lines), '\n'),
+  }, '\n')
+end
+
+--- The code a fix is asked for.
+---@class aineo.explain.FixCode
+---@field path string the file's path from the folder Claude Code runs in
+---@field language string the buffer's `'filetype'`, empty when it has none
+---@field issue_line integer the line the issue is shown above, from 1
+---@field issue string the issue's text
+---@field lines string[] every line of the buffer, as it stands
+---@field steer? string the text the prompt starts with, as the user edited it
+
+--- The text a fix's prompt starts with before the user edits it, as a
+--- `string.format()` pattern given the issue's line, the file and its
+--- language: its first line names them, the second asks for the change.
+local FIX_DEFAULT_STEER = 'Propose a fix for the issue at line %d of the file %s (language: %s),'
+  .. ' as numbered below.'
+  .. '\nMake the smallest change that fixes it, reading the project with the tools where it helps.'
+
+--- What a fix's prompt always says after the text the user may edit, as a
+--- `string.format()` pattern given the issue's line, the file and the
+--- issue's text: which issue to fix, whatever the text above says, then how
+--- to answer, which `aineo.explain.placement` holds the answer to.
+local FIX_RULES = 'The issue to fix is at line %d of the file %s: %s'
+  .. '\n\n'
+  .. 'Answer in summary the whole fix in one sentence, and the edits that make it.'
+  .. ' Fix only this file.'
+  .. ' Each edit gives in line and last the first and last line it replaces, and repeats in old'
+  .. ' exactly those lines of the numbered text below, verbatim with their indentation and'
+  .. ' without their numbers; new holds the lines that replace them, and why says what the'
+  .. ' change does and why it fixes the issue.'
+  .. ' Each edit has at least one old line: to insert lines, replace an anchor line with itself'
+  .. ' and the new lines.'
+  .. ' Edits do not overlap.'
+  .. ' Make the smallest change that fixes the issue.'
+  .. ' When no fix is needed or possible, answer no edits and say why in the summary.'
+
+--- The text a fix's prompt starts with before the user edits it: the issue's
+--- line, the file and its language — `unknown` when the buffer has no
+--- `'filetype'` — then what to change.
+---
+---@param fix aineo.explain.FixCode
+---@return string
+function M.default_fix_steer(fix)
+  return FIX_DEFAULT_STEER:format(
+    fix.issue_line,
+    fix.path,
+    fix.language ~= '' and fix.language or 'unknown'
+  )
+end
+
+--- The prompt Claude Code reads for `fix`: `fix.steer`, else the default text
+--- (`default_fix_steer()`), then what a fix's prompt always says
+--- (`FIX_RULES`), then every line of the buffer, numbered (`numbered()`).
+---
+---@param fix aineo.explain.FixCode
+---@return string
+function M.fix_prompt(fix)
+  return table.concat({
+    fix.steer or M.default_fix_steer(fix),
+    '',
+    FIX_RULES:format(fix.issue_line, fix.path, fix.issue),
+    '',
+    table.concat(numbered(fix.lines), '\n'),
   }, '\n')
 end
 
