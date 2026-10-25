@@ -4109,8 +4109,10 @@ job) and `error` (hit an error), unless the activity played has a `label`.
 
  #  State (and the state it falls back to) ~
  1  `arriving` (falls back to `standing`)
-    The main agent: the office begins to follow a new session (after a
-    session switch or `:Aineo office reset`). A subagent: its transcript
+    The main agent: `:Aineo office reset` begins its session afresh (a
+    session switch does not: the office then follows the new session's
+    transcript, and the agent shows the state that transcript gives).
+    A subagent: its transcript
     appears while the office shows (one that already runs when the office
     opens is at its place, not arriving). Lasts 4 seconds; what the agent
     does meanwhile waits for it to end.
@@ -4152,7 +4154,9 @@ job) and `error` (hit an error), unless the activity played has a `label`.
     it started last, or its turn has ended.
 14  `needs_permission` (falls back to `waiting`)
     The `PermissionRequest` hook for that agent (|aineo-office-hooks|), until
-    the agent's next line in its transcript.
+    the agent's next line in its transcript that is not the start of a tool
+    call: the line that starts the very call the hook asked about can be read
+    after the hook, and does not end the wait.
 15  `asking_you` (falls back to `waiting`)
     A call of `AskUserQuestion` still open.
 16  `reporting` (falls back to `working`)
@@ -4318,7 +4322,8 @@ pack.lua ~
 `pack.lua` returns a table, written in the subset of Lua that aineo reads as
 data and never runs: `return`, tables with named fields (`name = 'tiny'`),
 keys in brackets (`['*'] = ...`) and lists, strings in quotes or in long
-brackets, numbers, `true`, `false` and comments. A call, an operator,
+brackets, decimal numbers (`3`, `-1`, `0.25`; no `1e3`, no `0x10`), `true`,
+`false` and comments. A call, an operator,
 `function` or a name in a value is a problem at its line, and nothing of the
 file runs. A list item wins over a key of its number, as in Lua. A file is
 read to 256 KiB.
@@ -4386,7 +4391,8 @@ Field	Default	Means ~
 A character takes the colours and poses of the character of its kind in the
 pack it is based on, or of the kind it is `like`, and lays its own over them:
 its colours whole, its poses name by name. A subagent that is like nothing is
-like the agent; a pack that names no cat has none. The agent needs poses
+like the agent when no pack it is based on has a subagent (if one has, that
+subagent is taken); a pack that names no cat has none. The agent needs poses
 `standing` and `walking`: the engine uses them between steps. Every other pose
 is named by the steps that take it (|aineo-office-steps|), by any name of
 lowercase words joined by `_`.
@@ -4646,9 +4652,11 @@ of that name, and nowhere else:
 	area; a pack without the piece draws no sky
 `plan`	the main agent's tasks, from `TodoWrite` or `TaskCreate` and
 	`TaskUpdate`, a row each: `✓ ` before the ones done, `○ ` before the
-	others, cut to the area's width; from the first task not done when
-	there are more tasks than rows. A task deleted is left out, and a
-	creation whose result is an error takes no number. `TaskUpdate` names
+	others, cut to the area's width; when there are more tasks than rows,
+	from the first task not done, but never so late that rows stay empty
+	(7 tasks, 5 rows, only the 7th not done: tasks 3 to 7 show). A task
+	deleted is left out, and a creation whose result is an error takes no
+	number. `TaskUpdate` names
 	a task by the number Claude Code gave it, which the transcript does
 	not carry: aineo counts the creations it has read, so when the part
 	of the transcript it reads at the start begins after some of them,
@@ -4731,8 +4739,9 @@ Field	Default	Means ~
 		character's feet as the step ends
 `remove`	none	a thing taken away from the cell the character stands
 		on as the step ends
-`follow`	none	`'someone_walking'`, the only name there is: the
-		character trails the nearest one on the move
+`follow`	none	`'someone_walking'`, the only name that does anything
+		(the check does not tell another): the character
+		trails the nearest one on the move
 
 How an agent plays an activity: it takes the steps in order. For a step it
 goes to the nearest spot called `at` that no other agent has taken, walking
@@ -4903,10 +4912,10 @@ activities at random, as agents do, the ones whose `during` names `always`
 (weighted by `chance`, never the one it has just played). It takes no place
 among the agents, so it has no desk, no monitor and no row in the status list,
 and its colour goes by its number among the cats. A cat's step may `follow =
-'someone_walking'`, the only name there is: the cat trails the nearest
-character on the move for `for_seconds` or until it stops. A cat needs at
-least one activity with a spot to come into the office: it is placed by that,
-and a cat whose every activity follows someone is never placed.
+'someone_walking'`, the only name that does anything: the cat trails the
+nearest character on the move for `for_seconds` or until it stops. A cat
+needs at least one activity with a spot to come into the office: it is placed
+by that, and a cat whose every activity follows someone is never placed.
 
 The default pack's cat does these, with the weight of each: wander the aisles
 (4), sit and wash (3), sleep on a free sofa seat for one to three minutes (5),
@@ -4964,8 +4973,8 @@ state (|aineo-office-states|). A pack gives what a state looks like; a trigger
 gives what one call looks like, as `docker` at a server rack.
 
 Field	Means ~
-`when`	required: the call it matches; every field of it must match, and it
-	must have one
+`when`	required: the call it matches; every field of it must match. A
+	`when` with no field matches no call, and the check does not tell it
 `play`	required: the activity it plays while the call runs
 
 `when` holds `tool` (the tool's name, as `Bash`, `Read`, `Edit`), `agent`
@@ -5019,7 +5028,8 @@ Checking a pack ~
 `:Aineo office check [name]` (|:Aineo-office-check|) puts every problem of a
 pack in the quickfix list as `file:line: problem`, the file's whole path in
 the list, so `:cnext` goes to it. A problem names the entry by its path and
-says what it must be:
+says what it must be. This list is abridged: the real one gives each file by
+its whole path, and its last message goes on (`…; at most one is taken`):
 >
     art/desk.txt:3: the anchor lies outside the art
     art/desk.txt:6: this row is 5 pixels wide, and the first row is 6
@@ -5305,7 +5315,8 @@ area for the session's tasks: >
     RRRRRR
 <
 What `:Aineo office states tiny` tells of it (|:Aineo-office-states|), among
-its 28 lines: >
+its 28 lines. Each state is one long line in the window; here some are
+wrapped and some cut with `...` to fit the page: >
      1  arriving               draws come_in: Walks in through the door ...
      3  thinking               draws think_at_the_board: Stands at the ...
      5  reading                falls back to working, which draws
