@@ -120,4 +120,34 @@ function M.explanations_in(output, first, last)
   return one_per_line(object.explanations, first, last)
 end
 
+--- A fix as Claude Code answered it: the whole fix in one sentence, and its
+--- edits, unchecked (`aineo.explain.placement` checks them).
+---@class aineo.explain.Fix
+---@field summary string
+---@field edits aineo.explain.Edit[]
+
+--- The fix the result `output` holds, or `nil` and what is wrong with it:
+--- the error an error result says, or that it holds no summary text and no
+--- list of edits.
+---
+---@param output string what Claude Code printed
+---@return aineo.explain.Fix|nil fix
+---@return string? problem
+function M.fix_in(output)
+  local failure = M.error_in(output)
+  if failure then
+    return nil, failure
+  end
+  local result = decoded(output)
+  local object = type(result) == 'table' and answered_object(result)
+  if
+    type(object) ~= 'table'
+    or type(object.summary) ~= 'string'
+    or not vim.islist(object.edits)
+  then
+    return nil, 'its answer holds no fix'
+  end
+  return { summary = object.summary, edits = object.edits }
+end
+
 return M
