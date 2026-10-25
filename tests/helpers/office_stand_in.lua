@@ -13,11 +13,21 @@ local M = {}
 ---@field reports table[] each report `report_arrived()` was given
 ---@field let_go integer the `let_go()` calls
 ---@field session_changed integer the `session_changed()` calls
+---@field session_ended integer the `session_ended()` calls
+---@field session_started integer the `session_started()` calls
 ---@field settings table what the settings the office was given are, as the first office read them
 
 --- The Lua that makes `aineo.office` the stand-in.
 M.INSTALL = [[
-  _G.office_told = { made = 0, waits = {}, reports = {}, let_go = 0, session_changed = 0 }
+  _G.office_told = {
+    made = 0,
+    waits = {},
+    reports = {},
+    let_go = 0,
+    session_changed = 0,
+    session_ended = 0,
+    session_started = 0,
+  }
   package.loaded['aineo.office'] = {
     new_office = function(options)
       _G.office_told.made = _G.office_told.made + 1
@@ -32,6 +42,12 @@ M.INSTALL = [[
         end,
         session_changed = function()
           _G.office_told.session_changed = _G.office_told.session_changed + 1
+        end,
+        session_ended = function()
+          _G.office_told.session_ended = _G.office_told.session_ended + 1
+        end,
+        session_started = function()
+          _G.office_told.session_started = _G.office_told.session_started + 1
         end,
         follows_session = function()
           return false

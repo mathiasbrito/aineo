@@ -235,12 +235,18 @@ local function switch_session_to(new)
   end, 20)
 end
 
+--- How long a wait for the main agent to reach the file cabinet after a
+--- switch of session may last, in milliseconds: an office that shows has the
+--- new session's main agent walk in first, for 4 seconds, the old session
+--- having ended with the switch.
+local SWITCH_PATIENCE_MS = 10000
+
 --- Whether the main agent goes to the file cabinet, as it does for a call
 --- that reads, waiting for it.
 ---
 ---@return boolean
 local function goes_to_the_cabinet()
-  return vim.wait(PATIENCE_MS, function()
+  return vim.wait(SWITCH_PATIENCE_MS, function()
     return office_cells.is_at(child, 'file_cabinet')
   end, 20)
 end
