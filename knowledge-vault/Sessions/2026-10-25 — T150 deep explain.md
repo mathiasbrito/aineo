@@ -38,6 +38,19 @@ New files: `tests/test_explain_deep.lua` (the home: arguments, prompt, kept, flo
 
 Mutants are listed in the pull request and the report; each was one literal edit to a pristine copy, run alone on the file that targets it and restored, and each was killed by an assertion (the failure printed `Failed expectation`).
 
+## Fix round of PR #372 (A626)
+
+The settled points of the first round (a deep key never toggle-clears; the kept-answer message; the float's size) are accepted by A626 rule 5 and live here, not in the D122 row. The review's findings, built as A626 says:
+
+1. **Rule 1**: the deep prompt's fixed part says `The code asked about is the file X, lines a to b.` before the tie rule. `aineo.explain.steer` remembers a text with the default it was written over; the next float's first line (the head) is replaced by the new default's where it still equals the old default's. A head the user rewrote stays.
+2. **Rule 2**: the send checks `range[2]` against the buffer (one warning, nothing sent, float closed); a buffer gone sends nothing and raises nothing.
+3. **Rule 3**: one float at a time (`open_window`); `WinLeave` keeps the text as the kind's draft and closes the float on the next tick unless a send or a cancel finished it; a second call focuses the open float. `M.ask` is unchanged, so a send stops no run but the one `\V` would.
+4. **Rule 4**: `bufhidden = 'wipe'` pinned by a buffer count over `q`, `<Esc>`, `<CR>`, `<C-w>p` and `:q`.
+
+Measured on the committed fix: the buffer-gone guard (M30) is pinned by calling the `<CR>` mapping's callback under `pcall`, so the kill is an assertion, not the crash a key press would raise. Mutants (one literal edit each, a pristine copy, `tests/test_explain_deep.lua`, every kill an assertion): M30 `if false then` for the validity guard; M37 delete the `bufhidden` line (5 cases); stale-range guard `if false then`; head refresh `if false` and `if true`; the file in the fixed part replaced by `'other.lua'` (4 cases); the draft not remembered; `finished` ignored; the scheduled close removed (2 cases); the single-float guard `if false then`. A first attempt at the fixed-part mutant dropped `CODE_ASKED_ABOUT` and crashed `string.format`, so it was not counted as a kill and was replaced.
+
+Counts: `test_explain_deep` 38 cases, `test_entry_explain_deep` 8, `test_explain` 110, `test_doc` 150, all with no fail; `make lint` clean.
+
 ## Open threads
 
 - T151 (propose fix, D123) reuses `aineo.explain.steer` with its own default; nothing of it is built.
