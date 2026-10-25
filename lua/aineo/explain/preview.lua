@@ -487,6 +487,33 @@ vim.api.nvim_create_autocmd({ 'WinNew', 'BufWinEnter' }, {
   callback = conceal_in_current_window,
 })
 
+--- Gives a window that closes while it shows a preview's buffer the
+--- options it had there before the preview, before Neovim keeps them for
+--- the buffer and a later window takes them; `WinClosed` runs before that.
+---
+---@param window integer
+local function restore_closing_window(window)
+  for _, preview in pairs(previews) do
+    local before = preview.saved[window]
+    if
+      before
+      and vim.api.nvim_win_is_valid(window)
+      and vim.api.nvim_win_get_buf(window) == preview.buffer
+    then
+      set_conceal_options(window, before)
+      preview.saved[window] = nil
+    end
+  end
+end
+
+vim.api.nvim_create_autocmd('WinClosed', {
+  group = 'aineo_explain_fix_preview',
+  desc = 'aineo: give a window that closes while a fix shows its options back',
+  callback = function(event)
+    restore_closing_window(tonumber(event.match))
+  end,
+})
+
 vim.api.nvim_create_autocmd('BufWipeout', {
   group = 'aineo_explain_fix_preview',
   desc = 'aineo: forget what a fix left behind in the windows of a buffer wiped out',
