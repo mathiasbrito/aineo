@@ -1984,8 +1984,10 @@ the time limit `explain.fix_timeout_ms` (|aineo-config-explain.fix_model|,
 |aineo-config-explain.fix_effort|, |aineo-config-explain.fix_timeout_ms|).
 While it runs, the line above the issue's line and the badge say `proposing a
 fix…`. `\VVf` first opens the float of |aineo-explain-deep| with the fix's own
-default text, and its own remembered text, and asks with the text you send.
-A fix is never kept: each `\Vf` asks anew.
+default text, and its own remembered text, and asks with the text you send,
+for the line the issue is shown above when you send it; when it is shown no
+more, nothing is sent: `aineo: the issue is no longer shown`. A fix is never
+kept: each `\Vf` asks anew.
 
 What is sent is the text (the default asks for the smallest change that
 fixes the issue), then what aineo always adds and you do not edit: the issue,
@@ -2017,25 +2019,32 @@ foreground of |hl-DiagnosticHint|, `#56b6c2` without one. While the fix is
 shown, every window showing the buffer has a 'conceallevel' of at least 2 and
 an `n` in 'concealcursor', so that the old lines are hidden on the cursor's
 line too; each gets its own values back when the fix goes, and a window that
-comes to show the buffer meanwhile is given the values the buffer had.
+comes to show the buffer meanwhile is given the values the buffer had. A
+window showing another buffer when the fix goes keeps that buffer's values,
+and gets its own back when it comes back to the buffer.
 
 While a fix is shown, its buffer has three keys in Normal mode, never mapped
 over a key of yours, local or global, and removed when the fix goes:
 `\Va` accepts it, `\Vr` rejects it, `\Vd` shows it as a diff, the old lines
 struck through in |hl-AineoFixOld| above the new, and back again. Accepting
 first checks again that the lines under each edit are exactly its old
-lines; when one is not, nothing changes and you are told to ask again.
+lines and that the edits still stand in their order, none sharing a line
+with the next; when not, nothing changes and you are told to ask again.
 Otherwise every edit is applied, as one undo step (`u` takes them all back),
 the file is not written, the issue is no longer shown, and you are told
 `aineo: fix applied (u undoes it)`. Rejecting changes nothing. An edit of the
 fix's old lines while it is shown, typing, an undo, a redo, a reload or a
-plugin's, drops it with a word; an edit elsewhere moves it along. A buffer
+plugin's, or a command such as `J` or `:m` that leaves an old line other
+than it was or the edits out of their order, drops it with a word; an edit
+elsewhere moves it along. A buffer
 unloaded or wiped out drops it without a word. A buffer has one fix at a
 time: `\Vf` again replaces the fix shown and the request that runs, and
 `:Aineo explain clear` removes it with the rest. The keys are
 |<Plug>(aineo-fix-accept)|, |<Plug>(aineo-fix-reject)| and
 |<Plug>(aineo-fix-diff)|, which act on the fix the current buffer shows;
-with |aineo-config-prefix| `false`, none is mapped and the row names them.
+the row names the key aineo mapped for each, or its `<Plug>` mapping when
+the key is yours, or when |aineo-config-prefix| is `false` and none is
+mapped.
 
                                                           *aineo-explain-jump*
 `]v` and `[v` move the cursor to the line of the next and the previous
