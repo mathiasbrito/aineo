@@ -1133,8 +1133,8 @@ local function make_layout(input_name, group_name)
   --- when its terminal is wiped there (`close_claude_window_when_wiped()`);
   --- keeps Claude's line numbers and status line as Claude's terminal enters
   --- a window (`keep_claude_window_on_entry()`); and puts the proportions back
-  --- whenever a window closes, the editor is resized or a tab is entered,
-  --- replacing what an earlier call set up.
+  --- whenever a window that is not a float closes, the editor is resized or a
+  --- tab is entered, replacing what an earlier call set up.
   --- Input is made a scratch buffer first, so the redirect never takes it for
   --- a file. A window is still in the layout while `WinClosed` runs, so the
   --- proportions are put back after it; a tab that is not shown is resized
@@ -1149,7 +1149,15 @@ local function make_layout(input_name, group_name)
     )
     vim.api.nvim_create_autocmd('WinClosed', {
       group = group,
-      callback = function()
+      callback = function(event)
+        local closed = tonumber(event.match)
+        if
+          closed
+          and vim.api.nvim_win_is_valid(closed)
+          and vim.api.nvim_win_get_config(closed).relative ~= ''
+        then
+          return
+        end
         vim.schedule(keep_proportions)
       end,
     })

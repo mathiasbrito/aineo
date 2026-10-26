@@ -35,9 +35,6 @@ T['the groups']['are the sheet’s groups, in its order'] = function()
     'Explorer',
     'Explain and fix',
     'Office and zoom',
-    'While a fix shows',
-    'In the steering float',
-    'Jumping between explanations',
     'In the changes pane',
     'In the explorer',
   })
@@ -68,9 +65,12 @@ T['the rows']['each say what they do in a phrase'] = function()
   )
 end
 
-T['the rows']['each name their keys once, after the prefix or as typed'] = function()
+T['the rows']['each name their keys once, after the prefix or as typed, but those that list another row’s again'] = function()
   eq(
     rows_failing(function(row)
+      if row.mirrors then
+        return row.suffix == nil and row.key == nil
+      end
       return (row.suffix == nil) ~= (row.key == nil)
     end),
     {}
@@ -103,47 +103,98 @@ T['the sheet']['gathers the keys by group, in the order of the groups'] = functi
     'Explorer',
     'Explain and fix',
     'Office and zoom',
-    'While a fix shows',
-    'In the steering float',
-    'Jumping between explanations',
     'In the changes pane',
     'In the explorer',
   })
 end
 
-T['the sheet']['holds each key once, under its own group'] = function()
-  local keys = require('aineo.keys')
-  local gathered = {}
-  for _, group in ipairs(keys.sheet()) do
+--- Every row the sheet holds, by group and then by section, in the order
+--- the sheet holds them, as `group/section keys`.
+---
+---@return string[]
+local function rows_on_the_sheet()
+  local held = {}
+  for _, group in ipairs(require('aineo.keys').sheet()) do
     for _, row in ipairs(group.rows) do
-      table.insert(gathered, { group.id, row.group, row.suffix or row.key })
+      table.insert(held, ('%s/ %s'):format(group.id, row.suffix or row.key or row.mirrors))
+    end
+    for _, section in ipairs(group.sections) do
+      for _, row in ipairs(section.rows) do
+        table.insert(
+          held,
+          ('%s/%s %s'):format(group.id, section.id, row.suffix or row.key or row.mirrors)
+        )
+      end
     end
   end
-
-  local declared = vim.tbl_map(function(row)
-    return { row.group, row.group, row.suffix or row.key }
-  end, keys.rows())
-  table.sort(gathered, function(left, right)
-    return table.concat(left, ' ') < table.concat(right, ' ')
-  end)
-  table.sort(declared, function(left, right)
-    return table.concat(left, ' ') < table.concat(right, ' ')
-  end)
-  eq(gathered, declared)
+  return held
 end
 
-T['the sheet']['keeps the keys of a group in the order they are declared'] = function()
+T['the sheet']['holds each row once, in its group and its section'] = function()
+  local held = rows_on_the_sheet()
+  local declared = vim.tbl_map(function(row)
+    return ('%s/%s %s'):format(row.group, row.section or '', row.suffix or row.key or row.mirrors)
+  end, require('aineo.keys').rows())
+
+  table.sort(held)
+  table.sort(declared)
+  eq(held, declared)
+end
+
+T['the sheet']['has one group for explaining and fixing, in six sections in this order'] = function()
   local sheet = require('aineo.keys').sheet()
 
   local explain = vim.iter(sheet):find(function(group)
     return group.id == 'explain'
   end)
   eq(
-    vim.tbl_map(function(row)
-      return row.suffix
-    end, explain.rows),
-    { 'v', 'V', 'vi', 'VI', 'VV', 'VVI', 'vm', 'Vf', 'VVf', 'vc' }
+    vim.tbl_map(function(section)
+      return section.title
+    end, explain.sections),
+    {
+      'Explain',
+      'Issues',
+      'Fix',
+      'While a fix shows',
+      'In the steering float',
+      'Clean',
+    }
   )
+end
+
+--- The keys, as the sheet lists them, of the section of the explain group
+--- whose title is `title`.
+---
+---@param title string
+---@return string[]
+local function keys_of_section(title)
+  local explain = vim.iter(require('aineo.keys').sheet()):find(function(group)
+    return group.id == 'explain'
+  end)
+  local section = vim.iter(explain.sections):find(function(candidate)
+    return candidate.title == title
+  end)
+  return vim.tbl_map(function(row)
+    return row.suffix or row.key or ('(' .. row.mirrors .. ')')
+  end, section.rows)
+end
+
+T['the sheet']['lists the keys of each section in the order of the ruling'] = MiniTest.new_set({
+  parametrize = {
+    { 'Explain', { 'v', 'V', 'VV' } },
+    { 'Issues', { 'vi', 'VI', 'VVI', 'vm', '(send)', ']v', '[v' } },
+    { 'Fix', { 'Vf', 'VVf' } },
+    { 'While a fix shows', { 'Va', 'Vr', 'Vd' } },
+    { 'In the steering float', { '<CR>', 'q', 'R' } },
+    { 'Clean', { 'vc' } },
+  },
+})
+
+T['the sheet']['lists the keys of each section in the order of the ruling'][1] = function(
+  title,
+  expected
+)
+  eq(keys_of_section(title), expected)
 end
 
 T['the rows']['name no <Plug> mapping twice'] = function()

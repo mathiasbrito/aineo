@@ -49,6 +49,14 @@ function M.header_group(accent)
   return 'AineoCheatHeader' .. accent
 end
 
+--- The group of the headings of the sections drawn in accent number `accent`.
+---
+---@param accent integer
+---@return string
+function M.section_group(accent)
+  return 'AineoCheatSection' .. accent
+end
+
 --- The group of the keys drawn in accent number `accent`.
 ---
 ---@param accent integer
@@ -99,8 +107,9 @@ end
 
 --- Defines the groups of the cheatsheet from the groups of the colour scheme
 --- now: the title like `Title`, the phrase like `Normal`, the command like
---- `Comment`, and for each accent a heading, underlined, and keys, in bold,
---- in the colours of the scheme's group of that accent. A group the user has
+--- `Comment`, and for each accent a heading, underlined, a section heading,
+--- in italic, and keys, in bold, in the colours of the scheme's group of that
+--- accent. A group the user has
 --- defined is left as it is.
 function M.define()
   define_group(M.TITLE_GROUP, { link = 'Title' })
@@ -111,6 +120,7 @@ function M.define()
       M.header_group(accent),
       drawn_like(accent_group, { bold = true, underline = true })
     )
+    define_group(M.section_group(accent), drawn_like(accent_group, { italic = true }))
     define_group(M.key_group(accent), drawn_like(accent_group, { bold = true }))
   end
 end
