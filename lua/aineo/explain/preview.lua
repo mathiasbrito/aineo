@@ -42,6 +42,7 @@ local CONCEALING = 2
 ---@field set table<integer, aineo.explain.ConcealOptions> the options it set in each window
 ---@field modifiable boolean the buffer's 'modifiable' before it, which it turns off while shown
 ---@field ask_key string what asks a fix again, as the user is told it
+---@field issue string the text of the issue it fixes
 ---@field stale boolean whether its edits no longer stand in the buffer, as when it was last drawn
 ---@field first_row integer the line, from 0, its first edit started on when it was last drawn
 
@@ -72,6 +73,15 @@ local FIX_STYLE = {
   text = kinds.FIX.groups.text,
   gutter = kinds.FIX.groups.gutter,
   fill = kinds.FIX.groups.fill,
+}
+
+--- The style the issue a fix fixes is drawn in at the top of its overlay.
+---@type aineo.explain.Style
+local ISSUE_STYLE = {
+  gutter_mark = draw.GUTTER_MARK,
+  text = kinds.ISSUES.groups.text,
+  gutter = kinds.ISSUES.groups.gutter,
+  fill = kinds.ISSUES.groups.fill,
 }
 
 --- The style the fix explanation's rows are drawn in.
@@ -330,8 +340,11 @@ local function blocks_of(spans)
 end
 
 --- Adds to `places` the edits of `block` as the overlay shows them: their
---- old lines hidden, and their rows — each edit's head and explanation
---- (`lead_rows()`), then its new lines — below the line before the block,
+--- old lines hidden, which hides what is shown above them, the issue the
+--- fix fixes among it, and their rows — first, for the first edit, that
+--- issue's text in the issue look, labelled `issue`; then each edit's head
+--- and explanation (`lead_rows()`), then its new lines — below the line
+--- before the block,
 --- else above the line after it. A block that spans the whole buffer has no
 --- line to hang them on and shows as the diff view does (`add_diff()`).
 ---
@@ -351,6 +364,9 @@ local function add_overlay(preview, block, spans, geometry, places)
   end
   local rows = {}
   for _, index in ipairs(block.indexes) do
+    if index == 1 then
+      vim.list_extend(rows, band_rows({ preview.issue }, geometry, kinds.ISSUES.label, ISSUE_STYLE))
+    end
     vim.list_extend(rows, lead_rows(preview, index, geometry))
     vim.list_extend(rows, new_rows(preview.edits[index], geometry))
   end
@@ -766,6 +782,7 @@ end
 ---@field edits aineo.explain.PlacedEdit[] placed in the buffer's text as it reads, in the order of their lines
 ---@field keys? aineo.explain.FixKeys the keys that accept, reject and show the diff
 ---@field ask_key string what asks a fix again, as the user is told it
+---@field issue string the text of the issue the fix fixes
 
 --- Shows the edits of `order` in `buffer` as a preview: the buffer is not
 --- changed, and cannot be while it is shown, its 'modifiable' off; each
@@ -787,6 +804,7 @@ function M.show(buffer, order)
     set = {},
     modifiable = vim.bo[buffer].modifiable,
     ask_key = order.ask_key,
+    issue = order.issue,
     stale = false,
     first_row = order.edits[1].first - 1,
   }
