@@ -199,16 +199,16 @@ local NO_TAB_FOR_CHEATSHEET = 'aineo: there is no aineo tab to show the cheatshe
 
 --- What `:Aineo cheatsheet` does: shows the cheatsheet over the right side of
 --- the layout of the existing aineo tab to act on (`aineo.entry.opening`'s
---- `existing_acting_tab()`, `aineo.entry.cheatsheet`), the office closed
---- first, or closes it when it shows; never makes a tab. With none, tells the
---- user.
+--- `existing_acting_tab()`, `aineo.entry.cheatsheet`), or closes it when it
+--- shows; never makes a tab. The office that shows closes as the cursor
+--- enters the sheet, which covers the office's cells (`aineo.office`). With
+--- none, tells the user.
 ACTIONS.cheatsheet = function()
   local tab = opening.existing_acting_tab()
   if not tab then
     vim.notify(NO_TAB_FOR_CHEATSHEET, vim.log.levels.WARN)
     return
   end
-  offices.hide(tab)
   cheatsheets.toggle(tab)
 end
 
