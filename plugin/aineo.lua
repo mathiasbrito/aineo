@@ -493,7 +493,9 @@ end
 
 --- Maps `keys` in `mode` to the `<Plug>` mapping `plug` names, typed after
 --- `typed_before`, unless the user has mapped `keys` globally in `mode`
---- already (`has_global_mapping()`).
+--- already (`has_global_mapping()`). The mapping's description is the `:Aineo`
+--- argument that does the same, as it is typed (`pane agent`), or the words of
+--- the `<Plug>` mapping when there is none.
 ---
 ---@param mode 'n'|'x'|'t'|'i'
 ---@param keys string
@@ -501,7 +503,14 @@ end
 ---@param typed_before string keys typed before the `<Plug>` mapping, `''` for none
 local function map_unless_mapped(mode, keys, plug, typed_before)
   if not has_global_mapping(mode, keys) then
-    vim.keymap.set(mode, keys, typed_before .. plug_mapping(plug), { desc = 'aineo: ' .. plug })
+    local command = plug:gsub('-', ' ')
+    local described = vim.tbl_contains(ACTION_ARGUMENTS, command) and command or plug
+    vim.keymap.set(
+      mode,
+      keys,
+      typed_before .. plug_mapping(plug),
+      { desc = 'aineo: ' .. described }
+    )
   end
 end
 
