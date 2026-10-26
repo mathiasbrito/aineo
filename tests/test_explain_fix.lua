@@ -679,6 +679,17 @@ T['accepting']['in a buffer that was not modifiable applies the fix and leaves i
   eq(child.bo.modifiable, false)
 end
 
+T['accepting']['through its <Plug> mapping applies the fix in the read-only buffer'] = function()
+  start()
+  child.cmd('2')
+  propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+
+  child.cmd('execute "normal \\<Plug>(aineo-fix-accept)"')
+
+  eq(buffer_lines()[2], '  return a - b')
+  eq(messages()[#messages()], 'aineo: fix applied (u undoes it)')
+end
+
 --- How many issues the child's current buffer shows.
 ---
 ---@return integer
