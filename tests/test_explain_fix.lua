@@ -50,7 +50,8 @@ end
 --- Asks the explain home, in the child, for a fix of the issue on the
 --- cursor's line of the current buffer with the fake `claude`, as the fields
 --- `fields` say over these defaults: the model `sonnet`, effort `high`, a
---- long timeout and the keys `\Va`, `\Vr` and `\Vd`.
+--- long timeout, the keys `\Va`, `\Vr` and `\Vd`, and `\Vf` and `\VVf`
+--- named as the keys that ask a fix.
 ---
 ---@param fields? table
 local function ask_fix(fields)
@@ -66,6 +67,7 @@ local function ask_fix(fields)
       effort = 'high',
       timeout_ms = 180000,
       keys = { accept = '\\Va', reject = '\\Vr', diff = '\\Vd' },
+      ask_keys = { plain = '\\Vf', steered = '\\VVf' },
     }, fields))
   ]],
     { fields or vim.empty_dict(), explained.FAKE_CLAUDE }
@@ -105,6 +107,14 @@ local FIXED_PART = 'The issue to fix is at line 2 of the file src/code.lua: ' ..
 local function wait_until_told(message)
   vim.wait(explained.PATIENCE_MS, function()
     return vim.tbl_contains(messages(), message)
+  end, 20)
+end
+
+--- Lets the child's scheduled callbacks run: what the case expects not to
+--- happen would have happened by then.
+local function settle()
+  vim.wait(300, function()
+    return false
   end, 20)
 end
 
@@ -627,6 +637,10 @@ local function force_editable()
   child.bo.modifiable = true
 end
 
+--- The head row of a fix whose code changed under it, as the child shows it
+--- with no number column.
+local STALE_HEAD = '┊ the code under the fix changed · \\Vr rejects · \\Vf asks again'
+
 T['accepting'] = MiniTest.new_set()
 
 T['accepting']['applies every edit, writes nothing, and one undo takes them all back'] = function()
@@ -705,12 +719,9 @@ T['accepting']['changes nothing when the code under the fix changed meanwhile'] 
     vim.api.nvim_buf_set_lines(0, 5, 6, false, { '  return a + b + 0' })
     require('aineo.explain').accept_fix(vim.api.nvim_get_current_buf())
   ]])
-  wait_until_told('aineo: the fix was dropped: its lines were edited')
+  settle()
 
-  eq(messages(), {
-    'aineo: the code under the fix changed; ask again',
-    'aineo: the fix was dropped: its lines were edited',
-  })
+  eq(messages(), { 'aineo: the code under the fix changed; ask again' })
   eq(buffer_lines(), {
     'local function sub(a, b)',
     '  return a + b',
@@ -815,7 +826,7 @@ T['accepting']['changes nothing when an old line was edited in place meanwhile']
     vim.api.nvim_buf_set_text(0, 5, 9, 5, 14, { 'b + a' })
     require('aineo.explain').accept_fix(vim.api.nvim_get_current_buf())
   ]])
-  wait_until_told('aineo: the fix was dropped: its lines were edited')
+  settle()
 
   eq(messages()[1], 'aineo: the code under the fix changed; ask again')
   eq(buffer_lines(), {
@@ -1030,26 +1041,29 @@ end
 
 T['while shown'] = MiniTest.new_set()
 
-T['while shown']['a command that changes its old lines drops it, with a word'] = MiniTest.new_set({
-  parametrize = {
-    { '5normal! J' },
-    { '2normal! J' },
-    { '6m0' },
+T['while shown']['a command that changes its old lines keeps it, marked stale, without a word'] = MiniTest.new_set(
+  {
+    parametrize = {
+      { '5normal! J' },
+      { '2normal! J' },
+      { '6m0' },
+    },
   },
-}, {
-  test = function(command)
-    start()
-    child.cmd('2')
-    propose(SUBTRACT_AND_DROP)
-    force_editable()
+  {
+    test = function(command)
+      start()
+      child.cmd('2')
+      propose(SUBTRACT_AND_DROP)
+      force_editable()
 
-    child.cmd(command)
-    wait_until_told('aineo: the fix was dropped: its lines were edited')
+      child.cmd(command)
+      settle()
 
-    eq(messages()[#messages()], 'aineo: the fix was dropped: its lines were edited')
-    eq(conceal_options(), { 0, '' })
-  end,
-})
+      eq(count_of(screen(), STALE_HEAD), 1)
+      eq(messages(), {})
+    end,
+  }
+)
 
 T['while shown']['moving an old line up, still below the other edit’s, moves the fix with it'] = function()
   start()
@@ -1074,16 +1088,16 @@ T['while shown']['moving an old line up, still below the other edit’s, moves t
   })
 end
 
-T['while shown']['moving an old line up with :m .-2 keys drops it, with a word'] = function()
+T['while shown']['moving an old line above another edit’s with :m .-2 keys keeps it, marked stale'] = function()
   start()
   child.cmd('2')
   propose(SUBTRACT_AND_DROP)
   force_editable()
 
   child.type_keys('6G', ':m .-2<CR>', ':m .-2<CR>', ':m .-2<CR>', ':m .-2<CR>')
-  wait_until_told('aineo: the fix was dropped: its lines were edited')
+  settle()
 
-  eq(messages()[#messages()], 'aineo: the fix was dropped: its lines were edited')
+  eq({ count_of(screen(), STALE_HEAD), messages() }, { 1, {} })
   eq(buffer_lines(), {
     'local function sub(a, b)',
     '  return a + b',
@@ -1095,46 +1109,53 @@ T['while shown']['moving an old line up with :m .-2 keys drops it, with a word']
   })
 end
 
-T['while shown']['an edit of its old lines drops it, with a word'] = function()
+T['while shown']['a forced edit of its old lines keeps it, marked stale, and accepting changes nothing'] = function()
   start()
   child.cmd('2')
   propose({ summary = 'Subtract.', edits = { SUBTRACT } })
   force_editable()
 
   child.api.nvim_buf_set_text(0, 1, 2, 1, 2, { 'local x = 1; ' })
-  wait_until_told('aineo: the fix was dropped: its lines were edited')
+  settle()
+  accept()
 
-  eq(messages()[#messages()], 'aineo: the fix was dropped: its lines were edited')
-  eq(conceal_options(), { 0, '' })
-  eq(count_of(screen(), '  return a - b'), 0)
+  eq(count_of(screen(), STALE_HEAD), 1)
+  eq(messages(), { 'aineo: the code under the fix changed; ask again' })
+  eq(buffer_lines()[2], '  local x = 1; return a + b')
 end
 
-T['while shown']['an undo that changes its old lines drops it'] = function()
+T['while shown']['a forced edit undone marks it stale no more, and accepting applies it'] = function()
   start()
   child.cmd('2')
-  child.cmd('2s/b/b/')
   propose({ summary = 'Subtract.', edits = { SUBTRACT } })
   force_editable()
+  child.api.nvim_buf_set_text(0, 1, 2, 1, 2, { 'local x = 1; ' })
+  settle()
+  local stale = count_of(screen(), STALE_HEAD)
 
   child.cmd('undo')
-  wait_until_told('aineo: the fix was dropped: its lines were edited')
+  settle()
+  local after_undo = count_of(screen(), STALE_HEAD)
+  accept()
 
-  eq(messages()[#messages()], 'aineo: the fix was dropped: its lines were edited')
+  eq({ stale, after_undo }, { 1, 0 })
+  eq(messages(), { 'aineo: fix applied (u undoes it)' })
+  eq(buffer_lines()[2], '  return a - b')
 end
 
-T['while shown']['reloading the file drops it'] = function()
+T['while shown']['reloading the file keeps it, read-only, without a word'] = function()
   start()
   child.cmd('2')
   propose({ summary = 'Subtract.', edits = { SUBTRACT } })
 
   child.cmd('edit!')
-  wait_until_told('aineo: the fix was dropped: its lines were edited')
+  settle()
 
-  eq(messages()[#messages()], 'aineo: the fix was dropped: its lines were edited')
-  eq(conceal_options(), { 0, '' })
+  eq(count_of(screen(), '  return a - b'), 1)
+  eq({ child.bo.modifiable, messages() }, { false, {} })
 end
 
-T['while shown']['its marks cleared by another plugin, an edit drops it once, with a word and no error'] = function()
+T['while shown']['its marks cleared by another plugin, an edit marks it stale, with no error, and accepting changes nothing'] = function()
   start()
   child.cmd('2')
   propose(SUBTRACT_AND_DROP)
@@ -1151,15 +1172,13 @@ T['while shown']['its marks cleared by another plugin, an edit drops it once, wi
     end
     return failed
   ]])
-  wait_until_told('aineo: the fix was dropped: its lines were edited')
+  settle()
   accept()
 
   eq(edits, {})
-  eq(messages(), {
-    'aineo: the fix was dropped: its lines were edited',
-    'aineo: no fix is shown in this buffer',
-  })
-  eq(conceal_options(), { 0, '' })
+  eq(count_of(screen(), STALE_HEAD), 1)
+  eq(messages(), { 'aineo: the code under the fix changed; ask again' })
+  eq(buffer_lines()[2], '  return a + b')
 end
 
 T['while shown']['wiping the buffer out drops it without a word'] = function()
@@ -1190,14 +1209,6 @@ local function ranges()
     end
     return found
   end)()]])
-end
-
---- Lets the child's scheduled callbacks run: a drop the case expects not to
---- happen would have happened by then.
-local function settle()
-  vim.wait(300, function()
-    return false
-  end, 20)
 end
 
 T['while shown']['a mistyped edit changes nothing, and the fix and its issue stay'] = MiniTest.new_set(

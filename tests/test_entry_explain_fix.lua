@@ -101,6 +101,42 @@ local function marks_in(name)
   )
 end
 
+--- The rows of the child's screen once redrawn, white space at their ends
+--- cut off.
+---
+---@return string[]
+local function screen_rows()
+  child.cmd('redraw')
+  return vim.tbl_map(function(row)
+    return vim.trim(table.concat(row))
+  end, child.get_screenshot().text)
+end
+
+--- Starts the child as `start()` does, but with `prefix = false`: aineo
+--- maps no key.
+local function start_without_prefix()
+  explained.start(child, 'entry-explain-fix', CODE, {
+    claude = { cmd = explained.FAKE_CLAUDE },
+    prefix = false,
+  })
+  explained.place(child, 'issues', { { line = 2, text = 'Subtracts where it should add.' } })
+  explained.answer_with(child, FIX)
+  child.cmd('2')
+end
+
+--- Edits line 2 of the child's current buffer, under the fix it shows, its
+--- 'modifiable' turned back on first, as a user forcing an edit does, and
+--- waits until the screen shows the row `row`, or `PATIENCE_MS` is over.
+---
+---@param row string
+local function force_edit_until_shown(row)
+  child.bo.modifiable = true
+  child.api.nvim_buf_set_text(0, 1, 2, 1, 2, { 'x' })
+  vim.wait(explained.PATIENCE_MS, function()
+    return vim.tbl_contains(screen_rows(), row)
+  end, 20)
+end
+
 T['\\Vf'] = MiniTest.new_set()
 
 T['\\Vf']['asks a fix of the issue on the line with the read-only tools, Sonnet and effort high by default'] = function()
@@ -199,27 +235,40 @@ T['the preview keys']['\\Vr rejects, and \\Vd shows the diff'] = function()
 end
 
 T['the preview keys']['with no prefix are none, and the head row names the <Plug> mappings'] = function()
-  explained.start(child, 'entry-explain-fix', CODE, {
-    claude = { cmd = explained.FAKE_CLAUDE },
-    prefix = false,
-  })
-  explained.place(child, 'issues', { { line = 2, text = 'Subtracts where it should add.' } })
-  explained.answer_with(child, FIX)
-  child.cmd('2')
+  start_without_prefix()
 
   child.cmd('execute "normal \\<Plug>(aineo-explain-fix)"')
   wait_for_answer()
 
-  child.cmd('redraw')
-  local rows = vim.tbl_map(function(row)
-    return vim.trim(table.concat(row))
-  end, child.get_screenshot().text)
+  local rows = screen_rows()
   local head = vim.fn.index(
     rows,
     '┊ read-only until <Plug>(aineo-fix-accept) accepts or <Plug>(aineo-fix-reject)'
   ) + 1
   eq(rows[head + 1], '┊ rejects · <Plug>(aineo-fix-diff) shows the diff')
   eq(child.lua_get([[vim.fn.maparg('\\Va', 'n')]]), '')
+end
+
+T['the preview keys']['of a fix whose code changed name \\Vf, which asks again'] = function()
+  local stale_head = '┊ the code under the fix changed · \\Vr rejects · \\Vf asks again'
+  start()
+  press('\\Vf')
+  wait_for_answer()
+
+  force_edit_until_shown(stale_head)
+
+  eq(vim.tbl_contains(screen_rows(), stale_head), true)
+end
+
+T['the preview keys']['with no prefix, of a fix whose code changed name the <Plug> mapping that asks again'] = function()
+  local stale_end = '┊ <Plug>(aineo-explain-fix) asks again'
+  start_without_prefix()
+  child.cmd('execute "normal \\<Plug>(aineo-explain-fix)"')
+  wait_for_answer()
+
+  force_edit_until_shown(stale_end)
+
+  eq(vim.tbl_contains(screen_rows(), stale_end), true)
 end
 
 T['the mappings'] = MiniTest.new_set()
