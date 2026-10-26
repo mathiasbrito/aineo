@@ -28,6 +28,12 @@ local fixed_issues = {}
 ---@field effort string the effort Claude Code works at, as `--effort` takes it
 ---@field timeout_ms integer how long the request may run
 ---@field keys? aineo.explain.FixKeys the keys the preview maps; none when absent
+---@field ask_keys aineo.explain.FixAskKeys what asks a fix, as the user is told it
+
+--- What asks a fix, each a key or a `<Plug>` mapping as the user is told it.
+---@class aineo.explain.FixAskKeys
+---@field plain string what asks a fix with the default prompt
+---@field steered string what asks a fix with a prompt the user edits first
 
 --- What a fix request needs once its Claude Code has ended.
 ---@class aineo.explain.FixAsked
@@ -36,6 +42,7 @@ local fixed_issues = {}
 ---@field tick integer the buffer's `b:changedtick` when it was asked
 ---@field issue integer the extmark of the issue to fix
 ---@field keys? aineo.explain.FixKeys
+---@field ask_keys aineo.explain.FixAskKeys
 ---@field lines string[] every line of the buffer, as sent
 
 --- The fix the run `ended` of Claude Code answered (`aineo.explain.answer`'s
@@ -88,6 +95,7 @@ local function show_answer(asked, ended)
     summary = answered.summary,
     edits = edits,
     keys = asked.keys,
+    ask_key = asked.ask_keys.plain,
   })
 end
 
@@ -132,6 +140,7 @@ local function start(fixing, issue, folder, steered_text)
     tick = vim.api.nvim_buf_get_changedtick(buffer),
     issue = issue.id,
     keys = fixing.keys,
+    ask_keys = fixing.ask_keys,
     lines = vim.api.nvim_buf_get_lines(buffer, 0, -1, false),
   }
   local code = code_of(fixing, issue, folder)
