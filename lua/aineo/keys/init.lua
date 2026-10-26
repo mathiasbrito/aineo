@@ -9,9 +9,14 @@
 
 local M = {}
 
+---@class aineo.keys.Section
+---@field id string
+---@field title string
+
 ---@class aineo.keys.Group
 ---@field id string
 ---@field title string
+---@field sections? aineo.keys.Section[] the subsections of a group that has them, in the order the cheatsheet shows them; the rows of such a group each name theirs
 
 --- The groups of keys, in the order the cheatsheet shows them.
 ---@type aineo.keys.Group[]
@@ -22,20 +27,30 @@ local GROUPS = {
   { id = 'changes', title = 'Changes and diff' },
   { id = 'run', title = 'Run and terminal' },
   { id = 'explorer', title = 'Explorer' },
-  { id = 'explain', title = 'Explain and fix' },
+  {
+    id = 'explain',
+    title = 'Explain and fix',
+    sections = {
+      { id = 'explain', title = 'Explain' },
+      { id = 'issues', title = 'Issues' },
+      { id = 'fix', title = 'Fix' },
+      { id = 'fix_shown', title = 'While a fix shows' },
+      { id = 'steer', title = 'In the steering float' },
+      { id = 'clean', title = 'Clean' },
+    },
+  },
   { id = 'office', title = 'Office and zoom' },
-  { id = 'fix', title = 'While a fix shows' },
-  { id = 'steer', title = 'In the steering float' },
-  { id = 'jump', title = 'Jumping between explanations' },
   { id = 'changes_pane', title = 'In the changes pane' },
   { id = 'explorer_pane', title = 'In the explorer' },
 }
 
 ---@class aineo.keys.Row
 ---@field group string the id of the row's group (`M.groups()`)
----@field scope 'global'|'buffer' `global`: mapped in the editor, after the prefix; `buffer`: mapped in the buffers that show what the key acts on
----@field suffix? string what is typed after the prefix; exactly one of `suffix` and `key` is given
+---@field section? string the id of the row's section in its group, when the group has sections
+---@field scope 'global'|'buffer'|'mirror' `global`: mapped in the editor, after the prefix; `buffer`: mapped in the buffers that show what the key acts on; `mirror`: maps nothing, lists the key of the row `mirrors` names again, under its own phrase
+---@field suffix? string what is typed after the prefix; exactly one of `suffix` and `key` is given, but for a mirror, which has neither
 ---@field key? string the keys as typed, in the notation of a mapping
+---@field mirrors? string the `plug` of the row whose key a `mirror` row lists again
 ---@field plug? string the words after `aineo-` in the `<Plug>(aineo-…)` mapping that does what the key does
 ---@field command? string the words after `:Aineo` that do the same
 ---@field phrase string what the key does, in a few words
@@ -90,6 +105,36 @@ local function global_in_visual_too(group, suffix, plug, command, phrase)
   return vim.tbl_extend('force', global(group, suffix, plug, command, phrase), { modes = 'nx' })
 end
 
+--- `row` in the section `section` of its group.
+---
+---@param section string
+---@param row aineo.keys.Row
+---@return aineo.keys.Row
+local function in_section(section, row)
+  return vim.tbl_extend('force', row, { section = section })
+end
+
+--- A listing again, under the phrase `phrase` in the section `section` of
+--- `group`, of the key of the row whose `<Plug>` words are `plug`: it maps
+--- nothing.
+---
+---@param group string
+---@param section string
+---@param plug string
+---@param phrase string
+---@return aineo.keys.Row
+local function listing_again(group, section, plug, phrase)
+  return {
+    group = group,
+    section = section,
+    scope = 'mirror',
+    mirrors = plug,
+    phrase = phrase,
+    modes = 'n',
+    twin = false,
+  }
+end
+
 --- A key mapped in a buffer, typed as it is written in the mapping, in
 --- `modes` — Normal mode when not given.
 ---
@@ -115,7 +160,7 @@ end
 ---
 ---@param group string
 ---@param suffix string
----@param plug string
+---@param plug string|nil
 ---@param phrase string
 ---@return aineo.keys.Row
 local function in_buffer_after_the_prefix(group, suffix, plug, phrase)
@@ -203,60 +248,136 @@ local ROWS = vim.list_extend(
     global_with_twin('office', 'Z', 'zoom-full', 'zoom full', 'zoom the window to the whole tab'),
     global_with_twin('office', 'O', 'office', 'office', 'show the office'),
     global('layout', '?', 'cheatsheet', 'cheatsheet', 'show this sheet of keys'),
-    global_in_visual_too('explain', 'v', 'explain', 'explain', 'explain the code'),
-    global_in_visual_too(
+    in_section(
       'explain',
-      'V',
-      'explain-tools',
-      'explain tools',
-      'explain it, reading the project'
+      global_in_visual_too('explain', 'v', 'explain', 'explain', 'explain the code')
     ),
-    global_in_visual_too(
+    in_section(
       'explain',
-      'vi',
-      'explain-issues',
-      'explain issues',
-      'find potential issues'
+      global_in_visual_too(
+        'explain',
+        'V',
+        'explain-tools',
+        'explain tools',
+        'explain it, reading the project'
+      )
     ),
-    global_in_visual_too(
+    in_section(
+      'issues',
+      global_in_visual_too(
+        'explain',
+        'vi',
+        'explain-issues',
+        'explain issues',
+        'find potential issues'
+      )
+    ),
+    in_section(
+      'issues',
+      global_in_visual_too(
+        'explain',
+        'VI',
+        'explain-issues-tools',
+        'explain issues tools',
+        'find issues, reading the project'
+      )
+    ),
+    in_section(
       'explain',
-      'VI',
-      'explain-issues-tools',
-      'explain issues tools',
-      'find issues, reading the project'
+      global_in_visual_too(
+        'explain',
+        'VV',
+        'explain-deep',
+        nil,
+        'explain, editing the prompt first'
+      )
     ),
-    global_in_visual_too('explain', 'VV', 'explain-deep', nil, 'explain, editing the prompt first'),
-    global_in_visual_too(
-      'explain',
-      'VVI',
-      'explain-deep-issues',
-      nil,
-      'find issues, editing the prompt first'
+    in_section(
+      'issues',
+      global_in_visual_too(
+        'explain',
+        'VVI',
+        'explain-deep-issues',
+        nil,
+        'find issues, editing the prompt first'
+      )
     ),
-    global_in_visual_too('explain', 'vm', 'explain-mark', nil, 'mark or unmark an issue'),
-    global('explain', 'Vf', 'explain-fix', nil, 'propose a fix of the issue here'),
-    global('explain', 'VVf', 'explain-fix-steered', nil, 'propose a fix, editing the prompt first'),
-    global(
-      'explain',
-      'vc',
-      'explain-clean',
-      'explain clear',
-      'clean the explanations from the buffer'
+    in_section(
+      'issues',
+      global_in_visual_too('explain', 'vm', 'explain-mark', nil, 'mark or unmark an issue')
     ),
-    in_buffer_after_the_prefix('fix', 'Va', 'fix-accept', 'accept the fix'),
-    in_buffer_after_the_prefix('fix', 'Vr', 'fix-reject', 'reject the fix'),
-    in_buffer_after_the_prefix('fix', 'Vd', 'fix-diff', 'show the fix as a diff, or as an overlay'),
-    in_buffer('steer', '<CR>', nil, 'send the prompt'),
-    in_buffer('steer', 'q', nil, 'cancel, as <Esc> does'),
-    in_buffer('steer', 'R', nil, 'restore the default prompt'),
-    in_buffer('jump', ']v', 'explain-next', 'jump to the next explanation or issue', 'nxo'),
-    in_buffer('jump', '[v', 'explain-previous', 'jump to the previous one', 'nxo'),
+    in_section(
+      'fix',
+      global('explain', 'Vf', 'explain-fix', nil, 'propose a fix of the issue here')
+    ),
+    in_section(
+      'fix',
+      global(
+        'explain',
+        'VVf',
+        'explain-fix-steered',
+        nil,
+        'propose a fix, editing the prompt first'
+      )
+    ),
+    in_section(
+      'clean',
+      global(
+        'explain',
+        'vc',
+        'explain-clean',
+        'explain clear',
+        'clean the explanations from the buffer'
+      )
+    ),
+    listing_again('explain', 'issues', 'send', 'send the marked issues to Claude'),
+    in_section(
+      'fix_shown',
+      in_buffer_after_the_prefix('explain', 'Va', 'fix-accept', 'accept the fix')
+    ),
+    in_section(
+      'fix_shown',
+      in_buffer_after_the_prefix('explain', 'Vr', 'fix-reject', 'reject the fix')
+    ),
+    in_section(
+      'fix_shown',
+      in_buffer_after_the_prefix(
+        'explain',
+        'Vd',
+        'fix-diff',
+        'show the fix as a diff, or as an overlay'
+      )
+    ),
+    in_section('steer', in_buffer('explain', '<CR>', nil, 'send the prompt')),
+    in_section('steer', in_buffer('explain', 'q', nil, 'cancel, as <Esc> does')),
+    in_section('steer', in_buffer('explain', 'R', nil, 'restore the default prompt')),
+    in_section(
+      'issues',
+      in_buffer('explain', ']v', 'explain-next', 'jump to the next explanation or issue', 'nxo')
+    ),
+    in_section(
+      'issues',
+      in_buffer('explain', '[v', 'explain-previous', 'jump to the previous one', 'nxo')
+    ),
     in_buffer('changes_pane', '<CR>', nil, 'show the diff of the entry'),
-    in_buffer('changes_pane', 'l', nil, 'diff the file against its previous version'),
+    in_buffer(
+      'changes_pane',
+      'l',
+      nil,
+      'commits: move to the files window; files: diff the file against its previous version'
+    ),
     in_buffer('changes_pane', 'h', nil, 'diff the file against HEAD'),
+    in_buffer(
+      'changes_pane',
+      'j',
+      nil,
+      'next line: in the commits it chooses the files listed, in the files the diff follows'
+    ),
+    in_buffer('changes_pane', 'k', nil, 'previous line, as j does'),
     in_buffer('changes_pane', 's', nil, 'show one worktree or branch alone'),
     in_buffer('changes_pane', 't', nil, 'show the commit graph'),
     in_buffer('changes_pane', 'gf', nil, 'open the file'),
+    in_buffer_after_the_prefix('changes_pane', '<CR>', nil, 'edit the file in its working tree'),
     in_buffer('changes_pane', '<S-CR>', nil, 'edit the file in its working tree'),
     in_buffer('changes_pane', 'F', nil, 'in a diff: the whole file as context, or three lines'),
     in_buffer('changes_pane', '<BS>', nil, 'move back to the files or commits window'),
@@ -272,8 +393,12 @@ local ROWS = vim.list_extend(
   })
 )
 
----@class aineo.keys.SheetGroup : aineo.keys.Group
+---@class aineo.keys.SheetSection : aineo.keys.Section
 ---@field rows aineo.keys.Row[] its keys, in the order they are declared
+
+---@class aineo.keys.SheetGroup : aineo.keys.Group
+---@field rows aineo.keys.Row[] the keys of the group that belong to no section, in the order they are declared
+---@field sections aineo.keys.SheetSection[] the sections of the group, in order, each with its keys; none for a group without sections
 
 --- The groups of keys, in the order the cheatsheet shows them.
 ---
@@ -290,16 +415,34 @@ function M.rows()
 end
 
 --- The keys gathered by group, as the cheatsheet shows them: each group of
---- `M.groups()`, in its order, with its keys in the order they are declared.
+--- `M.groups()`, in its order, with its keys in the order they are declared,
+--- those of a group with sections under their sections.
 ---
 ---@return aineo.keys.SheetGroup[]
 function M.sheet()
   local sheet = {}
   for _, group in ipairs(GROUPS) do
-    local rows = vim.tbl_filter(function(row)
+    local in_group = vim.tbl_filter(function(row)
       return row.group == group.id
     end, ROWS)
-    table.insert(sheet, { id = group.id, title = group.title, rows = vim.deepcopy(rows) })
+    local sections = {}
+    for _, section in ipairs(group.sections or {}) do
+      table.insert(sections, {
+        id = section.id,
+        title = section.title,
+        rows = vim.deepcopy(vim.tbl_filter(function(row)
+          return row.section == section.id
+        end, in_group)),
+      })
+    end
+    table.insert(sheet, {
+      id = group.id,
+      title = group.title,
+      rows = vim.deepcopy(vim.tbl_filter(function(row)
+        return row.section == nil
+      end, in_group)),
+      sections = sections,
+    })
   end
   return sheet
 end

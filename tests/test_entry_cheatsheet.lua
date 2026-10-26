@@ -186,11 +186,66 @@ T['closing the cheatsheet']['by a key gives the right column back as it was, wit
   eq(child.lua_get([[vim.api.nvim_get_current_win()]]), cursor)
 end
 
+T['giving the column back'] = MiniTest.new_set()
+
+--- The cells of every window of the current tab page that does not float, in
+--- the order of the page's list: row, column, width and height.
+local BOXES = [[(function()
+  local boxes = {}
+  for _, window in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    if vim.api.nvim_win_get_config(window).relative == '' then
+      local position = vim.api.nvim_win_get_position(window)
+      table.insert(boxes, {
+        position[1],
+        position[2],
+        vim.api.nvim_win_get_width(window),
+        vim.api.nvim_win_get_height(window),
+      })
+    end
+  end
+  return boxes
+end)()]]
+
+--- Closes the sheet the child shows with `q`, and lets the layout, which
+--- puts its proportions back from a scheduled callback when a window closes,
+--- do so.
+local function close_the_sheet_and_let_the_layout_settle()
+  child.type_keys('q')
+  sheet_has_closed()
+  child.lua([[vim.wait(200)]])
+end
+
+T['giving the column back']['leaves the sizes of the layout as they were'] = function()
+  open_layout('cheatsheet-sizes')
+  local before = child.lua_get(BOXES)
+  entry.press(child, '\\?')
+
+  close_the_sheet_and_let_the_layout_settle()
+
+  eq(child.lua_get(BOXES), before)
+end
+
+T['giving the column back']['leaves a Report the user resized as they left it'] = function()
+  open_layout('cheatsheet-resized-report')
+  child.lua([[
+    local report = vim.fn.bufwinid(require('aineo.report').report_buffer())
+    vim.api.nvim_set_current_win(report)
+    vim.cmd('resize 18')
+  ]])
+  child.lua([[vim.wait(200)]])
+  local before = child.lua_get(BOXES)
+  entry.press(child, '\\?')
+
+  close_the_sheet_and_let_the_layout_settle()
+
+  eq(child.lua_get(BOXES), before)
+end
+
 T['the keys on the sheet'] = MiniTest.new_set()
 
 --- The keys the sheet's text shows for the prefix mappings of `child`: every
 --- Normal-mode mapping of the child whose right-hand side is an aineo
---- `<Plug>` mapping, as `lhs` and `plug`, but those of the tab keys 2 to 8,
+--- `<Plug>` mapping, as `lhs` and `plug`, but those of the tab keys 1 to 9,
 --- which the sheet shows as the range `\1…\9`.
 ---
 ---@return { lhs: string, plug: string }[]
@@ -199,7 +254,7 @@ local function mapped_to_aineo()
     local mapped = {}
     for _, mapping in ipairs(vim.api.nvim_get_keymap('n')) do
       local plug = (mapping.rhs or ''):match('^<Plug>%(aineo%-(.+)%)$')
-      if plug and not plug:match('^tab%-[2-8]$') then
+      if plug and not plug:match('^tab%-[1-9]$') then
         table.insert(mapped, { lhs = mapping.lhs, plug = plug })
       end
     end
@@ -207,14 +262,31 @@ local function mapped_to_aineo()
   end)()]])
 end
 
-T['the keys on the sheet']['show every key aineo maps'] = function()
+--- Whether `text`, the sheet's text, has a row with `key` and, after it, the
+--- start of `phrase`: the key as a word of its own, so that `\v` is not found
+--- in `\vi`, followed by the words of what it does, so that one `<CR>` is not
+--- found in another.
+---
+---@param text string
+---@param key string
+---@param phrase string
+---@return boolean
+local function shows_row(text, key, phrase)
+  return text:find('[\n ]' .. vim.pesc(key) .. '%s%s+' .. vim.pesc(phrase:sub(1, 6))) ~= nil
+end
+
+T['the keys on the sheet']['show every key aineo maps, with what it does'] = function()
   open_layout('cheatsheet-all-mapped')
   local mapped = mapped_to_aineo()
   entry.press(child, '\\?')
   local text = sheet_text()
+  local phrase_of = {}
+  for _, row in ipairs(require('aineo.keys').rows()) do
+    phrase_of[row.plug or ''] = row.phrase
+  end
 
   local missing = vim.tbl_filter(function(mapping)
-    return not text:find(mapping.lhs, 1, true)
+    return not shows_row(text, mapping.lhs, phrase_of[mapping.plug])
   end, mapped)
 
   eq(#mapped > 30, true)
@@ -242,24 +314,31 @@ T['the keys on the sheet']['are each mapped, for every key of the sheet that ain
   eq(unmapped, {})
 end
 
-T['the keys on the sheet']['are each of the sheet’s rows, one for each key aineo maps itself'] = function()
+T['the keys on the sheet']['are each of the sheet’s rows, one for each row of the table, with what it does'] = function()
   open_layout('cheatsheet-rows')
   entry.press(child, '\\?')
   local text = sheet_text()
+  local rows = require('aineo.keys').rows()
 
-  local absent = child.lua_get(
-    [[(function(text)
-      local absent = {}
-      for _, row in ipairs(require('aineo.keys').rows()) do
-        local shown = row.suffix and ('\\' .. row.suffix) or row.key
-        if not row.folded_into and not text:find(shown, 1, true) then
-          table.insert(absent, shown)
-        end
-      end
-      return absent
-    end)(...)]],
-    { text }
-  )
+  local absent = {}
+  for _, row in ipairs(rows) do
+    local mirrored = vim.iter(rows):find(function(other)
+      return other.plug == row.mirrors
+    end)
+    local shown = row.suffix and ('\\' .. row.suffix) or row.key or ('\\' .. mirrored.suffix)
+    local last = vim
+      .iter(rows)
+      :filter(function(other)
+        return row.plug and other.folded_into == row.plug
+      end)
+      :last()
+    if last then
+      shown = shown .. '…\\' .. last.suffix
+    end
+    if not row.folded_into and not shows_row(text, shown, row.phrase) then
+      table.insert(absent, shown .. ' ' .. row.phrase)
+    end
+  end
 
   eq(absent, {})
 end
@@ -281,6 +360,28 @@ T['the keys on the sheet']['follow the prefix the configuration names'] = functi
   local text = sheet_text()
   eq(text:find(',o', 1, true) ~= nil, true)
   eq(text:find('\\o', 1, true), nil)
+end
+
+T['the keys on the sheet']['show the prefix key, not another key the user mapped to the same <Plug> mapping'] = function()
+  entry.restart(child, { '--cmd', "let g:aineo = { 'prefix': ',' }" })
+  open_layout('cheatsheet-prefix-and-own', { prefix = ',' })
+  child.cmd('nmap +o <Plug>(aineo-open)')
+
+  entry.press(child, ',?')
+
+  local text = sheet_text()
+  eq(shows_row(text, ',o', 'open or'), true)
+  eq(shows_row(text, '+o', 'open or'), false)
+end
+
+T['the keys on the sheet']['of the user that start with a space show it as <Space>'] = function()
+  entry.restart(child, { '--cmd', 'lua vim.g.aineo = { prefix = false }' })
+  open_layout('cheatsheet-space-map', { prefix = false })
+  child.cmd('nmap <Space>xo <Plug>(aineo-open)')
+
+  entry.command(child, 'Aineo cheatsheet')
+
+  eq(shows_row(sheet_text(), '<Space>xo', 'open or'), true)
 end
 
 T['the keys on the sheet']['of a fix and of explaining follow the prefix too'] = function()
@@ -353,16 +454,13 @@ T['the keys on the sheet']['come with the command that does the same, dimmed'] =
   eq(vim.tbl_contains(dimmed, ':Aineo pane agent'), true)
 end
 
-T['the keys on the sheet']['are in groups, those of the buffers they act in last'] = function()
+T['the keys on the sheet']['are in groups, with explaining and fixing one group of six sections'] = function()
   open_layout('cheatsheet-groups')
   child.o.columns = 140
 
   entry.press(child, '\\?')
 
-  local text = sheet_text()
-  local positions = vim.tbl_map(function(title)
-    return text:find(title, 1, true)
-  end, {
+  local headings = {
     'Layout and tabs',
     'Claude and sessions',
     'Agent pane',
@@ -370,15 +468,51 @@ T['the keys on the sheet']['are in groups, those of the buffers they act in last
     'Run and terminal',
     'Explorer',
     'Explain and fix',
+    '  Explain',
+    '  Issues',
+    '  Fix',
+    '  While a fix shows',
+    '  In the steering float',
+    '  Clean',
     'Office and zoom',
-    'While a fix shows',
-    'In the steering float',
-    'Jumping between explanations',
     'In the changes pane',
     'In the explorer',
-  })
-  eq(#positions, 13)
-  eq(positions, vim.fn.sort(positions, 'n'))
+  }
+  local lines = vim.split(sheet_text(), '\n')
+  local at = vim.tbl_map(function(heading)
+    return vim.fn.index(lines, heading)
+  end, headings)
+  eq(
+    vim.tbl_filter(function(index)
+      return index < 0
+    end, at),
+    {}
+  )
+  eq(at, vim.fn.sort(at, 'n'))
+end
+
+T['the keys on the sheet']['of the changes pane include the key that edits a file, j and k, and both meanings of l'] = function()
+  open_layout('cheatsheet-changes-keys')
+
+  entry.press(child, '\\?')
+
+  local text = sheet_text()
+  eq(shows_row(text, '\\<CR>', 'edit t'), true)
+  eq(shows_row(text, '<S-CR>', 'edit t'), true)
+  eq(shows_row(text, 'j', 'next l'), true)
+  eq(shows_row(text, 'k', 'previous'), true)
+  eq(text:find('commits: move to the files window', 1, true) ~= nil, true)
+end
+
+T['the keys on the sheet']['of the changes pane leave out the key that edits a file when the prefix is false'] = function()
+  entry.restart(child, { '--cmd', 'lua vim.g.aineo = { prefix = false }' })
+  open_layout('cheatsheet-no-edit-key', { prefix = false })
+
+  entry.command(child, 'Aineo cheatsheet')
+
+  local text = sheet_text()
+  eq(shows_row(text, '<S-CR>', 'edit t'), true)
+  eq(select(2, text:gsub('edit the file in its working tree', '')), 1)
 end
 
 T['the cheatsheet and the office'] = MiniTest.new_set()
