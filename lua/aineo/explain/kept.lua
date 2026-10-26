@@ -11,10 +11,11 @@ local M = {}
 ---@field answer aineo.explain.Explanation[]|aineo.explain.KeptFix
 
 --- A fix kept: its summary and its edits, placed in the lines it was asked
---- about.
+--- about, and whether it was asked with a prompt the user edited.
 ---@class aineo.explain.KeptFix
 ---@field summary string
 ---@field edits aineo.explain.PlacedEdit[]
+---@field steered boolean
 
 --- The kept answers, by the buffer they are for and their key (`key()`).
 ---@type table<integer, table<string, aineo.explain.Kept>>
@@ -44,22 +45,21 @@ function M.key(kind, tools, range, deep)
   )
 end
 
---- What a fix is asked with, which tells its answer from another's.
+--- What a fix is asked for, which tells its answer from another's.
 ---@class aineo.explain.FixAsk
 ---@field line integer the line the issue is shown above, from 1
 ---@field issue string the issue's text
 ---@field model string
 ---@field effort string
----@field steer string the prompt's text, as the user edited it; empty for the default text
 
 --- The key a fix is kept under: the issue it fixes, on its line, and the
---- model, effort and prompt text it is asked with.
+--- model and effort it is asked with, whatever its prompt, so that the fix
+--- asked last for an issue is the one kept.
 ---
 ---@param asking aineo.explain.FixAsk
 ---@return string
 function M.fix_key(asking)
-  return 'fix '
-    .. vim.json.encode({ asking.line, asking.issue, asking.model, asking.effort, asking.steer })
+  return 'fix ' .. vim.json.encode({ asking.line, asking.issue, asking.model, asking.effort })
 end
 
 --- Keeps `answer`, the answer for the lines `lines` of `buffer`, under
