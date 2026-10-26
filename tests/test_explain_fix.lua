@@ -1301,6 +1301,36 @@ T['while shown']['deleting the line before it keeps its new lines in view'] = fu
   eq(row_after(screen(), '  return a - b'), 'end')
 end
 
+T['accepting']['undone, lets the issues asked for come back from the kept answer, asking nothing'] = function()
+  start()
+  child.cmd('2')
+  propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+  accept()
+  child.cmd('undo')
+  local after_undo = issues_shown()
+
+  child.lua(
+    [[
+    require('aineo.explain').ask({
+      buffer = vim.api.nvim_get_current_buf(),
+      window = vim.api.nvim_get_current_win(),
+      tools = false,
+      kind = 'issues',
+      command = ...,
+      model = 'sonnet',
+      timeout_ms = 180000,
+    })
+  ]],
+    { explained.FAKE_CLAUDE }
+  )
+
+  eq({ after_undo, issues_shown() }, { 0, 1 })
+  eq(
+    messages()[#messages()],
+    'aineo: the earlier answer, the code unchanged (:Aineo explain issues new asks again)'
+  )
+end
+
 T['accepting']['tells the user when the buffer shows no fix'] = function()
   start()
 
@@ -1328,16 +1358,58 @@ end
 --- The edit of line 2 that the second answer of a case makes.
 local SWAP = vim.tbl_extend('force', SUBTRACT, { new = { '  return b - a' }, why = 'Swaps.' })
 
-T['asking again']['while a fix is shown replaces it'] = function()
+T['asking again']['while a fix is shown, with another model, replaces it'] = function()
   start()
   child.cmd('2')
   propose({ summary = 'Subtract.', edits = { SUBTRACT } })
 
-  propose({ summary = 'Swap.', edits = { SWAP } })
+  propose({ summary = 'Swap.', edits = { SWAP } }, { model = 'opus' })
 
   local rows = screen()
   eq({ count_of(rows, '  return a - b'), count_of(rows, '  return b - a') }, { 0, 1 })
   eq(marks_in('aineo_explain_fix_preview'), 1)
+end
+
+T['asking again']['after a rejection, the code unchanged, shows the kept fix at once, with a word'] = function()
+  start()
+  child.cmd('2')
+  propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+  reject()
+
+  ask_fix()
+
+  eq(marks_in('aineo_explain_fix'), 0)
+  eq(count_of(screen(), '  return a - b'), 1)
+  eq(
+    messages()[#messages()],
+    'aineo: the fix kept from before, the code unchanged (\\VVf asks anew)'
+  )
+end
+
+T['asking again']['with the prompt edited first asks anew, a fix being kept'] = function()
+  start()
+  child.cmd('2')
+  propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+  reject()
+  explained.answer_with(child, { summary = 'Swap.', edits = { SWAP } })
+
+  ask_fix({ steered = true })
+  child.type_keys('<CR>')
+  wait_for_answer()
+
+  eq(count_of(screen(), '  return b - a'), 1)
+end
+
+T['asking again']['after the code changed asks anew, the kept fix not shown'] = function()
+  start()
+  child.cmd('2')
+  propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+  reject()
+  child.api.nvim_buf_set_lines(0, 3, 4, false, { '-- changed' })
+
+  propose({ summary = 'Swap.', edits = { SWAP } })
+
+  eq(count_of(screen(), '  return b - a'), 1)
 end
 
 T['asking again']['while a fix is asked stops that request and asks anew'] = function()
@@ -1487,5 +1559,15 @@ T['rejecting']['gives the buffer the modifiable it had before the fix'] = MiniTe
     eq({ while_shown, child.bo.modifiable }, { false, modifiable })
   end,
 })
+
+T['rejecting']['keeps the issue the fix was asked for'] = function()
+  start()
+  child.cmd('2')
+  propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+
+  reject()
+
+  eq(issues_shown(), 1)
+end
 
 return T
