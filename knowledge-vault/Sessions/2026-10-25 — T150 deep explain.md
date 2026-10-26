@@ -60,3 +60,14 @@ Counts: `test_explain_deep` 38 cases, `test_entry_explain_deep` 8, `test_explain
 ## Commits
 
 Recorded after the merge.
+
+## Commits on dev
+
+PR #372 into `dev`, rebased; released in `v0.2.81` (PR #373, `main` `9f24b4a6`).
+
+- `963d86f8` Document the A626 float rules and record the fix round (T150)
+- `0f577e3c` Keep one steering float, refuse a stale range, pin its wipe (A626, T150)
+- `fa6d1d5f` Name the code asked about, and refresh a remembered head (A626, T150)
+- `2110ad5c` Record D122, A625 and T150 in the v1 plan and a session note
+- `fecfec30` Map \VV and \VVI to the deep request and configure it
+- `6a261cae` Add the deep request and its steering float to the explain home
