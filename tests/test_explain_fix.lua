@@ -398,7 +398,7 @@ T['the preview']['shows the keys, then explains each edit after the summary, the
   local first = row_of(rows, '    1 local function sub(a, b)')
   eq(vim.list_slice(rows, first, first + 5), {
     '    1 local function sub(a, b)',
-    '▎ fix ┊ \\Va accepts · \\Vr rejects · \\Vd shows the diff',
+    '▎ fix ┊ read-only until \\Va accepts or \\Vr rejects · \\Vd shows the diff',
     '▎ why ┊ Subtract.',
     '▎     ┊ Subtracts b from a.',
     '▎       return a - b',
@@ -440,7 +440,7 @@ T['the preview']['draws the fix explanation in its own groups, and the keys and 
     why_label = group_of('why'),
     why = group_of('┊ Subtract.'),
     fix_label = group_of('fix'),
-    keys = group_of('┊ \\Va accepts · \\Vr rejects · \\Vd shows the diff'),
+    keys = group_of('┊ read-only until \\Va accepts or \\Vr rejects · \\Vd shows the diff'),
     new = group_of('return a - b'),
   }, {
     why_label = 'AineoFixWhyGutter',
@@ -621,6 +621,12 @@ local function accept()
   child.lua('require("aineo.explain").accept_fix(vim.api.nvim_get_current_buf())')
 end
 
+--- Turns 'modifiable' back on in the child's current buffer, which a fix
+--- shown turned off, as a user does who forces an edit.
+local function force_editable()
+  child.bo.modifiable = true
+end
+
 T['accepting'] = MiniTest.new_set()
 
 T['accepting']['applies every edit, writes nothing, and one undo takes them all back'] = function()
@@ -645,6 +651,18 @@ T['accepting']['applies every edit, writes nothing, and one undo takes them all 
   eq(child.fn.readfile(child.api.nvim_buf_get_name(0)), CODE)
   eq(messages()[#messages()], 'aineo: fix applied (u undoes it)')
   eq(buffer_lines(), CODE)
+end
+
+T['accepting']['in a buffer that was not modifiable applies the fix and leaves it not modifiable'] = function()
+  start()
+  child.cmd('2')
+  child.bo.modifiable = false
+  propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+
+  accept()
+
+  eq(buffer_lines()[2], '  return a - b')
+  eq(child.bo.modifiable, false)
 end
 
 --- How many issues the child's current buffer shows.
@@ -681,6 +699,7 @@ T['accepting']['changes nothing when the code under the fix changed meanwhile'] 
   start()
   child.cmd('2')
   propose(TWO_EDITS)
+  force_editable()
 
   child.lua([[
     vim.api.nvim_buf_set_lines(0, 5, 6, false, { '  return a + b + 0' })
@@ -716,6 +735,7 @@ T['accepting']['after an old line moved up with :m .-2, still below the other, a
   start()
   child.cmd('2')
   propose(SUBTRACT_AND_DROP)
+  force_editable()
 
   child.lua([[
     vim.cmd('6')
@@ -739,6 +759,7 @@ T['accepting']['changes nothing when :m .-2 moved an old line above another edit
   start()
   child.cmd('2')
   propose(SUBTRACT_AND_DROP)
+  force_editable()
 
   child.lua([[
     vim.cmd('6')
@@ -765,6 +786,7 @@ T['accepting']['changes nothing when an old line moved above another edit’s wi
   start()
   child.cmd('2')
   propose(SUBTRACT_AND_DROP)
+  force_editable()
 
   child.lua([[
     vim.cmd('6m0')
@@ -787,6 +809,7 @@ T['accepting']['changes nothing when an old line was edited in place meanwhile']
   start()
   child.cmd('2')
   propose(TWO_EDITS)
+  force_editable()
 
   child.lua([[
     vim.api.nvim_buf_set_text(0, 5, 9, 5, 14, { 'b + a' })
@@ -845,7 +868,7 @@ T['the preview']['shows edits that touch one after the other, the old lines of b
   local first = row_of(rows, '    1 local function sub(a, b)')
   eq(vim.list_slice(rows, first, first + 9), {
     '    1 local function sub(a, b)',
-    '▎ fix ┊ \\Va accepts · \\Vr rejects · \\Vd shows the diff',
+    '▎ fix ┊ read-only until \\Va accepts or \\Vr rejects · \\Vd shows the diff',
     '▎ why ┊ Subtract.',
     '▎     ┊ Subtracts b from a.',
     '▎       return a - b',
@@ -910,7 +933,7 @@ T['the diff view']['shows the old lines struck through under the issue and above
   eq(vim.list_slice(rows, first, first + 7), {
     '    1 local function sub(a, b)',
     '▎issu   ┊ Adds where it should subtract.',
-    '▎ fix ┊ \\Va accepts · \\Vr rejects · \\Vd shows the diff',
+    '▎ fix ┊ read-only until \\Va accepts or \\Vr rejects · \\Vd shows the diff',
     '▎ why ┊ Subtract.',
     '▎     ┊ Subtracts b from a.',
     '    2   return a + b',
@@ -987,7 +1010,7 @@ T['the keys']['leave a global key of the user’s alone, and the head row names 
   eq(
     count_of(
       screen(),
-      '┊ <Plug>(aineo-fix-accept) accepts · \\Vr rejects · \\Vd shows the diff'
+      '┊ read-only until <Plug>(aineo-fix-accept) accepts or \\Vr rejects · \\Vd shows'
     ),
     1
   )
@@ -1018,6 +1041,7 @@ T['while shown']['a command that changes its old lines drops it, with a word'] =
     start()
     child.cmd('2')
     propose(SUBTRACT_AND_DROP)
+    force_editable()
 
     child.cmd(command)
     wait_until_told('aineo: the fix was dropped: its lines were edited')
@@ -1031,6 +1055,7 @@ T['while shown']['moving an old line up, still below the other edit’s, moves t
   start()
   child.cmd('2')
   propose(SUBTRACT_AND_DROP)
+  force_editable()
 
   child.cmd('6m4')
   vim.wait(500, function()
@@ -1053,6 +1078,7 @@ T['while shown']['moving an old line up with :m .-2 keys drops it, with a word']
   start()
   child.cmd('2')
   propose(SUBTRACT_AND_DROP)
+  force_editable()
 
   child.type_keys('6G', ':m .-2<CR>', ':m .-2<CR>', ':m .-2<CR>', ':m .-2<CR>')
   wait_until_told('aineo: the fix was dropped: its lines were edited')
@@ -1073,6 +1099,7 @@ T['while shown']['an edit of its old lines drops it, with a word'] = function()
   start()
   child.cmd('2')
   propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+  force_editable()
 
   child.api.nvim_buf_set_text(0, 1, 2, 1, 2, { 'local x = 1; ' })
   wait_until_told('aineo: the fix was dropped: its lines were edited')
@@ -1087,6 +1114,7 @@ T['while shown']['an undo that changes its old lines drops it'] = function()
   child.cmd('2')
   child.cmd('2s/b/b/')
   propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+  force_editable()
 
   child.cmd('undo')
   wait_until_told('aineo: the fix was dropped: its lines were edited')
@@ -1110,6 +1138,7 @@ T['while shown']['its marks cleared by another plugin, an edit drops it once, wi
   start()
   child.cmd('2')
   propose(SUBTRACT_AND_DROP)
+  force_editable()
   child.api.nvim_buf_clear_namespace(0, -1, 0, -1)
 
   local edits = child.lua([[
@@ -1171,6 +1200,32 @@ local function settle()
   end, 20)
 end
 
+T['while shown']['a mistyped edit changes nothing, and the fix and its issue stay'] = MiniTest.new_set(
+  {
+    parametrize = {
+      { 'silent! normal \\Vs' },
+      { 'silent! normal 2Gdd' },
+      { 'silent! normal 2Gx' },
+      { 'silent! normal 2Gyyp' },
+      { 'silent! 2s/a/b/' },
+    },
+  },
+  {
+    test = function(command)
+      start()
+      child.cmd('2')
+      propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+
+      child.cmd(command)
+      settle()
+
+      eq(buffer_lines(), CODE)
+      eq(count_of(screen(), '  return a - b'), 1)
+      eq(issues_shown(), 1)
+    end,
+  }
+)
+
 T['while shown']['a line inserted right above or below its old lines moves it, or leaves it, and drops nothing'] = MiniTest.new_set(
   {
     parametrize = { { 1, { { 3, 3 } } }, { 2, { { 2, 2 } } } },
@@ -1180,6 +1235,7 @@ T['while shown']['a line inserted right above or below its old lines moves it, o
       start()
       child.cmd('2')
       propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+      force_editable()
 
       child.api.nvim_buf_set_lines(0, row, row, false, { '-- inserted' })
       settle()
@@ -1193,6 +1249,7 @@ T['while shown']['after an edit above it, an edit of the line now above its old 
   start()
   child.cmd('2')
   propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+  force_editable()
   child.api.nvim_buf_set_lines(0, 0, 0, false, { '-- head' })
   settle()
 
@@ -1206,6 +1263,7 @@ T['while shown']['an edit above it moves it, and accepting applies it where its 
   start()
   child.cmd('2')
   propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+  force_editable()
 
   child.api.nvim_buf_set_lines(0, 0, 0, false, { '-- head' })
   accept()
@@ -1222,6 +1280,7 @@ T['while shown']['deleting the line before it keeps its new lines in view'] = fu
   start()
   child.cmd('2')
   propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+  force_editable()
 
   child.api.nvim_buf_set_lines(0, 0, 1, false, {})
 
@@ -1399,5 +1458,23 @@ T['clearing']['what the buffer shows removes the fix it shows too'] = function()
   eq(count_of(screen(), '  return a - b'), 0)
   eq(conceal_options(), { 0, '' })
 end
+
+T['rejecting'] = MiniTest.new_set()
+
+T['rejecting']['gives the buffer the modifiable it had before the fix'] = MiniTest.new_set({
+  parametrize = { { true }, { false } },
+}, {
+  test = function(modifiable)
+    start()
+    child.cmd('2')
+    child.bo.modifiable = modifiable
+    propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+    local while_shown = child.bo.modifiable
+
+    reject()
+
+    eq({ while_shown, child.bo.modifiable }, { false, modifiable })
+  end,
+})
 
 return T

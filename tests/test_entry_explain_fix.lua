@@ -216,9 +216,9 @@ T['the preview keys']['with no prefix are none, and the head row names the <Plug
   end, child.get_screenshot().text)
   local head = vim.fn.index(
     rows,
-    '┊ <Plug>(aineo-fix-accept) accepts · <Plug>(aineo-fix-reject) rejects ·'
+    '┊ read-only until <Plug>(aineo-fix-accept) accepts or <Plug>(aineo-fix-reject)'
   ) + 1
-  eq(rows[head + 1], '┊ <Plug>(aineo-fix-diff) shows the diff')
+  eq(rows[head + 1], '┊ rejects · <Plug>(aineo-fix-diff) shows the diff')
   eq(child.lua_get([[vim.fn.maparg('\\Va', 'n')]]), '')
 end
 

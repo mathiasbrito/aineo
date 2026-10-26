@@ -40,6 +40,7 @@ local CONCEALING = 2
 ---@field edits aineo.explain.ShownEdit[] in the order of their lines
 ---@field saved table<integer, aineo.explain.ConcealOptions> the options of each window it set, before it set them
 ---@field set table<integer, aineo.explain.ConcealOptions> the options it set in each window
+---@field modifiable boolean the buffer's 'modifiable' before it, which it turns off while shown
 
 --- The keys a preview maps in its buffer, each a left-hand side as
 --- `vim.keymap.set()` takes it.
@@ -93,7 +94,8 @@ local function new_line_row(text, geometry)
   return chunks
 end
 
---- What the head row of `preview` says: for accepting it, rejecting it and
+--- What the head row of `preview` says: that its buffer is read-only until
+--- it is accepted or rejected, and, for accepting it, rejecting it and
 --- showing its diff, the key it mapped in its buffer, or the `<Plug>`
 --- mapping when it mapped none for that, the key being the user's or none
 --- being given.
@@ -104,7 +106,7 @@ local function head_text(preview)
   local function named(action)
     return preview.mapped[action] and preview.keys[action] or PLUG_KEYS[action]
   end
-  return ('%s accepts · %s rejects · %s shows the diff'):format(
+  return ('read-only until %s accepts or %s rejects · %s shows the diff'):format(
     named('accept'),
     named('reject'),
     named('diff')
@@ -582,7 +584,8 @@ local function unmap_keys(preview)
 end
 
 --- Removes the preview `buffer` shows, if any, leaving the buffer as it
---- reads and every window's options as they were before it.
+--- reads, its 'modifiable' and every window's options as they were before
+--- it.
 ---
 ---@param buffer integer
 function M.clear(buffer)
@@ -594,6 +597,7 @@ function M.clear(buffer)
   restore_windows(preview)
   unmap_keys(preview)
   if vim.api.nvim_buf_is_valid(buffer) then
+    vim.bo[buffer].modifiable = preview.modifiable
     vim.api.nvim_buf_clear_namespace(buffer, DRAWN, 0, -1)
     vim.api.nvim_buf_clear_namespace(buffer, RANGES, 0, -1)
   end
@@ -634,8 +638,9 @@ end
 --- Applies the preview `buffer` shows, which must be shown
 --- (`is_shown()`): when its edits still stand (`standing_spans()`),
 --- replaces the old lines of each by its new lines, the edit lowest in the
---- buffer first, as one undo step, writes nothing and removes the preview
---- (`clear()`); else tells the user, once, and leaves the buffer and the
+--- buffer first, as one undo step, 'modifiable' on while it does, writes
+--- nothing and removes the preview (`clear()`), which gives the buffer its
+--- 'modifiable' back; else tells the user, once, and leaves the buffer and the
 --- preview as they are. Returns whether it applied the edits.
 ---
 ---@param buffer integer
@@ -654,6 +659,7 @@ function M.apply(buffer)
   table.sort(lowest_first, function(a, b)
     return spans[a].first > spans[b].first
   end)
+  vim.bo[buffer].modifiable = true
   for _, index in ipairs(lowest_first) do
     local span = spans[index]
     vim.api.nvim_buf_set_lines(buffer, span.first, span.last + 1, true, preview.edits[index].new)
@@ -773,8 +779,9 @@ end
 ---@field keys? aineo.explain.FixKeys the keys that accept, reject and show the diff
 
 --- Shows the edits of `order` in `buffer` as a preview: the buffer is not
---- changed; each edit's old lines are hidden in every window showing it
---- and its new lines drawn in their place.
+--- changed, and cannot be while it is shown, its 'modifiable' off; each
+--- edit's old lines are hidden in every window showing it and its new lines
+--- drawn in their place.
 ---
 ---@param buffer integer
 ---@param order aineo.explain.PreviewOrder
@@ -789,6 +796,7 @@ function M.show(buffer, order)
     edits = {},
     saved = {},
     set = {},
+    modifiable = vim.bo[buffer].modifiable,
   }
   for _, edit in ipairs(order.edits) do
     table.insert(preview.edits, {
@@ -802,6 +810,7 @@ function M.show(buffer, order)
     })
   end
   previews[buffer] = preview
+  vim.bo[buffer].modifiable = false
   conceal_in_windows(preview)
   map_keys(preview)
   render(preview)
