@@ -350,6 +350,7 @@ local function steer_then_ask(explaining, kind)
   steer.open({
     name = kind.name,
     title = kind.deep.title,
+    steered_buffer = explaining.buffer,
     default = request.default_steer(code_of(explaining, kind)),
     on_send = function(text)
       local buffer = explaining.buffer
@@ -411,16 +412,26 @@ function M.ask(explaining)
   end
 end
 
---- Removes every explanation and every issue `buffer` shows, and the fix it
---- shows, and stops the requests that run for it, if any, without a word.
+--- Returns `buffer` to how it behaved when it was opened, without a word:
+--- stops the requests that run for it, so that none of their answers is
+--- shown later; closes the float steering a request for it, if open
+--- (`aineo.explain.steer`); rejects the fix it shows
+--- (`aineo.explain.fix`), which gives back its 'modifiable' and its
+--- windows' options; removes every
+--- explanation and every issue it shows, with their marks, which takes back
+--- its keys `]v` and `[v` and its windows' badges; and drops the answers and
+--- fixes kept for it (`aineo.explain.kept`), so that the next request asks
+--- anew. Its text and its undo history stay as they are.
 ---
 ---@param buffer integer
 function M.clear(buffer)
   runs.stop_all_of(buffer)
+  steer.close_for(buffer)
   fix.reject(buffer)
   for _, kind in ipairs(kinds.ALL) do
     marks.clear(buffer, kind)
   end
+  kept.forget(buffer)
 end
 
 --- Marks the issues `buffer` shows above the lines from `first` to `last`,

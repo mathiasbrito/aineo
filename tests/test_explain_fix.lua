@@ -1508,7 +1508,12 @@ T['a steered fix']['sends nothing when the issue is no longer shown, with a word
   local buffer = child.api.nvim_get_current_buf()
   ask_fix({ steered = true })
 
-  child.lua('require("aineo.explain").clear(...)', { buffer })
+  child.api.nvim_buf_clear_namespace(
+    buffer,
+    child.api.nvim_create_namespace('aineo_explain_issues'),
+    0,
+    -1
+  )
   child.type_keys('<CR>')
 
   eq(messages()[#messages()], 'aineo: the issue is no longer shown')
