@@ -1,6 +1,7 @@
 --- What `:Aineo`'s arguments do, and the actions of tabs themselves: move to
 --- a tab, claim a session in the current tab, close the current tab.
 
+local cheatsheets = require('aineo.entry.cheatsheet')
 local finding = require('aineo.entry.finding')
 local offices = require('aineo.entry.office')
 local opening = require('aineo.entry.opening')
@@ -188,19 +189,40 @@ ACTIONS.office = function()
     vim.notify(NO_TAB_FOR_OFFICE, vim.log.levels.WARN)
     return
   end
+  cheatsheets.close(tab)
   offices.show(tab)
+end
+
+--- What `:Aineo cheatsheet` tells the user, as a warning, when there is no
+--- aineo tab.
+local NO_TAB_FOR_CHEATSHEET = 'aineo: there is no aineo tab to show the cheatsheet in'
+
+--- What `:Aineo cheatsheet` does: shows the cheatsheet over the right side of
+--- the layout of the existing aineo tab to act on (`aineo.entry.opening`'s
+--- `existing_acting_tab()`, `aineo.entry.cheatsheet`), the office closed
+--- first, or closes it when it shows; never makes a tab. With none, tells the
+--- user.
+ACTIONS.cheatsheet = function()
+  local tab = opening.existing_acting_tab()
+  if not tab then
+    vim.notify(NO_TAB_FOR_CHEATSHEET, vim.log.levels.WARN)
+    return
+  end
+  offices.hide(tab)
+  cheatsheets.toggle(tab)
 end
 
 --- What `:Aineo office reset` does: shows the office of the existing aineo
 --- tab to act on (as `:Aineo office`) as if its session began now, every
 --- agent forgotten and the main agent walking in (`aineo.entry.office`'s
---- `reset()`). With no aineo tab, tells the user.
+--- `reset()`), the cheatsheet closed first. With no aineo tab, tells the user.
 function M.reset_office()
   local tab = opening.existing_acting_tab()
   if not tab then
     vim.notify(NO_TAB_FOR_OFFICE, vim.log.levels.WARN)
     return
   end
+  cheatsheets.close(tab)
   offices.reset(tab)
 end
 
@@ -216,6 +238,7 @@ function M.preview_office(name)
     vim.notify(NO_TAB_FOR_OFFICE, vim.log.levels.WARN)
     return
   end
+  cheatsheets.close(tab)
   offices.preview(tab, name)
 end
 

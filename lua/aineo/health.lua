@@ -313,77 +313,28 @@ local function check_server_socket()
 end
 
 --- The keys that follow the prefix for each of aineo's actions, with the
---- `<Plug>` mapping each runs and the mode it is mapped in — `n`, Normal
---- mode, or `x`, Visual mode — in the order `plugin/aineo.lua` maps them.
---- Each `n` key but Send's also has a twin in Terminal and Insert mode
---- (`TERMINAL_MODES`).
-local PREFIX_KEYS = {
-  { key = 's', plug = '<Plug>(aineo-send)', mode = 'n' },
-  { key = 'o', plug = '<Plug>(aineo-open)', mode = 'n' },
-  { key = 'r', plug = '<Plug>(aineo-report)', mode = 'n' },
-  { key = 'i', plug = '<Plug>(aineo-input)', mode = 'n' },
-  { key = 'c', plug = '<Plug>(aineo-claude)', mode = 'n' },
-  { key = 'tcn', plug = '<Plug>(aineo-claude-numbers)', mode = 'n' },
-  { key = 'S', plug = '<Plug>(aineo-sessions)', mode = 'n' },
-  { key = 'N', plug = '<Plug>(aineo-new)', mode = 'n' },
-  { key = 'pa', plug = '<Plug>(aineo-pane-agent)', mode = 'n' },
-  { key = 'g', plug = '<Plug>(aineo-pane-changes)', mode = 'n' },
-  { key = 'pt', plug = '<Plug>(aineo-pane-terminal)', mode = 'n' },
-  { key = 'x', plug = '<Plug>(aineo-pane-run)', mode = 'n' },
-  { key = 'e', plug = '<Plug>(aineo-pane-explorer)', mode = 'n' },
-  { key = 'X', plug = '<Plug>(aineo-run-shell)', mode = 'n' },
-  { key = 'T', plug = '<Plug>(aineo-tab-new)', mode = 'n' },
-  { key = 'Q', plug = '<Plug>(aineo-tab-close)', mode = 'n' },
-  { key = '1', plug = '<Plug>(aineo-tab-1)', mode = 'n' },
-  { key = '2', plug = '<Plug>(aineo-tab-2)', mode = 'n' },
-  { key = '3', plug = '<Plug>(aineo-tab-3)', mode = 'n' },
-  { key = '4', plug = '<Plug>(aineo-tab-4)', mode = 'n' },
-  { key = '5', plug = '<Plug>(aineo-tab-5)', mode = 'n' },
-  { key = '6', plug = '<Plug>(aineo-tab-6)', mode = 'n' },
-  { key = '7', plug = '<Plug>(aineo-tab-7)', mode = 'n' },
-  { key = '8', plug = '<Plug>(aineo-tab-8)', mode = 'n' },
-  { key = '9', plug = '<Plug>(aineo-tab-9)', mode = 'n' },
-  { key = 'd', plug = '<Plug>(aineo-diff-close)', mode = 'n' },
-  { key = 'f', plug = '<Plug>(aineo-find)', mode = 'n' },
-  { key = 'z', plug = '<Plug>(aineo-zoom)', mode = 'n' },
-  { key = 'Z', plug = '<Plug>(aineo-zoom-full)', mode = 'n' },
-  { key = 'O', plug = '<Plug>(aineo-office)', mode = 'n' },
-  { key = 's', plug = '<Plug>(aineo-send)', mode = 'x' },
-  { key = 'v', plug = '<Plug>(aineo-explain)', mode = 'n' },
-  { key = 'V', plug = '<Plug>(aineo-explain-tools)', mode = 'n' },
-  { key = 'vi', plug = '<Plug>(aineo-explain-issues)', mode = 'n' },
-  { key = 'VI', plug = '<Plug>(aineo-explain-issues-tools)', mode = 'n' },
-  { key = 'VV', plug = '<Plug>(aineo-explain-deep)', mode = 'n' },
-  { key = 'VVI', plug = '<Plug>(aineo-explain-deep-issues)', mode = 'n' },
-  { key = 'vm', plug = '<Plug>(aineo-explain-mark)', mode = 'n' },
-  { key = 'Vf', plug = '<Plug>(aineo-explain-fix)', mode = 'n' },
-  { key = 'VVf', plug = '<Plug>(aineo-explain-fix-steered)', mode = 'n' },
-  { key = 'vc', plug = '<Plug>(aineo-explain-clean)', mode = 'n' },
-  { key = 'v', plug = '<Plug>(aineo-explain)', mode = 'x' },
-  { key = 'V', plug = '<Plug>(aineo-explain-tools)', mode = 'x' },
-  { key = 'vi', plug = '<Plug>(aineo-explain-issues)', mode = 'x' },
-  { key = 'VI', plug = '<Plug>(aineo-explain-issues-tools)', mode = 'x' },
-  { key = 'VV', plug = '<Plug>(aineo-explain-deep)', mode = 'x' },
-  { key = 'VVI', plug = '<Plug>(aineo-explain-deep-issues)', mode = 'x' },
-  { key = 'vm', plug = '<Plug>(aineo-explain-mark)', mode = 'x' },
-}
-
---- The prefix keys that have no twin in Terminal and Insert mode, by their
---- `<Plug>` mapping: Send acts on a selection or on Normal mode's line, and
---- explaining on the buffer of a file or on a selection in it.
-local HAS_NO_TWIN = {
-  ['<Plug>(aineo-send)'] = true,
-  ['<Plug>(aineo-explain)'] = true,
-  ['<Plug>(aineo-explain-tools)'] = true,
-  ['<Plug>(aineo-explain-issues)'] = true,
-  ['<Plug>(aineo-explain-issues-tools)'] = true,
-  ['<Plug>(aineo-explain-deep)'] = true,
-  ['<Plug>(aineo-explain-deep-issues)'] = true,
-  ['<Plug>(aineo-explain-mark)'] = true,
-  ['<Plug>(aineo-explain-fix)'] = true,
-  ['<Plug>(aineo-explain-fix-steered)'] = true,
-  ['<Plug>(aineo-explain-clean)'] = true,
-}
+--- `<Plug>` mapping each runs, the mode it is mapped in — `n`, Normal mode,
+--- or `x`, Visual mode — and whether it has a twin in Terminal and Insert
+--- mode (`TERMINAL_MODES`): the keys of Normal mode first, then those of
+--- Visual mode, each in the order `aineo.keys` declares them.
+---
+---@return { key: string, plug: string, mode: 'n'|'x', twin: boolean }[]
+local function declared_prefix_keys()
+  local found = {}
+  for _, mode in ipairs({ 'n', 'x' }) do
+    for _, row in ipairs(require('aineo.keys').rows()) do
+      if row.scope == 'global' and row.modes:find(mode, 1, true) then
+        table.insert(found, {
+          key = row.suffix,
+          plug = ('<Plug>(aineo-%s)'):format(row.plug),
+          mode = mode,
+          twin = row.twin,
+        })
+      end
+    end
+  end
+  return found
+end
 
 --- The modes a twin is mapped in, with how the Terminal prefix mappings
 --- section names each: Terminal mode first.
@@ -657,7 +608,7 @@ local function check_prefix_mappings(resolved_config)
   if pending then
     vim.health.info(pending)
   else
-    for _, prefix_key in ipairs(PREFIX_KEYS) do
+    for _, prefix_key in ipairs(declared_prefix_keys()) do
       check_prefix_key(resolved_config.prefix, prefix_key)
     end
   end
@@ -774,8 +725,8 @@ local function check_terminal_prefix_mappings(resolved_config)
     return
   end
   local skipped = check_terminal_prefix_mapped_alone(terminal_prefix)
-  for _, prefix_key in ipairs(PREFIX_KEYS) do
-    if prefix_key.mode == 'n' and not HAS_NO_TWIN[prefix_key.plug] then
+  for _, prefix_key in ipairs(declared_prefix_keys()) do
+    if prefix_key.mode == 'n' and prefix_key.twin then
       for _, terminal_mode in ipairs(TERMINAL_MODES) do
         if not skipped[terminal_mode.mode] then
           check_terminal_key(terminal_prefix, prefix_key, terminal_mode)
