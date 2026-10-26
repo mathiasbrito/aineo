@@ -42,10 +42,12 @@ local fixed_issues = {}
 ---@field window integer
 ---@field tick integer the buffer's `b:changedtick` when it was asked
 ---@field issue integer the extmark of the issue to fix
+---@field issue_text string the text of the issue to fix
 ---@field keys? aineo.explain.FixKeys
 ---@field ask_keys aineo.explain.FixAskKeys
 ---@field lines string[] every line of the buffer, as sent
 ---@field key string what its answer is kept under (`aineo.explain.kept`'s `fix_key()`)
+---@field steered boolean whether it was asked with a prompt the user edited
 
 --- The fix the run `ended` of Claude Code answered (`aineo.explain.answer`'s
 --- `fix_in()`), or `nil` and what went wrong (`failure_of()` for a failed
@@ -75,6 +77,7 @@ local function show(asked, fix)
     edits = fix.edits,
     keys = asked.keys,
     ask_key = asked.ask_keys.plain,
+    issue = asked.issue_text,
   })
 end
 
@@ -107,7 +110,7 @@ local function show_answer(asked, ended)
     vim.notify('aineo: the fix was refused: ' .. refusal, vim.log.levels.WARN)
     return
   end
-  local fix = { summary = answered.summary, edits = edits }
+  local fix = { summary = answered.summary, edits = edits, steered = asked.steered }
   kept.keep(asked.buffer, asked.key, asked.lines, fix)
   show(asked, fix)
 end
@@ -133,20 +136,18 @@ local function code_of(fixing, issue, folder)
 end
 
 --- What a fix of `issue`, shown above `fixing.line`, asked as `fixing`
---- says with the prompt text `steered_text`, is kept under, or the default
---- text when absent (`aineo.explain.kept`'s `fix_key()`).
+--- says, is kept under, whatever its prompt (`aineo.explain.kept`'s
+--- `fix_key()`).
 ---
 ---@param fixing aineo.explain.FixRequest
 ---@param issue aineo.explain.ShownIssue
----@param steered_text? string
 ---@return string
-local function kept_key(fixing, issue, steered_text)
+local function kept_key(fixing, issue)
   return kept.fix_key({
     line = fixing.line,
     issue = issue.text,
     model = fixing.model,
     effort = fixing.effort,
-    steer = steered_text or '',
   })
 end
 
@@ -170,10 +171,12 @@ local function start(fixing, issue, folder, steered_text)
     window = fixing.window,
     tick = vim.api.nvim_buf_get_changedtick(buffer),
     issue = issue.id,
+    issue_text = issue.text,
     keys = fixing.keys,
     ask_keys = fixing.ask_keys,
     lines = vim.api.nvim_buf_get_lines(buffer, 0, -1, false),
-    key = kept_key(fixing, issue, steered_text),
+    key = kept_key(fixing, issue),
+    steered = steered_text ~= nil,
   }
   local code = code_of(fixing, issue, folder)
   code.steer = steered_text
@@ -247,11 +250,12 @@ local function ask(fixing, issue, folder, steered_text)
   start(fixing, issue, folder, steered_text)
 end
 
---- Shows the fix kept for `issue` asked as `fixing` says with the default
---- prompt (`kept_key()`), when the buffer reads as it did when it was
---- answered, in place of the fix request and the fix of `fixing.buffer`
---- (`replace_fix()`), and tells the user, once, that it is the fix kept
---- and what asks anew. Returns whether one was kept.
+--- Shows the fix kept for `issue` asked as `fixing` says (`kept_key()`),
+--- the one asked last whatever its prompt, when the buffer reads as it did
+--- when it was answered, in place of the fix request and the fix of
+--- `fixing.buffer` (`replace_fix()`), and tells the user, once, that it is
+--- the fix kept, which prompt it was asked with, and what asks anew.
+--- Returns whether one was kept.
 ---
 ---@param fixing aineo.explain.FixRequest
 ---@param issue aineo.explain.ShownIssue
@@ -270,13 +274,16 @@ local function show_kept(fixing, issue)
     window = fixing.window,
     tick = vim.api.nvim_buf_get_changedtick(buffer),
     issue = issue.id,
+    issue_text = issue.text,
     keys = fixing.keys,
     ask_keys = fixing.ask_keys,
     lines = lines,
     key = key,
+    steered = fix.steered,
   }, fix)
   vim.notify(
-    ('aineo: the fix kept from before, the code unchanged (%s asks anew)'):format(
+    ('aineo: the fix kept from before, asked with %s, the code unchanged (%s asks anew)'):format(
+      fix.steered and 'your edited prompt' or 'the default prompt',
       fixing.ask_keys.steered
     ),
     vim.log.levels.INFO

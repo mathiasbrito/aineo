@@ -406,8 +406,9 @@ T['the preview']['shows the keys, then explains each edit after the summary, the
 
   local rows = screen()
   local first = row_of(rows, '    1 local function sub(a, b)')
-  eq(vim.list_slice(rows, first, first + 5), {
+  eq(vim.list_slice(rows, first, first + 6), {
     '    1 local function sub(a, b)',
+    '▎issu ┊ Adds where it should subtract.',
     '▎ fix ┊ read-only until \\Va accepts or \\Vr rejects · \\Vd shows the diff',
     '▎ why ┊ Subtract.',
     '▎     ┊ Subtracts b from a.',
@@ -459,6 +460,19 @@ T['the preview']['draws the fix explanation in its own groups, and the keys and 
     keys = 'AineoFix',
     new = 'AineoFix',
   })
+end
+
+T['the preview']['starts with the issue it fixes, in the issue look, above its keys'] = function()
+  start()
+  child.cmd('2')
+
+  propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+
+  eq(
+    row_after(screen(), '┊ ' .. ISSUE),
+    '┊ read-only until \\Va accepts or \\Vr rejects · \\Vd shows the diff'
+  )
+  eq(group_of('┊ ' .. ISSUE), 'AineoExplainIssue')
 end
 
 T['the preview']['colours the fix explanation with the hint accent, apart from the fix’s green'] = function()
@@ -888,8 +902,9 @@ T['the preview']['shows edits that touch one after the other, the old lines of b
 
   local rows = screen()
   local first = row_of(rows, '    1 local function sub(a, b)')
-  eq(vim.list_slice(rows, first, first + 9), {
+  eq(vim.list_slice(rows, first, first + 10), {
     '    1 local function sub(a, b)',
+    '▎issu ┊ Adds where it should subtract.',
     '▎ fix ┊ read-only until \\Va accepts or \\Vr rejects · \\Vd shows the diff',
     '▎ why ┊ Subtract.',
     '▎     ┊ Subtracts b from a.',
@@ -1393,7 +1408,27 @@ T['asking again']['after a rejection, the code unchanged, shows the kept fix at 
   eq(count_of(screen(), '  return a - b'), 1)
   eq(
     messages()[#messages()],
-    'aineo: the fix kept from before, the code unchanged (\\VVf asks anew)'
+    'aineo: the fix kept from before, asked with the default prompt, the code unchanged (\\VVf asks anew)'
+  )
+end
+
+T['asking again']['after a steered fix was rejected, the code unchanged, shows that fix at once, saying it was steered'] = function()
+  start()
+  child.cmd('2')
+  explained.answer_with(child, { summary = 'Swap.', edits = { SWAP } })
+  ask_fix({ steered = true })
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { 'Fix it my way.' })
+  child.type_keys('<CR>')
+  wait_for_answer()
+  reject()
+
+  ask_fix()
+
+  eq(marks_in('aineo_explain_fix'), 0)
+  eq(count_of(screen(), '  return b - a'), 1)
+  eq(
+    messages()[#messages()],
+    'aineo: the fix kept from before, asked with your edited prompt, the code unchanged (\\VVf asks anew)'
   )
 end
 

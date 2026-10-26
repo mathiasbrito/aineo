@@ -100,7 +100,9 @@ local function fill_buffer()
   explained.answer_with(child, FIX)
   press('\\Vf')
   vim.wait(explained.PATIENCE_MS, function()
-    return child.lua_get('require("aineo.explain.preview").is_shown(0)')
+    return child.lua_get(
+      'require("aineo.explain.preview").is_shown(vim.api.nvim_get_current_buf())'
+    )
   end, 20)
   explained.begin_slowly(child, 'explanations', { { line = 3, text = 'Late.' } }, 1500)
 end
