@@ -25,7 +25,7 @@
 local cards_module = require('aineo.office.cards')
 local colours = require('aineo.office.colours')
 local countdown_module = require('aineo.office.countdown')
-local float_module = require('aineo.office.float')
+local cover_module = require('aineo.cover')
 local preview_module = require('aineo.office.preview')
 local screen_module = require('aineo.office.screen')
 local too_small = require('aineo.office.too_small')
@@ -46,6 +46,11 @@ local NEEDS_TRUE_COLOUR =
 --- pixel would be twice as wide as the window.
 local NEEDS_SINGLE_CELL_BLOCKS =
   "aineo: the office needs 'ambiwidth' to be single to draw its half blocks one cell wide, and it is double, so it does not show"
+
+--- How the office's window opens (`aineo.cover`): its buffer is of the
+--- filetype `aineo-office`, and the cursor stays where it was.
+---@type aineo.cover.Options
+local OFFICE_COVER = { filetype = 'aineo-office', name = 'office', enter = false }
 
 --- The most agents whose permission waits an office keeps.
 local MOST_WAITS_KEPT = 64
@@ -122,6 +127,7 @@ end
 ---@field session_started fun() tells the office the session it acts out has started again after it ended (`session_ended()`): an office that is running has its main agent walk in, as when a session begins, the session's earlier agents forgotten; nothing when it had not ended
 ---@field follows_session fun(session: string): boolean whether `session` is one of the sessions of the chain the office followed last: the session of the transcript it was given and those it went on in; false before it has followed any
 ---@field show_now fun() shows the office over the right side at once, and does nothing when it shows
+---@field hide fun() closes the office when it shows, a preview included, and starts the countdown to showing it by itself as the cursor's place says; does nothing when it is hidden
 ---@field preview fun(pack?: string) shows the pack, or the one the settings name, over the right side with every state of the vocabulary acted out in turn, each named, in place of the office that shows, which stays when the pack cannot be shown; the preview follows no transcript
 ---@field reload fun() shows the office again with what the settings name now, when it shows, and does nothing when it is hidden, previews a pack or has no right side; a pack that cannot be shown is told, and the office that shows stays
 ---@field reset fun() shows the office over the right side as if the session began now: every agent is forgotten but for a permission wait not answered, the main agent walks in (or, once the session has ended, `session_ended()`, stays gone until a session starts), and only what the transcripts say from then on is acted out, then and whenever an office of this Neovim follows the session again; with no right side, a pack that cannot be loaded or a stage that cannot be made, it tells the user why and the office that shows stays
@@ -244,7 +250,7 @@ function M.new_office(options)
   --- What exists while the office shows; nil while it is hidden. Its timer,
   --- tracker and follower are nil while the office is paused, as it is while
   --- its tab page is left.
-  ---@type { float: aineo.office.Float, group: integer, pack: aineo.office_pack.Pack, commands: aineo.office_states.CommandClasses|nil, stage: aineo.office_scene.Stage, screen: aineo.office.Screen, area: aineo.layout.Area, refresh_colours: fun(), draw: fun(), timer: uv.uv_timer_t|nil, tracker: aineo.office_states.Tracker|nil, follower: aineo.transcript.Follower|nil, preview: aineo.office.Preview|nil }|nil
+  ---@type { float: aineo.cover.Cover, group: integer, pack: aineo.office_pack.Pack, commands: aineo.office_states.CommandClasses|nil, stage: aineo.office_scene.Stage, screen: aineo.office.Screen, area: aineo.layout.Area, refresh_colours: fun(), draw: fun(), timer: uv.uv_timer_t|nil, tracker: aineo.office_states.Tracker|nil, follower: aineo.transcript.Follower|nil, preview: aineo.office.Preview|nil }|nil
   local showing = nil
 
   local office = {}
@@ -311,7 +317,7 @@ function M.new_office(options)
     showing = nil
     stop_running(open)
     pcall(vim.api.nvim_del_augroup_by_id, open.group)
-    float_module.close(open.float)
+    cover_module.close(open.float)
   end
 
   --- Closes the office once the current event is over: a window cannot be
@@ -322,7 +328,7 @@ function M.new_office(options)
     vim.schedule(function()
       local open = showing
       if open and vim.api.nvim_get_current_win() == open.float.window then
-        local covered = float_module.window_under(open.float, open.area)
+        local covered = cover_module.window_under(open.float, open.area)
         if covered then
           vim.api.nvim_set_current_win(covered)
         end
@@ -448,7 +454,7 @@ function M.new_office(options)
 
   --- Whether the current tab page is the one the office's window is in.
   ---
-  ---@param open { float: aineo.office.Float }
+  ---@param open { float: aineo.cover.Cover }
   ---@return boolean
   local function is_in_current_tab_page(open)
     return vim.api.nvim_win_is_valid(open.float.window)
@@ -459,7 +465,7 @@ function M.new_office(options)
   --- to it; closes it when the layout shows no right side. Does nothing from
   --- another tab page, whose cells are not the office's.
   ---
-  ---@param open { float: aineo.office.Float, stage: aineo.office_scene.Stage, area: aineo.layout.Area }
+  ---@param open { float: aineo.cover.Cover, stage: aineo.office_scene.Stage, area: aineo.layout.Area }
   local function follow_right_side(open)
     if not is_in_current_tab_page(open) then
       return
@@ -468,7 +474,7 @@ function M.new_office(options)
     if not area then
       close_soon()
     elseif not vim.deep_equal(area, open.area) then
-      float_module.place(open.float, area)
+      cover_module.place(open.float, area)
       open.stage.resize(area.width, area.height)
       open.area = area
     end
@@ -479,7 +485,7 @@ function M.new_office(options)
   --- closes it when its window closes; and makes its colours again after a
   --- colorscheme cleared them.
   ---
-  ---@param open { float: aineo.office.Float, group: integer, stage: aineo.office_scene.Stage, area: aineo.layout.Area, screen: aineo.office.Screen, refresh_colours: fun() }
+  ---@param open { float: aineo.cover.Cover, group: integer, stage: aineo.office_scene.Stage, area: aineo.layout.Area, screen: aineo.office.Screen, refresh_colours: fun() }
   local function watch_the_screen(open)
     vim.api.nvim_create_autocmd('WinEnter', {
       group = open.group,
@@ -488,7 +494,7 @@ function M.new_office(options)
         if
           is_in_current_tab_page(open)
           and not is_paused(open)
-          and float_module.covers(open.float, entered)
+          and cover_module.covers(open.float, entered)
         then
           close_soon()
         end
@@ -633,7 +639,7 @@ function M.new_office(options)
     if before_opening then
       before_opening()
     end
-    local float = float_module.open(area)
+    local float = cover_module.open(area, OFFICE_COVER)
     local screen = screen_module.new_screen(float.buffer)
     cards_module.define_groups()
     local open = {
@@ -713,7 +719,7 @@ function M.new_office(options)
   ---@param area aineo.layout.Area|nil the right side now
   ---@return boolean
   local function cursor_is_in(area)
-    return area ~= nil and float_module.area_holds(area, vim.api.nvim_get_current_win())
+    return area ~= nil and cover_module.area_holds(area, vim.api.nvim_get_current_win())
   end
 
   local countdown = countdown_module.new_countdown({
@@ -804,6 +810,11 @@ function M.new_office(options)
     if not show_over(area, { pack = pack }, close) then
       settle()
     end
+  end
+
+  function office.hide()
+    close()
+    settle()
   end
 
   function office.reload()
