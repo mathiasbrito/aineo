@@ -127,7 +127,6 @@ end
 ---@field session_started fun() tells the office the session it acts out has started again after it ended (`session_ended()`): an office that is running has its main agent walk in, as when a session begins, the session's earlier agents forgotten; nothing when it had not ended
 ---@field follows_session fun(session: string): boolean whether `session` is one of the sessions of the chain the office followed last: the session of the transcript it was given and those it went on in; false before it has followed any
 ---@field show_now fun() shows the office over the right side at once, and does nothing when it shows
----@field hide fun() closes the office when it shows, a preview included, and starts the countdown to showing it by itself as the cursor's place says; does nothing when it is hidden
 ---@field preview fun(pack?: string) shows the pack, or the one the settings name, over the right side with every state of the vocabulary acted out in turn, each named, in place of the office that shows, which stays when the pack cannot be shown; the preview follows no transcript
 ---@field reload fun() shows the office again with what the settings name now, when it shows, and does nothing when it is hidden, previews a pack or has no right side; a pack that cannot be shown is told, and the office that shows stays
 ---@field reset fun() shows the office over the right side as if the session began now: every agent is forgotten but for a permission wait not answered, the main agent walks in (or, once the session has ended, `session_ended()`, stays gone until a session starts), and only what the transcripts say from then on is acted out, then and whenever an office of this Neovim follows the session again; with no right side, a pack that cannot be loaded or a stage that cannot be made, it tells the user why and the office that shows stays
@@ -810,11 +809,6 @@ function M.new_office(options)
     if not show_over(area, { pack = pack }, close) then
       settle()
     end
-  end
-
-  function office.hide()
-    close()
-    settle()
   end
 
   function office.reload()

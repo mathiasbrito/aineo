@@ -58,7 +58,7 @@ function M.let_go(tab)
   local sheet = sheets[tab]
   sheets[tab] = nil
   if sheet then
-    sheet.let_go()
+    sheet.close()
   end
 end
 
