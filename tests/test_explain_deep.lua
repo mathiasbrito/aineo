@@ -649,12 +649,22 @@ T['the look']['labels a deep explanation expl+ in the gutter'] = function()
   eq(first_row_in('aineo_explain')[3], { 'expl+', 'AineoExplainGutter' })
 end
 
-T['the look']['labels a deep explanation placed again from the answer kept expl+ too'] = function()
+T['the look']['labels a deep explanation placed again from the answer kept expl+ too, after \\V cleared it'] = function()
   start()
   child.wo.number = true
   child.wo.numberwidth = 10
   ask_deep_and_wait()
-  child.lua("require('aineo.explain').clear(vim.api.nvim_get_current_buf())")
+  child.lua(
+    [[require('aineo.explain').ask({
+      buffer = vim.api.nvim_get_current_buf(),
+      window = vim.api.nvim_get_current_win(),
+      tools = true,
+      command = ...,
+      model = 'sonnet',
+      timeout_ms = 180000,
+    })]],
+    { explained.FAKE_CLAUDE }
+  )
 
   ask_deep()
 

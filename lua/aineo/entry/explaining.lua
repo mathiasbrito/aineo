@@ -65,6 +65,8 @@ end
 --- `explain.fix_model`, `explain.fix_effort` and `explain.fix_timeout_ms`;
 --- while the fix is shown, the prefix followed by `Va`, `Vr` and `Vd`
 --- accept it, reject it and show its diff, unless the prefix is `false`.
+--- What asks a fix is told to the user as the prefix followed by `Vf` and
+--- `VVf`, or, when the prefix is `false`, as their `<Plug>` mappings.
 ---
 --- Raises an error when the current buffer holds no file, and the
 --- configuration's or the explain home's errors.
@@ -89,6 +91,10 @@ function M.propose_fix(order)
     timeout_ms = settings.fix_timeout_ms,
     keys = prefix and { accept = prefix .. 'Va', reject = prefix .. 'Vr', diff = prefix .. 'Vd' }
       or nil,
+    ask_keys = prefix and { plain = prefix .. 'Vf', steered = prefix .. 'VVf' } or {
+      plain = '<Plug>(aineo-explain-fix)',
+      steered = '<Plug>(aineo-explain-fix-steered)',
+    },
   })
 end
 
@@ -127,11 +133,13 @@ function M.explain_selection(order)
   })
 end
 
---- What `:Aineo explain clear` does: removes every explanation and every
---- issue the current buffer shows, and stops the request that runs for it
---- (`aineo.explain`'s `clear()`).
+--- What `\vc`, `<Plug>(aineo-explain-clean)` and `:Aineo explain clear`
+--- do: return the current buffer to how it behaved when it was opened
+--- (`aineo.explain`'s `clear()`), and tell the user so, once, whether or not
+--- it held anything to clean.
 function M.clear_explanations()
   require('aineo.explain').clear(vim.api.nvim_get_current_buf())
+  vim.notify('aineo: explanations cleaned from this buffer', vim.log.levels.INFO)
 end
 
 --- What Send does when the current buffer has issues marked (`\vm`): hands

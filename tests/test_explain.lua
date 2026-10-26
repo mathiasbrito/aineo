@@ -2179,12 +2179,12 @@ T['a kept answer']['is placed wrapped for the window it is placed in now'] = fun
   eq(#shown_once_it_holds('wörd')[1].virt_lines, 3)
 end
 
-T['a kept answer']['for some lines is kept for those lines, and placed after clear()'] = function()
+T['a kept answer']['for some lines is kept for those lines, and placed after the whole buffer’s request cleared it'] = function()
   start_with_project()
   answer_explanations({ { line = 2, text = 'Adds.' } })
   explain({ range = { 1, 3 } })
   local shown = shown_once_it_holds('Adds')
-  child.lua("require('aineo.explain').clear(vim.api.nvim_get_current_buf())")
+  explain()
 
   explain({ range = { 1, 3 } })
 

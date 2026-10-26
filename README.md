@@ -168,7 +168,8 @@ resumes it.
 | `\v`, `\V` | explain the code of the file, or in Visual mode of the selected lines: `\v` hands Claude the code alone, `\V` lets it read the project too |
 | `\vi`, `\VI` | the same, asking for potential issues instead of explanations (`\vi` the code alone, `\VI` with the project readable) |
 | `\VV`, `\VVI` | the deep versions of `\V` and `\VI`: a float with the whole prompt to edit opens first, then the request runs with higher effort |
-| `\Vf`, `\VVf` | propose a fix for the issue on the cursor's line, shown over the code until you accept it with `\Va` (one undo step, no file written), reject it with `\Vr`, or see it as a diff with `\Vd`; `\VVf` opens the float to edit the prompt first |
+| `\Vf`, `\VVf` | propose a fix for the issue on the cursor's line, shown over the code, the buffer read-only, until you accept it with `\Va` (one undo step, no file written), reject it with `\Vr`, or see it as a diff with `\Vd`; `\VVf` opens the float to edit the prompt first; `\Vf` on unchanged code shows the fix kept from before |
+| `\vc` | cleans the buffer of everything the `\v` and `\V` keys added (answers, marks, a fix, requests that run, kept answers), leaving its text and undo history as they were |
 | `\vm` | marks the issues on the cursor's line (on each selected line in Visual mode), or unmarks them; `\s` then sends the marked issues to Claude |
 | `]v`, `[v` | jump to the next and the previous explanation or issue of the buffer |
 | `\z` | zooms the window of the right column the cursor is in, and gives the heights back when pressed again |
@@ -412,9 +413,9 @@ handling gaps, security or performance risks, no remarks on style), shown the
 same way in the accent of `DiagnosticWarn` with the label `issue`. Explanations
 and issues are shown together, and each key toggles its own kind; a request of
 each kind may run at once, and a key stops the request of its own kind alone.
-Since `\v` starts `\vi` and `\vm`, and `\V` starts `\VI` and `\VV`, Neovim waits
-`'timeoutlen'` for a following key before it runs `\v` or `\V`. `:Aineo explain [issues] [tools]` with a range, and `:Aineo
-explain clear`, do the same. The model is `explain.model`, `'sonnet'` by
+Since `\v` starts `\vi`, `\vm` and `\vc`, and `\V` starts `\VI` and `\VV`, Neovim waits
+`'timeoutlen'` for a following key before it runs `\v` or `\V`. `:Aineo explain [issues] [tools]` with a range does the same, and `:Aineo
+explain clear` what `\vc` does. The model is `explain.model`, `'sonnet'` by
 default, and a request is stopped after `explain.timeout_ms`. If the text of
 the buffer changes while Claude Code works on it (a write changes nothing),
 nothing is shown: ask again.
@@ -447,8 +448,15 @@ why. The fix shows over the code without changing it: the old lines hidden, the
 new lines in their place in a green band, each edit explained above them in a
 band of its own, labelled `why`. While it shows, `\Va` accepts it (checked
 again, applied as one undo step, the file not written), `\Vr` rejects it and
-`\Vd` shows it as a diff, the old lines struck through above the new; an edit
-of its lines drops it. The groups are `AineoFix`, `AineoFixGutter`,
+`\Vd` shows it as a diff, the old lines struck through above the new. Only
+`\Va` or `\Vr` removes it: the buffer is read-only while it shows, and if its
+code changes anyway (`'modifiable'` set back on, a reload), the fix stays,
+marked stale, `\Va` refuses and `\Vr` still rejects; an undo back to the old
+lines lifts the mark. The issue stays, drawn at the top of the fix while its
+line is hidden, and after `\Vr`; the fix is kept: `\Vf` on the same issue
+while the file reads the same shows the fix asked last again at once, whether
+`\Vf` or `\VVf` asked it, and `\VVf` asks anew. `\vc` (or `:Aineo explain clear`) cleans the buffer of all
+of this. The groups are `AineoFix`, `AineoFixGutter`,
 `AineoFixGutterFill`, `AineoFixOld`, `AineoFixWhy`, `AineoFixWhyGutter` and
 `AineoFixWhyGutterFill`.
 

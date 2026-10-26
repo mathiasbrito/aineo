@@ -3,6 +3,7 @@
 --- as a preview (`aineo.explain.preview`) the user accepts or rejects.
 
 local answer = require('aineo.explain.answer')
+local kept = require('aineo.explain.kept')
 local kinds = require('aineo.explain.kinds')
 local marks = require('aineo.explain.marks')
 local placement = require('aineo.explain.placement')
@@ -28,6 +29,12 @@ local fixed_issues = {}
 ---@field effort string the effort Claude Code works at, as `--effort` takes it
 ---@field timeout_ms integer how long the request may run
 ---@field keys? aineo.explain.FixKeys the keys the preview maps; none when absent
+---@field ask_keys aineo.explain.FixAskKeys what asks a fix, as the user is told it
+
+--- What asks a fix, each a key or a `<Plug>` mapping as the user is told it.
+---@class aineo.explain.FixAskKeys
+---@field plain string what asks a fix with the default prompt
+---@field steered string what asks a fix with a prompt the user edits first
 
 --- What a fix request needs once its Claude Code has ended.
 ---@class aineo.explain.FixAsked
@@ -35,8 +42,12 @@ local fixed_issues = {}
 ---@field window integer
 ---@field tick integer the buffer's `b:changedtick` when it was asked
 ---@field issue integer the extmark of the issue to fix
+---@field issue_text string the text of the issue to fix
 ---@field keys? aineo.explain.FixKeys
+---@field ask_keys aineo.explain.FixAskKeys
 ---@field lines string[] every line of the buffer, as sent
+---@field key string what its answer is kept under (`aineo.explain.kept`'s `fix_key()`)
+---@field steered boolean whether it was asked with a prompt the user edited
 
 --- The fix the run `ended` of Claude Code answered (`aineo.explain.answer`'s
 --- `fix_in()`), or `nil` and what went wrong (`failure_of()` for a failed
@@ -53,10 +64,27 @@ local function fix_of(ended)
   return answer.fix_in(ended.stdout)
 end
 
---- Shows as a preview (`aineo.explain.preview`) the fix the run `ended`
---- answered for `asked`, placed in the lines sent
---- (`aineo.explain.placement`), or tells the user, once, why nothing is
---- shown: the buffer changed while the fix was asked, which any move of its
+--- Shows `fix` in `asked.buffer` as a preview (`aineo.explain.preview`),
+--- the fix of the issue `asked.issue`.
+---
+---@param asked aineo.explain.FixAsked
+---@param fix aineo.explain.KeptFix
+local function show(asked, fix)
+  fixed_issues[asked.buffer] = asked.issue
+  preview.show(asked.buffer, {
+    window = asked.window,
+    summary = fix.summary,
+    edits = fix.edits,
+    keys = asked.keys,
+    ask_key = asked.ask_keys.plain,
+    issue = asked.issue_text,
+  })
+end
+
+--- Shows (`show()`) the fix the run `ended` answered for `asked`, placed in
+--- the lines sent (`aineo.explain.placement`), and keeps it for those lines
+--- (`aineo.explain.kept`), or tells the user, once, why nothing is shown:
+--- the buffer changed while the fix was asked, which any move of its
 --- `b:changedtick` says; the run failed or answered no fix (`fix_of()`);
 --- the answer has no edits, when its summary is told; or the fix was
 --- refused, with the reason.
@@ -82,13 +110,9 @@ local function show_answer(asked, ended)
     vim.notify('aineo: the fix was refused: ' .. refusal, vim.log.levels.WARN)
     return
   end
-  fixed_issues[asked.buffer] = asked.issue
-  preview.show(asked.buffer, {
-    window = asked.window,
-    summary = answered.summary,
-    edits = edits,
-    keys = asked.keys,
-  })
+  local fix = { summary = answered.summary, edits = edits, steered = asked.steered }
+  kept.keep(asked.buffer, asked.key, asked.lines, fix)
+  show(asked, fix)
 end
 
 --- The code the fix of `issue`, shown above `fixing.line` of
@@ -111,6 +135,22 @@ local function code_of(fixing, issue, folder)
   }
 end
 
+--- What a fix of `issue`, shown above `fixing.line`, asked as `fixing`
+--- says, is kept under, whatever its prompt (`aineo.explain.kept`'s
+--- `fix_key()`).
+---
+---@param fixing aineo.explain.FixRequest
+---@param issue aineo.explain.ShownIssue
+---@return string
+local function kept_key(fixing, issue)
+  return kept.fix_key({
+    line = fixing.line,
+    issue = issue.text,
+    model = fixing.model,
+    effort = fixing.effort,
+  })
+end
+
 --- Starts Claude Code for a fix of `issue`, shown above `fixing.line` of
 --- `fixing.buffer`, from `folder`, the project's folder, with the read-only
 --- tools, `fixing.model` and `fixing.effort`, showing above that line that
@@ -131,8 +171,12 @@ local function start(fixing, issue, folder, steered_text)
     window = fixing.window,
     tick = vim.api.nvim_buf_get_changedtick(buffer),
     issue = issue.id,
+    issue_text = issue.text,
     keys = fixing.keys,
+    ask_keys = fixing.ask_keys,
     lines = vim.api.nvim_buf_get_lines(buffer, 0, -1, false),
+    key = kept_key(fixing, issue),
+    steered = steered_text ~= nil,
   }
   local code = code_of(fixing, issue, folder)
   code.steer = steered_text
@@ -182,21 +226,69 @@ local function start(fixing, issue, folder, steered_text)
   run.process = process
 end
 
---- Asks a fix of `issue` (`start()`), replacing the fix request that runs
---- for `fixing.buffer` and the fix it shows, both without a word: a buffer
---- has one fix at a time.
+--- Stops the fix request that runs for `buffer` and rejects the fix it
+--- shows, both without a word: a buffer has one fix at a time.
+---
+---@param buffer integer
+local function replace_fix(buffer)
+  local running = runs.find(buffer, kinds.FIX)
+  if running then
+    runs.stop(running)
+  end
+  M.reject(buffer)
+end
+
+--- Asks a fix of `issue` (`start()`), in place of the fix request and the
+--- fix of `fixing.buffer` (`replace_fix()`).
 ---
 ---@param fixing aineo.explain.FixRequest
 ---@param issue aineo.explain.ShownIssue
 ---@param folder string
 ---@param steered_text? string
 local function ask(fixing, issue, folder, steered_text)
-  local running = runs.find(fixing.buffer, kinds.FIX)
-  if running then
-    runs.stop(running)
-  end
-  M.reject(fixing.buffer)
+  replace_fix(fixing.buffer)
   start(fixing, issue, folder, steered_text)
+end
+
+--- Shows the fix kept for `issue` asked as `fixing` says (`kept_key()`),
+--- the one asked last whatever its prompt, when the buffer reads as it did
+--- when it was answered, in place of the fix request and the fix of
+--- `fixing.buffer` (`replace_fix()`), and tells the user, once, that it is
+--- the fix kept, which prompt it was asked with, and what asks anew.
+--- Returns whether one was kept.
+---
+---@param fixing aineo.explain.FixRequest
+---@param issue aineo.explain.ShownIssue
+---@return boolean
+local function show_kept(fixing, issue)
+  local buffer = fixing.buffer
+  local lines = vim.api.nvim_buf_get_lines(buffer, 0, -1, false)
+  local key = kept_key(fixing, issue)
+  local fix = kept.recall(buffer, key, lines)
+  if not fix then
+    return false
+  end
+  replace_fix(buffer)
+  show({
+    buffer = buffer,
+    window = fixing.window,
+    tick = vim.api.nvim_buf_get_changedtick(buffer),
+    issue = issue.id,
+    issue_text = issue.text,
+    keys = fixing.keys,
+    ask_keys = fixing.ask_keys,
+    lines = lines,
+    key = key,
+    steered = fix.steered,
+  }, fix)
+  vim.notify(
+    ('aineo: the fix kept from before, asked with %s, the code unchanged (%s asks anew)'):format(
+      fix.steered and 'your edited prompt' or 'the default prompt',
+      fixing.ask_keys.steered
+    ),
+    vim.log.levels.INFO
+  )
+  return true
 end
 
 --- A text the user sent from the float, and the default text the float
@@ -247,11 +339,13 @@ end
 
 --- Asks a fix for the issue `fixing.buffer` shows above `fixing.line`
 --- (`aineo.explain.marks`' `issue_at()`), running Claude Code in `folder`,
---- the project's folder (`ask()`); tells the user, once, when none is shown
---- there. A steered request first opens the float in which the user edits
---- the prompt (`aineo.explain.steer`), from the fix's default text or the
---- text last sent for a fix, and asks with the text sent (`ask_steered()`);
---- nothing when the user cancels.
+--- the project's folder (`ask()`), unless a fix of it is kept for the code
+--- as it reads, which is shown at once (`show_kept()`); tells the user,
+--- once, when none is shown there. A steered request, always asked anew,
+--- first opens the float in which the user edits the prompt
+--- (`aineo.explain.steer`), from the fix's default text or the text last
+--- sent for a fix, and asks with the text sent (`ask_steered()`); nothing
+--- when the user cancels.
 ---
 --- Raises an error naming `claude.cmd` when its command cannot be run.
 ---
@@ -264,13 +358,16 @@ function M.propose(fixing, folder)
     return
   end
   if not fixing.steered then
-    ask(fixing, issue, folder)
+    if not show_kept(fixing, issue) then
+      ask(fixing, issue, folder)
+    end
     return
   end
   local default = request.default_fix_steer(code_of(fixing, issue, folder))
   steer.open({
     name = kinds.FIX.name,
     title = kinds.FIX.deep.title,
+    steered_buffer = fixing.buffer,
     default = default,
     on_send = function(text)
       ask_steered(fixing, issue, folder, { text = text, default = default })

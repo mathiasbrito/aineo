@@ -238,7 +238,7 @@ local function answer_explanations(explanations)
   child.lua('vim.env.AINEO_FAKE_CLAUDE_PRINT = ...', { answer })
 end
 
-T[':Aineo explain']['clear removes every explanation the buffer shows'] = function()
+T[':Aineo explain']['clear removes every explanation the buffer shows, and says so once'] = function()
   start()
   answer_explanations({ { line = 2, text = 'Adds.' }, { line = 5, text = 'Returns it.' } })
   child.cmd('Aineo explain')
@@ -247,7 +247,9 @@ T[':Aineo explain']['clear removes every explanation the buffer shows'] = functi
   child.cmd('Aineo explain clear')
 
   eq(explained_lines_once(0), 0)
-  eq(child.lua_get('_G.told'), {})
+  eq(child.lua_get('_G.told'), {
+    { message = 'aineo: explanations cleaned from this buffer', level = vim.log.levels.INFO },
+  })
 end
 
 T[':Aineo explain']['with another word says which it takes, and asks nothing'] = function()
@@ -528,7 +530,7 @@ T[':Aineo explain']['shows the kept answer when the code is unchanged, and new a
   answer_explanations({ { line = 2, text = 'Adds.' } })
   child.cmd('Aineo explain')
   explained_lines_once(1)
-  child.cmd('Aineo explain clear')
+  child.cmd('Aineo explain')
   eq(explained_lines_once(0), 0)
 
   child.cmd('Aineo explain')
@@ -543,6 +545,18 @@ T[':Aineo explain']['shows the kept answer when the code is unchanged, and new a
   eq(started_once(1), 1)
 
   child.cmd('Aineo explain new')
+
+  eq(started_once(2), 2)
+end
+
+T[':Aineo explain']['clear drops the kept answer, so asking again asks anew'] = function()
+  start()
+  answer_explanations({ { line = 2, text = 'Adds.' } })
+  child.cmd('Aineo explain')
+  explained_lines_once(1)
+  child.cmd('Aineo explain clear')
+
+  child.cmd('Aineo explain')
 
   eq(started_once(2), 2)
 end
