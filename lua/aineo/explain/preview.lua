@@ -45,6 +45,7 @@ local CONCEALING = 2
 ---@field issue string the text of the issue it fixes
 ---@field stale boolean whether its edits no longer stand in the buffer, as when it was last drawn
 ---@field first_row integer the line, from 0, its first edit started on when it was last drawn
+---@field redraw_pending? boolean whether a drawing again is scheduled (`redraw_lost()`)
 
 --- The keys a preview maps in its buffer, each a left-hand side as
 --- `vim.keymap.set()` takes it.
@@ -107,30 +108,37 @@ local function new_line_row(text, geometry)
   return chunks
 end
 
+--- What names `action` of `preview` to the user: the key it mapped for it
+--- in its buffer, or its `<Plug>` mapping when it mapped none for it, the
+--- key being the user's or none being given.
+---
+---@param preview aineo.explain.Preview
+---@param action 'accept'|'reject'|'diff'
+---@return string
+local function named_key(preview, action)
+  return preview.mapped[action] and preview.keys[action] or PLUG_KEYS[action]
+end
+
 --- What the head row of `preview` says: that its buffer is read-only until
---- it is accepted or rejected, and, for accepting it, rejecting it and
---- showing its diff, the key it mapped in its buffer, or the `<Plug>`
---- mapping when it mapped none for that, the key being the user's or none
---- being given. A stale preview's says instead that the code under it
---- changed, what rejects it and what asks again.
+--- it is accepted or rejected, while its 'modifiable' is off, and what
+--- accepts it, rejects it and shows its diff (`named_key()`). A stale
+--- preview's says instead that the code under it changed, what rejects it
+--- and what asks again.
 ---
 ---@param preview aineo.explain.Preview
 ---@return string
 local function head_text(preview)
-  local function named(action)
-    return preview.mapped[action] and preview.keys[action] or PLUG_KEYS[action]
-  end
   if preview.stale then
     return ('the code under the fix changed · %s rejects · %s asks again'):format(
-      named('reject'),
+      named_key(preview, 'reject'),
       preview.ask_key
     )
   end
-  return ('read-only until %s accepts or %s rejects · %s shows the diff'):format(
-    named('accept'),
-    named('reject'),
-    named('diff')
-  )
+  local keys = (
+    vim.bo[preview.buffer].modifiable and '%s accepts · %s rejects'
+    or 'read-only until %s accepts or %s rejects'
+  ):format(named_key(preview, 'accept'), named_key(preview, 'reject'))
+  return ('%s · %s shows the diff'):format(keys, named_key(preview, 'diff'))
 end
 
 --- `texts`, each wrapped at the text width of `geometry`, as rows of a band
@@ -205,6 +213,16 @@ end
 local function standing_spans(preview)
   local spans = spans_of(preview)
   return spans and stands(preview, spans) and spans or nil
+end
+
+--- Whether `preview` is stale: an extmark of its edits is gone, or its
+--- edits no longer stand at `spans`, the lines each spans now (`stands()`).
+---
+---@param preview aineo.explain.Preview
+---@param spans { first: integer, last: integer }[]|nil `spans_of(preview)`
+---@return boolean
+local function is_stale(preview, spans)
+  return not (spans and stands(preview, spans))
 end
 
 --- The head row of `preview` (`head_text()`) as a band labelled `fix`, in a
@@ -396,7 +414,7 @@ local function render(preview)
   vim.api.nvim_buf_clear_namespace(buffer, DRAWN, 0, -1)
   local geometry = draw.geometry_of(buffer, preview.window)
   local spans = spans_of(preview)
-  preview.stale = not (spans and stands(preview, spans))
+  preview.stale = is_stale(preview, spans)
   local places = { order = {}, rows = {} }
   if not spans then
     local row = math.min(preview.first_row, vim.api.nvim_buf_line_count(buffer) - 1)
@@ -413,6 +431,50 @@ local function render(preview)
     end
   end
   draw_places(buffer, places)
+end
+
+--- The namespace of the decoration provider that notices a preview's
+--- drawing lost (`redraw_lost()`).
+local REDRAW = vim.api.nvim_create_namespace('aineo_explain_fix_redraw')
+
+--- Whether `preview` is no longer drawn as it stands: nothing of it is
+--- drawn, or it is drawn as standing while its edits' extmarks are gone, as
+--- when another plugin clears namespaces, which changes no line.
+---
+---@param preview aineo.explain.Preview
+---@return boolean
+local function drawing_lost(preview)
+  local drawn = #vim.api.nvim_buf_get_extmarks(preview.buffer, DRAWN, 0, -1, { limit = 1 }) > 0
+  return not (drawn and (preview.stale or spans_of(preview)))
+end
+
+--- Draws again (`render()`), once the event loop has turned, the preview of
+--- `buffer` when a window showing it is redrawn and its drawing was lost
+--- (`drawing_lost()`); once for each loss. As a decoration provider's
+--- `on_win`, it returns `false`: it draws nothing in that redraw.
+---
+---@param buffer integer
+---@return boolean
+local function redraw_lost(_, _, buffer)
+  local preview = previews[buffer]
+  if preview and not preview.redraw_pending and drawing_lost(preview) then
+    preview.redraw_pending = true
+    vim.schedule(function()
+      preview.redraw_pending = nil
+      if previews[buffer] == preview and vim.api.nvim_buf_is_loaded(buffer) then
+        render(preview)
+      end
+    end)
+  end
+  return false
+end
+
+--- Has the windows' redraws checked for a lost drawing (`redraw_lost()`)
+--- while `watching`, and not otherwise: while a fix shows, and only then.
+---
+---@param watching boolean
+local function watch_drawings(watching)
+  vim.api.nvim_set_decoration_provider(REDRAW, watching and { on_win = redraw_lost } or {})
 end
 
 --- The options of `window` that hide old lines, its own for the buffer it
@@ -588,11 +650,31 @@ local function restore_closing_window(window)
   end
 end
 
+vim.api.nvim_create_autocmd('OptionSet', {
+  group = 'aineo_explain_fix_preview',
+  pattern = 'modifiable',
+  desc = "aineo: say in a fix's head row whether its buffer is read-only",
+  callback = function()
+    local preview = previews[vim.api.nvim_get_current_buf()]
+    if preview then
+      render(preview)
+    end
+  end,
+})
+
 vim.api.nvim_create_autocmd('WinClosed', {
   group = 'aineo_explain_fix_preview',
   desc = 'aineo: give a window that closes while a fix shows its options back',
   callback = function(event)
     restore_closing_window(tonumber(event.match))
+  end,
+})
+
+vim.api.nvim_create_autocmd('BufDelete', {
+  group = 'aineo_explain_fix_preview',
+  desc = 'aineo: remove the fix of a buffer deleted, which it does not come back with',
+  callback = function(event)
+    M.clear(event.buf)
   end,
 })
 
@@ -682,6 +764,9 @@ function M.clear(buffer)
     vim.api.nvim_buf_clear_namespace(buffer, DRAWN, 0, -1)
     vim.api.nvim_buf_clear_namespace(buffer, RANGES, 0, -1)
   end
+  if not next(previews) then
+    watch_drawings(false)
+  end
 end
 
 --- Whether `buffer` shows a preview.
@@ -697,8 +782,9 @@ end
 --- replaces the old lines of each by its new lines, the edit lowest in the
 --- buffer first, as one undo step, 'modifiable' on while it does, writes
 --- nothing and removes the preview (`clear()`), which gives the buffer its
---- 'modifiable' back; else tells the user, once, and leaves the buffer and the
---- preview as they are. Returns whether it applied the edits.
+--- 'modifiable' back; else leaves the buffer as it is, draws the preview
+--- again (`render()`), marked stale, and tells the user, once. Returns
+--- whether it applied the edits.
 ---
 ---@param buffer integer
 ---@return boolean
@@ -706,6 +792,7 @@ function M.apply(buffer)
   local preview = previews[buffer]
   local spans = standing_spans(preview)
   if not spans then
+    render(preview)
     vim.notify('aineo: the code under the fix changed; ask again', vim.log.levels.WARN)
     return false
   end
@@ -731,7 +818,8 @@ end
 --- along with its extmarks, and marked stale when its edits no longer
 --- stand, or no longer so when they stand again. A reload, which detaches
 --- the watch, is watched again and drawn again the same way. The buffer
---- unloaded or wiped out removes it without a word.
+--- unloaded or wiped out removes it without a word, as its deletion does
+--- (the `BufDelete` autocommand).
 ---
 ---@param preview aineo.explain.Preview
 local function watch_edits(preview)
@@ -764,15 +852,28 @@ end
 
 --- Shows the preview `buffer` shows as the diff view, its old lines struck
 --- through above its new lines, or as the overlay again; nothing when
---- `buffer` shows none.
+--- `buffer` shows none. A stale preview (`is_stale()`), always shown as the
+--- diff view, is left so, and the user is told, once, what rejects it and
+--- what asks again.
 ---
 ---@param buffer integer
 function M.toggle_diff(buffer)
   local preview = previews[buffer]
-  if preview then
-    preview.diff = not preview.diff
-    render(preview)
+  if not preview then
+    return
   end
+  if is_stale(preview, spans_of(preview)) then
+    vim.notify(
+      ('aineo: the fix is stale: %s rejects, %s asks again'):format(
+        named_key(preview, 'reject'),
+        preview.ask_key
+      ),
+      vim.log.levels.INFO
+    )
+    return
+  end
+  preview.diff = not preview.diff
+  render(preview)
 end
 
 --- What a preview is shown with.
@@ -820,6 +921,7 @@ function M.show(buffer, order)
     })
   end
   previews[buffer] = preview
+  watch_drawings(true)
   vim.bo[buffer].modifiable = false
   conceal_in_windows(preview)
   map_keys(preview)

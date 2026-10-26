@@ -1181,6 +1181,34 @@ T['while shown']['reloading the file keeps it, read-only, without a word'] = fun
   eq({ child.bo.modifiable, messages() }, { false, {} })
 end
 
+T['while shown']['reloading the file changed on disk marks it stale'] = function()
+  start()
+  child.cmd('2')
+  propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+  local changed = vim.deepcopy(CODE)
+  changed[2] = '  return a + b + 0'
+  child.fn.writefile(changed, child.api.nvim_buf_get_name(0))
+
+  child.cmd('edit!')
+  settle()
+
+  eq(count_of(screen(), STALE_HEAD), 1)
+end
+
+T['while shown']['after a reload, a forced edit of its old lines marks it stale'] = function()
+  start()
+  child.cmd('2')
+  propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+  child.cmd('edit!')
+  settle()
+  force_editable()
+
+  child.api.nvim_buf_set_text(0, 1, 2, 1, 2, { 'local x = 1; ' })
+  settle()
+
+  eq(count_of(screen(), STALE_HEAD), 1)
+end
+
 T['while shown']['its marks cleared by another plugin, an edit marks it stale, with no error, and accepting changes nothing'] = function()
   start()
   child.cmd('2')
@@ -1205,6 +1233,73 @@ T['while shown']['its marks cleared by another plugin, an edit marks it stale, w
   eq(count_of(screen(), STALE_HEAD), 1)
   eq(messages(), { 'aineo: the code under the fix changed; ask again' })
   eq(buffer_lines()[2], '  return a + b')
+end
+
+T['while shown']['its marks cleared by another plugin, it shows marked stale at once, with no edit'] = MiniTest.new_set(
+  {
+    parametrize = {
+      { '-1' },
+      { "vim.api.nvim_create_namespace('aineo_explain_fix_preview')" },
+    },
+  },
+  {
+    test = function(namespace)
+      start()
+      child.cmd('2')
+      propose(SUBTRACT_AND_DROP)
+
+      child.lua('vim.api.nvim_buf_clear_namespace(0, ' .. namespace .. ', 0, -1)')
+      vim.wait(explained.PATIENCE_MS, function()
+        child.cmd('redraw!')
+        return count_of(screen(), STALE_HEAD) == 1
+      end, 20)
+
+      eq(count_of(screen(), STALE_HEAD), 1)
+      eq(buffer_lines(), CODE)
+    end,
+  }
+)
+
+T['while shown']['with modifiable set back on, its head row no longer says read-only'] = function()
+  local editable_head = '┊ \\Va accepts · \\Vr rejects · \\Vd shows the diff'
+  start()
+  child.cmd('2')
+  propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+
+  child.cmd('setlocal modifiable')
+  vim.wait(explained.PATIENCE_MS, function()
+    return count_of(screen(), editable_head) == 1
+  end, 20)
+
+  eq(count_of(screen(), editable_head), 1)
+end
+
+T['while shown']['marked stale, its diff view toggled says once what to do instead'] = function()
+  start()
+  child.cmd('2')
+  propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+  force_editable()
+  child.api.nvim_buf_set_text(0, 1, 2, 1, 2, { 'local x = 1; ' })
+  settle()
+
+  toggle_diff()
+
+  eq(messages(), { 'aineo: the fix is stale: \\Vr rejects, \\Vf asks again' })
+end
+
+T['while shown']['deleting the buffer, then editing it again in one command line, drops it'] = function()
+  start()
+  child.cmd('2')
+  propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+
+  child.cmd('%bdelete | edit #')
+  settle()
+
+  eq(
+    child.lua_get('require("aineo.explain.preview").is_shown(vim.api.nvim_get_current_buf())'),
+    false
+  )
+  eq({ count_of(screen(), STALE_HEAD), child.bo.modifiable }, { 0, true })
 end
 
 T['while shown']['wiping the buffer out drops it without a word'] = function()
@@ -1355,6 +1450,22 @@ T['accepting']['undone, lets the issues asked for come back from the kept answer
     messages()[#messages()],
     'aineo: the earlier answer, the code unchanged (:Aineo explain issues new asks again)'
   )
+end
+
+T['accepting']['refused for its marks cleared, draws it marked stale before the screen is redrawn'] = function()
+  start()
+  child.cmd('2')
+  propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+
+  local drawn = child.lua([[
+    vim.api.nvim_buf_clear_namespace(0, -1, 0, -1)
+    require('aineo.explain').accept_fix(vim.api.nvim_get_current_buf())
+    return #vim.api.nvim_buf_get_extmarks(0,
+      vim.api.nvim_create_namespace('aineo_explain_fix_drawn'), 0, -1, {})
+  ]])
+
+  eq(drawn, 1)
+  eq(messages(), { 'aineo: the code under the fix changed; ask again' })
 end
 
 T['accepting']['tells the user when the buffer shows no fix'] = function()
