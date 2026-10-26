@@ -153,6 +153,71 @@ T['the columns']['keep the groups in their order, the first ones in the left col
   eq(line_holding(sheet, 'Beta') > line_holding(sheet, 'Alpha'), true)
 end
 
+--- A group of two sections, the first with a command: the keys of its
+--- sections are aligned with each other.
+local EXPLAIN = {
+  {
+    title = 'Explain and fix',
+    rows = {},
+    sections = {
+      {
+        title = 'Explain',
+        rows = { { key = '\\v', phrase = 'explain the code', command = ':Aineo explain' } },
+      },
+      { title = 'Fix', rows = { { key = '\\Vf', phrase = 'propose a fix' } } },
+    },
+  },
+}
+
+T['the sections'] = MiniTest.new_set()
+
+T['the sections']['are headings indented under the group, with their keys indented further'] = function()
+  local sheet = composed(EXPLAIN, 50)
+
+  eq(sheet.lines, {
+    'aineo — keys',
+    '',
+    'Explain and fix',
+    '  Explain',
+    '    \\v   explain the code           :Aineo explain',
+    '  Fix',
+    '    \\Vf  propose a fix',
+  })
+end
+
+T['the sections']['are drawn in the accent of their group, not in bold'] = function()
+  local sheet = composed(EXPLAIN, 50)
+
+  eq(
+    vim.tbl_filter(function(highlight)
+      return highlight.group:find('Section') ~= nil
+    end, sheet.highlights),
+    {
+      { line = 3, from = 2, to = 9, group = 'AineoCheatSection1' },
+      { line = 5, from = 2, to = 5, group = 'AineoCheatSection1' },
+    }
+  )
+end
+
+T['the sections']['of a group are never split across the two columns'] = function()
+  local explain = {
+    title = 'Explain and fix',
+    rows = {},
+    sections = {
+      { title = 'SectionOne', rows = group_of('One', 3).rows },
+      { title = 'SectionTwo', rows = group_of('Two', 3).rows },
+      { title = 'SectionThree', rows = group_of('Three', 3).rows },
+    },
+  }
+
+  local sheet = composed({ group_of('Alpha', 1), explain, group_of('Gamma', 1) }, 100)
+
+  local columns = vim.tbl_map(function(title)
+    return sheet.lines[line_holding(sheet, title)]:find(title, 1, true)
+  end, { 'SectionOne', 'SectionTwo', 'SectionThree' })
+  eq(columns, { 3, 3, 3 })
+end
+
 T['the colours'] = MiniTest.new_set()
 
 T['the colours']['are the title, then in each row the key, the phrase and the command, each in a group'] = function()

@@ -16,6 +16,10 @@ local GAP = 3
 --- The cells a key row is indented by, and that lie between its key and its
 --- phrase.
 local INDENT = 2
+
+--- The cells the heading of a section is indented by under its group's
+--- heading; the keys of the section are indented by that much more.
+local SECTION_INDENT = 2
 local KEY_TO_PHRASE = 2
 
 --- The least cells of a row's phrase that its key leaves.
@@ -36,9 +40,14 @@ local TITLE = 'aineo — keys'
 ---@field phrase string what the key does
 ---@field command? string the `:Aineo` command that does the same, as it is typed
 
----@class aineo.cheatsheet.Group
+---@class aineo.cheatsheet.Section
 ---@field title string
 ---@field rows aineo.cheatsheet.Row[]
+
+---@class aineo.cheatsheet.Group
+---@field title string
+---@field rows aineo.cheatsheet.Row[] the keys under the group's heading
+---@field sections? aineo.cheatsheet.Section[] the sections, each under a heading of its own, after those keys
 
 ---@class aineo.cheatsheet.Highlight
 ---@field line integer the line, from 0
@@ -117,12 +126,13 @@ end
 ---@param key_cells integer
 ---@param width integer
 ---@param accent integer
+---@param indent integer the cells the row is indented by
 ---@return aineo.cheatsheet.Segment[][]
-local function row_lines(row, key_cells, width, accent)
-  local phrase_at = INDENT + key_cells + KEY_TO_PHRASE
+local function row_lines(row, key_cells, width, accent, indent)
+  local phrase_at = indent + key_cells + KEY_TO_PHRASE
   local phrase = cut_to(row.phrase, width - phrase_at)
   local first = {
-    { text = string.rep(' ', INDENT) },
+    { text = string.rep(' ', indent) },
     { text = padded(cut_to(row.key, key_cells), key_cells), group = look.key_group(accent) },
     { text = string.rep(' ', KEY_TO_PHRASE) },
     { text = phrase, group = look.PHRASE_GROUP },
@@ -145,24 +155,57 @@ local function row_lines(row, key_cells, width, accent)
   }
 end
 
---- The lines of a group in a column `width` cells wide: its title, then each
---- of its keys, and an empty line after them.
+--- The widest key of the group, in cells, among its own keys and those of its
+--- sections.
+---
+---@param group aineo.cheatsheet.Group
+---@return integer
+local function widest_key_of(group)
+  local widest = 0
+  for _, row in ipairs(group.rows) do
+    widest = math.max(widest, cells(row.key))
+  end
+  for _, section in ipairs(group.sections or {}) do
+    for _, row in ipairs(section.rows) do
+      widest = math.max(widest, cells(row.key))
+    end
+  end
+  return widest
+end
+
+--- The lines of a group in a column `width` cells wide: its title, then its
+--- own keys, then each of its sections under a heading of its own, in the
+--- group's accent and indented under the group's, with its keys indented
+--- further, and an empty line after them. The keys of the group's sections
+--- are aligned with each other.
 ---
 ---@param group aineo.cheatsheet.Group
 ---@param accent integer the number of the accent the group is drawn in
 ---@param width integer
 ---@return aineo.cheatsheet.Segment[][]
 local function group_lines(group, accent, width)
-  local widest_key = 0
-  for _, row in ipairs(group.rows) do
-    widest_key = math.max(widest_key, cells(row.key))
-  end
-  local key_cells = math.min(widest_key, math.max(1, width - INDENT - KEY_TO_PHRASE - LEAST_PHRASE))
+  local deepest_indent = INDENT + (group.sections and SECTION_INDENT or 0)
+  local key_cells = math.min(
+    widest_key_of(group),
+    math.max(1, width - deepest_indent - KEY_TO_PHRASE - LEAST_PHRASE)
+  )
   local lines = {
     { { text = cut_to(group.title, width), group = look.header_group(accent) } },
   }
   for _, row in ipairs(group.rows) do
-    vim.list_extend(lines, row_lines(row, key_cells, width, accent))
+    vim.list_extend(lines, row_lines(row, key_cells, width, accent, INDENT))
+  end
+  for _, section in ipairs(group.sections or {}) do
+    table.insert(lines, {
+      { text = string.rep(' ', SECTION_INDENT) },
+      {
+        text = cut_to(section.title, width - SECTION_INDENT),
+        group = look.section_group(accent),
+      },
+    })
+    for _, row in ipairs(section.rows) do
+      vim.list_extend(lines, row_lines(row, key_cells, width, accent, INDENT + SECTION_INDENT))
+    end
   end
   table.insert(lines, {})
   return lines
