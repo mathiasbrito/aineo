@@ -133,11 +133,13 @@ function M.explain_selection(order)
   })
 end
 
---- What `:Aineo explain clear` does: removes every explanation and every
---- issue the current buffer shows, and stops the request that runs for it
---- (`aineo.explain`'s `clear()`).
+--- What `\vc`, `<Plug>(aineo-explain-clean)` and `:Aineo explain clear`
+--- do: return the current buffer to how it behaved when it was opened
+--- (`aineo.explain`'s `clear()`), and tell the user so, once, whether or not
+--- it held anything to clean.
 function M.clear_explanations()
   require('aineo.explain').clear(vim.api.nvim_get_current_buf())
+  vim.notify('aineo: explanations cleaned from this buffer', vim.log.levels.INFO)
 end
 
 --- What Send does when the current buffer has issues marked (`\vm`): hands

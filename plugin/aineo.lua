@@ -56,9 +56,10 @@ local SUBCOMMANDS = {
 --- The words `:Aineo explain` takes, in the order it offers them: `tools`
 --- lets Claude Code read the project with read-only tools, `issues` asks it
 --- for potential issues instead of explanations, `new` asks again whatever
---- answer is kept, and `clear` removes the buffer's explanations and issues
---- (`aineo.entry`'s `clear_explanations()`). `issues`, `tools` and `new` are
---- written in that order, each at most once.
+--- answer is kept, and `clear` cleans the buffer back to how it behaved
+--- when it was opened, as `\vc` does (`aineo.entry`'s
+--- `clear_explanations()`). `issues`, `tools` and `new` are written in that
+--- order, each at most once.
 local EXPLAIN_WORDS = { 'tools', 'issues', 'new', 'clear' }
 
 --- The words `:Aineo explain` offers after `words`, the words typed after
@@ -480,6 +481,19 @@ for words, order in pairs(FIX_ORDERS) do
   end, { desc = 'aineo: ' .. words })
 end
 
+--- The `<Plug>` mapping that returns the current buffer to how it behaved
+--- when it was opened, as `:Aineo explain clear` does (`aineo.entry`'s
+--- `clear_explanations()`).
+vim.keymap.set('n', '<Plug>(aineo-explain-clean)', function()
+  run(function()
+    require('aineo.entry').clear_explanations()
+  end)
+end, { desc = 'aineo: clean the explanations from this buffer' })
+
+--- The keys that follow the prefix for `<Plug>(aineo-explain-clean)`, in
+--- Normal mode.
+local CLEAN_KEYS = 'vc'
+
 --- The `<Plug>` mappings of a fix shown, which the keys of its buffer map
 --- to while it is shown, by the words after `aineo-fix-`: what each does
 --- (`aineo.entry`'s `accept_fix()`, `reject_fix()` and `toggle_fix_diff()`).
@@ -562,8 +576,8 @@ end
 --- of only the start of a sequence, of a longer one, or in the other mode,
 --- does not count; maps nothing when `prefix` is `false`. An action with no
 --- keys there, `claim`, gets none. Explaining code gets its keys
---- (`EXPLAIN_KEYS`) in both modes, and asking a fix its own (`FIX_KEYS`) in
---- Normal mode.
+--- (`EXPLAIN_KEYS`) in both modes, and asking a fix its own (`FIX_KEYS`) and
+--- cleaning a buffer its own (`CLEAN_KEYS`) in Normal mode.
 ---
 ---@param prefix string|false
 local function map_prefix(prefix)
@@ -585,6 +599,7 @@ local function map_prefix(prefix)
   for words, keys in pairs(FIX_KEYS) do
     map_unless_mapped('n', prefix .. keys, words, '')
   end
+  map_unless_mapped('n', prefix .. CLEAN_KEYS, 'explain-clean', '')
 end
 
 --- Maps `terminal_prefix` followed by each action's keys (`PREFIX_KEYS`) in
@@ -811,7 +826,7 @@ local RANGE_REFUSAL = 'aineo: only :Aineo ' .. RANGE_SUBCOMMAND .. ' takes a ran
 --- `range`, the lines given, or `nil` for the whole buffer: `tools` explains
 --- with read-only tools, `issues` asks for potential issues instead, alone or
 --- followed by `tools`, `new` ends the words and asks again whatever answer
---- is kept, `clear` removes the explanations and the issues, no word explains
+--- is kept, `clear` cleans the buffer as `\vc` does, no word explains
 --- the code alone. Any other word is told as `:Aineo` tells its usage.
 ---
 ---@param words string[]

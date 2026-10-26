@@ -360,6 +360,7 @@ function M.propose(fixing, folder)
   steer.open({
     name = kinds.FIX.name,
     title = kinds.FIX.deep.title,
+    steered_buffer = fixing.buffer,
     default = default,
     on_send = function(text)
       ask_steered(fixing, issue, folder, { text = text, default = default })
