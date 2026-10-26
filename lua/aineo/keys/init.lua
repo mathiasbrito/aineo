@@ -290,8 +290,7 @@ function M.rows()
 end
 
 --- The keys gathered by group, as the cheatsheet shows them: each group of
---- `M.groups()`, in its order, with its keys in the order they are declared;
---- a group no key belongs to is left out.
+--- `M.groups()`, in its order, with its keys in the order they are declared.
 ---
 ---@return aineo.keys.SheetGroup[]
 function M.sheet()
@@ -300,9 +299,7 @@ function M.sheet()
     local rows = vim.tbl_filter(function(row)
       return row.group == group.id
     end, ROWS)
-    if #rows > 0 then
-      table.insert(sheet, { id = group.id, title = group.title, rows = vim.deepcopy(rows) })
-    end
+    table.insert(sheet, { id = group.id, title = group.title, rows = vim.deepcopy(rows) })
   end
   return sheet
 end
