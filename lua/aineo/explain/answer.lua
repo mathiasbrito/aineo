@@ -99,6 +99,32 @@ function M.error_in(output)
   end
 end
 
+--- The first line of `text` that holds more than white space, or `nil`.
+---
+---@param text string|nil
+---@return string|nil
+local function first_line(text)
+  return (text or ''):match('[^\r\n]*%S[^\r\n]*')
+end
+
+--- What went wrong with the run `ended` of Claude Code, when it exited with
+--- a code other than 0: the error result it printed, else its code and the
+--- first line of its errors. `nil` when it exited with 0.
+---
+---@param ended vim.SystemCompleted
+---@return string|nil
+function M.failure_of(ended)
+  if ended.code == 0 then
+    return nil
+  end
+  local failure = M.error_in(ended.stdout or '')
+  if failure then
+    return failure
+  end
+  local said = first_line(ended.stderr)
+  return ('Claude Code exited with code %d%s'):format(ended.code, said and ': ' .. said or '')
+end
+
 --- The explanations the result `output` holds for the lines from `first` to
 --- `last` (`one_per_line()`), or `nil` and what is wrong with it.
 ---
@@ -118,6 +144,36 @@ function M.explanations_in(output, first, last)
     return nil, 'its answer holds no explanations'
   end
   return one_per_line(object.explanations, first, last)
+end
+
+--- A fix as Claude Code answered it: the whole fix in one sentence, and its
+--- edits, unchecked (`aineo.explain.placement` checks them).
+---@class aineo.explain.Fix
+---@field summary string
+---@field edits aineo.explain.Edit[]
+
+--- The fix the result `output` holds, or `nil` and what is wrong with it:
+--- the error an error result says, or that it holds no summary text and no
+--- list of edits.
+---
+---@param output string what Claude Code printed
+---@return aineo.explain.Fix|nil fix
+---@return string? problem
+function M.fix_in(output)
+  local failure = M.error_in(output)
+  if failure then
+    return nil, failure
+  end
+  local result = decoded(output)
+  local object = type(result) == 'table' and answered_object(result)
+  if
+    type(object) ~= 'table'
+    or type(object.summary) ~= 'string'
+    or not vim.islist(object.edits)
+  then
+    return nil, 'its answer holds no fix'
+  end
+  return { summary = object.summary, edits = object.edits }
 end
 
 return M

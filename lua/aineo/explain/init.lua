@@ -3,6 +3,7 @@
 --- buffer, or of some of its lines, or to find its potential issues.
 
 local answer = require('aineo.explain.answer')
+local fix = require('aineo.explain.fix')
 local kinds = require('aineo.explain.kinds')
 local jump = require('aineo.explain.jump')
 local kept = require('aineo.explain.kept')
@@ -15,7 +16,7 @@ local steer = require('aineo.explain.steer')
 
 local M = {}
 
-look.keep_defined(kinds.ALL)
+look.keep_defined(kinds.LOOKS)
 marks.keep_aligned()
 marks.on_change(function(buffer, window)
   jump.sync_keys(buffer)
@@ -73,18 +74,9 @@ local function project_folder(path)
   return vim.fs.root(path, '.git') or nearest_existing_folder(path)
 end
 
---- The first line of `text` that holds more than white space, or `nil`.
----
----@param text string|nil
----@return string|nil
-local function first_line(text)
-  return (text or ''):match('[^\r\n]*%S[^\r\n]*')
-end
-
 --- The explanations of the lines from `first` to `last` that the run `ended`
 --- of Claude Code answered (`aineo.explain.answer`), or `nil` and what went
---- wrong: an exit with a code other than 0 is told with the error result it
---- printed, else with the first line of its errors.
+--- wrong (`aineo.explain.answer`'s `failure_of()` for a failed run).
 ---
 ---@param ended vim.SystemCompleted
 ---@param first integer
@@ -92,14 +84,9 @@ end
 ---@return aineo.explain.Explanation[]|nil explanations
 ---@return string? problem
 local function explanations_of(ended, first, last)
-  if ended.code ~= 0 then
-    local failure = answer.error_in(ended.stdout or '')
-    if failure then
-      return nil, failure
-    end
-    local said = first_line(ended.stderr)
-    return nil,
-      ('Claude Code exited with code %d%s'):format(ended.code, said and ': ' .. said or '')
+  local failure = answer.failure_of(ended)
+  if failure then
+    return nil, failure
   end
   return answer.explanations_in(ended.stdout, first, last)
 end
@@ -424,12 +411,13 @@ function M.ask(explaining)
   end
 end
 
---- Removes every explanation and every issue `buffer` shows, and stops the
---- requests that run for it, if any, without a word.
+--- Removes every explanation and every issue `buffer` shows, and the fix it
+--- shows, and stops the requests that run for it, if any, without a word.
 ---
 ---@param buffer integer
 function M.clear(buffer)
   runs.stop_all_of(buffer)
+  fix.reject(buffer)
   for _, kind in ipairs(kinds.ALL) do
     marks.clear(buffer, kind)
   end
@@ -485,6 +473,43 @@ end
 ---@param buffer integer
 function M.clear_issue_marks(buffer)
   marks.clear_issue_marks(buffer)
+end
+
+--- Asks a Claude Code of its own for a fix of the issue `fixing.buffer`
+--- shows above `fixing.line`, and shows the fix as a preview to accept or
+--- reject (`aineo.explain.fix`'s `propose()`), running Claude Code in the
+--- project's folder of the buffer's file (`project_folder()`).
+---
+--- Raises an error naming `claude.cmd` when its command cannot be run.
+---
+---@param fixing aineo.explain.FixRequest
+function M.propose_fix(fixing)
+  fix.propose(fixing, project_folder(vim.api.nvim_buf_get_name(fixing.buffer)))
+end
+
+--- Accepts the fix `buffer` shows: its edits are applied as one undo step,
+--- and the file is not written (`aineo.explain.fix`'s `accept()`).
+---
+---@param buffer integer
+function M.accept_fix(buffer)
+  fix.accept(buffer)
+end
+
+--- Shows the fix `buffer` shows as the diff view, its old lines struck
+--- through above its new lines, or as the overlay again
+--- (`aineo.explain.fix`'s `toggle_diff()`).
+---
+---@param buffer integer
+function M.toggle_fix_diff(buffer)
+  fix.toggle_diff(buffer)
+end
+
+--- Rejects the fix `buffer` shows, if any: its preview goes and the buffer
+--- stays as it reads (`aineo.explain.fix`'s `reject()`).
+---
+---@param buffer integer
+function M.reject_fix(buffer)
+  fix.reject(buffer)
 end
 
 --- Moves the cursor of `window` to the line of the next or the previous

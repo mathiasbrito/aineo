@@ -24,18 +24,32 @@ local M = {}
 ---@field working string what it says while its request runs
 ---@field title string what the float that steers the request says it does
 
---- One kind of virtual line.
----@class aineo.explain.Kind
----@field name 'explanations'|'issues' what a request names it
----@field namespace string the name of the namespace its extmarks live in
----@field column integer the column its extmarks are set at: a kind with a lower one shows above one with a higher on the same line
----@field working string what it says while its request runs
----@field label string the word that names it in the gutter, on its first row
----@field deep aineo.explain.DeepWords how it names a deep request's answer, and says it works
+--- How a band looks: the word that labels it in the gutter, its accent and
+--- the highlight groups it is drawn with (`aineo.explain.look`).
+---@class aineo.explain.Look
+---@field label string
 ---@field accent_group string the highlight group whose foreground is its accent
 ---@field accent_fallback integer the accent when that group has no foreground
 ---@field groups aineo.explain.KindGroups
----@field marked_groups? aineo.explain.MarkedGroups the groups of a marked one, for a kind that can be marked
+---@field marked_groups? aineo.explain.MarkedGroups
+---@field struck? aineo.explain.Struck
+
+--- The highlight group of the lines a look shows struck through, and its
+--- accent.
+---@class aineo.explain.Struck
+---@field group string
+---@field accent_group string the highlight group whose foreground is its accent
+---@field accent_fallback integer the accent when that group has no foreground
+
+--- One kind of virtual line.
+--- Its `label` names it in the gutter, on its first row, and its
+--- `marked_groups` are those of a marked one, for a kind that can be marked.
+---@class aineo.explain.Kind : aineo.explain.Look
+---@field name 'explanations'|'issues'|'fix' what a request names it
+---@field namespace string the name of the namespace its extmarks live in
+---@field column integer the column its extmarks are set at: a kind with a lower one shows above one with a higher on the same line
+---@field working string what it says while its request runs
+---@field deep aineo.explain.DeepWords how it names a deep request's answer, and says it works
 
 ---@type aineo.explain.Kind
 M.EXPLANATIONS = {
@@ -85,9 +99,60 @@ M.ISSUES = {
   },
 }
 
+--- The kind of a proposed fix: the virtual line that says its request is
+--- working, and the new lines of its preview (`aineo.explain.preview`). Not
+--- one of `ALL`: a fix is not an answer placed above lines.
+---@type aineo.explain.Kind
+M.FIX = {
+  name = 'fix',
+  namespace = 'aineo_explain_fix',
+  column = 2,
+  working = 'proposing a fix…',
+  deep = {
+    label = 'fix',
+    working = 'proposing a fix…',
+    title = 'Propose a fix',
+  },
+  label = 'fix',
+  accent_group = 'DiagnosticOk',
+  accent_fallback = 0x98c379,
+  groups = {
+    text = 'AineoFix',
+    gutter = 'AineoFixGutter',
+    fill = 'AineoFixGutterFill',
+    number = 'AineoFixNr',
+  },
+  struck = {
+    group = 'AineoFixOld',
+    accent_group = 'DiagnosticError',
+    accent_fallback = 0xe06c75,
+  },
+}
+
+--- The look of the fix explanation: the band that says, above each edit of
+--- a fix's preview, what the fix does and why the edit fixes the issue. Its
+--- rows are drawn with the preview's (`aineo.explain.preview`).
+---@type aineo.explain.Look
+M.FIX_WHY = {
+  label = 'why',
+  accent_group = 'DiagnosticHint',
+  accent_fallback = 0x56b6c2,
+  groups = {
+    text = 'AineoFixWhy',
+    gutter = 'AineoFixWhyGutter',
+    fill = 'AineoFixWhyGutterFill',
+    number = 'AineoFixWhyNr',
+  },
+}
+
 --- Every kind, in the order they are told.
 ---@type aineo.explain.Kind[]
 M.ALL = { M.EXPLANATIONS, M.ISSUES }
+
+--- Every look whose highlight groups the explain home defines
+--- (`aineo.explain.look`): each kind's, and the fix explanation's.
+---@type aineo.explain.Look[]
+M.LOOKS = { M.EXPLANATIONS, M.ISSUES, M.FIX, M.FIX_WHY }
 
 --- The kind a request names.
 ---

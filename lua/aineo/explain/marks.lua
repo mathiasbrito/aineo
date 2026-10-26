@@ -2,24 +2,17 @@
 --- the lines it is about, in the namespace of the kind of answer
 --- (`aineo.explain.Kind`).
 
+local draw = require('aineo.explain.draw')
 local kinds = require('aineo.explain.kinds')
 
 local M = {}
 
---- What starts the text of every virtual line, after the line's indent.
-local MARK = '┊ '
-
---- What marks the gutter of every virtual line, and of every virtual line
---- of a marked issue.
-local GUTTER_MARK = '▎'
+--- What marks the gutter of every virtual line of a marked issue.
 local MARKED_GUTTER_MARK = '✓'
 
 --- What says, in the badge, the key that sends the marked issues, unless
 --- the answer's origin gives it.
 local DEFAULT_SEND_KEY = '\\s'
-
---- The fewest characters of a label worth showing in the gutter.
-local SHORTEST_LABEL = 2
 
 --- The fewest columns a virtual line's text is wrapped at, however narrow
 --- the window.
@@ -32,107 +25,6 @@ local NARROWEST = 1
 local function namespace_of(kind)
   return vim.api.nvim_create_namespace(kind.namespace)
 end
-
---- The bytes of the longest start of `word` no wider than `width` display
---- columns, and at least its first character. Walks the characters of that
---- start alone, so that a long word costs its length, not its length per row.
----
----@param word string
----@param width integer
----@return integer
-local function fitting_bytes(word, width)
-  local bytes, used = 0, 0
-  while bytes < #word do
-    local character = word:sub(bytes + 1, bytes + 1 + vim.str_utf_end(word, bytes + 1))
-    local wide = vim.fn.strdisplaywidth(character)
-    if used + wide > width and bytes > 0 then
-      break
-    end
-    bytes = bytes + #character
-    used = used + wide
-  end
-  return bytes
-end
-
---- `text` broken into rows no wider than `width` display columns: between
---- words, a word wider than `width` cut into rows of its own, and a new row
---- at each line break.
----
----@param text string
----@param width integer
----@return string[]
-local function wrapped(text, width)
-  local rows = {}
-  for _, paragraph in ipairs(vim.split(text, '\n', { plain = true })) do
-    local row = ''
-    for word in paragraph:gmatch('%S+') do
-      while vim.fn.strdisplaywidth(word) > width do
-        if row ~= '' then
-          table.insert(rows, row)
-          row = ''
-        end
-        local cut = fitting_bytes(word, width)
-        table.insert(rows, word:sub(1, cut))
-        word = word:sub(cut + 1)
-      end
-      local longer = row == '' and word or row .. ' ' .. word
-      if vim.fn.strdisplaywidth(longer) <= width then
-        row = longer
-      else
-        table.insert(rows, row)
-        row = word
-      end
-    end
-    table.insert(rows, row)
-  end
-  return rows
-end
-
---- Where a window shows a buffer's text: its width, and the columns before
---- the text that its number, sign and fold columns take.
----@class aineo.explain.Geometry
----@field width integer the window's columns
----@field textoff integer the columns before the text
-
---- The geometry of a window showing `buffer`: `window`'s when it still shows
---- `buffer`, else the first such window's, else the screen's, with no
---- columns before the text, when none shows it.
----
----@param buffer integer
----@param window integer
----@return aineo.explain.Geometry
-local function geometry_of(buffer, window)
-  if not (vim.api.nvim_win_is_valid(window) and vim.api.nvim_win_get_buf(window) == buffer) then
-    window = vim.fn.bufwinid(buffer)
-  end
-  local info = vim.fn.getwininfo(window)[1]
-  if not info then
-    return { width = vim.o.columns, textoff = 0 }
-  end
-  return { width = info.width, textoff = info.textoff }
-end
-
---- The indent of `line` of `buffer`, from 1, as the spaces that fill it, at
---- most `most` of them.
----
----@param buffer integer
----@param line integer
----@param most? integer no limit when absent
----@return string
-local function indent_of(buffer, line, most)
-  local indent = vim.api.nvim_buf_call(buffer, function()
-    return vim.fn.indent(line)
-  end)
-  return (' '):rep(math.min(indent, most or indent))
-end
-
---- How a band is drawn: the character that marks its gutter and the
---- highlight groups of its text, gutter and the columns the gutter fills.
----@class aineo.explain.Style
----@field gutter_mark string
----@field text string
----@field gutter string
----@field fill string
 
 --- The style of a band of `kind`, that of a marked issue when `marked`.
 ---
@@ -149,62 +41,11 @@ local function style_of(kind, marked)
     }
   end
   return {
-    gutter_mark = GUTTER_MARK,
+    gutter_mark = draw.GUTTER_MARK,
     text = kind.groups.text,
     gutter = kind.groups.gutter,
     fill = kind.groups.fill,
   }
-end
-
---- The chunks that fill the columns before the text, `textoff` of them: the
---- style's mark, then spaces, and `label` right-aligned with a space after
---- it, cut to the cells left by the mark and that space, and left out when
---- fewer than `SHORTEST_LABEL` fit; the mark and the label in the style's
---- gutter group and the spaces in its fill group; none when there are no
---- such columns.
----
----@param textoff integer
----@param label string
----@param style aineo.explain.Style
----@return table[] chunks
-local function gutter_chunks(textoff, label, style)
-  if textoff == 0 then
-    return {}
-  end
-  local mark_width = vim.fn.strdisplaywidth(style.gutter_mark)
-  local room = textoff - mark_width - 1
-  label = room >= SHORTEST_LABEL and label:sub(1, room) or ''
-  local chunks = { { style.gutter_mark, style.gutter } }
-  local spaces = textoff - mark_width - (label == '' and 0 or #label + 1)
-  if spaces > 0 then
-    table.insert(chunks, { (' '):rep(spaces), style.fill })
-  end
-  if label ~= '' then
-    table.insert(chunks, { label, style.gutter })
-    table.insert(chunks, { ' ', style.fill })
-  end
-  return chunks
-end
-
---- The virtual line that shows `row`: the gutter (`gutter_chunks()`, with
---- `label`), `indent` unhighlighted, then `MARK` and `row` padded with
---- spaces to the end of the window, in the text group of `style`.
----
----@param row string
----@param indent string
----@param geometry aineo.explain.Geometry
----@param label string
----@param style aineo.explain.Style
----@return table[] chunks
-local function band_row(row, indent, geometry, label, style)
-  local body = MARK .. row
-  local padding = geometry.width - geometry.textoff - #indent - vim.fn.strdisplaywidth(body)
-  local chunks = gutter_chunks(geometry.textoff, label, style)
-  if indent ~= '' then
-    table.insert(chunks, { indent })
-  end
-  table.insert(chunks, { body .. (' '):rep(math.max(padding, 0)), style.text })
-  return chunks
 end
 
 --- What `show_above()` shows.
@@ -219,7 +60,7 @@ end
 ---@field id? integer the extmark to set again; a new one when absent
 
 --- Shows `band.rows` in `buffer` as virtual lines above `band.line`, each
---- starting at the window's left column and showing as `band_row()` does,
+--- starting at the window's left column and showing as `draw.row()` does,
 --- in the style of the kind (`style_of()`). The line's number shows in the
 --- number group of the kind. Returns the extmark's id.
 ---
@@ -231,7 +72,7 @@ local function show_above(buffer, band)
   local style = style_of(band.kind, band.marked)
   for number, row in ipairs(band.rows) do
     virt_lines[number] =
-      band_row(row, band.indent, band.geometry, number == 1 and band.label or '', style)
+      draw.row(row, band.indent, band.geometry, number == 1 and band.label or '', style)
   end
   return vim.api.nvim_buf_set_extmark(
     buffer,
@@ -317,7 +158,7 @@ end
 
 --- Shows the explanation `shown` in `buffer` as virtual lines above its
 --- line, indented as that line but by half the window's text width at most,
---- each row starting with `MARK`, and the text wrapped (`wrapped()`) at the
+--- each row starting with `draw.MARK`, and the text wrapped (`draw.wrapped()`) at the
 --- text width of `geometry` less that indent, in the look of its kind.
 --- Returns the extmark's id.
 ---
@@ -327,14 +168,14 @@ end
 ---@return integer
 local function show_explanation(buffer, shown, geometry)
   local width = geometry.width - geometry.textoff
-  local indent = indent_of(buffer, shown.line, math.floor(width / 2))
-  local room = math.max(width - #indent - vim.fn.strdisplaywidth(MARK), NARROWEST)
+  local indent = draw.indent_of(buffer, shown.line, math.floor(width / 2))
+  local room = math.max(width - #indent - vim.fn.strdisplaywidth(draw.MARK), NARROWEST)
   return show_above(buffer, {
     id = shown.id,
     kind = shown.kind,
     line = shown.line,
     indent = indent,
-    rows = wrapped(shown.text, room),
+    rows = draw.wrapped(shown.text, room),
     geometry = geometry,
     label = shown.deep and shown.kind.deep.label or shown.kind.label,
     marked = shown.marked,
@@ -352,7 +193,7 @@ local function place_again(buffer, record)
   if not vim.api.nvim_buf_is_valid(buffer) then
     return
   end
-  local geometry = geometry_of(buffer, record.window)
+  local geometry = draw.geometry_of(buffer, record.window)
   record.textoff = geometry.textoff
   for id, text in pairs(record.texts) do
     local line = line_of(buffer, record.kind, id)
@@ -466,7 +307,7 @@ end
 ---@field deep? boolean whether they answer a deep request, which their label says
 
 --- Shows each of `explanations` in `buffer` as virtual lines above its line
---- (`show_explanation()`) for a window showing it (`geometry_of()`), and
+--- (`show_explanation()`) for a window showing it (`draw.geometry_of()`), and
 --- keeps them to show again when that window's gutter changes
 --- (`keep_aligned()`). Tells the listeners (`on_change()`).
 ---
@@ -476,7 +317,7 @@ end
 ---@param origin aineo.explain.Origin where and for what they were asked
 function M.place(buffer, kind, explanations, origin)
   local window, file = origin.window, origin.file
-  local geometry = geometry_of(buffer, window)
+  local geometry = draw.geometry_of(buffer, window)
   placed[buffer] = placed[buffer] or {}
   local record = placed[buffer][kind.name]
   if record and record.textoff ~= geometry.textoff then
@@ -591,6 +432,67 @@ function M.marked_issues(buffer)
   end, found)
 end
 
+--- An issue a buffer shows.
+---@class aineo.explain.ShownIssue
+---@field id integer its extmark
+---@field text string
+
+--- The issue `buffer` shows above `line`, from 1: the marked one when one
+--- is, else the first the answer gave; `nil` when none is shown there.
+---
+---@param buffer integer
+---@param line integer
+---@return aineo.explain.ShownIssue|nil
+function M.issue_at(buffer, line)
+  local record = issues_of(buffer)
+  if not record then
+    return nil
+  end
+  local ids = vim.tbl_keys(record.texts)
+  table.sort(ids)
+  local first, first_marked
+  for _, id in ipairs(ids) do
+    if line_of(buffer, record.kind, id) == line then
+      first = first or id
+      first_marked = first_marked or (record.marked[id] and id)
+    end
+  end
+  local chosen = first_marked or first
+  return chosen and { id = chosen, text = record.texts[chosen] }
+end
+
+--- The line, from 1, the issue `id` of `buffer` is shown above now; `nil`
+--- when it is shown no more.
+---
+---@param buffer integer
+---@param id integer
+---@return integer|nil
+function M.issue_line(buffer, id)
+  local record = issues_of(buffer)
+  if not record or not record.texts[id] then
+    return nil
+  end
+  return line_of(buffer, record.kind, id)
+end
+
+--- Removes the issue `id` `buffer` shows, marked or not, and tells the
+--- listeners (`on_change()`); nothing when it is shown no more.
+---
+---@param buffer integer
+---@param id integer
+function M.remove_issue(buffer, id)
+  local record = issues_of(buffer)
+  if not record or not record.texts[id] then
+    return
+  end
+  record.texts[id] = nil
+  record.files[id] = nil
+  record.marked[id] = nil
+  record.deep[id] = nil
+  M.remove(buffer, record.kind, id)
+  notify(buffer, record.window)
+end
+
 --- Unmarks every issue `buffer` shows, which stay shown, and tells the
 --- listeners (`on_change()`) when any was marked.
 ---
@@ -643,7 +545,9 @@ function M.keep_aligned()
   vim.api.nvim_set_decoration_provider(vim.api.nvim_create_namespace('aineo_explain_align'), {
     on_win = function(_, _, buffer)
       for _, record in pairs(placed[buffer] or {}) do
-        if not record.pending and geometry_of(buffer, record.window).textoff ~= record.textoff then
+        if
+          not record.pending and draw.geometry_of(buffer, record.window).textoff ~= record.textoff
+        then
           record.pending = true
           vim.schedule(function()
             place_again(buffer, record)
@@ -668,9 +572,9 @@ function M.show_progress(buffer, window, kind, line, text)
   return show_above(buffer, {
     kind = kind,
     line = line,
-    indent = indent_of(buffer, line),
+    indent = draw.indent_of(buffer, line),
     rows = { text },
-    geometry = geometry_of(buffer, window),
+    geometry = draw.geometry_of(buffer, window),
     label = '',
   })
 end
@@ -696,9 +600,9 @@ function M.update_progress(buffer, window, kind, id, text)
     id = id,
     kind = kind,
     line = line,
-    indent = indent_of(buffer, line),
+    indent = draw.indent_of(buffer, line),
     rows = { text },
-    geometry = geometry_of(buffer, window),
+    geometry = draw.geometry_of(buffer, window),
     label = '',
   })
 end
