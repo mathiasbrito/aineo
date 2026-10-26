@@ -31,6 +31,7 @@ local remembered = {}
 ---@field title string what the request it steers does, said in the float's title
 ---@field default string the text to start from when none was sent under `name`, and what `R` brings back; its first line is the head that names what the request is about
 ---@field on_send fun(text: string) called with the text sent, after the float is closed
+---@field steered_buffer integer the buffer of the code the request is about, which `close_for()` names
 
 --- The lines of `text`, the way a buffer holds them.
 ---
@@ -105,6 +106,10 @@ end
 ---@type integer|nil
 local open_window = nil
 
+--- The buffer whose request the float that is open steers, if any.
+---@type integer|nil
+local open_for = nil
+
 --- The text `buffer` holds, white space at its ends cut off.
 ---
 ---@param buffer integer
@@ -138,6 +143,7 @@ function M.open(steering)
   vim.api.nvim_buf_set_lines(buffer, 0, -1, false, lines)
   local window = vim.api.nvim_open_win(buffer, true, float_config(#lines, steering.title))
   open_window = window
+  open_for = steering.steered_buffer
   vim.wo[window].wrap = true
   vim.wo[window].linebreak = true
 
@@ -190,6 +196,17 @@ function M.open(steering)
     restore_default,
     { buffer = buffer, nowait = true, desc = 'aineo: restore the default prompt' }
   )
+end
+
+--- Closes the float that is open, if it steers a request for `buffer`
+--- (`aineo.explain.Steering`'s `steered_buffer`), with nothing sent; the
+--- text remembered from earlier floats stays.
+---
+---@param buffer integer
+function M.close_for(buffer)
+  if open_window and open_for == buffer then
+    close(open_window)
+  end
 end
 
 return M

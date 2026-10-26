@@ -358,6 +358,7 @@ local PREFIX_KEYS = {
   { key = 'vm', plug = '<Plug>(aineo-explain-mark)', mode = 'n' },
   { key = 'Vf', plug = '<Plug>(aineo-explain-fix)', mode = 'n' },
   { key = 'VVf', plug = '<Plug>(aineo-explain-fix-steered)', mode = 'n' },
+  { key = 'vc', plug = '<Plug>(aineo-explain-clean)', mode = 'n' },
   { key = 'v', plug = '<Plug>(aineo-explain)', mode = 'x' },
   { key = 'V', plug = '<Plug>(aineo-explain-tools)', mode = 'x' },
   { key = 'vi', plug = '<Plug>(aineo-explain-issues)', mode = 'x' },
@@ -381,6 +382,7 @@ local HAS_NO_TWIN = {
   ['<Plug>(aineo-explain-mark)'] = true,
   ['<Plug>(aineo-explain-fix)'] = true,
   ['<Plug>(aineo-explain-fix-steered)'] = true,
+  ['<Plug>(aineo-explain-clean)'] = true,
 }
 
 --- The modes a twin is mapped in, with how the Terminal prefix mappings
@@ -977,9 +979,9 @@ end
 --- Reports how `\v`, `\V`, `\vi`, `\VI`, `\VV` and `\VVI` ask about code with
 --- `resolved_config`'s `explain.model`, `explain.timeout_ms` and the settings of
 --- the deep requests, and what the Claude Code they start may use; how `\Vf`
---- and `\VVf` ask a fix with the fix settings, and the keys of a fix; and how
---- `\vm`, `\s`, `]v` and `[v` work on what they answer, with
---- `explain.issues_prompt`. Nothing while the configuration is wrong.
+--- and `\VVf` ask a fix with the fix settings, and the keys of a fix; what
+--- `\vc` cleans; and how `\vm`, `\s`, `]v` and `[v` work on what they
+--- answer, with `explain.issues_prompt`. Nothing while the configuration is wrong.
 ---
 ---@param resolved_config table|nil the configuration, `nil` when it is wrong
 local function check_explain(resolved_config)
@@ -997,7 +999,7 @@ local function check_explain(resolved_config)
     "\\v hands it the code alone, with no tool; \\V lets it read the project with Read, Grep and Glob, without asking; it gets no other tool, no MCP server and no settings of aineo, loads your own settings but never the project's (--setting-sources user), and asks no permission"
   )
   vim.health.info(
-    "\\vi and \\VI ask the same Claude Code for potential issues instead of explanations, \\vi with the code alone and \\VI with the read-only tools; \\v waits for 'timeoutlen' for a following i or m, \\V for a following I, V or f, and \\VV for a following I or f"
+    "\\vi and \\VI ask the same Claude Code for potential issues instead of explanations, \\vi with the code alone and \\VI with the read-only tools; \\v waits for 'timeoutlen' for a following i, m or c, \\V for a following I, V or f, and \\VV for a following I or f"
   )
   vim.health.info(
     ('\\VV and \\VVI do what \\V and \\VI do after a float in which you edit the whole prompt (<CR> sends, q or <Esc> cancels, R restores the default text), with model %s (explain.deep_model) at effort %s (explain.deep_effort), stopped after %g s (explain.deep_timeout_ms): :help |aineo-explain-deep|'):format(
@@ -1007,11 +1009,14 @@ local function check_explain(resolved_config)
     )
   )
   vim.health.info(
-    ("\\Vf asks a Claude Code of its own, with Read, Grep and Glob alone, for a fix of the issue on the cursor's line, with model %s (explain.fix_model) at effort %s (explain.fix_effort), stopped after %g s (explain.fix_timeout_ms), and \\VVf first opens the float in which you edit its prompt; the fix shows over the code, which it changes only when you accept it: \\Va accepts it as one undo step and writes no file, \\Vr rejects it, \\Vd shows it as a diff: :help |aineo-explain-fix|"):format(
+    ("\\Vf asks a Claude Code of its own, with Read, Grep and Glob alone, for a fix of the issue on the cursor's line, with model %s (explain.fix_model) at effort %s (explain.fix_effort), stopped after %g s (explain.fix_timeout_ms), and \\VVf first opens the float in which you edit its prompt; the fix shows over the code, which it changes only when you accept it, and the buffer is read-only until you decide: \\Va accepts it as one undo step and writes no file, \\Vr rejects it, \\Vd shows it as a diff; a fix whose code changed anyway stays, marked stale, until \\Vr, and \\Vf on unchanged code shows the fix kept from before: :help |aineo-explain-fix|"):format(
       resolved_config.explain.fix_model,
       resolved_config.explain.fix_effort,
       resolved_config.explain.fix_timeout_ms / 1000
     )
+  )
+  vim.health.info(
+    '\\vc cleans the buffer of everything explaining added to it, stopping its requests and dropping its kept answers and fixes, and leaves its text and undo history as they were; :Aineo explain clear does the same: :help |aineo-explain-clean|'
   )
   vim.health.info(
     ('\\vm marks the issues on a line (on each selected line in Visual mode), and \\s then sends the marked issues to the session\'s Claude Code in place of Input, after "%s" (explain.issues_prompt): :help |aineo-explain-mark|'):format(
