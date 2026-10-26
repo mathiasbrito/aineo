@@ -33,6 +33,7 @@ local PREFIX_KEYS = {
   { 'z', '<Plug>(aineo-zoom)', 'n' },
   { 'Z', '<Plug>(aineo-zoom-full)', 'n' },
   { 'O', '<Plug>(aineo-office)', 'n' },
+  { '?', '<Plug>(aineo-cheatsheet)', 'n' },
   { 's', '<Plug>(aineo-send)', 'x' },
 }
 
