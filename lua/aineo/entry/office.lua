@@ -216,6 +216,18 @@ function M.show(tab)
   office.show_now()
 end
 
+--- Closes the office of `tab`, if it has one and it shows: its window, timer
+--- and watch end, and its countdown starts again as the cursor's place says
+--- (`aineo.office`'s `hide()`).
+---
+---@param tab aineo.entry.Tab
+function M.hide(tab)
+  local office = offices[tab]
+  if office then
+    office.hide()
+  end
+end
+
 --- Shows the office of `tab` over the right side of its layout as if its
 --- session began now: every agent forgotten, the main agent walking in.
 ---

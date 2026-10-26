@@ -10,6 +10,7 @@ local explorer = require('aineo.entry.explorer')
 local folder_tabs = require('aineo.entry.folder_tabs')
 local input_carry = require('aineo.entry.input_carry')
 local links = require('aineo.entry.links')
+local cheatsheets = require('aineo.entry.cheatsheet')
 local offices = require('aineo.entry.office')
 local places = require('aineo.entry.places')
 local prompt = require('aineo.entry.prompt')
@@ -1976,7 +1977,7 @@ local function make_tab(homes, key, callbacks)
   local function leave_as_it_is() end
 
   --- Lets the tab's homes go as its tab page has closed, at once: its claim
-  --- and its office are let go, Input's draft is saved first (`aineo.draft`'s `let_go()`),
+  --- and its office and cheatsheet are let go, Input's draft is saved first (`aineo.draft`'s `let_go()`),
   --- then the layout, the shell, the changes pane, the Report and the
   --- explorer are let go, the shell after the layout, whose handlers must
   --- not see its wipe; the first tab's explorer too, which makes its buffer
@@ -1989,6 +1990,9 @@ local function make_tab(homes, key, callbacks)
     is_released = true
     let_each_go({
       release_claim,
+      function()
+        cheatsheets.let_go(tab)
+      end,
       function()
         offices.let_go(tab)
       end,

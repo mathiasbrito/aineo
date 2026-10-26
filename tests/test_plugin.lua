@@ -37,10 +37,10 @@ T['plugin/aineo.lua']['loads no module as it is sourced that Neovim has not load
   eq(child.lua_get('_G.loaded_before_vim_enter'), without_the_file)
 end
 
-T['plugin/aineo.lua']['loads the configuration alone in a headless start'] = function()
+T['plugin/aineo.lua']['loads the configuration and the table of keys alone in a headless start'] = function()
   children.restart(child, { '--cmd', 'lua vim.g.aineo = {}' })
 
-  eq(child.lua_get(LOADED_AINEO_MODULES), { 'aineo.config' })
+  eq(child.lua_get('vim.fn.sort(' .. LOADED_AINEO_MODULES .. ')'), { 'aineo.config', 'aineo.keys' })
 end
 
 --- What a Neovim has defined: the names of its user commands, its mappings
@@ -114,6 +114,7 @@ T['plugin/aineo.lua']['defines :Aineo, their <Plug> mappings, the prefix mapping
       'i <C-Bslash>tcn',
       'i <C-Bslash>x',
       'i <C-Bslash>z',
+      'n <Plug>(aineo-cheatsheet)',
       'n <Plug>(aineo-claim)',
       'n <Plug>(aineo-claude)',
       'n <Plug>(aineo-claude-numbers)',
@@ -169,6 +170,7 @@ T['plugin/aineo.lua']['defines :Aineo, their <Plug> mappings, the prefix mapping
       'n \\7',
       'n \\8',
       'n \\9',
+      'n \\?',
       'n \\N',
       'n \\O',
       'n \\Q',
