@@ -48,9 +48,8 @@ M.compose = compose.compose
 
 ---@class aineo.cheatsheet.Cheatsheet
 ---@field open fun() shows the sheet over the right side and moves the cursor into it; does nothing when it shows, and tells the user when there is no right side
----@field close fun() closes the sheet, if it shows, and moves the cursor back to the window it was in when the sheet opened, if that window remains
+---@field close fun() closes the sheet, if it shows; the cursor, in the sheet, goes back to the window it came from
 ---@field toggle fun() closes the sheet when it shows and opens it otherwise
----@field let_go fun() closes the sheet, leaving the cursor where it is
 
 --- Writes the sheet for the width of `open`'s window into its buffer, with
 --- its highlights.
@@ -82,26 +81,22 @@ function M.new_cheatsheet(options)
   sheets_made = sheets_made + 1
 
   --- What exists while the sheet shows; nil while it is hidden.
-  ---@type { cover: aineo.cover.Cover, group: integer, previous: integer, area: aineo.layout.Area }|nil
+  ---@type { cover: aineo.cover.Cover, group: integer, area: aineo.layout.Area }|nil
   local showing = nil
 
   local cheatsheet = {}
 
-  --- Closes the sheet `open`, if it is the one that shows, and moves the
-  --- cursor to the window it came from when `returns` says so.
+  --- Closes the sheet `open`, if it is the one that shows. When the cursor
+  --- is in its window, Neovim moves it back to the window it came from.
   ---
   ---@param open table what exists while the sheet shows
-  ---@param returns boolean
-  local function close_sheet(open, returns)
+  local function close_sheet(open)
     if showing ~= open then
       return
     end
     showing = nil
     pcall(vim.api.nvim_del_augroup_by_id, open.group)
     cover_module.close(open.cover)
-    if returns and vim.api.nvim_win_is_valid(open.previous) then
-      vim.api.nvim_set_current_win(open.previous)
-    end
   end
 
   --- Moves the sheet to where the right side is now and writes it for that
@@ -116,7 +111,7 @@ function M.new_cheatsheet(options)
     local area = options.right_side()
     if not area then
       vim.schedule(function()
-        close_sheet(open, true)
+        close_sheet(open)
       end)
     elseif not vim.deep_equal(area, open.area) then
       cover_module.place(open.cover, area)
@@ -141,7 +136,7 @@ function M.new_cheatsheet(options)
       callback = function()
         if vim.api.nvim_get_current_win() == open.cover.window then
           vim.schedule(function()
-            close_sheet(open, false)
+            close_sheet(open)
           end)
         end
       end,
@@ -155,7 +150,7 @@ function M.new_cheatsheet(options)
       pattern = tostring(open.cover.window),
       callback = function()
         vim.schedule(function()
-          close_sheet(open, false)
+          close_sheet(open)
         end)
       end,
     })
@@ -172,7 +167,6 @@ function M.new_cheatsheet(options)
     end
     local groups = options.groups()
     look.define()
-    local previous = vim.api.nvim_get_current_win()
     local cover = cover_module.open(area, SHEET_COVER)
     vim.wo[cover.window].signcolumn = 'no'
     local open = {
@@ -183,13 +177,12 @@ function M.new_cheatsheet(options)
           clear = true,
         }
       ),
-      previous = previous,
       area = area,
     }
     showing = open
     for _, key in ipairs({ 'q', '<Esc>' }) do
       vim.keymap.set('n', key, function()
-        close_sheet(open, true)
+        close_sheet(open)
       end, { buffer = cover.buffer, nowait = true, desc = 'aineo: close the cheatsheet' })
     end
     write(open, groups)
@@ -198,7 +191,7 @@ function M.new_cheatsheet(options)
 
   function cheatsheet.close()
     if showing then
-      close_sheet(showing, true)
+      close_sheet(showing)
     end
   end
 
@@ -207,12 +200,6 @@ function M.new_cheatsheet(options)
       cheatsheet.close()
     else
       cheatsheet.open()
-    end
-  end
-
-  function cheatsheet.let_go()
-    if showing then
-      close_sheet(showing, false)
     end
   end
 

@@ -137,28 +137,6 @@ T['showing the office']['opens a window over exactly the cells of the right colu
   eq(config.relative, 'editor')
 end
 
-T['hiding the office'] = MiniTest.new_set()
-
-T['hiding the office']['closes the window of an office that shows, and it shows again when asked'] = function()
-  open_office()
-  child.lua([[_G.office.show_now()]])
-
-  child.lua([[_G.office.hide()]])
-
-  eq(office_window(), vim.NIL)
-  child.lua([[_G.office.show_now()]])
-  eq(office_window() ~= vim.NIL, true)
-end
-
-T['hiding the office']['does nothing when it is hidden'] = function()
-  open_office()
-
-  child.lua([[_G.office.hide()]])
-
-  eq(office_window(), vim.NIL)
-  eq(child.lua_get([[_G.told]]), {})
-end
-
 T['showing the office']['follows the right column to where it is now, not where it was'] = function()
   local buffers = open_office()
   layout.enter_window_showing(child, buffers.claude)

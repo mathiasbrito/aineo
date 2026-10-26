@@ -170,7 +170,7 @@ end
 
 --- How the blocks of lines split in two columns so that the taller column is
 --- as short as it can be: the number of blocks the left column takes, the
---- first of the splits that does that.
+--- last of the splits that does that, which gives the left column the more.
 ---
 ---@param blocks aineo.cheatsheet.Segment[][][]
 ---@return integer
@@ -186,7 +186,7 @@ local function left_block_count(blocks)
       left = left + #blocks[count]
     end
     local taller = math.max(left, total - left)
-    if taller < best_height then
+    if taller <= best_height then
       best_count, best_height = count, taller
     end
   end

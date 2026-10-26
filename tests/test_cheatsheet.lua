@@ -259,15 +259,6 @@ T['closing']['happens when the cursor leaves the sheet, and the cursor stays whe
   eq(child.lua_get([[vim.api.nvim_win_get_buf(0)]]), buffers.input)
 end
 
-T['closing']['happens when the sheet is let go'] = function()
-  open_sheet()
-  child.lua([[_G.sheet.open()]])
-
-  child.lua([[_G.sheet.let_go()]])
-
-  eq(sheet_window(), vim.NIL)
-end
-
 T['closing']['by :close leaves the sheet free to open again'] = function()
   open_sheet()
   child.lua([[_G.sheet.open()]])

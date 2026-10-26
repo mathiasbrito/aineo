@@ -133,6 +133,13 @@ T['the columns']['hold the groups so that their heights are as even as they can 
   eq(line_holding(sheet, 'Delta') > line_holding(sheet, 'Gamma'), true)
 end
 
+T['the columns']['give the left column the more groups when two splits are as even'] = function()
+  local sheet = composed({ group_of('Alpha', 1), group_of('Beta', 1), group_of('Gamma', 1) }, 100)
+
+  eq(line_holding(sheet, 'Beta') > line_holding(sheet, 'Alpha'), true)
+  eq(line_holding(sheet, 'Gamma'), line_holding(sheet, 'Alpha'))
+end
+
 T['the columns']['keep the groups in their order, the first ones in the left column'] = function()
   local sheet = composed(
     { group_of('Alpha', 2), group_of('Beta', 2), group_of('Gamma', 2), group_of('Delta', 2) },

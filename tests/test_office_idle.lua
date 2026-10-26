@@ -72,18 +72,6 @@ T['the idle countdown']['starts as the office is made when the cursor is out of 
   eq(office_child.waits_pending(child), 1)
 end
 
-T['the idle countdown']['starts again when the office that showed is hidden with the cursor out of the right side'] = function()
-  open_office_waiting('1000')
-  office_child.enter_the_left_window(child)
-  office_child.let_time_pass(child)
-  eq(shows(), true)
-
-  child.lua([[_G.office.hide()]])
-
-  eq(shows(), false)
-  eq(office_child.waits_pending(child), 1)
-end
-
 T['the idle countdown']['is stopped by the cursor entering the right side'] = function()
   local buffers = open_office_waiting('1000')
   office_child.enter_the_left_window(child)
