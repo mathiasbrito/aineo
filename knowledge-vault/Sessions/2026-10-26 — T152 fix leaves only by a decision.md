@@ -22,7 +22,7 @@ T152: a fix shown by `\Vf` leaves only by `\Va` or `\Vr`, the buffer read-only m
 The user lost fixes, and the issue explanations they were asked for, to mistyped keys: any edit of a fix's lines dropped it (D124). And the user asked for one key that returns a buffer to how it behaved when opened (D125).
 
 1. **Read-only** (A632 (1), `aineo.explain.preview`): `show()` keeps the buffer's `modifiable` and turns it off; `clear()` gives it back on every way out (accept, reject, `\Vf` replacing, unload, `\vc`); `apply()` turns it on only to apply the edits, as one undo step. The head row reads `read-only until \Va accepts or \Vr rejects · \Vd shows the diff`.
-2. **No drop, a stale mark** (A632 (2)): the edit watch (`touches()`, `drop_edited()`) is gone. Every change, after the event loop turns, redraws the fix; `render()` computes stale from A630 (1)'s checks (`stands()`), unchanged, at each drawing, so an undo back to the old lines lifts the mark. A stale fix is drawn as the diff view, its head row `the code under the fix changed · \Vr rejects · \Vf asks again`; with its extmarks gone, its head row alone, above the line the fix last started on. A reload detaches the buffer watch (`:edit!` fires `on_detach`, not `on_reload`, measured), so a detach while the buffer is loaded watches it again and redraws; while unloaded it clears quietly.
+2. **No drop, a stale mark** (A632 (2)): the edit watch (`touches()`, `drop_edited()`) is gone. Every change, after the event loop turns, redraws the fix; `render()` computes stale from A630 (1)'s checks (`stands()`), unchanged, at each drawing, so an undo back to the old lines lifts the mark. A stale fix is drawn as the diff view, its head row `the code under the fix changed · \Vr rejects · \Vf asks again`; with its extmarks gone, its head row alone, above the line the fix last started on, drawn after the next change (from the fix round on, also at the next redraw of a window showing it or when `\Va` refuses, A635 (1)). A reload detaches the buffer watch (`:edit!` fires `on_detach`, not `on_reload`, measured), so a detach while the buffer is loaded watches it again and redraws; while unloaded it clears quietly.
 3. **The issue survives** (A632 (3)): `\Vr` never removed it; a case now pins that.
 4. **Kept fixes** (A632 (4)): `aineo.explain.kept` holds any answer (`answer` in place of `explanations`) and gains `fix_key()` (issue line and text, model, effort, steer text); `aineo.explain.fix` keeps a fix once shown, and `\Vf` shows it again at once while the file reads as sent, saying `aineo: the fix kept from before, the code unchanged (\VVf asks anew)`; `\VVf` never recalls. After `u` undoes an accept, A552's kept issues come back with no request, confirmed by a case.
 5. **What asks a fix** is told to the preview by the entry (`ask_keys`): the prefix keys, or the `<Plug>` mappings when the prefix is `false`.
@@ -108,9 +108,66 @@ Every file run with `make test_file` on Neovim 0.12.5 on the host (D29); no whol
 
 Each mutant ran from a pristine copy, alone, on the group of its test file that exercises it (a wrapper keeping the named top-level sets), or the whole file for test_plugin and test_health; A632's five (M1, M2, M3, M4, M5) and A633's three (M6, M7, M1c) are among them.
 
+## Fix round of PR #377 (A634, A635)
+
+A634 answered the spec points: (1) and (3) changed the code, and (2) accepted the float rule as built. A635 adopted review377's findings.
+
+1. **The latest kept fix** (A634 (1)): `kept.fix_key()` drops the steer text; the key is the issue on its line, the model and the effort, so the fix asked last for an issue, with `\Vf` or `\VVf`, is the one kept, and `\Vf` on unchanged code shows it. A kept fix records whether it was steered, and the message says `asked with the default prompt` or `asked with your edited prompt`. `\VVf` still asks fresh.
+2. **The issue at the top of the overlay** (A634 (3)): the overlay's rows for the first edit start with the issue's text in the issue look (`kinds.ISSUES`' groups, label `issue`, shown as `issu` in a six-column gutter, as issue bands are). Only the overlay draws it. The diff view and a stale fix leave the issue's line visible, and with it the issue's own band, so drawing it there would repeat it on the next row.
+3. **Lost drawings redrawn** (A635 (1), review377's measured FIX1 and FIX2): a decoration provider `on_win` (`redraw_lost()`), set while any fix shows and removed with the last. When the drawing is gone, or the fix is drawn as standing while its edit marks are gone, it redraws the fix, stale, once the event loop turns. `apply()`'s refusal draws it too. Clearing only the edit marks changes no decoration, so the redraw comes with the next full redraw of a window showing the buffer; the case forces it with `redraw!`.
+4. **`BufDelete` ends the fix** (A635 (2), FIX3): `:%bd|e#` no longer brings a fix back into a stripped buffer.
+5. **Reload cases** (A635 (3)): a file changed on disk then `:e!` shows stale (kills ME), and `:e!` then a forced edit shows stale (kills MD).
+6. **`fill_buffer()`** (A635 (4)) waits on `is_shown()` of the current buffer.
+7. **Head row and `\Vd`** (A635 (5)): the head row says read-only only while `modifiable` is off; an `OptionSet` autocommand on `modifiable` redraws it. `\Vd` on a stale fix leaves the diff view and says `aineo: the fix is stale: \Vr rejects, \Vf asks again`. `named_key()` and `is_stale()` were extracted so the head row and `toggle_diff()` share them.
+8. **Records** (A635 (6)): the help now says a fix whose marks were cleared is drawn stale at the next redraw of a window showing it, or when `\Va` refuses, which is what the code does. Item 2 of *What was done* above held only after an edit until this round.
+
+**Seen red:**
+- asking again · after a steered fix was rejected… shows that fix…: a request started (Left 1, Right 0).
+- asking again · after a rejection… shows the kept fix…: the message lacked the prompt.
+- the preview · starts with the issue it fixes…: no issue row (nil).
+- while shown · its marks cleared by another plugin, it shows marked stale at once… (all namespaces; the edit marks only): no stale head (0).
+- while shown · with modifiable set back on…: still read-only (0).
+- while shown · marked stale, its diff view toggled says once…: no message.
+- while shown · deleting the buffer, then editing it again…: the fix was still shown (true).
+
+**Updated after the code:** the exact rows of the preview · shows the keys…, and shows edits that touch…, which now hold the issue row.
+
+**Arrived green, each killed by a mutant that was run:**
+- while shown · reloading the file changed on disk marks it stale: ME.
+- while shown · after a reload, a forced edit…: MD.
+- accepting · refused for its marks cleared, draws it marked stale before the screen is redrawn: MR. It was written because MR survived: the provider draws the same thing at the next redraw, so only the drawing's extmarks before that redraw tell the two apart.
+
+| Mutant | Literal edit | Killed by (assertion) |
+|---|---|---|
+| MD | `on_detach`: drop `watch_edits(preview)` before `render(preview)` | after a reload, a forced edit… |
+| ME | `on_detach`: drop `render(preview)` after `watch_edits(preview)` | reloading the file changed on disk… |
+| MA1 | `start()`: `key = kept_key(fixing, issue),` → `key = steered_text and kept_key(fixing, issue) .. ' steered' or kept_key(fixing, issue),` | after a steered fix was rejected… |
+| MA3 | `add_overlay()`: `band_rows({ preview.issue },` → `band_rows({},` | the three preview cases with the issue row |
+| MP | `show()`: `watch_drawings(true)` → `watch_drawings(false)` | marks cleared… at once (both) |
+| MB | `BufDelete` callback: delete `M.clear(event.buf)` | deleting the buffer, then editing it again… |
+| MO | `head_text()`: `vim.bo[preview.buffer].modifiable and` → `false and` | with modifiable set back on… |
+| MV | `toggle_diff()`: `if is_stale(preview, spans_of(preview)) then` → `if false then` | marked stale, its diff view toggled… |
+| MR | `apply()`: delete the `render(preview)` before the refusal's notify | refused for its marks cleared, draws it… |
+
+All 35 mutants were re-run on the round's final tree, one at a time from a pristine copy: the nine above, and the packet's 26. Every one was killed by an assertion. M5 and M10 also crash some cases, as before.
+
+The round's refactor moved two anchors, so M11 and M15 were re-run as literal edits on the current text:
+- M11: `preview.stale = is_stale(preview, spans)` → `preview.stale = preview.stale or is_stale(preview, spans)`. Killed by: a forced edit undone…
+- M15: the stale head's `preview.ask_key` → `'<Plug>(aineo-explain-fix)'`. Killed by: entry · of a fix whose code changed name `\Vf`…
+
+Counts on the round's final tree, Neovim 0.12.5, host:
+- test_explain_fix: 86 cases.
+- test_entry_explain_fix: 10.
+- test_entry_explain_clean: 6.
+- test_explain: 110.
+- test_entry_explain: 46.
+- test_doc: 158.
+
+Every file shows Fails (0). `make lint` is clean. The whole suite was not run (D30).
+
 ## Open threads
 
-- Spec points 1–3 above.
+- Spec points 1 and 3 above were ruled by A634 and built in the fix round; point 2 was accepted as built.
 - The `announce_work` call was refused twice with "not taken" and no correction; the work went on.
 - A632 (2)'s "an external reload" is measured with `:edit!`; a `:checktime` reload of a file changed on disk goes the same way (`on_detach` without `on_reload`) but has no case of its own.
 
