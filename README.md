@@ -452,9 +452,10 @@ again, applied as one undo step, the file not written), `\Vr` rejects it and
 `\Va` or `\Vr` removes it: the buffer is read-only while it shows, and if its
 code changes anyway (`'modifiable'` set back on, a reload), the fix stays,
 marked stale, `\Va` refuses and `\Vr` still rejects; an undo back to the old
-lines lifts the mark. The issue stays after `\Vr`, and the fix is kept: `\Vf`
-on the same issue while the file reads the same shows it again at once, and
-`\VVf` asks anew. `\vc` (or `:Aineo explain clear`) cleans the buffer of all
+lines lifts the mark. The issue stays, drawn at the top of the fix while its
+line is hidden, and after `\Vr`; the fix is kept: `\Vf` on the same issue
+while the file reads the same shows the fix asked last again at once, whether
+`\Vf` or `\VVf` asked it, and `\VVf` asks anew. `\vc` (or `:Aineo explain clear`) cleans the buffer of all
 of this. The groups are `AineoFix`, `AineoFixGutter`,
 `AineoFixGutterFill`, `AineoFixOld`, `AineoFixWhy`, `AineoFixWhyGutter` and
 `AineoFixWhyGutterFill`.
