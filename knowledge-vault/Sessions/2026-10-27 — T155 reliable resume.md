@@ -66,6 +66,10 @@ Mutants (literal edits, each run on the group that targets it, against the final
 
 `make test` on the tree pushed, on the host, Neovim 0.12.5 (the newest the host has; 0.12.6 is out, a D29 caveat): 8679 cases, `Fails (0) and Notes (0)`, exit 0. `make lint` clean; `test_doc` 162 cases, 0 fails.
 
+## Review round (A648)
+
+The review of the pull request passed. The reviewer measured one survivor on the start-token path: mutant M7, `if not began_elsewhere(told) then` → `if told.cause == 'resume' then` in `take_session_event()`. No test sent a `SessionStart` from another process with any source other than `resume`, `startup` or `fork`, so the guard could have narrowed the follow to `resume` alone and no test would fail. The reviewer's pin went into `test_claude_switch`'s "a session switch" group as "is not made by a /clear that another process ran under the start's token, which is told as a session elsewhere". The test was green on the head. Under M7 it failed by assertion (`"elsewhere"->1, left = nil, right = { id = …, source = "clear" }`). The whole `test_claude_switch` file passed (112 cases, `Fails (0)`), and `make lint` was clean.
+
 ## Open threads
 
 - The guard keys on the hook's `source`; a background session under a tab's hooks that a future Claude Code starts with another source would still be followed.
