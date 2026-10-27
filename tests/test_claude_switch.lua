@@ -1415,6 +1415,30 @@ T['a session switch']['is not made by a SessionStart of another session that ano
   })
 end
 
+T['a session switch']['is not made by a /clear that another process ran under the start’s token, which is told as a session elsewhere'] = function()
+  local fake = claude.fake('switch-other-process-clear', 'ready')
+  claude.start_noting_switches(child, fake, kept_in('switch-other-process-clear-state'))
+  local started_on = first_session_id(fake)
+
+  claude.run_session_hook_elsewhere(
+    child,
+    fake,
+    1,
+    'SessionStart',
+    hook_input('SessionStart', OTHER_SESSION_ID, 'clear')
+  )
+
+  eq({
+    elsewhere = claude.wait_for_sessions_elsewhere(child, 1),
+    switches = child.lua_get('_G.session_switches'),
+    followed = claude.followed_session_id(child),
+  }, {
+    elsewhere = { { id = OTHER_SESSION_ID, source = 'clear' } },
+    switches = {},
+    followed = started_on,
+  })
+end
+
 T['a session switch']['is not made, nor told as a session elsewhere, by a SessionStart of a new session that another process ran under the start’s token'] =
   MiniTest.new_set({ parametrize = { { 'startup' }, { 'fork' } } })
 
