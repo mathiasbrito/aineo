@@ -125,6 +125,7 @@ local function show(writing, ask, code)
     keys = writing.keys,
     ask_key = writing.ask_key,
     subject = { text = shortened(ask.request), look = kinds.WRITE },
+    kind = kinds.WRITE,
   })
 end
 
