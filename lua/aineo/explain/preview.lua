@@ -793,10 +793,36 @@ function M.is_shown(buffer)
   return previews[buffer] ~= nil
 end
 
+--- Whether the new lines of `edit` start with its old lines, unchanged: it
+--- then only adds lines after them.
+---
+---@param edit aineo.explain.ShownEdit
+---@return boolean
+local function keeps_its_old_lines(edit)
+  return #edit.new >= #edit.old and vim.deep_equal(vim.list_slice(edit.new, 1, #edit.old), edit.old)
+end
+
+--- Applies `edit`, spanning the lines of `span` in `buffer`: an edit that
+--- keeps its old lines (`keeps_its_old_lines()`) inserts the rest of its
+--- new lines after them, leaving them, their marks and their extmarks
+--- untouched; any other replaces its old lines by its new lines.
+---
+---@param buffer integer
+---@param edit aineo.explain.ShownEdit
+---@param span { first: integer, last: integer }
+local function apply_edit(buffer, edit, span)
+  if keeps_its_old_lines(edit) then
+    local added = vim.list_slice(edit.new, #edit.old + 1)
+    vim.api.nvim_buf_set_lines(buffer, span.last + 1, span.last + 1, true, added)
+    return
+  end
+  vim.api.nvim_buf_set_lines(buffer, span.first, span.last + 1, true, edit.new)
+end
+
 --- Applies the preview `buffer` shows, which must be shown
 --- (`is_shown()`): when its edits still stand (`standing_spans()`),
---- replaces the old lines of each by its new lines, the edit lowest in the
---- buffer first, as one undo step, 'modifiable' on while it does, writes
+--- applies each (`apply_edit()`), the edit lowest in the buffer first, as
+--- one undo step, 'modifiable' on while it does, writes
 --- nothing and removes the preview (`clear()`), which gives the buffer its
 --- 'modifiable' back; else leaves the buffer as it is, draws the preview
 --- again (`render()`), marked stale, and tells the user, once. Returns
@@ -821,8 +847,7 @@ function M.apply(buffer)
   end)
   vim.bo[buffer].modifiable = true
   for _, index in ipairs(lowest_first) do
-    local span = spans[index]
-    vim.api.nvim_buf_set_lines(buffer, span.first, span.last + 1, true, preview.edits[index].new)
+    apply_edit(buffer, preview.edits[index], spans[index])
   end
   M.clear(buffer)
   return true
