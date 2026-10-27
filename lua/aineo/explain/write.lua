@@ -18,7 +18,7 @@ local M = {}
 ---@class aineo.explain.WriteRequest
 ---@field buffer integer the buffer of the file the code is written in
 ---@field window integer the window the request was made in
----@field line integer the cursor's line, from 1
+---@field line integer the cursor's line, from 1, which the code goes below, followed while the request is typed
 ---@field range? integer[] the first and last lines that hold the request, from 1
 ---@field tools boolean whether Claude Code may read the project with read-only tools
 ---@field command string[] the words that run Claude Code, `claude.cmd`
@@ -280,27 +280,55 @@ local function ask_for(writing, ask, folder)
   end
 end
 
+--- The namespace of the extmarks that follow the lines requests typed in
+--- the float are asked about. They draw nothing.
+local ANCHOR = vim.api.nvim_create_namespace('aineo_explain_write_anchor')
+
+--- Marks the line `line`, from 1, of `buffer` as the line a request is asked
+--- about: the mark follows the line as lines are added or deleted around
+--- it, and is invalidated when the line itself is deleted. Returns its id.
+---
+---@param buffer integer
+---@param line integer
+---@return integer
+local function mark_anchor(buffer, line)
+  return vim.api.nvim_buf_set_extmark(buffer, ANCHOR, line - 1, 0, { invalidate = true })
+end
+
+--- The line, from 1, where the mark `anchor` of `buffer` stands now, and
+--- removes the mark; `nil` when the line it marked is gone.
+---
+---@param buffer integer
+---@param anchor integer
+---@return integer|nil
+local function take_anchor(buffer, anchor)
+  local mark = vim.api.nvim_buf_get_extmark_by_id(buffer, ANCHOR, anchor, { details = true })
+  vim.api.nvim_buf_del_extmark(buffer, ANCHOR, anchor)
+  if not mark[1] or mark[3].invalid then
+    return nil
+  end
+  return mark[1] + 1
+end
+
 --- Asks for code for `text`, the request the user sent from the float,
---- below the line `writing.line` (`ask_for()`). Nothing is asked when the
---- buffer is gone by then, nor, with a word, when it no longer has that
---- line.
+--- below the line the mark `anchor` follows, where it stands now
+--- (`take_anchor()`, `ask_for()`). Nothing is asked when the buffer is gone
+--- by then, nor, with a word, when that line was deleted.
 ---
 ---@param writing aineo.explain.WriteRequest
 ---@param folder string
+---@param anchor integer
 ---@param text string
-local function ask_typed(writing, folder, text)
+local function ask_typed(writing, folder, anchor, text)
   if not vim.api.nvim_buf_is_valid(writing.buffer) then
     return
   end
-  if writing.line > vim.api.nvim_buf_line_count(writing.buffer) then
-    vim.notify('aineo: the cursor’s line is no longer in the buffer', vim.log.levels.WARN)
+  local line = take_anchor(writing.buffer, anchor)
+  if not line then
+    vim.notify('aineo: the line asked about is gone', vim.log.levels.WARN)
     return
   end
-  ask_for(
-    writing,
-    { first = writing.line, last = writing.line, request = text, below = true },
-    folder
-  )
+  ask_for(writing, { first = line, last = line, request = text, below = true }, folder)
 end
 
 --- What the float in which the user types a request says it does, when
@@ -311,21 +339,25 @@ local PLAIN_TITLE = 'Write code'
 --- write code for the request that the lines of `writing.range` hold, or
 --- shows the code kept for it (`ask_for()`); tells the user, once, and asks
 --- nothing when they hold white space alone. With no `writing.range`,
---- first opens an empty float in which the user types the request
---- (`aineo.explain.steer`), remembering nothing of it, and asks for the
---- request sent (`ask_typed()`); nothing when the user cancels.
+--- marks the line `writing.line` (`mark_anchor()`), then opens an empty
+--- float in which the user types the request (`aineo.explain.steer`),
+--- remembering nothing of it, and asks for the request sent below that
+--- line where it stands then (`ask_typed()`); nothing when the user
+--- cancels.
 ---
---- Raises an error naming `claude.cmd` when its command cannot be run.
+--- Raises an error naming `claude.cmd` when its command cannot be run; for
+--- a request sent from the float, the float tells it to the user instead.
 ---
 ---@param writing aineo.explain.WriteRequest
 ---@param folder string
 function M.propose(writing, folder)
   if not writing.range then
+    local anchor = mark_anchor(writing.buffer, writing.line)
     steer.open({
       title = writing.tools and kinds.WRITE.deep.title or PLAIN_TITLE,
       steered_buffer = writing.buffer,
       on_send = function(text)
-        ask_typed(writing, folder, text)
+        ask_typed(writing, folder, anchor, text)
       end,
     })
     return
