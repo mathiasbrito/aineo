@@ -73,11 +73,13 @@ end
 ---@field first integer the first line of the request, or the line the code goes below, from 1
 ---@field last integer the last line of the request, or the line the code goes below
 ---@field request string the request's text
+---@field below boolean whether the code goes below the line, else in place of the request's lines
 ---@field model string
 ---@field effort? string
 
 --- The key code written for a request is kept under: the request, its
---- lines, and the model and effort it is asked with.
+--- lines, whether the code goes below them or in their place, and the
+--- model and effort it is asked with.
 ---
 ---@param asking aineo.explain.WriteKeyed
 ---@return string
@@ -87,6 +89,7 @@ function M.write_key(asking)
       asking.first,
       asking.last,
       asking.request,
+      asking.below,
       asking.model,
       asking.effort or vim.NIL,
     })

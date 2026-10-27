@@ -105,6 +105,7 @@ local function kept_key(writing, ask)
     first = ask.first,
     last = ask.last,
     request = ask.request,
+    below = ask.below,
     model = writing.model,
     effort = writing.effort,
   })
