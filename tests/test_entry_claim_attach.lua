@@ -511,31 +511,34 @@ T[':Aineo claim']['with no word, while Claude’s window is attached to the clai
   eq(tabs.kept_tab_list(state, child.fn.getcwd()), { sessions = { own }, current = 1 })
 end
 
-T['a fork of the tab’s session'] = MiniTest.new_set()
+T['a session another process switches to under the tab’s token'] = MiniTest.new_set()
 
 --- Tells the child's Claude home of a `SessionStart` of `id` (`CLAIMED` by
---- default) from another Claude Code process (pid 1) under the token of
---- `token` (the tab's start's by default), as a fork Claude Code's
---- background service runs tells it.
+--- default), from `source` (`resume` by default), from another Claude Code
+--- process (pid 1) under the token of `token` (the tab's start's by
+--- default): `resume` as a background session that runs the tab's
+--- conversation under the tab's hooks switches session, `startup` or `fork`
+--- as another process begins a session of its own under them.
 ---
 ---@param id? string
 ---@param token? string
-local function follow_fork(id, token)
+---@param source? string
+local function tell_start_elsewhere(id, token, source)
   child.lua(
     [[
       local claude = require('aineo.claude')
-      local id, token = ...
+      local id, token, source = ...
       local from = token ~= vim.NIL and token or claude.start_token()
-      claude.receive_session_event('SessionStart', id, 'startup', from, nil, 1, nil)
+      claude.receive_session_event('SessionStart', id, source, from, nil, 1, nil)
     ]],
-    { id or CLAIMED, token or vim.NIL }
+    { id or CLAIMED, token or vim.NIL, source or 'resume' }
   )
 end
 
-T['a fork of the tab’s session']['that runs in the background, once the tab follows it, has Claude’s window attached to it'] = function()
+T['a session another process switches to under the tab’s token']['that runs in the background, once the tab follows it, has Claude’s window attached to it'] = function()
   local state, fake, own = open_listing('claim-attach-fork', { background_entry() })
 
-  follow_fork()
+  tell_start_elsewhere()
   claude_session.wait_for_starts(fake, 2)
   claude_session.wait_for_status(child, 'ready')
 
@@ -665,11 +668,11 @@ local function what_reaches_the_tab(token)
   return { run_answered = type(answer) == 'table', waits = child.lua_get('_G.waits_taken') }
 end
 
-T['a fork of the tab’s session']['once Claude’s window is attached to it, still reaches the tab under the token of the tab’s own start: run calls and permission waits'] = function()
+T['a session another process switches to under the tab’s token']['once Claude’s window is attached to it, still reaches the tab under the token of the tab’s own start: run calls and permission waits'] = function()
   local _, fake = open_listing('claim-attach-fork-token', { background_entry() })
   local token = child.lua_get("require('aineo.claude').start_token()")
 
-  follow_fork()
+  tell_start_elsewhere()
   claude_session.wait_for_starts(fake, 2)
   claude_session.wait_for_status(child, 'ready')
 
@@ -677,15 +680,15 @@ T['a fork of the tab’s session']['once Claude’s window is attached to it, st
   eq(what_reaches_the_tab(token), { run_answered = true, waits = { CLAIMED } })
 end
 
-T['a fork of the tab’s session']['forked again while Claude’s window is attached to it is followed, under the token of the tab’s own start, and attached to in place'] = function()
+T['a session another process switches to under the tab’s token']['switched again while Claude’s window is attached to it is followed, under the token of the tab’s own start, and attached to in place'] = function()
   local other = background_entry({ id = OTHER_SHORT_ID, sessionId = OTHER })
   local _, fake = open_listing('claim-attach-fork-again', { background_entry(), other })
   local token = child.lua_get("require('aineo.claude').start_token()")
-  follow_fork()
+  tell_start_elsewhere()
   claude_session.wait_for_starts(fake, 2)
   claude_session.wait_for_status(child, 'ready')
 
-  follow_fork(OTHER, token)
+  tell_start_elsewhere(OTHER, token)
   local attached = claude_session.start_arguments(fake, 3)
 
   eq(vim.list_slice(attached, 1, 2), { 'attach', OTHER_SHORT_ID })

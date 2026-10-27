@@ -1415,6 +1415,42 @@ T['a session switch']['is not made by a SessionStart of another session that ano
   })
 end
 
+T['a session switch']['is not made, nor told as a session elsewhere, by a SessionStart of a new session that another process ran under the start’s token'] =
+  MiniTest.new_set({ parametrize = { { 'startup' }, { 'fork' } } })
+
+T['a session switch']['is not made, nor told as a session elsewhere, by a SessionStart of a new session that another process ran under the start’s token']['from'] = function(
+  source
+)
+  local fake = claude.fake('switch-other-process-new', 'ready')
+  claude.start_noting_switches(child, fake, kept_in('switch-other-process-new-state'))
+  local started_on = first_session_id(fake)
+
+  claude.run_session_hook_elsewhere(
+    child,
+    fake,
+    1,
+    'SessionStart',
+    hook_input('SessionStart', OTHER_SESSION_ID, source)
+  )
+  claude.run_session_hook_elsewhere(
+    child,
+    fake,
+    1,
+    'SessionStart',
+    hook_input('SessionStart', THIRD_SESSION_ID, 'resume')
+  )
+
+  eq({
+    elsewhere = claude.wait_for_sessions_elsewhere(child, 1),
+    switches = child.lua_get('_G.session_switches'),
+    followed = claude.followed_session_id(child),
+  }, {
+    elsewhere = { { id = THIRD_SESSION_ID, source = 'resume' } },
+    switches = {},
+    followed = started_on,
+  })
+end
+
 --- Starts the session, noting switches, with a `claude.cmd` whose shell
 --- starts a process in the background and then becomes the fake, so that
 --- the process is a child of the start's Claude Code — as the background

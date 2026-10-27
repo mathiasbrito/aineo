@@ -624,19 +624,19 @@ local function make_tab(homes, key, callbacks)
 
   --- Makes the panes follow `id` as a claim of it, and claims it
   --- (`follow_claimed_session()`, `claim()`): a session another Claude Code
-  --- process started under the tab's start token (`aineo.claude`'s
-  --- `on_session_elsewhere`), as Claude Code's background service runs a
-  --- conversation of the tab's in a process of its own. That conversation
-  --- goes on there, so Input's text goes with it, in place of any draft of
-  --- `id`, with no question, while Input follows the session it came from;
-  --- the session left keeps it too. While a claim of another session holds
-  --- (`holds_other_claim()`), Input holds that session's text, which the
-  --- fork does not continue: Input then shows `id`'s draft. The tab's own
-  --- Claude terminal runs on its own session meanwhile, and a confirmation
-  --- of its start that comes later leaves the panes on the claim
-  --- (`follow_confirmed_start()`), unless Claude's window attaches to the
-  --- fork, as it does when Claude Code's background service runs it
-  --- (`attach_to_claim()`). Notes that the tab's office begins following
+  --- process switched to under the tab's start token (`aineo.claude`'s
+  --- `on_session_elsewhere`), as a session of Claude Code's background
+  --- service that runs a conversation of the tab's under the tab's hooks
+  --- does. The conversation goes on there, so Input's text goes with it, in
+  --- place of any draft of `id`, with no question, while Input follows the
+  --- session it came from; the session left keeps it too. While a claim of
+  --- another session holds (`holds_other_claim()`), Input holds that
+  --- session's text, which `id` does not continue: Input then shows `id`'s
+  --- draft. The tab's own Claude terminal runs on its own session
+  --- meanwhile, and a confirmation of its start that comes later leaves the
+  --- panes on the claim (`follow_confirmed_start()`), unless Claude's window
+  --- attaches to `id`, as it does when Claude Code's background service
+  --- runs it (`attach_to_claim()`). Notes that the tab's office begins following
   --- then (`aineo.entry.office`'s `began_following()`).
   ---
   ---@param id string

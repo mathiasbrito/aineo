@@ -437,21 +437,21 @@ T['a claimed session']['is acted out from the moment it is claimed, by an office
   eq(child.lua_get('_G.taken'), { 'prompt', 'tool_started' })
 end
 
-T['a fork of the tab’s Claude Code'] = MiniTest.new_set()
+T['a session another process switches to under the tab’s token'] = MiniTest.new_set()
 
-T['a fork of the tab’s Claude Code']['is the session the office acts out, as the tab’s claim, once its SessionStart hook, with the tab’s token, names it'] = function()
-  local forked = new_session_numbered(30)
-  open_layout('office-fork')
+T['a session another process switches to under the tab’s token']['is the session the office acts out, as the tab’s claim, once its SessionStart hook, with the tab’s token, names it'] = function()
+  local switched = new_session_numbered(30)
+  open_layout('office-switched-elsewhere')
   child.lua(KEEP_THE_SIGNALS_TAKEN)
-  write_transcript_of(forked, vim.list_slice(RECORDED_TURN, 1, 5))
+  write_transcript_of(switched, vim.list_slice(RECORDED_TURN, 1, 5))
   run_and_settle(
     [[
       local claude = require('aineo.claude')
-      local own, forked = ...
+      local own, switched = ...
       claude.receive_session_event('SessionStart', own, 'startup', claude.start_token(), 1, 111, nil)
-      claude.receive_session_event('SessionStart', forked, 'startup', claude.start_token(), 2, 222, nil)
+      claude.receive_session_event('SessionStart', switched, 'resume', claude.start_token(), 2, 222, nil)
     ]],
-    { tab_session(), forked }
+    { tab_session(), switched }
   )
 
   entry.command(child, 'Aineo office')
@@ -459,7 +459,7 @@ T['a fork of the tab’s Claude Code']['is the session the office acts out, as t
   eq(
     child.lua_get(
       "require('aineo.mcp').session_claimant(vim.fn.stdpath('state'), ...) == vim.v.servername",
-      { forked }
+      { switched }
     ),
     true
   )

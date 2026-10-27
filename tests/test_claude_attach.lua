@@ -393,8 +393,9 @@ end
 --- session resumed when the attach ends; the new terminal is shown in the
 --- current window, and each terminal `on_terminal_replaced` and each switch
 --- `on_session_switched` is given is noted in the child's
---- `_G.replaced_terminals` and `_G.session_switches`. Returns the new
---- terminal.
+--- `_G.replaced_terminals` and `_G.session_switches`, and each session
+--- `on_session_elsewhere` is told of in `_G.sessions_elsewhere`. Returns the
+--- new terminal.
 ---
 ---@param overrides table
 ---@param listed aineo.claude.ListedSession
@@ -407,6 +408,10 @@ local function attach_claimed(overrides, listed, return_to)
       local settings = dofile('tests/helpers/claude_session.lua').stand_in_settings(overrides)
       _G.replaced_terminals = {}
       _G.session_switches = {}
+      _G.sessions_elsewhere = {}
+      settings.on_session_elsewhere = function(id, source)
+        table.insert(_G.sessions_elsewhere, { id = id, source = source })
+      end
       settings.on_terminal_replaced = function(terminal)
         table.insert(_G.replaced_terminals, terminal)
       end
@@ -468,6 +473,48 @@ T['an attach to a claimed session']['stops the running Claude Code by its keys a
   eq(endings(fake), { { ended = 'keys', code = 0 } })
   eq(claude.followed_session_id(child), OTHER_ID)
   eq(kept_session_id(settings), KEPT_ID)
+end
+
+--- Sessions of the form Claude Code gives that another process starts or
+--- switches to while the attach runs.
+local STARTED_ELSEWHERE_ID = '3e8a1f2b-6c4d-4e7f-8a9b-1c2d3e4f5a6b'
+local SWITCHED_ELSEWHERE_ID = '4f9b2a3c-7d5e-4f8a-9b0c-2d3e4f5a6b7c'
+
+--- Tells the child's Claude home of a `SessionStart` of `id`, from `source`,
+--- under `token`, from another Claude Code process (pid 1).
+---
+---@param token string
+---@param id string
+---@param source string
+local function tell_session_start_elsewhere(token, id, source)
+  child.lua(
+    [[
+      local id, source, token = ...
+      require('aineo.claude').receive_session_event('SessionStart', id, source, token, nil, 1, nil)
+    ]],
+    { id, source, token }
+  )
+end
+
+T['an attach to a claimed session']['tells no session elsewhere of a new session another process starts under the token of the start it replaced'] =
+  MiniTest.new_set({ parametrize = { { 'startup' }, { 'fork' } } })
+
+T['an attach to a claimed session']['tells no session elsewhere of a new session another process starts under the token of the start it replaced']['from'] = function(
+  source
+)
+  local fake = claude.fake('claim-attach-held-new', 'ready')
+  local settings = start_own_session('claim-attach-held-new', fake)
+  local replaced_token = child.lua_get("require('aineo.claude').start_token()")
+  attach_claimed(settings, claimed_listing(), KEPT_ID)
+  claude.start_arguments(fake, 2)
+
+  tell_session_start_elsewhere(replaced_token, STARTED_ELSEWHERE_ID, source)
+  tell_session_start_elsewhere(replaced_token, SWITCHED_ELSEWHERE_ID, 'clear')
+
+  eq(
+    claude.wait_for_sessions_elsewhere(child, 1),
+    { { id = SWITCHED_ELSEWHERE_ID, source = 'clear' } }
+  )
 end
 
 T['an attach to a claimed session']['that ends by itself resumes the session it returns to in its place, telling the replacement and the switch'] = function()
