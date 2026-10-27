@@ -945,12 +945,12 @@ T['the request float']['leaves R to Neovim: there is no default request to resto
   eq(child.lua_get([[vim.fn.maparg('R', 'n')]]), '')
 end
 
-T['the request float']['sends nothing, with a word, when the cursor’s line is no longer in the buffer'] = function()
-  local gone = 'aineo: the cursor’s line is no longer in the buffer'
+T['the request float']['sends nothing, with a word, when the line asked about is gone'] = function()
+  local gone = 'aineo: the line asked about is gone'
   start(BELOW_LINE_1)
-  child.cmd('5')
+  child.cmd('3')
   ask_write()
-  child.lua([[vim.api.nvim_buf_set_lines(vim.fn.bufnr('src/code.lua'), 3, 5, false, {})]])
+  child.lua([[vim.api.nvim_buf_set_lines(vim.fn.bufnr('src/code.lua'), 2, 3, false, {})]])
   child.api.nvim_buf_set_lines(0, 0, -1, false, { 'A function that adds two values.' })
 
   press('<CR>')
@@ -958,6 +958,33 @@ T['the request float']['sends nothing, with a word, when the cursor’s line is 
   eq(messages(), { gone })
   settle()
   eq(#recorded(0), 0)
+end
+
+T['the request float']['asks below the line asked about where it stands when the request is sent'] = function()
+  start(BELOW_LINE_1)
+  child.cmd('3')
+  ask_write()
+  child.lua(
+    [[vim.api.nvim_buf_set_lines(vim.fn.bufnr('src/code.lua'), 0, 0, false, { '-- header' })]]
+  )
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { 'A function that adds two values.' })
+
+  press('<CR>')
+
+  eq(vim.split(recorded(2)[2].stdin, '\n')[1]:match('after line %d+'), 'after line 4')
+end
+
+T['the request float']['tells once, with no traceback, that claude.cmd cannot be run'] = function()
+  start(BELOW_LINE_1)
+  ask_write({ command = { '/nonexistent/aineo-claude' } })
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { 'A function that adds two values.' })
+
+  press('<CR>')
+
+  local told = explained.told(child)
+  eq(#told, 1)
+  eq(vim.startswith(told[1].message, 'aineo: claude.cmd cannot be run: '), true)
+  eq({ told[1].level, child.lua_get('vim.v.errmsg') }, { vim.log.levels.ERROR, '' })
 end
 
 return T

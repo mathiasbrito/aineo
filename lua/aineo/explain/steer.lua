@@ -33,7 +33,7 @@ local remembered = {}
 ---@field name? string what it steers: the text sent is remembered under it and starts the next float of that name; nothing is remembered when absent
 ---@field title string what the request it steers does, said in the float's title
 ---@field default? string the text to start from when none was sent under `name`, and what `R` brings back; its first line is the head that names what the request is about; the float starts empty and maps no `R` when absent
----@field on_send fun(text: string) called with the text sent, after the float is closed
+---@field on_send fun(text: string) called with the text sent, after the float is closed; an error it raises is told to the user, once
 ---@field steered_buffer integer the buffer of the code the request is about, which `close_for()` names
 
 --- The lines of `text`, the way a buffer holds them.
@@ -141,10 +141,11 @@ end
 --- when it has a `steering.default`, `R` puts it back; Insert mode is plain
 --- editing. A text of white space alone is not sent: the user is told,
 --- once, and the float stays. Sending closes the float, remembers the text
---- (`remember()`) and calls `steering.on_send` with it. Leaving the float
---- closes it with nothing sent and remembers its text as a draft, which
---- starts the next float of that name as a text sent does. While a float is
---- open, a call focuses it and opens no other.
+--- (`remember()`) and calls `steering.on_send` with it; an error it raises,
+--- as when `claude.cmd` cannot be run, is told to the user once. Leaving
+--- the float closes it with nothing sent and remembers its text as a draft,
+--- which starts the next float of that name as a text sent does. While a
+--- float is open, a call focuses it and opens no other.
 ---
 ---@param steering aineo.explain.Steering
 function M.open(steering)
@@ -180,7 +181,10 @@ function M.open(steering)
     end
     remember(steering, text)
     finish()
-    steering.on_send(text)
+    local sent, failure = pcall(steering.on_send, text)
+    if not sent then
+      vim.notify('aineo: ' .. tostring(failure), vim.log.levels.ERROR)
+    end
   end
   local function restore_default()
     vim.api.nvim_buf_set_lines(buffer, 0, -1, false, lines_of(steering.default))

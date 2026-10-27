@@ -1732,4 +1732,21 @@ T['rejecting']['keeps the issue the fix was asked for'] = function()
   eq(issues_shown(), 1)
 end
 
+T['a steered fix'] = MiniTest.new_set()
+
+T['a steered fix']['tells once, with no traceback, that claude.cmd cannot be run'] = function()
+  start()
+  child.cmd('2')
+  ask_fix({ steered = true, command = { '/nonexistent/aineo-claude' } })
+
+  child.type_keys('<CR>')
+
+  local told = vim.tbl_filter(function(entry)
+    return vim.startswith(entry.message, 'aineo: claude.cmd')
+  end, explained.told(child))
+  eq(#told, 1)
+  eq(vim.startswith(told[1].message, 'aineo: claude.cmd cannot be run: '), true)
+  eq({ told[1].level, child.lua_get('vim.v.errmsg') }, { vim.log.levels.ERROR, '' })
+end
+
 return T
