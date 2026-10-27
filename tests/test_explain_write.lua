@@ -979,12 +979,15 @@ T['the request float']['tells once, with no traceback, that claude.cmd cannot be
   ask_write({ command = { '/nonexistent/aineo-claude' } })
   child.api.nvim_buf_set_lines(0, 0, -1, false, { 'A function that adds two values.' })
 
-  press('<CR>')
+  child.lua([[_G.sent = pcall(vim.cmd, 'execute "normal \\<CR>"')]])
 
   local told = explained.told(child)
   eq(#told, 1)
   eq(vim.startswith(told[1].message, 'aineo: claude.cmd cannot be run: '), true)
-  eq({ told[1].level, child.lua_get('vim.v.errmsg') }, { vim.log.levels.ERROR, '' })
+  eq(
+    { told[1].level, child.lua_get('vim.v.errmsg'), child.lua_get('_G.sent') },
+    { vim.log.levels.ERROR, '', true }
+  )
 end
 
 --- Sets, in the child's current buffer, the mark `a` and an extmark at
