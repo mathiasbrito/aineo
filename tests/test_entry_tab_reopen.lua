@@ -384,14 +384,14 @@ T['a claim']['the user ends with :Aineo claim is no longer in the folder’s lis
   eq(list, { sessions = { own }, current = 1 })
 end
 
-T['a claim']['of a session another Claude Code process started under the tab’s token is kept in the folder’s list'] = function()
+T['a claim']['of a session another Claude Code process switched to under the tab’s token is kept in the folder’s list'] = function()
   local state = tabs.open_first_tab(child, 'reopen-claim-fork')
   local own = tabs.session_of_tab(state, child, tabs.FIRST_TAB)
 
   child.lua(
     [[
       local claude = require('aineo.claude')
-      claude.receive_session_event('SessionStart', ..., 'startup', claude.start_token(), nil, 1, nil)
+      claude.receive_session_event('SessionStart', ..., 'resume', claude.start_token(), nil, 1, nil)
     ]],
     { THIRD }
   )
