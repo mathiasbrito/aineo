@@ -134,8 +134,8 @@ T['writing for the selected lines']['asks at once, with no float, the selected l
 
   ask_write({ range = { 3, 3 } })
 
-  local stdin = vim.split(recorded(2)[2].stdin, '\n')
   eq(in_a_float(), false)
+  local stdin = vim.split(recorded(2)[2].stdin, '\n')
   eq(vim.list_slice(stdin, 1, 2), {
     'Write code in the file src/code.lua (language: lua) for the request lines 3 to 3 hold,'
       .. ' as numbered below: those lines are the request, to be replaced by the code that fulfils it.',
@@ -727,6 +727,7 @@ end
 
 T['one proposal for each buffer']['is the fix once asked while code is written: that request is stopped'] = function()
   start_with_an_issue()
+  explained.answer_with(child, REPLACING_THE_REQUEST)
   child.lua('vim.env.AINEO_FAKE_CLAUDE_PRINT_MS = "1500"')
   ask_write({ range = { 3, 3 } })
   local while_writing = writing_marks()
