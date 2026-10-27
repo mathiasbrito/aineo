@@ -391,13 +391,13 @@ T[':Aineo claim']['with no word, from a claim, shows the own session’s draft, 
   })
 end
 
-T['a session another Claude Code process starts'] = MiniTest.new_set()
+T['a session another Claude Code process switches to'] = MiniTest.new_set()
 
---- A session id of the form Claude Code gives, for a fork of the tab's own
---- session.
+--- A session id of the form Claude Code gives, for a session another
+--- process switches to from the tab's own session's conversation.
 local FORK = '7d1f0b9e-3c2a-4e5f-9a8b-6c4d2e1f0a3b'
 
-T['a session another Claude Code process starts']['under the tab’s start token, while a claim of another session holds, starts from its own draft and carries nothing'] = function()
+T['a session another Claude Code process switches to']['under the tab’s start token, while a claim of another session holds, starts from its own draft and carries nothing'] = function()
   local state = open_until_ready('entry-claim-input-fork-claimed')
   leave_draft(state, CLAIMED, { CLAIMED_DRAFT })
   leave_draft(state, FORK, { 'Kept for the fork' })
@@ -407,7 +407,7 @@ T['a session another Claude Code process starts']['under the tab’s start token
   child.lua(
     [[
       local claude = require('aineo.claude')
-      claude.receive_session_event('SessionStart', ..., 'startup', claude.start_token(), nil, 1, nil)
+      claude.receive_session_event('SessionStart', ..., 'resume', claude.start_token(), nil, 1, nil)
     ]],
     { FORK }
   )
@@ -425,7 +425,7 @@ T['a session another Claude Code process starts']['under the tab’s start token
   })
 end
 
-T['a session another Claude Code process starts']['under the tab’s start token takes Input’s text in place of its draft, which the session left keeps, asking nothing'] = function()
+T['a session another Claude Code process switches to']['under the tab’s start token takes Input’s text in place of its draft, which the session left keeps, asking nothing'] = function()
   local state, own = open_until_ready('entry-claim-input-fork')
   leave_draft(state, CLAIMED, { CLAIMED_DRAFT })
   entry.set_input(child, { TYPED })
@@ -434,7 +434,7 @@ T['a session another Claude Code process starts']['under the tab’s start token
   child.lua(
     [[
       local claude = require('aineo.claude')
-      claude.receive_session_event('SessionStart', ..., 'startup', claude.start_token(), nil, 1, nil)
+      claude.receive_session_event('SessionStart', ..., 'resume', claude.start_token(), nil, 1, nil)
     ]],
     { CLAIMED }
   )
@@ -449,6 +449,39 @@ T['a session another Claude Code process starts']['under the tab’s start token
     input = { TYPED },
     claimed = { TYPED },
     own = { TYPED },
+  })
+end
+
+T['a new session another Claude Code process starts'] =
+  MiniTest.new_set({ parametrize = { { 'startup' }, { 'fork' } } })
+
+T['a new session another Claude Code process starts']['under the tab’s start token is not followed, nor is Input’s text carried to it'] = function(
+  source
+)
+  local state = open_until_ready('entry-claim-input-new-elsewhere')
+  leave_draft(state, CLAIMED, { CLAIMED_DRAFT })
+  leave_draft(state, FORK, { 'Kept for the fork' })
+  entry.set_input(child, { TYPED })
+
+  child.lua(
+    [[
+      local claude = require('aineo.claude')
+      local new, switched, source = ...
+      claude.receive_session_event('SessionStart', new, source, claude.start_token(), nil, 1, nil)
+      claude.receive_session_event('SessionStart', switched, 'resume', claude.start_token(), nil, 1, nil)
+    ]],
+    { CLAIMED, FORK, source }
+  )
+  vim.wait(claude_session.PATIENCE_MS, function()
+    return vim.deep_equal(draft_lines(state, FORK), { TYPED })
+  end, 20)
+
+  eq({
+    new = draft_lines(state, CLAIMED),
+    switched = draft_lines(state, FORK),
+  }, {
+    new = { CLAIMED_DRAFT },
+    switched = { TYPED },
   })
 end
 
