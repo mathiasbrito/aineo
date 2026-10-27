@@ -1749,4 +1749,58 @@ T['a steered fix']['tells once, with no traceback, that claude.cmd cannot be run
   eq({ told[1].level, child.lua_get('vim.v.errmsg') }, { vim.log.levels.ERROR, '' })
 end
 
+--- Sets, in the child's current buffer, the mark `a` and an extmark at
+--- column 5 of line `line`, from 1.
+---
+---@param line integer
+local function mark_line(line)
+  child.lua(
+    [[
+    local line = ...
+    vim.api.nvim_buf_set_mark(0, 'a', line, 5, {})
+    _G.kept_mark = vim.api.nvim_buf_set_extmark(
+      0, vim.api.nvim_create_namespace('test_kept'), line - 1, 5, {})
+  ]],
+    { line }
+  )
+end
+
+--- Where the mark `a` and the extmark `mark_line()` set stand now: the
+--- mark's line and column, and the extmark's row, from 0, and column.
+---
+---@return integer[]
+local function marks_now()
+  return child.lua_get([[(function()
+    local mark = vim.api.nvim_buf_get_mark(0, 'a')
+    local extmark = vim.api.nvim_buf_get_extmark_by_id(
+      0, vim.api.nvim_create_namespace('test_kept'), _G.kept_mark, {})
+    return { mark[1], mark[2], extmark[1], extmark[2] }
+  end)()]])
+end
+
+T['accepting an edit that keeps its old lines'] = MiniTest.new_set()
+
+T['accepting an edit that keeps its old lines']['leaves those lines untouched: their marks stay'] = function()
+  start()
+  child.cmd('2')
+  propose({
+    summary = 'Note.',
+    edits = {
+      {
+        line = 2,
+        last = 2,
+        old = { '  return a + b' },
+        new = { '  return a + b', '  -- noted' },
+        why = 'Notes.',
+      },
+    },
+  })
+  mark_line(2)
+
+  child.lua('require("aineo.explain").accept_fix(vim.api.nvim_get_current_buf())')
+
+  eq(child.api.nvim_buf_get_lines(0, 1, 3, false), { '  return a + b', '  -- noted' })
+  eq(marks_now(), { 2, 5, 1, 5 })
+end
+
 return T

@@ -987,4 +987,44 @@ T['the request float']['tells once, with no traceback, that claude.cmd cannot be
   eq({ told[1].level, child.lua_get('vim.v.errmsg') }, { vim.log.levels.ERROR, '' })
 end
 
+--- Sets, in the child's current buffer, the mark `a` and an extmark at
+--- column 5 of line `line`, from 1.
+---
+---@param line integer
+local function mark_line(line)
+  child.lua(
+    [[
+    local line = ...
+    vim.api.nvim_buf_set_mark(0, 'a', line, 5, {})
+    _G.kept_mark = vim.api.nvim_buf_set_extmark(
+      0, vim.api.nvim_create_namespace('test_kept'), line - 1, 5, {})
+  ]],
+    { line }
+  )
+end
+
+--- Where the mark `a` and the extmark `mark_line()` set stand now: the
+--- mark's line and column, and the extmark's row, from 0, and column.
+---
+---@return integer[]
+local function marks_now()
+  return child.lua_get([[(function()
+    local mark = vim.api.nvim_buf_get_mark(0, 'a')
+    local extmark = vim.api.nvim_buf_get_extmark_by_id(
+      0, vim.api.nvim_create_namespace('test_kept'), _G.kept_mark, {})
+    return { mark[1], mark[2], extmark[1], extmark[2] }
+  end)()]])
+end
+
+T['writing below the cursor']['leaves the cursor’s line itself untouched on accept: its marks stay where they were'] = function()
+  start(BELOW_LINE_1)
+  send_request(1, { 'A function that adds two values.' })
+  wait_for_preview()
+  mark_line(1)
+
+  child.lua("require('aineo.explain').accept_fix(vim.api.nvim_get_current_buf())")
+
+  eq(marks_now(), { 1, 5, 0, 5 })
+end
+
 return T
