@@ -604,6 +604,54 @@ T['Claude Code']['warns of a --settings in claude.cmd that cannot take aineo’s
   })
 end
 
+T['agent view in tabs'] = MiniTest.new_set()
+
+T['agent view in tabs']['reports that aineo’s tabs run Claude Code with agent view turned off'] = function()
+  start_with({ autostart = false })
+
+  local report = health.report(child)
+
+  eq(health.section(report, 'Agent view in tabs'), {
+    "- ✅ OK aineo's tabs run Claude Code with agent view turned off: open a conversation that runs in the background with \\S, or claude attach outside aineo",
+  })
+end
+
+T['agent view in tabs']['reports agent view turned off when the --settings of claude.cmd take aineo’s settings'] = function()
+  local file = vim.fs.joinpath(fixture.directory('health-agent-view-settings'), 'settings.json')
+  vim.fn.writefile({ '{"model":"haiku"}' }, file)
+  start_with({ autostart = false, claude = { cmd = { HEALTH_CLAUDE, '--settings', file } } })
+
+  local report = health.report(child)
+
+  eq(vim.startswith(health.section(report, 'Agent view in tabs')[1], '- ✅ OK'), true)
+end
+
+T['agent view in tabs']['warns that agent view stays on when the --settings of claude.cmd cannot take aineo’s settings'] = function()
+  start_with({
+    autostart = false,
+    claude = { cmd = { HEALTH_CLAUDE, '--settings', SETTINGS_MISSING } },
+  })
+
+  local report = health.report(child)
+
+  eq(health.section(report, 'Agent view in tabs'), {
+    "- ⚠️ WARNING agent view stays on in aineo's tabs: claude.cmd's --settings cannot take aineo's settings",
+  })
+  eq(health.advice(report, 'Agent view in tabs'), {
+    "In a tab, /resume of a conversation that runs in the background then moves the tab's conversation to the background, and aineo does not follow it: :help |aineo-agent-view|",
+  })
+end
+
+T['agent view in tabs']['is not checked while the configuration is wrong'] = function()
+  start_with({ autostart = false, claude = { cmd = 'claude' } })
+
+  local report = health.report(child)
+
+  eq(health.section(report, 'Agent view in tabs'), {
+    '- agent view in tabs is not checked while the configuration is wrong',
+  })
+end
+
 T['the shell terminal'] = MiniTest.new_set()
 
 --- Starts `child` afresh with autostart off and 'shell' set to `shell`.
