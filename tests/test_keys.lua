@@ -33,7 +33,7 @@ T['the groups']['are the sheet’s groups, in its order'] = function()
     'Changes and diff',
     'Run and terminal',
     'Explorer',
-    'Explain and fix',
+    'Explain, fix and write',
     'Office and zoom',
     'In the changes pane',
     'In the explorer',
@@ -101,7 +101,7 @@ T['the sheet']['gathers the keys by group, in the order of the groups'] = functi
     'Changes and diff',
     'Run and terminal',
     'Explorer',
-    'Explain and fix',
+    'Explain, fix and write',
     'Office and zoom',
     'In the changes pane',
     'In the explorer',
@@ -141,7 +141,7 @@ T['the sheet']['holds each row once, in its group and its section'] = function()
   eq(held, declared)
 end
 
-T['the sheet']['has one group for explaining and fixing, in six sections in this order'] = function()
+T['the sheet']['has one group for explaining, fixing and writing, in seven sections in this order'] = function()
   local sheet = require('aineo.keys').sheet()
 
   local explain = vim.iter(sheet):find(function(group)
@@ -155,6 +155,7 @@ T['the sheet']['has one group for explaining and fixing, in six sections in this
       'Explain',
       'Issues',
       'Fix',
+      'Write',
       'While a fix shows',
       'In the steering float',
       'Clean',
@@ -184,6 +185,7 @@ T['the sheet']['lists the keys of each section in the order of the ruling'] = Mi
     { 'Explain', { 'v', 'V', 'VV' } },
     { 'Issues', { 'vi', 'VI', 'VVI', 'vm', '(send)', ']v', '[v' } },
     { 'Fix', { 'Vf', 'VVf' } },
+    { 'Write', { 'w', 'W' } },
     { 'While a fix shows', { 'Va', 'Vr', 'Vd' } },
     { 'In the steering float', { '<CR>', 'q', 'R' } },
     { 'Clean', { 'vc' } },
