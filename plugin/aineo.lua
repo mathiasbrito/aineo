@@ -51,6 +51,7 @@ local SUBCOMMANDS = {
   'find',
   'zoom',
   'explain',
+  'write',
   'office',
   'cheatsheet',
 }
@@ -92,7 +93,8 @@ end
 --- and `tab` takes `new`, `close` or the number of a tab page to move to; only
 --- the numbers 1 to 9 have a `<Plug>` mapping, and `:Aineo tab` takes any
 --- number (`aineo.entry`'s `jump_to_tab()`); `diff` takes `close`, and `zoom`
---- takes `full` (`ACTS_WITHOUT_A_WORD`), and `explain` takes `EXPLAIN_WORDS`.
+--- takes `full` (`ACTS_WITHOUT_A_WORD`), `explain` takes `EXPLAIN_WORDS`,
+--- and `write` takes `deep`, which lets Claude Code read the project.
 local SUBCOMMAND_WORDS = {
   pane = { 'agent', 'changes', 'terminal', 'run', 'explorer' },
   run = { 'shell' },
@@ -100,12 +102,15 @@ local SUBCOMMAND_WORDS = {
   diff = { 'close' },
   zoom = { 'full' },
   explain = EXPLAIN_WORDS,
+  write = { 'deep' },
 }
 
---- The subcommand that takes a range, the lines whose code it explains: the
---- others refuse one (`:Aineo` callback). It is no action of `ACTION_ARGUMENTS`:
---- it has its own branch, and its own `<Plug>` mappings.
-local RANGE_SUBCOMMAND = 'explain'
+--- The subcommands that take a range: `explain`, the lines whose code it
+--- explains, and `write`, the lines that hold the request code is written
+--- for; the others refuse one (`:Aineo` callback). They are no actions of
+--- `ACTION_ARGUMENTS`: each has its own branch, and its own `<Plug>`
+--- mappings.
+local RANGE_SUBCOMMANDS = { explain = true, write = true }
 
 --- The subcommands that take words (`SUBCOMMAND_WORDS`) and run an action
 --- without one too: `:Aineo zoom` zooms the right column's window, and
@@ -185,7 +190,7 @@ local function usage(words)
 end
 
 --- `:Aineo`'s arguments that each run an action, in `SUBCOMMANDS`' order,
---- `RANGE_SUBCOMMAND` left out:
+--- `RANGE_SUBCOMMANDS` left out:
 --- each subcommand alone, or followed by each of its words
 --- (`SUBCOMMAND_WORDS`), as `pane agent`; a subcommand that runs without a
 --- word too (`ACTS_WITHOUT_A_WORD`) has both. Built with plain loops, so that
@@ -193,7 +198,7 @@ end
 local ACTION_ARGUMENTS = {}
 for _, subcommand in ipairs(SUBCOMMANDS) do
   local words = SUBCOMMAND_WORDS[subcommand]
-  if subcommand ~= RANGE_SUBCOMMAND then
+  if not RANGE_SUBCOMMANDS[subcommand] then
     if not words or ACTS_WITHOUT_A_WORD[subcommand] then
       table.insert(ACTION_ARGUMENTS, subcommand)
     end
@@ -248,10 +253,10 @@ local function offered_words(typed)
   then
     return require('aineo.entry').office_pack_names()
   end
-  if #typed == 2 and typed[2] ~= RANGE_SUBCOMMAND then
+  if #typed == 2 and typed[2] ~= 'explain' then
     return SUBCOMMAND_WORDS[typed[2]] or {}
   end
-  if typed[2] == RANGE_SUBCOMMAND then
+  if typed[2] == 'explain' then
     return explain_words_after(vim.list_slice(typed, 3))
   end
   return {}
@@ -428,6 +433,29 @@ for words, order in pairs(FIX_ORDERS) do
       require('aineo.entry').propose_fix(order)
     end)
   end, { desc = 'aineo: ' .. words })
+end
+
+--- What writing code asks for, by the words of its `<Plug>` mappings after
+--- `aineo-`, in Normal mode, for a request typed in a float, the code below
+--- the cursor's line, and in Visual mode, for the request the selected lines
+--- hold: from the file alone or reading the project (`aineo.entry`'s
+--- `write()` and `write_selection()`).
+local WRITE_ORDERS = {
+  write = { deep = false },
+  ['write-deep'] = { deep = true },
+}
+
+for words, order in pairs(WRITE_ORDERS) do
+  vim.keymap.set('n', ('<Plug>(aineo-%s)'):format(words), function()
+    run(function()
+      require('aineo.entry').write(order)
+    end)
+  end, { desc = 'aineo: ' .. words })
+  vim.keymap.set('x', ('<Plug>(aineo-%s)'):format(words), function()
+    run(function()
+      require('aineo.entry').write_selection(order)
+    end)
+  end, { desc = 'aineo: ' .. words .. ' for the selected lines' })
 end
 
 --- The `<Plug>` mapping that returns the current buffer to how it behaved
@@ -754,8 +782,8 @@ else
 end
 
 --- What `:Aineo` tells the user when it is given a range for a subcommand
---- but `RANGE_SUBCOMMAND`.
-local RANGE_REFUSAL = 'aineo: only :Aineo ' .. RANGE_SUBCOMMAND .. ' takes a range'
+--- that takes none (`RANGE_SUBCOMMANDS`).
+local RANGE_REFUSAL = 'aineo: only :Aineo explain and :Aineo write take a range'
 
 --- Does what `:Aineo explain` does with `words`, the words after it, and
 --- `range`, the lines given, or `nil` for the whole buffer: `tools` explains
@@ -782,7 +810,7 @@ local function explain(words, range)
     table.remove(rest, 1)
   end
   if not clears and #rest > 0 then
-    vim.notify(usage({ RANGE_SUBCOMMAND }), vim.log.levels.ERROR)
+    vim.notify(usage({ 'explain' }), vim.log.levels.ERROR)
     return
   end
   run(function()
@@ -794,14 +822,39 @@ local function explain(words, range)
   end)
 end
 
+--- Does what `:Aineo write` does with `words`, the words after it, and
+--- `range`, the lines given, or `nil` for none: writes code for the request
+--- the lines of `range` hold, else for one typed in a float, below the
+--- cursor's line, from the file alone, or reading the project after `deep`
+--- (`aineo.entry`'s `write()`). Any other word is told as `:Aineo` tells its
+--- usage.
+---
+---@param words string[]
+---@param range integer[]|nil
+local function write(words, range)
+  local deep = #words == 1 and words[1] == 'deep'
+  if #words > 0 and not deep then
+    vim.notify(usage({ 'write' }), vim.log.levels.ERROR)
+    return
+  end
+  run(function()
+    require('aineo.entry').write({ deep = deep, range = range })
+  end)
+end
+
+--- What `:Aineo` does for each subcommand that takes a range
+--- (`RANGE_SUBCOMMANDS`), given the words after it and the range.
+local RANGE_ACTIONS = { explain = explain, write = write }
+
 vim.api.nvim_create_user_command('Aineo', function(command)
-  if command.range > 0 and command.fargs[1] ~= RANGE_SUBCOMMAND then
+  local range_action = RANGE_ACTIONS[command.fargs[1]]
+  if command.range > 0 and not range_action then
     vim.notify(RANGE_REFUSAL, vim.log.levels.ERROR)
     return
   end
-  if command.fargs[1] == RANGE_SUBCOMMAND then
+  if range_action then
     local range = command.range > 0 and { command.line1, command.line2 } or nil
-    explain(vim.list_slice(command.fargs, 2), range)
+    range_action(vim.list_slice(command.fargs, 2), range)
     return
   end
   local argument = table.concat(command.fargs, ' ')
@@ -834,5 +887,5 @@ end, {
   range = true,
   bar = true,
   complete = complete_subcommand,
-  desc = 'aineo: send, open, report, input, claude, claude-numbers, sessions, new, pane agent|changes|terminal|run|explorer, run shell, claim [id], tab new|close|{n}, diff close, find, zoom or zoom full, [range]explain [issues] [tools] [new]|clear, office [check|states|preview [name]|new name|pack [name]|reset], cheatsheet',
+  desc = 'aineo: send, open, report, input, claude, claude-numbers, sessions, new, pane agent|changes|terminal|run|explorer, run shell, claim [id], tab new|close|{n}, diff close, find, zoom or zoom full, [range]explain [issues] [tools] [new]|clear, [range]write [deep], office [check|states|preview [name]|new name|pack [name]|reset], cheatsheet',
 })

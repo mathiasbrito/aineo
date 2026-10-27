@@ -1,7 +1,8 @@
---- What `\v`, `\V`, `\vi`, `\VI`, `\VV`, `\VVI`, `\Vf`, `\VVf`, their `<Plug>`
---- mappings, the keys of a fix shown and `:Aineo explain` do: hand the
---- current buffer, a file's, to the explain home (`aineo.explain`), with the
---- Claude Code command and the settings of the configuration.
+--- What `\v`, `\V`, `\vi`, `\VI`, `\VV`, `\VVI`, `\Vf`, `\VVf`, `\w`, `\W`,
+--- their `<Plug>` mappings, the keys of a fix shown, `:Aineo explain` and
+--- `:Aineo write` do: hand the current buffer, a file's, to the explain home
+--- (`aineo.explain`), with the Claude Code command and the settings of the
+--- configuration.
 
 local M = {}
 
@@ -96,6 +97,62 @@ function M.propose_fix(order)
       steered = '<Plug>(aineo-explain-fix-steered)',
     },
   })
+end
+
+--- How code is asked for.
+---@class aineo.entry.WriteOrder
+---@field deep boolean whether Claude Code may read the project, with `write.deep_model`, `write.deep_effort` and `write.deep_timeout_ms`; else `write.model` and `write.timeout_ms`, from the file alone
+---@field range? integer[] the first and last lines that hold the request, from 1; the request is typed in a float, the code going below the cursor's line, when absent
+
+--- What `\w`, `\W`, their `<Plug>` mappings and `:Aineo write` do: ask the
+--- explain home to write code in the current buffer, a file's
+--- (`aineo.explain`'s `propose_write()`), for the request the lines of
+--- `order.range` hold, or for one typed in a float, the code going below
+--- the cursor's line; with `claude.cmd` and `write.model`, from the file
+--- alone, or, for a deep order, `write.deep_model` at `write.deep_effort`
+--- with the read-only tools. While the code shows, the prefix followed by
+--- `Va`, `Vr` and `Vd` accept it, reject it and show its diff, as for a
+--- fix, unless the prefix is `false`; what asks again is told as the prefix
+--- followed by `w` or `W`, or as their `<Plug>` mapping.
+---
+--- Raises an error when the current buffer holds no file, and the
+--- configuration's or the explain home's errors.
+---
+---@param order aineo.entry.WriteOrder
+function M.write(order)
+  local buffer = vim.api.nvim_get_current_buf()
+  if not holds_a_file(buffer) then
+    error('code is written in the buffer of a file', 0)
+  end
+  local config = resolved_config()
+  local settings = config.write
+  local prefix = config.prefix
+  local plug = order.deep and '<Plug>(aineo-write-deep)' or '<Plug>(aineo-write)'
+  require('aineo.explain').propose_write({
+    buffer = buffer,
+    window = vim.api.nvim_get_current_win(),
+    line = vim.fn.line('.'),
+    range = order.range,
+    tools = order.deep,
+    command = config.claude.cmd,
+    model = order.deep and settings.deep_model or settings.model,
+    effort = order.deep and settings.deep_effort or nil,
+    timeout_ms = order.deep and settings.deep_timeout_ms or settings.timeout_ms,
+    keys = prefix and { accept = prefix .. 'Va', reject = prefix .. 'Vr', diff = prefix .. 'Vd' }
+      or nil,
+    ask_key = prefix and prefix .. (order.deep and 'W' or 'w') or plug,
+  })
+end
+
+--- What `\w` and `\W` do in Visual mode: leave Visual mode, then write code
+--- for the request the lines the selection spans hold, as `write()` does
+--- with `order`'s depth.
+---
+---@param order aineo.entry.WriteOrder
+function M.write_selection(order)
+  local first, last = vim.fn.line('v'), vim.fn.line('.')
+  vim.cmd.normal({ args = { vim.keycode('<Esc>') }, bang = true })
+  M.write({ deep = order.deep, range = { math.min(first, last), math.max(first, last) } })
 end
 
 --- What `<Plug>(aineo-fix-accept)` does: accepts the fix the current buffer

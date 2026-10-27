@@ -775,6 +775,8 @@ T['the prefix mappings']['are reported in place when aineo mapped each key'] = f
     '- ✅ OK \\vm runs <Plug>(aineo-explain-mark)',
     '- ✅ OK \\Vf runs <Plug>(aineo-explain-fix)',
     '- ✅ OK \\VVf runs <Plug>(aineo-explain-fix-steered)',
+    '- ✅ OK \\w runs <Plug>(aineo-write)',
+    '- ✅ OK \\W runs <Plug>(aineo-write-deep)',
     '- ✅ OK \\vc runs <Plug>(aineo-explain-clean)',
     '- ✅ OK \\s in Visual mode runs <Plug>(aineo-send)',
     '- ✅ OK \\v in Visual mode runs <Plug>(aineo-explain)',
@@ -784,6 +786,8 @@ T['the prefix mappings']['are reported in place when aineo mapped each key'] = f
     '- ✅ OK \\VV in Visual mode runs <Plug>(aineo-explain-deep)',
     '- ✅ OK \\VVI in Visual mode runs <Plug>(aineo-explain-deep-issues)',
     '- ✅ OK \\vm in Visual mode runs <Plug>(aineo-explain-mark)',
+    '- ✅ OK \\w in Visual mode runs <Plug>(aineo-write)',
+    '- ✅ OK \\W in Visual mode runs <Plug>(aineo-write-deep)',
     LEADER_WARNING,
   })
 end
@@ -793,7 +797,7 @@ T['the prefix mappings']['warn that the leader, unset and so a backslash, is the
 
   local report = health.report(child)
 
-  eq(health.section(report, 'Prefix mappings')[50], LEADER_WARNING)
+  eq(health.section(report, 'Prefix mappings')[54], LEADER_WARNING)
   eq(health.advice(report, 'Prefix mappings'), { LEADER_ADVICE })
 end
 
@@ -810,7 +814,7 @@ T['the prefix mappings']['warn that the leader, a Number, is the prefix'] = func
 
   local report = health.report(child)
 
-  eq(health.section(report, 'Prefix mappings')[50], '- ⚠️ WARNING the leader is the prefix, 1')
+  eq(health.section(report, 'Prefix mappings')[54], '- ⚠️ WARNING the leader is the prefix, 1')
 end
 
 T['the prefix mappings']['warn that a leader longer than 48 bytes, which Neovim maps as a backslash, is the prefix'] = function()
@@ -826,7 +830,7 @@ T['the prefix mappings']['warn that a leader longer than 48 bytes, which Neovim 
 
   local report = health.report(child)
 
-  eq(health.section(report, 'Prefix mappings')[50], LEADER_WARNING)
+  eq(health.section(report, 'Prefix mappings')[54], LEADER_WARNING)
 end
 
 T['the prefix mappings']['take a leader of 48 bytes as the characters Neovim maps it to'] = function()
@@ -842,7 +846,7 @@ T['the prefix mappings']['take a leader of 48 bytes as the characters Neovim map
 
   local report = health.report(child)
 
-  eq(#health.section(report, 'Prefix mappings'), 49)
+  eq(#health.section(report, 'Prefix mappings'), 53)
 end
 
 T['the prefix mappings']['warn that the leader, the same key as a prefix in key notation, is the prefix'] = function()
@@ -859,7 +863,7 @@ T['the prefix mappings']['warn that the leader, the same key as a prefix in key 
   local report = health.report(child)
 
   eq(
-    health.section(report, 'Prefix mappings')[50],
+    health.section(report, 'Prefix mappings')[54],
     '- ⚠️ WARNING the leader is the prefix, <space>'
   )
 end
@@ -877,7 +881,7 @@ T['the prefix mappings']['take a leader written in key notation as the character
 
   local report = health.report(child)
 
-  eq(#health.section(report, 'Prefix mappings'), 49)
+  eq(#health.section(report, 'Prefix mappings'), 53)
 end
 
 T['the prefix mappings']['report the keys plugin/aineo.lua mapped to aineo, no more and no fewer'] = function()
@@ -935,6 +939,8 @@ T['the prefix mappings']['warn that the local leader, the same key as a prefix i
     '- ✅ OK <space>vm runs <Plug>(aineo-explain-mark)',
     '- ✅ OK <space>Vf runs <Plug>(aineo-explain-fix)',
     '- ✅ OK <space>VVf runs <Plug>(aineo-explain-fix-steered)',
+    '- ✅ OK <space>w runs <Plug>(aineo-write)',
+    '- ✅ OK <space>W runs <Plug>(aineo-write-deep)',
     '- ✅ OK <space>vc runs <Plug>(aineo-explain-clean)',
     '- ✅ OK <space>s in Visual mode runs <Plug>(aineo-send)',
     '- ✅ OK <space>v in Visual mode runs <Plug>(aineo-explain)',
@@ -944,6 +950,8 @@ T['the prefix mappings']['warn that the local leader, the same key as a prefix i
     '- ✅ OK <space>VV in Visual mode runs <Plug>(aineo-explain-deep)',
     '- ✅ OK <space>VVI in Visual mode runs <Plug>(aineo-explain-deep-issues)',
     '- ✅ OK <space>vm in Visual mode runs <Plug>(aineo-explain-mark)',
+    '- ✅ OK <space>w in Visual mode runs <Plug>(aineo-write)',
+    '- ✅ OK <space>W in Visual mode runs <Plug>(aineo-write-deep)',
     '- ⚠️ WARNING the local leader is the prefix, <space>',
   })
 end
@@ -994,6 +1002,8 @@ T['the prefix mappings']['take a local leader written in key notation as the cha
     '- ✅ OK <Space>vm runs <Plug>(aineo-explain-mark)',
     '- ✅ OK <Space>Vf runs <Plug>(aineo-explain-fix)',
     '- ✅ OK <Space>VVf runs <Plug>(aineo-explain-fix-steered)',
+    '- ✅ OK <Space>w runs <Plug>(aineo-write)',
+    '- ✅ OK <Space>W runs <Plug>(aineo-write-deep)',
     '- ✅ OK <Space>vc runs <Plug>(aineo-explain-clean)',
     '- ✅ OK <Space>s in Visual mode runs <Plug>(aineo-send)',
     '- ✅ OK <Space>v in Visual mode runs <Plug>(aineo-explain)',
@@ -1003,6 +1013,8 @@ T['the prefix mappings']['take a local leader written in key notation as the cha
     '- ✅ OK <Space>VV in Visual mode runs <Plug>(aineo-explain-deep)',
     '- ✅ OK <Space>VVI in Visual mode runs <Plug>(aineo-explain-deep-issues)',
     '- ✅ OK <Space>vm in Visual mode runs <Plug>(aineo-explain-mark)',
+    '- ✅ OK <Space>w in Visual mode runs <Plug>(aineo-write)',
+    '- ✅ OK <Space>W in Visual mode runs <Plug>(aineo-write-deep)',
   })
 end
 
@@ -1018,7 +1030,7 @@ T['the prefix mappings']['warn that the local leader, a Number, is the prefix'] 
   local report = health.report(child)
 
   eq(
-    health.section(report, 'Prefix mappings')[50],
+    health.section(report, 'Prefix mappings')[54],
     '- ⚠️ WARNING the local leader is the prefix, 1'
   )
   eq(#health.section(report, 'Limits'), 1)
@@ -1038,7 +1050,7 @@ T['the prefix mappings']['warn that a List local leader, which Neovim maps as a 
   local report = health.report(child)
 
   eq(
-    health.section(report, 'Prefix mappings')[50],
+    health.section(report, 'Prefix mappings')[54],
     '- ⚠️ WARNING the local leader is the prefix, \\'
   )
   eq(#health.section(report, 'Limits'), 1)
@@ -1166,6 +1178,8 @@ T['the prefix mappings']['warn of a key the user mapped, naming what it runs'] =
     '- ✅ OK \\vm runs <Plug>(aineo-explain-mark)',
     '- ✅ OK \\Vf runs <Plug>(aineo-explain-fix)',
     '- ✅ OK \\VVf runs <Plug>(aineo-explain-fix-steered)',
+    '- ✅ OK \\w runs <Plug>(aineo-write)',
+    '- ✅ OK \\W runs <Plug>(aineo-write-deep)',
     '- ✅ OK \\vc runs <Plug>(aineo-explain-clean)',
     '- ✅ OK \\s in Visual mode runs <Plug>(aineo-send)',
     '- ✅ OK \\v in Visual mode runs <Plug>(aineo-explain)',
@@ -1175,6 +1189,8 @@ T['the prefix mappings']['warn of a key the user mapped, naming what it runs'] =
     '- ✅ OK \\VV in Visual mode runs <Plug>(aineo-explain-deep)',
     '- ✅ OK \\VVI in Visual mode runs <Plug>(aineo-explain-deep-issues)',
     '- ✅ OK \\vm in Visual mode runs <Plug>(aineo-explain-mark)',
+    '- ✅ OK \\w in Visual mode runs <Plug>(aineo-write)',
+    '- ✅ OK \\W in Visual mode runs <Plug>(aineo-write-deep)',
     LEADER_WARNING,
   })
   eq(health.advice(report, 'Prefix mappings'), {
@@ -1198,7 +1214,7 @@ T['the prefix mappings']['warn of a Visual-mode key the user mapped, saying Visu
 
   eq({
     normal = health.section(report, 'Prefix mappings')[1],
-    visual = health.section(report, 'Prefix mappings')[42],
+    visual = health.section(report, 'Prefix mappings')[44],
   }, {
     normal = '- ✅ OK \\s runs <Plug>(aineo-send)',
     visual = '- ⚠️ WARNING \\s in Visual mode runs \':echo "mine"<CR>\', not <Plug>(aineo-send)',
@@ -1290,6 +1306,8 @@ T['the prefix mappings']['warn of each key nobody mapped, as after setup() chang
     '- ⚠️ WARNING ,vm is not mapped',
     '- ⚠️ WARNING ,Vf is not mapped',
     '- ⚠️ WARNING ,VVf is not mapped',
+    '- ⚠️ WARNING ,w is not mapped',
+    '- ⚠️ WARNING ,W is not mapped',
     '- ⚠️ WARNING ,vc is not mapped',
     '- ⚠️ WARNING ,s in Visual mode is not mapped',
     '- ⚠️ WARNING ,v in Visual mode is not mapped',
@@ -1299,6 +1317,8 @@ T['the prefix mappings']['warn of each key nobody mapped, as after setup() chang
     '- ⚠️ WARNING ,VV in Visual mode is not mapped',
     '- ⚠️ WARNING ,VVI in Visual mode is not mapped',
     '- ⚠️ WARNING ,vm in Visual mode is not mapped',
+    '- ⚠️ WARNING ,w in Visual mode is not mapped',
+    '- ⚠️ WARNING ,W in Visual mode is not mapped',
   })
   eq(
     health.advice(report, 'Prefix mappings')[1],
@@ -1312,7 +1332,7 @@ T['the prefix mappings']['warn that the local leader, unset and so a backslash, 
   local report = health.report(child)
 
   eq(
-    health.section(report, 'Prefix mappings')[50],
+    health.section(report, 'Prefix mappings')[54],
     '- ⚠️ WARNING the local leader is the prefix, \\'
   )
   eq(health.advice(report, 'Prefix mappings'), {
@@ -1327,7 +1347,7 @@ T['the prefix mappings']['warn that the local leader, empty and so a backslash, 
   local report = health.report(child)
 
   eq(
-    health.section(report, 'Prefix mappings')[50],
+    health.section(report, 'Prefix mappings')[54],
     '- ⚠️ WARNING the local leader is the prefix, \\'
   )
 end
@@ -1338,7 +1358,7 @@ T['the prefix mappings']['warn that the local leader, set, is the prefix set'] =
   local report = health.report(child)
 
   eq(
-    health.section(report, 'Prefix mappings')[50],
+    health.section(report, 'Prefix mappings')[54],
     '- ⚠️ WARNING the local leader is the prefix, ,'
   )
 end
@@ -1971,6 +1991,28 @@ T['explaining code']['says nothing while the configuration is wrong'] = function
   local report = health.report(child)
 
   eq(health.section(report, 'Explain code'), {})
+end
+
+T['writing code'] = MiniTest.new_set()
+
+T['writing code']['says what Claude Code writes with, what it may use, and how the code is decided'] = function()
+  start_with({ autostart = false, write = { model = 'sonnet', deep_effort = 'max' } })
+
+  local report = health.report(child)
+
+  eq(health.section(report, 'Write code'), {
+    "- \\w asks a Claude Code of its own, with the file alone and no tool, to write code for a request: in Normal mode a float asks for the request and the code goes below the cursor's line; in Visual mode the selected lines are the request, sent at once, and the code replaces them; model sonnet (write.model), stopped after 120 s (write.timeout_ms): :help |aineo-write|",
+    '- \\W does the same with Read, Grep and Glob alone, without asking, to read the project when it helps, with model sonnet (write.deep_model) at effort max (write.deep_effort), stopped after 300 s (write.deep_timeout_ms)',
+    '- the code shows over the file as a fix does, which it changes only when you accept it: the buffer is read-only until \\Va accepts it as one undo step and writes no file, or \\Vr rejects it; \\Vd shows it as a diff; a fix and written code replace each other, and the same request on unchanged code shows the code kept from before',
+  })
+end
+
+T['writing code']['says nothing while the configuration is wrong'] = function()
+  start_with({ autostart = false, write = { model = '' } })
+
+  local report = health.report(child)
+
+  eq(health.section(report, 'Write code'), {})
 end
 
 T['the office'] = MiniTest.new_set()

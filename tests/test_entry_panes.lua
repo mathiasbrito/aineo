@@ -1336,6 +1336,7 @@ local SUBCOMMANDS = {
   'find',
   'zoom',
   'explain',
+  'write',
   'office',
   'cheatsheet',
 }

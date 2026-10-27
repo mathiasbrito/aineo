@@ -347,6 +347,36 @@ local SETTINGS = {
     expected = 'a non-empty string',
   },
   {
+    name = 'write.model',
+    default = 'haiku',
+    validator = is_model_name,
+    expected = 'a non-empty string naming a model',
+  },
+  {
+    name = 'write.timeout_ms',
+    default = 120000,
+    validator = is_positive_count,
+    expected = 'a whole number of milliseconds of at least 1',
+  },
+  {
+    name = 'write.deep_model',
+    default = 'sonnet',
+    validator = is_model_name,
+    expected = 'a non-empty string naming a model',
+  },
+  {
+    name = 'write.deep_effort',
+    default = 'high',
+    validator = is_effort,
+    expected = 'one of ' .. table.concat(EXPLAIN_EFFORTS, ', '),
+  },
+  {
+    name = 'write.deep_timeout_ms',
+    default = 300000,
+    validator = is_positive_count,
+    expected = 'a whole number of milliseconds of at least 1',
+  },
+  {
     name = 'office.commands',
     default = {
       tests = {
