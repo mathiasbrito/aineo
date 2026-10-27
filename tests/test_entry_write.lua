@@ -134,6 +134,17 @@ T['\\w']['takes the model from write.model'] = function()
   eq(recorded(2)[1].argv[9], 'sonnet')
 end
 
+T['\\w']['asks for the code below the cursor’s line, wherever it is'] = function()
+  start(BELOW_LINE_1)
+  child.cmd('5')
+  press('\\w')
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { 'A function that adds two values.' })
+
+  press('<CR>')
+
+  eq(vim.split(recorded(2)[2].stdin, '\n')[1]:match('after line %d+'), 'after line 5')
+end
+
 T['\\W'] = MiniTest.new_set()
 
 T['\\W']['asks with Sonnet at effort high, with the read-only tools alone, by default'] = function()

@@ -287,6 +287,21 @@ T['writing for the selected lines']['refuses an answer that changes a line outsi
   eq(preview_marks(), 0)
 end
 
+T['writing for the selected lines']['refuses an answer whose edit starts before them, and shows nothing'] = function()
+  start({
+    summary = 'Adds two values.',
+    edits = {
+      { line = 2, last = 3, old = { CODE[2], CODE[3] }, new = ADD, why = 'Adds.' },
+    },
+  })
+
+  ask_write({ range = { 3, 3 } })
+  wait_until_told(OUTSIDE_THE_SELECTION)
+
+  eq(messages(), { OUTSIDE_THE_SELECTION })
+  eq(preview_marks(), 0)
+end
+
 T['writing for the selected lines']['refuses an answer the placement of a fix refuses, with its reason'] = function()
   local refused =
     'aineo: the written code was refused: the old lines of an edit stand nowhere in the file'
@@ -455,6 +470,50 @@ T['writing below the cursor']['refuses an answer that changes the cursor’s lin
 
   eq(messages(), { refused })
   eq(preview_marks(), 0)
+end
+
+T['writing below the cursor']['refuses an answer that writes the code above the cursor’s line'] = function()
+  local refused = 'aineo: the written code was refused: it must keep the cursor’s line as it is'
+  start({
+    summary = 'Adds two values.',
+    edits = {
+      {
+        line = 1,
+        last = 1,
+        old = { CODE[1] },
+        new = vim.list_extend(vim.deepcopy(ADD), { CODE[1] }),
+        why = 'Adds.',
+      },
+    },
+  })
+
+  send_request(1, { 'A function that adds two values.' })
+  wait_until_told(refused)
+
+  eq(messages(), { refused })
+  eq(preview_marks(), 0)
+end
+
+T['writing below the cursor']['inserts the code below the cursor’s line on a line that is not the first'] = function()
+  start({
+    summary = 'Adds two values.',
+    edits = {
+      {
+        line = 5,
+        last = 5,
+        old = { CODE[5] },
+        new = vim.list_extend({ CODE[5] }, ADD),
+        why = 'Adds.',
+      },
+    },
+  })
+  send_request(5, { 'A function that adds two values.' })
+  wait_for_preview()
+
+  child.lua("require('aineo.explain').accept_fix(vim.api.nvim_get_current_buf())")
+
+  eq(vim.split(recorded(2)[2].stdin, '\n')[1]:match('after line %d+'), 'after line 5')
+  eq(buffer_lines(), vim.list_extend(vim.deepcopy(CODE), ADD))
 end
 
 T['writing below the cursor']['refuses an answer that edits another line too, and shows nothing'] = function()
@@ -634,6 +693,26 @@ T['the code kept']['is not reused once the file changed'] = function()
   child.api.nvim_buf_set_lines(0, 4, 5, false, { 'return { M = M }' })
 
   ask_write({ range = { 3, 3 } })
+
+  eq(#recorded(4), 4)
+  eq(vim.tbl_contains(messages(), KEPT), false)
+end
+
+T['the code kept']['is not reused for the same request typed below another line'] = function()
+  start(BELOW_LINE_1)
+  send_and_reject('A function that adds two values.')
+
+  send_request(5, { 'A function that adds two values.' })
+
+  eq(#recorded(4), 4)
+  eq(vim.tbl_contains(messages(), KEPT), false)
+end
+
+T['the code kept']['for the selected lines is not reused for the same text typed below them'] = function()
+  start(REPLACING_THE_REQUEST)
+  ask_and_reject()
+
+  send_request(3, { CODE[3] })
 
   eq(#recorded(4), 4)
   eq(vim.tbl_contains(messages(), KEPT), false)
