@@ -472,7 +472,7 @@ T['the keys on the sheet']['are in groups, with explaining, fixing and writing o
     '  Issues',
     '  Fix',
     '  Write',
-    '  While a fix shows',
+    '  While a proposal shows',
     '  In the steering float',
     '  Clean',
     'Office and zoom',

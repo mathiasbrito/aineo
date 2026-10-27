@@ -50,6 +50,8 @@ local M = {}
 ---@field column integer the column its extmarks are set at: a kind with a lower one shows above one with a higher on the same line
 ---@field working string what it says while its request runs
 ---@field deep aineo.explain.DeepWords how it names a deep request's answer, and says it works
+---@field changed? string what the preview of a proposal of this kind says when the code under it changed
+---@field stale? string what the preview of a proposal of this kind says of itself once stale
 
 ---@type aineo.explain.Kind
 M.EXPLANATIONS = {
@@ -108,6 +110,8 @@ M.FIX = {
   namespace = 'aineo_explain_fix',
   column = 2,
   working = 'proposing a fix…',
+  changed = 'the code under the fix changed',
+  stale = 'the fix is stale',
   deep = {
     label = 'fix',
     working = 'proposing a fix…',
@@ -140,6 +144,8 @@ M.WRITE = {
   namespace = 'aineo_explain_write',
   column = 3,
   working = 'writing code…',
+  changed = 'the lines under the written code changed',
+  stale = 'the written code is stale',
   deep = {
     label = 'write',
     working = 'writing code, reading the project…',

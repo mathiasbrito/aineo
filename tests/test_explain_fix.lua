@@ -1473,7 +1473,7 @@ T['accepting']['tells the user when the buffer shows no fix'] = function()
 
   accept()
 
-  eq(messages(), { 'aineo: no fix is shown in this buffer' })
+  eq(messages(), { 'aineo: no proposal is shown in this buffer' })
 end
 
 T['asking again'] = MiniTest.new_set()

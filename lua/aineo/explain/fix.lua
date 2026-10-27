@@ -78,6 +78,7 @@ local function show(asked, fix)
     keys = asked.keys,
     ask_key = asked.ask_keys.plain,
     subject = { text = asked.issue_text, look = kinds.ISSUES },
+    kind = kinds.FIX,
   })
 end
 
@@ -388,7 +389,7 @@ end
 ---@param buffer integer
 function M.accept(buffer)
   if not preview.is_shown(buffer) then
-    vim.notify('aineo: no fix is shown in this buffer', vim.log.levels.INFO)
+    vim.notify('aineo: no proposal is shown in this buffer', vim.log.levels.INFO)
     return
   end
   local issue = fixed_issues[buffer]

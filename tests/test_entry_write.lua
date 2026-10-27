@@ -347,7 +347,8 @@ local function screen_rows()
 end
 
 T['the keys']['of code whose lines changed name the key that asked it, which asks again'] = function()
-  local stale_head = '┊ the code under the fix changed · \\Vr rejects · \\W asks again'
+  local stale_head =
+    '┊ the lines under the written code changed · \\Vr rejects · \\W asks again'
   start(REPLACING_THE_REQUEST)
   child.cmd('3')
   press('V', '\\W')
