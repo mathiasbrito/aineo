@@ -77,7 +77,8 @@ local function show(asked, fix)
     edits = fix.edits,
     keys = asked.keys,
     ask_key = asked.ask_keys.plain,
-    issue = asked.issue_text,
+    subject = { text = asked.issue_text, look = kinds.ISSUES },
+    kind = kinds.FIX,
   })
 end
 
@@ -226,34 +227,38 @@ local function start(fixing, issue, folder, steered_text)
   run.process = process
 end
 
---- Stops the fix request that runs for `buffer` and rejects the fix it
---- shows, both without a word: a buffer has one fix at a time.
+--- Stops the request for a fix or for code (`aineo.explain.kinds`'
+--- `PROPOSALS`) that runs for `buffer` and rejects the fix or the code it
+--- shows (`reject()`), both without a word: a buffer has one proposal at a
+--- time.
 ---
 ---@param buffer integer
-local function replace_fix(buffer)
-  local running = runs.find(buffer, kinds.FIX)
-  if running then
-    runs.stop(running)
+function M.replace(buffer)
+  for _, kind in ipairs(kinds.PROPOSALS) do
+    local running = runs.find(buffer, kind)
+    if running then
+      runs.stop(running)
+    end
   end
   M.reject(buffer)
 end
 
---- Asks a fix of `issue` (`start()`), in place of the fix request and the
---- fix of `fixing.buffer` (`replace_fix()`).
+--- Asks a fix of `issue` (`start()`), in place of the request and the
+--- proposal of `fixing.buffer` (`replace()`).
 ---
 ---@param fixing aineo.explain.FixRequest
 ---@param issue aineo.explain.ShownIssue
 ---@param folder string
 ---@param steered_text? string
 local function ask(fixing, issue, folder, steered_text)
-  replace_fix(fixing.buffer)
+  M.replace(fixing.buffer)
   start(fixing, issue, folder, steered_text)
 end
 
 --- Shows the fix kept for `issue` asked as `fixing` says (`kept_key()`),
 --- the one asked last whatever its prompt, when the buffer reads as it did
---- when it was answered, in place of the fix request and the fix of
---- `fixing.buffer` (`replace_fix()`), and tells the user, once, that it is
+--- when it was answered, in place of the request and the proposal of
+--- `fixing.buffer` (`replace()`), and tells the user, once, that it is
 --- the fix kept, which prompt it was asked with, and what asks anew.
 --- Returns whether one was kept.
 ---
@@ -268,7 +273,7 @@ local function show_kept(fixing, issue)
   if not fix then
     return false
   end
-  replace_fix(buffer)
+  M.replace(buffer)
   show({
     buffer = buffer,
     window = fixing.window,
@@ -375,33 +380,39 @@ function M.propose(fixing, folder)
   })
 end
 
---- Accepts the fix `buffer` shows (`aineo.explain.preview`'s `apply()`):
---- its edits are applied as one undo step, the file is not written, and the
---- issue it fixes is no longer shown; the user is told so, once. Tells the
---- user when `buffer` shows no fix.
+--- Accepts the fix or the code written for a request that `buffer` shows
+--- (`aineo.explain.preview`'s `apply()`): its edits are applied as one undo
+--- step, the file is not written, and the issue a fix fixes is no longer
+--- shown; the user is told, once, that the fix was applied or the code
+--- written. Tells the user when `buffer` shows neither.
 ---
 ---@param buffer integer
 function M.accept(buffer)
   if not preview.is_shown(buffer) then
-    vim.notify('aineo: no fix is shown in this buffer', vim.log.levels.INFO)
+    vim.notify('aineo: no proposal is shown in this buffer', vim.log.levels.INFO)
     return
   end
+  local issue = fixed_issues[buffer]
   if preview.apply(buffer) then
-    marks.remove_issue(buffer, fixed_issues[buffer])
+    marks.remove_issue(buffer, issue)
     fixed_issues[buffer] = nil
-    vim.notify('aineo: fix applied (u undoes it)', vim.log.levels.INFO)
+    vim.notify(
+      issue and 'aineo: fix applied (u undoes it)' or 'aineo: code written (u undoes it)',
+      vim.log.levels.INFO
+    )
   end
 end
 
---- Shows the fix `buffer` shows as the diff view, or as the overlay again
---- (`aineo.explain.preview`'s `toggle_diff()`).
+--- Shows the fix or the code written that `buffer` shows as the diff view,
+--- or as the overlay again (`aineo.explain.preview`'s `toggle_diff()`).
 ---
 ---@param buffer integer
 function M.toggle_diff(buffer)
   preview.toggle_diff(buffer)
 end
 
---- Rejects the fix `buffer` shows: its preview goes, and nothing changes.
+--- Rejects the fix or the code written that `buffer` shows: its preview
+--- goes, and nothing changes.
 ---
 ---@param buffer integer
 function M.reject(buffer)

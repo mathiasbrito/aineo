@@ -708,4 +708,24 @@ T['the look']['says in its working line and its badge that a deep request is wor
   eq(first_row_in(namespace)[#first_row_in(namespace)][1]:find(working, 1, true) ~= nil, true)
 end
 
+T['the steering float']['tells once, with no traceback, that claude.cmd cannot be run'] =
+  MiniTest.new_set({ parametrize = { { 'explanations' }, { 'issues' } } })
+
+T['the steering float']['tells once, with no traceback, that claude.cmd cannot be run']['for'] = function(
+  kind
+)
+  start()
+  ask_steered({ kind = kind, command = { '/nonexistent/aineo-claude' } })
+
+  child.lua([[_G.sent = pcall(vim.cmd, 'execute "normal \\<CR>"')]])
+
+  local told = explained.told(child)
+  eq(#told, 1)
+  eq(vim.startswith(told[1].message, 'aineo: claude.cmd cannot be run: '), true)
+  eq(
+    { told[1].level, child.lua_get('vim.v.errmsg'), child.lua_get('_G.sent') },
+    { vim.log.levels.ERROR, '', true }
+  )
+end
+
 return T

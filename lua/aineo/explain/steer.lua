@@ -14,7 +14,10 @@ local FEWEST_ROWS = 6
 local MOST_ROWS = 20
 
 --- What the float's title says after what the caller names, which keys do.
-local KEYS_TITLE = '<CR> sends · q or <Esc> cancels · R restores the default'
+local KEYS_TITLE = '<CR> sends · q or <Esc> cancels'
+
+--- What the title says after `KEYS_TITLE` when the float has a default text.
+local RESTORE_TITLE = ' · R restores the default'
 
 --- A text the user wrote and the default text it was written over.
 ---@class aineo.explain.Remembered
@@ -27,10 +30,10 @@ local remembered = {}
 
 --- What a float is opened with.
 ---@class aineo.explain.Steering
----@field name string what it steers: the text sent is remembered under it and starts the next float of that name
+---@field name? string what it steers: the text sent is remembered under it and starts the next float of that name; nothing is remembered when absent
 ---@field title string what the request it steers does, said in the float's title
----@field default string the text to start from when none was sent under `name`, and what `R` brings back; its first line is the head that names what the request is about
----@field on_send fun(text: string) called with the text sent, after the float is closed
+---@field default? string the text to start from when none was sent under `name`, and what `R` brings back; its first line is the head that names what the request is about; the float starts empty and maps no `R` when absent
+---@field on_send fun(text: string) called with the text sent, after the float is closed; an error it raises is told to the user, once
 ---@field steered_buffer integer the buffer of the code the request is about, which `close_for()` names
 
 --- The lines of `text`, the way a buffer holds them.
@@ -58,9 +61,9 @@ end
 ---@param steering aineo.explain.Steering
 ---@return string[]
 local function starting_lines(steering)
-  local last = remembered[steering.name]
+  local last = steering.name and remembered[steering.name]
   if not last then
-    return lines_of(steering.default)
+    return lines_of(steering.default or '')
   end
   local lines = lines_of(last.text)
   if lines[1] == head_of(last.default) then
@@ -70,12 +73,14 @@ local function starting_lines(steering)
 end
 
 --- The configuration of a float that holds `line_count` lines, centred in the
---- editor, with the title `title`.
+--- editor, with the title `title` followed by what its keys do, `R` among
+--- them when `restores` is set.
 ---
 ---@param line_count integer
 ---@param title string
+---@param restores boolean
 ---@return vim.api.keyset.win_config
-local function float_config(line_count, title)
+local function float_config(line_count, title, restores)
   local width = math.min(MOST_WIDTH, vim.o.columns - 2 * SIDE_MARGIN)
   local height = math.max(FEWEST_ROWS, math.min(MOST_ROWS, line_count + 2))
   height = math.min(height, vim.o.lines - 4)
@@ -87,7 +92,7 @@ local function float_config(line_count, title)
     col = math.floor((vim.o.columns - width - 2) / 2),
     style = 'minimal',
     border = 'rounded',
-    title = (' %s: %s '):format(title, KEYS_TITLE),
+    title = (' %s: %s%s '):format(title, KEYS_TITLE, restores and RESTORE_TITLE or ''),
     title_pos = 'center',
   }
 end
@@ -118,17 +123,29 @@ local function text_of(buffer)
   return vim.trim(table.concat(vim.api.nvim_buf_get_lines(buffer, 0, -1, false), '\n'))
 end
 
+--- Remembers `text`, written in the float `steering` opened, under
+--- `steering.name`; nothing when it has none.
+---
+---@param steering aineo.explain.Steering
+---@param text string
+local function remember(steering, text)
+  if steering.name then
+    remembered[steering.name] = { text = text, default = steering.default }
+  end
+end
+
 --- Opens a centred float holding a scratch buffer of the markdown filetype,
 --- starting from the text last written under `steering.name`, else from
---- `steering.default`. In Normal mode `<CR>` sends the text, `q` and `<Esc>`
---- close the float with nothing sent and nothing kept, and `R` puts
---- `steering.default` back; Insert mode is plain editing. A text of white
---- space alone is not sent: the user is told, once, and the float stays.
---- Sending closes the float, remembers the text under `steering.name` and
---- calls `steering.on_send` with it. Leaving the float closes it with nothing
---- sent and keeps its text under `steering.name` as a draft, which starts the
---- next float of that name as a text sent does. While a float is open, a call
---- focuses it and opens no other.
+--- `steering.default`, else empty. In Normal mode `<CR>` sends the text,
+--- `q` and `<Esc>` close the float with nothing sent and nothing kept, and,
+--- when it has a `steering.default`, `R` puts it back; Insert mode is plain
+--- editing. A text of white space alone is not sent: the user is told,
+--- once, and the float stays. Sending closes the float, remembers the text
+--- (`remember()`) and calls `steering.on_send` with it; an error it raises,
+--- as when `claude.cmd` cannot be run, is told to the user once. Leaving
+--- the float closes it with nothing sent and remembers its text as a draft,
+--- which starts the next float of that name as a text sent does. While a
+--- float is open, a call focuses it and opens no other.
 ---
 ---@param steering aineo.explain.Steering
 function M.open(steering)
@@ -141,7 +158,11 @@ function M.open(steering)
   vim.bo[buffer].bufhidden = 'wipe'
   local lines = starting_lines(steering)
   vim.api.nvim_buf_set_lines(buffer, 0, -1, false, lines)
-  local window = vim.api.nvim_open_win(buffer, true, float_config(#lines, steering.title))
+  local window = vim.api.nvim_open_win(
+    buffer,
+    true,
+    float_config(#lines, steering.title, steering.default ~= nil)
+  )
   open_window = window
   open_for = steering.steered_buffer
   vim.wo[window].wrap = true
@@ -158,9 +179,12 @@ function M.open(steering)
       vim.notify('aineo: the prompt is empty: nothing is sent', vim.log.levels.WARN)
       return
     end
-    remembered[steering.name] = { text = text, default = steering.default }
+    remember(steering, text)
     finish()
-    steering.on_send(text)
+    local sent, failure = pcall(steering.on_send, text)
+    if not sent then
+      vim.notify('aineo: ' .. tostring(failure), vim.log.levels.ERROR)
+    end
   end
   local function restore_default()
     vim.api.nvim_buf_set_lines(buffer, 0, -1, false, lines_of(steering.default))
@@ -175,7 +199,7 @@ function M.open(steering)
       end
       local text = text_of(buffer)
       if text ~= '' then
-        remembered[steering.name] = { text = text, default = steering.default }
+        remember(steering, text)
       end
       vim.schedule(function()
         close(window)
@@ -190,12 +214,14 @@ function M.open(steering)
   )
   vim.keymap.set('n', 'q', finish, { buffer = buffer, nowait = true, desc = 'aineo: cancel' })
   vim.keymap.set('n', '<Esc>', finish, { buffer = buffer, nowait = true, desc = 'aineo: cancel' })
-  vim.keymap.set(
-    'n',
-    'R',
-    restore_default,
-    { buffer = buffer, nowait = true, desc = 'aineo: restore the default prompt' }
-  )
+  if steering.default then
+    vim.keymap.set(
+      'n',
+      'R',
+      restore_default,
+      { buffer = buffer, nowait = true, desc = 'aineo: restore the default prompt' }
+    )
+  end
 end
 
 --- Closes the float that is open, if it steers a request for `buffer`

@@ -2074,20 +2074,91 @@ mapped; it names `\Vf` and `\VVf` likewise, or
 |<Plug>(aineo-explain-fix)| and |<Plug>(aineo-explain-fix-steered)| when the
 prefix is `false`.
 
+                                                                 *aineo-write*
+`\w` writes code for a request of yours in the current buffer, a file's. In
+Normal mode it opens an empty float, titled `Write code`, in which you type
+the request: `<CR>` in Normal mode sends it, `q` and `<Esc>` cancel, a request
+of white space alone is not sent, and nothing you typed is kept for the next
+request; the code goes below the cursor's line, followed while you type: lines
+added or deleted above it move it, and when the line itself is deleted
+nothing is sent and you are told `aineo: the line asked about is gone`. A
+`claude.cmd` that cannot be run is told once, from the float as from Visual
+mode. In Visual mode the lines the selection spans, whole lines whatever the
+kind of selection, are the request,
+sent at once as they are written, comment markers and all, with no float; the
+code replaces them. Selected lines of white space alone are refused with one
+message, and nothing is sent. `:Aineo write` does the same, with a range for
+the lines that hold the request (|:Aineo-write|).
+
+`\w` asks a Claude Code of its own, as `\v` does, with the file alone and no
+tool, at its own effort, with the model `write.model`, the cheapest by
+default, stopped after `write.timeout_ms` (|aineo-config-write.model|,
+|aineo-config-write.timeout_ms|). `\W` does the same with the read-only tools
+`Read`, `Grep` and `Glob`, which it may use to read the project when that
+helps, at `write.deep_effort` (`--effort`) with the model `write.deep_model`
+and the time limit `write.deep_timeout_ms` (|aineo-config-write.deep_model|,
+|aineo-config-write.deep_effort|, |aineo-config-write.deep_timeout_ms|).
+Neither has a tool that writes. While it runs, the line above the cursor's
+line, or above the request, and the badge say `writing code…` (`writing code,
+reading the project…` for `\W`).
+
+What is sent is the request, the file, its language, the line the code goes
+after or the lines that hold the request, and the rules of the answer, which
+has the shape of a fix's (|aineo-explain-fix|): a summary of what the code
+does and one edit of this file. Below the cursor, the edit replaces the
+cursor's line with itself followed by the code, in the file's style and
+indented as the code around it; for a request in the file, it replaces
+exactly the lines of the request with the code, the first indented as the
+first of them. Every line of the buffer is sent too, numbered.
+
+aineo places the edit as it places a fix's, byte for byte, and refuses,
+telling you why, once, an answer that is not one edit of exactly those lines,
+or, below the cursor, one that does not keep the cursor's line as it is: the
+code never changes a line outside the request. When the buffer changed while
+the code was asked, nothing is shown: `aineo: the buffer changed while the
+code was written; ask again`. An answer with no edits tells its summary.
+
+The code shows as a fix does, and is decided the same way: the buffer is
+read-only until `\Va` accepts it, as one undo step, writing no file, or `\Vr`
+rejects it, which leaves the buffer as it was, the request's lines too; `\Vd`
+shows it as a diff, and the stale mark, the keys and the 'conceallevel' are
+the fix's, in its own words: its head row is labelled `write`, a stale head
+row says `the lines under the written code changed`, accepting it then tells
+you `aineo: the lines under the written code changed; ask again`, and `\Vd`
+tells you `aineo: the written code is stale: \Vr rejects, \w asks again`.
+Accepting writes the code below the cursor's line without touching that line,
+so its marks and extmarks stay where they were (a fix whose new lines start
+with its old lines is applied the same way). Above it, in place of an issue,
+the request is named, on one line of at most 60 characters, labelled `write`,
+in the look of |hl-AineoWrite|, the accent being the foreground of `Special`,
+`#c678dd` without one.
+Accepting tells you `aineo: code written (u undoes it)`. A buffer shows one
+fix or written code at a time: asking for either replaces the other and stops
+the request that runs. Code that was shown is kept in memory, for the buffer,
+by the request, its lines, the model and the effort, with the text of the
+file as it was sent: the same request while the file reads the same shows it
+again at once, asks nothing, and tells you `aineo: the code written before
+for this request, the file unchanged (change the request to ask anew)`. `\vc`
+or `:Aineo explain clear` removes it with the rest, stops its request and
+drops what was kept. The keys are |<Plug>(aineo-write)| and
+|<Plug>(aineo-write-deep)|.
+
                                                          *aineo-explain-clean*
 `\vc` returns the current buffer to how it behaved when you opened it, at
 once: it stops every request that runs for it, so that no answer of theirs is
-shown later; closes the float steering a request for it; rejects the fix it
-shows, applying nothing; removes every explanation and issue, with their
-marks, and the fix explanations; gives every window back the 'conceallevel'
-and 'concealcursor' a fix set, and the buffer its 'modifiable'; takes back
-the keys aineo mapped for the buffer (`]v`, `[v`, `\Va`, `\Vr`, `\Vd`) and
-the badges; and drops the answers and the fixes kept for it, so that the next
-request asks anew. Its text and its undo history stay as they are, and your
-own keys and options too; the text you last sent in a steering float, which
-is not the buffer's, stays. You are told `aineo: explanations cleaned from
-this buffer`, also when there was nothing to clean. `:Aineo explain clear`
-does the same, and |<Plug>(aineo-explain-clean)| is the key's mapping.
+shown later; closes the float steering a request for it, or asking for a
+request of code; rejects the fix or the written code it shows, applying
+nothing; removes every explanation and issue, with their marks, and the fix
+explanations; gives every window back the 'conceallevel' and
+'concealcursor' a fix set, and the buffer its 'modifiable'; takes back the
+keys aineo mapped for the buffer (`]v`, `[v`, `\Va`, `\Vr`, `\Vd`) and the
+badges; and drops the answers, the fixes and the code kept for it, so that
+the next request asks anew. Its text and its undo history stay as they are,
+and your own keys and options too; the text you last sent in a steering
+float, which is not the buffer's, stays. You are told `aineo: explanations
+cleaned from this buffer`, also when there was nothing to clean. `:Aineo
+explain clear` does the same, and |<Plug>(aineo-explain-clean)| is the key's
+mapping.
 
                                                           *aineo-explain-jump*
 `]v` and `[v` move the cursor to the line of the next and the previous
@@ -2224,6 +2295,15 @@ AineoFixWhyGutter	As |hl-AineoExplainGutter|, for the fix explanation.
                                                    *hl-AineoFixWhyGutterFill*
 AineoFixWhyGutterFill	As |hl-AineoExplainGutterFill|, for the fix
 			explanation.
+                                                               *hl-AineoWrite*
+AineoWrite		As |hl-AineoExplain|, for the row that names the
+			request of written code and the line that says it is
+			being written (|aineo-write|), the accent being the
+			foreground of `Special`.
+                                                         *hl-AineoWriteGutter*
+AineoWriteGutter	As |hl-AineoExplainGutter|, for written code.
+                                                     *hl-AineoWriteGutterFill*
+AineoWriteGutterFill	As |hl-AineoExplainGutterFill|, for written code.
 
 Claude's session ~
                                                         *aineo-claude-session*
@@ -2591,19 +2671,22 @@ from another tab, `\o` moves you to it.
 			after `tab` `new` and the number of each tab page
 			(|:Aineo-tab|), and `close` after `diff`
 			(|:Aineo-diff|), and `tools` and `clear` after
-			`explain` (|:Aineo-explain|), and `check`, `states`,
+			`explain` (|:Aineo-explain|), and `deep` after
+			`write` (|:Aineo-write|), and `check`, `states`,
 			`preview`, `new` and `pack` after `office`, the names
 			of the office packs found after `check`, `states`,
 			`preview` and `pack`
 			(|:Aineo-office|). Without one of them, or
 			with anything else, it tells you, with one error,
-			which ones it takes. Only `explain` takes a range;
-			given one for another subcommand, it tells you so.
+			which ones it takes. Only `explain` and `write` take
+			a range; given one for another subcommand, it tells
+			you so.
 
                                                                  *:Aineo-send*
 :Aineo send		Sends Input to Claude (|aineo-send|). It takes no
 			range: `:'<,'>Aineo send` tells you, with one error,
-			that only `:Aineo explain` takes a range.
+			that only `:Aineo explain` and `:Aineo write` take a
+			range.
 			A selection is sent by `\s` in Visual mode
 			(|aineo-v_\s|).
 
@@ -3042,12 +3125,27 @@ keeps the tab's claim, and the next start takes it up again (|aineo-tabs|).
 			and keeps the new answer. The words are written in
 			this order, each at most once. In a buffer that holds
 			no file it tells you, with one error. With any other
-			word it tells you, with one error, what it takes. The
-			only subcommand of `:Aineo` that takes a range.
+			word it tells you, with one error, what it takes.
+			With `:Aineo write`, the only subcommands of `:Aineo`
+			that take a range.
 
 :Aineo explain clear
 			Returns the current buffer to how it behaved when it
 			was opened, as `\vc` does (|aineo-explain-clean|).
+
+                                                                *:Aineo-write*
+:[range]Aineo write [deep]
+			Writes code for a request in the current buffer, a
+			file's, with a Claude Code of its own
+			(|aineo-write|): for the request the lines of [range]
+			hold, which the code replaces, asked at once; without
+			a range, for the request you type in a float, the
+			code going below the cursor's line. With `deep` that
+			Claude Code may read the project with `Read`, `Grep`
+			and `Glob`, as `\W` does; without, it has the file
+			alone, as `\w` does. In a buffer that holds no file it
+			tells you, with one error. With any other word it
+			tells you, with one error, what it takes.
 
                                                                *:Aineo-office*
 :Aineo office		Shows the office over the right side of the layout, at
@@ -3192,15 +3290,16 @@ row is a key, a few words on what it does and, dimmed, the `:Aineo` command
 that does the same. The keys are in groups, each with a heading and keys in a
 colour of its own: the layout and the tabs, Claude Code and its sessions, the
 agent pane, the changes pane and the diff, the run and terminal panes, the
-explorer, explaining code and its fixes, the office and the zoom, and the keys
-local to the changes pane and to the explorer. The group of explaining code
-has six sections, each under a heading of its own in the group's colour:
-Explain, Issues (with marking, sending the marked issues and jumping between
-them), Fix, While a fix shows, In the steering float, and Clean. A group is
-never split between the two columns. The sheet has two columns when the column
-is 80 cells wide or more, with the groups split so that they are as even as
-they can be, and one below that, and it is written again as the column is
-resized. The title is `aineo — keys`.
+explorer, explaining code, its fixes and writing code, the office and the
+zoom, and the keys local to the changes pane and to the explorer. The group
+of explaining code, `Explain, fix and write`, has seven sections, each under
+a heading of its own in the group's colour: Explain, Issues (with marking,
+sending the marked issues and jumping between them), Fix, Write, While a
+proposal shows (a fix or written code), In the steering float, and Clean. A
+group is never split between the two columns. The sheet has two columns
+when the column is 80 cells wide or more, with the groups split so that they
+are as even as they can be, and one below that, and it is written again as
+the column is resized. The title is `aineo — keys`.
 
 Every key is written as you type it. With the prefix (|aineo-config-prefix|)
 `,`, the sheet shows `,o` where it shows `\o` by default. With `prefix =
@@ -3377,6 +3476,19 @@ you turn the prefix off, or when a prefix key is yours: >lua
 			In Normal mode, returns the current buffer to how it
 			behaved when it was opened (|aineo-explain-clean|).
 
+                                                         *<Plug>(aineo-write)*
+<Plug>(aineo-write)
+			In Normal mode, opens the float in which you type a
+			request, and writes the code for it below the
+			cursor's line; in Visual mode, writes code for the
+			request the selected lines hold, in their place,
+			leaving Visual mode (|aineo-write|).
+
+                                                    *<Plug>(aineo-write-deep)*
+<Plug>(aineo-write-deep)
+			Does what `<Plug>(aineo-write)` does, the Claude Code
+			reading the project when that helps.
+
                                                     *<Plug>(aineo-fix-accept)*
 <Plug>(aineo-fix-accept)
 			In Normal mode, accepts the fix the current buffer
@@ -3502,6 +3614,10 @@ which has none, and those of a fix shown, whose keys are local to its buffer
 \Vf		|<Plug>(aineo-explain-fix)|
                                                                   *aineo-\VVf*
 \VVf		|<Plug>(aineo-explain-fix-steered)|
+                                                                    *aineo-\w*
+\w		|<Plug>(aineo-write)|
+                                                                    *aineo-\W*
+\W		|<Plug>(aineo-write-deep)|
                                                                    *aineo-\vc*
 \vc		|<Plug>(aineo-explain-clean)|
                                                                   *aineo-v_\s*
@@ -3520,6 +3636,10 @@ which has none, and those of a fix shown, whose keys are local to its buffer
 \VVI		|<Plug>(aineo-explain-deep-issues)| in Visual mode
                                                                  *aineo-v_\vm*
 \vm		|<Plug>(aineo-explain-mark)| in Visual mode
+                                                                  *aineo-v_\w*
+\w		|<Plug>(aineo-write)| in Visual mode (|aineo-write|)
+                                                                  *aineo-v_\W*
+\W		|<Plug>(aineo-write-deep)| in Visual mode
 
 Visual mode here is Visual mode alone: in Select mode, `\s` is text you
 type.
@@ -3894,6 +4014,37 @@ explain.issues_prompt	A non-empty string. Default: `'Some issues were
 			The words that open the message `\s` sends when
 			issues are marked (|aineo-explain-mark|), before the
 			line for each issue.
+
+                                                          *aineo-config-write*
+                                                    *aineo-config-write.model*
+write.model		A non-empty string. Default: `'haiku'`
+			The model of the Claude Code that `\w` starts
+			(|aineo-write|), passed as its `--model`: an alias
+			such as `'haiku'` or `'sonnet'`, or a model's full
+			name.
+
+                                               *aineo-config-write.timeout_ms*
+write.timeout_ms	A whole number of at least 1. Default: `120000`
+			How many milliseconds a request of `\w` may run.
+			Past that, its Claude Code is stopped and aineo
+			tells you, once.
+
+                                               *aineo-config-write.deep_model*
+write.deep_model	A non-empty string. Default: `'sonnet'`
+			The model of the Claude Code that `\W` starts,
+			passed as its `--model`: `'sonnet'`, `'opus'` or a
+			model's full name.
+
+                                              *aineo-config-write.deep_effort*
+write.deep_effort	One of `'low'`, `'medium'`, `'high'`, `'xhigh'`,
+			`'max'`. Default: `'high'`
+			The effort of the Claude Code that `\W` starts,
+			passed as its `--effort`; `\w` passes none.
+
+                                          *aineo-config-write.deep_timeout_ms*
+write.deep_timeout_ms	A whole number of at least 1. Default: `300000`
+			How many milliseconds a request of `\W` may run, as
+			`write.timeout_ms` does for `\w`.
 
                                                 *aineo-config-office.commands*
 office.commands		A table of the classes `tests`, `committing`,
@@ -6290,6 +6441,15 @@ Explain code ~
   (|aineo-config-explain.issues_prompt|), and that `]v` and `[v` jump between
   explanations and issues (|aineo-explain-jump|).
   Nothing while the configuration is wrong.
+
+Write code ~
+  Which model `\w` writes code with (`write.model`,
+  |aineo-config-write.model|) and after how long it is stopped
+  (`write.timeout_ms`), with the file alone and no tool; the model, the effort
+  and the time limit of `\W` (`write.deep_model`, `write.deep_effort`,
+  `write.deep_timeout_ms`), with `Read`, `Grep` and `Glob`; that the code is
+  decided as a fix is, replaces a fix and is kept (|aineo-write|). Nothing
+  while the configuration is wrong.
 
 Office ~
   That 'termguicolors' is on and 'ambiwidth' is not `double`, an error for

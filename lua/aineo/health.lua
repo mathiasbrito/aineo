@@ -979,6 +979,35 @@ local function check_explain(resolved_config)
   )
 end
 
+--- Reports how `\w` and `\W` ask for code with `resolved_config`'s `write`
+--- settings, what the Claude Code they start may use, and how the code is
+--- decided. Nothing while the configuration is wrong.
+---
+---@param resolved_config table|nil the configuration, `nil` when it is wrong
+local function check_write(resolved_config)
+  if not resolved_config then
+    return
+  end
+  local settings = resolved_config.write
+  vim.health.start('Write code')
+  vim.health.info(
+    ("\\w asks a Claude Code of its own, with the file alone and no tool, to write code for a request: in Normal mode a float asks for the request and the code goes below the cursor's line; in Visual mode the selected lines are the request, sent at once, and the code replaces them; model %s (write.model), stopped after %g s (write.timeout_ms): :help |aineo-write|"):format(
+      settings.model,
+      settings.timeout_ms / 1000
+    )
+  )
+  vim.health.info(
+    ('\\W does the same with Read, Grep and Glob alone, without asking, to read the project when it helps, with model %s (write.deep_model) at effort %s (write.deep_effort), stopped after %g s (write.deep_timeout_ms)'):format(
+      settings.deep_model,
+      settings.deep_effort,
+      settings.deep_timeout_ms / 1000
+    )
+  )
+  vim.health.info(
+    'the code shows over the file as a fix does, which it changes only when you accept it: the buffer is read-only until \\Va accepts it as one undo step and writes no file, or \\Vr rejects it; \\Vd shows it as a diff; a fix and written code replace each other, and the same request on unchanged code shows the code kept from before'
+  )
+end
+
 --- The names of the packs the report tells of: those the setting `office.pack`
 --- names, in its order, then the others found, by name; each once.
 ---
@@ -1158,6 +1187,7 @@ function M.check()
   check_tab_line(resolved_config)
   check_find(resolved_config)
   check_explain(resolved_config)
+  check_write(resolved_config)
   check_office(resolved_config)
   check_autostart()
   name_limits()

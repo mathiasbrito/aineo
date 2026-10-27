@@ -45,11 +45,13 @@ local M = {}
 --- Its `label` names it in the gutter, on its first row, and its
 --- `marked_groups` are those of a marked one, for a kind that can be marked.
 ---@class aineo.explain.Kind : aineo.explain.Look
----@field name 'explanations'|'issues'|'fix' what a request names it
+---@field name 'explanations'|'issues'|'fix'|'write' what a request names it
 ---@field namespace string the name of the namespace its extmarks live in
 ---@field column integer the column its extmarks are set at: a kind with a lower one shows above one with a higher on the same line
 ---@field working string what it says while its request runs
 ---@field deep aineo.explain.DeepWords how it names a deep request's answer, and says it works
+---@field changed? string what the preview of a proposal of this kind says when the code under it changed
+---@field stale? string what the preview of a proposal of this kind says of itself once stale
 
 ---@type aineo.explain.Kind
 M.EXPLANATIONS = {
@@ -108,6 +110,8 @@ M.FIX = {
   namespace = 'aineo_explain_fix',
   column = 2,
   working = 'proposing a fix…',
+  changed = 'the code under the fix changed',
+  stale = 'the fix is stale',
   deep = {
     label = 'fix',
     working = 'proposing a fix…',
@@ -126,6 +130,35 @@ M.FIX = {
     group = 'AineoFixOld',
     accent_group = 'DiagnosticError',
     accent_fallback = 0xe06c75,
+  },
+}
+
+--- The kind of code written for a request (`aineo.explain.write`): the
+--- virtual line that says its request is working, and the row that names the
+--- request at the top of its preview (`aineo.explain.preview`). Not one of
+--- `ALL`: written code is not an answer placed above lines. Its `deep`
+--- words are those of a request that reads the project with the tools.
+---@type aineo.explain.Kind
+M.WRITE = {
+  name = 'write',
+  namespace = 'aineo_explain_write',
+  column = 3,
+  working = 'writing code…',
+  changed = 'the lines under the written code changed',
+  stale = 'the written code is stale',
+  deep = {
+    label = 'write',
+    working = 'writing code, reading the project…',
+    title = 'Write code, reading the project',
+  },
+  label = 'write',
+  accent_group = 'Special',
+  accent_fallback = 0xc678dd,
+  groups = {
+    text = 'AineoWrite',
+    gutter = 'AineoWriteGutter',
+    fill = 'AineoWriteGutterFill',
+    number = 'AineoWriteNr',
   },
 }
 
@@ -149,10 +182,15 @@ M.FIX_WHY = {
 ---@type aineo.explain.Kind[]
 M.ALL = { M.EXPLANATIONS, M.ISSUES }
 
+--- The kinds of request whose answer is a proposal shown as a preview
+--- (`aineo.explain.preview`), of which a buffer shows one at a time.
+---@type aineo.explain.Kind[]
+M.PROPOSALS = { M.FIX, M.WRITE }
+
 --- Every look whose highlight groups the explain home defines
 --- (`aineo.explain.look`): each kind's, and the fix explanation's.
 ---@type aineo.explain.Look[]
-M.LOOKS = { M.EXPLANATIONS, M.ISSUES, M.FIX, M.FIX_WHY }
+M.LOOKS = { M.EXPLANATIONS, M.ISSUES, M.FIX, M.WRITE, M.FIX_WHY }
 
 --- The kind a request names.
 ---

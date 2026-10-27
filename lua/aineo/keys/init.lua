@@ -29,12 +29,13 @@ local GROUPS = {
   { id = 'explorer', title = 'Explorer' },
   {
     id = 'explain',
-    title = 'Explain and fix',
+    title = 'Explain, fix and write',
     sections = {
       { id = 'explain', title = 'Explain' },
       { id = 'issues', title = 'Issues' },
       { id = 'fix', title = 'Fix' },
-      { id = 'fix_shown', title = 'While a fix shows' },
+      { id = 'write', title = 'Write' },
+      { id = 'fix_shown', title = 'While a proposal shows' },
       { id = 'steer', title = 'In the steering float' },
       { id = 'clean', title = 'Clean' },
     },
@@ -321,6 +322,20 @@ local ROWS = vim.list_extend(
       )
     ),
     in_section(
+      'write',
+      global_in_visual_too('explain', 'w', 'write', 'write', 'write code for a request')
+    ),
+    in_section(
+      'write',
+      global_in_visual_too(
+        'explain',
+        'W',
+        'write-deep',
+        'write deep',
+        'write code, reading the project'
+      )
+    ),
+    in_section(
       'clean',
       global(
         'explain',
@@ -333,11 +348,11 @@ local ROWS = vim.list_extend(
     listing_again('explain', 'issues', 'send', 'send the marked issues to Claude'),
     in_section(
       'fix_shown',
-      in_buffer_after_the_prefix('explain', 'Va', 'fix-accept', 'accept the fix')
+      in_buffer_after_the_prefix('explain', 'Va', 'fix-accept', 'accept the proposal')
     ),
     in_section(
       'fix_shown',
-      in_buffer_after_the_prefix('explain', 'Vr', 'fix-reject', 'reject the fix')
+      in_buffer_after_the_prefix('explain', 'Vr', 'fix-reject', 'reject the proposal')
     ),
     in_section(
       'fix_shown',
@@ -345,7 +360,7 @@ local ROWS = vim.list_extend(
         'explain',
         'Vd',
         'fix-diff',
-        'show the fix as a diff, or as an overlay'
+        'show the proposal as a diff, or as an overlay'
       )
     ),
     in_section('steer', in_buffer('explain', '<CR>', nil, 'send the prompt')),
