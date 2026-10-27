@@ -231,6 +231,15 @@ T['start_session()']['gives a SubagentStart command hook with no matcher that pr
   })
 end
 
+T['start_session()']['turns Claude Code’s agent view off in the settings it gives inline'] = function()
+  local fake = claude.fake('agent-view-off', 'exit')
+
+  claude.start(child, fake)
+
+  local given = claude.decoded_words_after(claude.arguments(fake), '--settings')[1]
+  eq(given.disableAgentView, true)
+end
+
 --- Settings of the user's own, as a `--settings` of `claude.cmd` gives them,
 --- with a `SubagentStart` hook of their own.
 local USER_SUBAGENT_SETTINGS =
@@ -249,6 +258,17 @@ T['start_session()']['adds the SubagentStart hook after those of a --settings in
   eq(#entries, 2)
   eq(entries[1], vim.json.decode(USER_SUBAGENT_SETTINGS).hooks.SubagentStart[1])
   eq(printed_by(entries[2].hooks[1].command).hookSpecificOutput.additionalContext, SUBAGENT_CONTEXT)
+end
+
+T['start_session()']['turns agent view off in the settings of a --settings in claude.cmd, whatever they say of it, keeping the rest'] = function()
+  local fake = claude.fake('agent-view-off-merged', 'exit')
+  local user_settings = '{"disableAgentView":false,"model":"haiku"}'
+
+  claude.start(child, fake, { cmd = claude.fake_command({ '--settings', user_settings }) })
+
+  local file = claude.words_after(claude.arguments(fake), '--settings')[1]
+  local merged = vim.json.decode(table.concat(vim.fn.readfile(file), '\n'))
+  eq({ merged.disableAgentView, merged.model }, { true, 'haiku' })
 end
 
 T['start_session()']['adds no hook to a --settings in claude.cmd whose SubagentStart hooks are not a list'] = function()
