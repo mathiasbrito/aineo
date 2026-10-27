@@ -300,4 +300,102 @@ function M.fix_prompt(fix)
   }, '\n')
 end
 
+--- The code written for a request.
+---@class aineo.explain.WriteCode
+---@field path string the file's path from the folder Claude Code runs in
+---@field language string the buffer's `'filetype'`, empty when it has none
+---@field first integer the first line of the request, from 1, or the line the code goes after
+---@field last integer the last line of the request, or the line the code goes after
+---@field request? string the request the user typed, the code going after the line `first`; absent when the lines `first` to `last` hold the request, which the code replaces
+---@field lines string[] every line of the buffer, as it stands
+
+--- What a prompt for code written in place of the lines that hold its
+--- request says first, as a `string.format()` pattern given the file, its
+--- language and the first and last line of the request.
+local WRITE_IN_PLACE_HEAD = 'Write code in the file %s (language: %s) for the request lines %d to %d hold,'
+  .. ' as numbered below: those lines are the request, to be replaced by the code that fulfils it.'
+
+--- What a prompt for code written in place of its request always says
+--- after its head, as a `string.format()` pattern given the first and last
+--- line of the request and the first again: how to answer, which
+--- `aineo.explain.write` holds the answer to.
+local WRITE_IN_PLACE_RULES = 'Answer in summary what the code does in one sentence,'
+  .. ' and one edit that replaces the request with it.'
+  .. ' Write only into this file.'
+  .. ' The edit gives in line and last the lines %d and %d, and repeats in old exactly those lines'
+  .. ' of the numbered text below, verbatim with their indentation and without their numbers;'
+  .. ' new holds the lines of the code, in the language of the file and its style,'
+  .. ' the first indented as line %d is,'
+  .. ' and why says what the code does.'
+  .. ' When the request cannot be fulfilled in this file, answer no edits and say why in the summary.'
+
+--- What a prompt for code written after a line says first, as a
+--- `string.format()` pattern given the file, its language and the line.
+local WRITE_BELOW_HEAD = 'Write code in the file %s (language: %s) for the request below,'
+  .. ' to be inserted after line %d as numbered below.'
+
+--- What a prompt for code written after a line always says after the
+--- request, as a `string.format()` pattern given the line twice: how
+--- to answer, which `aineo.explain.write` holds the answer to.
+local WRITE_BELOW_RULES = 'Answer in summary what the code does in one sentence,'
+  .. ' and one edit that inserts it.'
+  .. ' Write only into this file.'
+  .. ' The edit gives in line and last the line %d, and repeats in old exactly that line'
+  .. ' of the numbered text below, verbatim with its indentation and without its number;'
+  .. ' new holds that line unchanged, then the lines of the code, in the language of the file'
+  .. ' and its style, indented as the code around line %d is,'
+  .. ' and why says what the code does.'
+  .. ' When the request cannot be fulfilled in this file, answer no edits and say why in the summary.'
+
+--- The prompt Claude Code reads to write code for `code.request`, after the
+--- line `code.first`: the file, its language — `unknown` when the buffer has
+--- no `'filetype'` — and that line, the request as typed, how to answer
+--- (`WRITE_BELOW_RULES`), then every line of the buffer, numbered
+--- (`numbered()`).
+---
+---@param code aineo.explain.WriteCode
+---@return string
+local function write_below_prompt(code)
+  return table.concat({
+    WRITE_BELOW_HEAD:format(
+      code.path,
+      code.language ~= '' and code.language or 'unknown',
+      code.first
+    ),
+    '',
+    code.request,
+    '',
+    WRITE_BELOW_RULES:format(code.first, code.first),
+    '',
+    table.concat(numbered(code.lines), '\n'),
+  }, '\n')
+end
+
+--- The prompt Claude Code reads to write code for `code`: for the request
+--- typed, the code going after a line (`write_below_prompt()`); else for
+--- the request that the lines `code.first` to `code.last` hold: the file,
+--- its language — `unknown` when the buffer has no `'filetype'` — and those
+--- lines, which the code replaces, how to answer (`WRITE_IN_PLACE_RULES`),
+--- then every line of the buffer, numbered (`numbered()`).
+---
+---@param code aineo.explain.WriteCode
+---@return string
+function M.write_prompt(code)
+  if code.request then
+    return write_below_prompt(code)
+  end
+  return table.concat({
+    WRITE_IN_PLACE_HEAD:format(
+      code.path,
+      code.language ~= '' and code.language or 'unknown',
+      code.first,
+      code.last
+    ),
+    '',
+    WRITE_IN_PLACE_RULES:format(code.first, code.last, code.first),
+    '',
+    table.concat(numbered(code.lines), '\n'),
+  }, '\n')
+end
+
 return M
