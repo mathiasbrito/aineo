@@ -717,12 +717,15 @@ T['the steering float']['tells once, with no traceback, that claude.cmd cannot b
   start()
   ask_steered({ kind = kind, command = { '/nonexistent/aineo-claude' } })
 
-  press('<CR>')
+  child.lua([[_G.sent = pcall(vim.cmd, 'execute "normal \\<CR>"')]])
 
   local told = explained.told(child)
   eq(#told, 1)
   eq(vim.startswith(told[1].message, 'aineo: claude.cmd cannot be run: '), true)
-  eq({ told[1].level, child.lua_get('vim.v.errmsg') }, { vim.log.levels.ERROR, '' })
+  eq(
+    { told[1].level, child.lua_get('vim.v.errmsg'), child.lua_get('_G.sent') },
+    { vim.log.levels.ERROR, '', true }
+  )
 end
 
 return T
