@@ -584,6 +584,14 @@ aineo also gives Claude Code hooks that tell aineo when you switch session
 inside Claude Code with `/clear`, `/resume` or `/branch`, so the Report,
 Input's draft and the changes pane follow the session Claude Code is on.
 
+aineo starts each tab's Claude Code with Claude Code's agent view turned off
+(`"disableAgentView": true`, added to the settings aineo gives it, yours
+kept). In an aineo tab there is no agent view and no `/background`, and
+`/fork` runs a forked subagent. `/resume` of a conversation that runs in the
+background only prints how to attach to it: open it with `\S`, which
+attaches a new tab to it, or with `claude attach <id>` outside aineo.
+`:help aineo-agent-view` has the details.
+
 ## The office
 
 When you leave the right side of the layout alone for three minutes
@@ -790,7 +798,8 @@ version may change the title.
 ## Health check
 
 `:checkhealth aineo` reports the Neovim version, the configuration (an unknown
-key is named), whether `claude` runs, the shell, the server socket, the prefix
+key is named), whether `claude` runs, whether its agent view is off in aineo's
+tabs, the shell, the server socket, the prefix
 mappings, the tab line, the activity indicator, the picker `\f` uses, how code
 is explained and written, the office packs found and why the autostart did or
 did not run.

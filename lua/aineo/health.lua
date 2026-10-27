@@ -277,6 +277,33 @@ local function check_claude(resolved_config)
   )
 end
 
+--- Reports whether aineo's tabs run Claude Code with its agent view turned
+--- off, as aineo's settings turn it off: a warning when the `--settings` of
+--- `claude.cmd` cannot take them (`aineo.claude`'s
+--- `given_settings_verdict()`), since Claude Code then starts with those
+--- settings as they are; nothing checked while the configuration,
+--- `resolved_config`, is wrong.
+---
+---@param resolved_config table|nil the configuration, `nil` when it is wrong
+local function check_agent_view(resolved_config)
+  vim.health.start('Agent view in tabs')
+  if resolved_config == nil then
+    vim.health.info('agent view in tabs is not checked while the configuration is wrong')
+    return
+  end
+  local verdict = claude.given_settings_verdict(resolved_config.claude.cmd, vim.fn.getcwd())
+  if verdict and verdict.problem then
+    vim.health.warn(
+      "agent view stays on in aineo's tabs: claude.cmd's --settings cannot take aineo's settings",
+      "In a tab, /resume of a conversation that runs in the background then moves the tab's conversation to the background, and aineo does not follow it: :help aineo-agent-view"
+    )
+    return
+  end
+  vim.health.ok(
+    "aineo's tabs run Claude Code with agent view turned off: open a conversation that runs in the background with \\S, or claude attach outside aineo"
+  )
+end
+
 --- Reports the 'shell' the terminal pane and the run pane run, and warns when its program
 --- (`aineo.shell`'s `shell_program()`) is not executable (`executable()`), in
 --- the words the shell home uses when it refuses to start.
@@ -1180,6 +1207,7 @@ function M.check()
   check_neovim()
   local resolved_config = check_configuration()
   check_claude(resolved_config)
+  check_agent_view(resolved_config)
   check_shell()
   check_server_socket()
   check_prefix_mappings(resolved_config)
