@@ -16,7 +16,7 @@ M.LINES = 42
 
 --- What `:Aineo` tells the user when it is not given one of its subcommands.
 M.USAGE =
-  'aineo: :Aineo takes one of send, open, report, input, claude, claude-numbers, sessions, new, pane, run, claim, tab, diff, find, zoom, explain, office, cheatsheet'
+  'aineo: :Aineo takes one of send, open, report, input, claude, claude-numbers, sessions, new, pane, run, claim, tab, diff, find, zoom, explain, write, office, cheatsheet'
 
 --- What `:Aineo office` tells the user when it is given words it does not
 --- take.

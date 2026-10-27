@@ -24,6 +24,13 @@ local DEFAULTS = {
     fix_timeout_ms = 300000,
     issues_prompt = 'Some issues were found in this code, can you check and propose a fix if the issue holds:',
   },
+  write = {
+    model = 'haiku',
+    timeout_ms = 120000,
+    deep_model = 'sonnet',
+    deep_effort = 'high',
+    deep_timeout_ms = 300000,
+  },
   office = {
     idle_ms = 180000,
     pack = 'default',
@@ -517,6 +524,68 @@ T['resolve_config()']['refuses a fix timeout that is not a whole number of milli
   expect.error(function()
     config.resolve_config({ explain = { fix_timeout_ms = timeout } }, nil)
   end, 'explain%.fix_timeout_ms: expected a whole number of milliseconds of at least 1')
+end
+
+--- Settings of `write` given for each of its keys.
+local WRITE_SETTINGS = {
+  model = 'sonnet',
+  timeout_ms = 1000,
+  deep_model = 'opus',
+  deep_effort = 'max',
+  deep_timeout_ms = 2000,
+}
+
+T['resolve_config()']['takes the write settings from either source: Haiku, Sonnet at effort high, 120000 and 300000 ms by default'] = function()
+  local from_global = config.resolve_config({ write = WRITE_SETTINGS }, nil)
+  local from_setup = config.resolve_config(
+    { write = { model = 'opus' } },
+    { write = vim.tbl_extend('force', WRITE_SETTINGS, { model = 'haiku', deep_effort = 'low' }) }
+  )
+
+  eq(from_global.write, WRITE_SETTINGS)
+  eq(
+    from_setup.write,
+    vim.tbl_extend('force', WRITE_SETTINGS, { model = 'haiku', deep_effort = 'low' })
+  )
+  eq(config.resolve_config(nil, nil).write, {
+    model = 'haiku',
+    timeout_ms = 120000,
+    deep_model = 'sonnet',
+    deep_effort = 'high',
+    deep_timeout_ms = 300000,
+  })
+end
+
+--- What a setting of `write` that is not a whole number of milliseconds of
+--- at least 1 is refused with.
+local NOT_MILLISECONDS = 'expected a whole number of milliseconds of at least 1'
+
+T['resolve_config()']['refuses a write setting that is not what it takes'] = MiniTest.new_set({
+  parametrize = {
+    { 'model', '', 'write%.model: expected a non%-empty string naming a model' },
+    { 'model', 5, 'write%.model: expected a non%-empty string naming a model' },
+    { 'deep_model', false, 'write%.deep_model: expected a non%-empty string naming a model' },
+    {
+      'deep_effort',
+      'highest',
+      'write%.deep_effort: expected one of low, medium, high, xhigh, max',
+    },
+    { 'deep_effort', 'High', 'write%.deep_effort: expected one of low, medium, high, xhigh, max' },
+    { 'timeout_ms', 0, 'write%.timeout_ms: ' .. NOT_MILLISECONDS },
+    { 'timeout_ms', 2.5, 'write%.timeout_ms: ' .. NOT_MILLISECONDS },
+    { 'deep_timeout_ms', '100', 'write%.deep_timeout_ms: ' .. NOT_MILLISECONDS },
+    { 'deep_timeout_ms', math.huge, 'write%.deep_timeout_ms: ' .. NOT_MILLISECONDS },
+  },
+})
+
+T['resolve_config()']['refuses a write setting that is not what it takes']['as'] = function(
+  key,
+  value,
+  refusal
+)
+  expect.error(function()
+    config.resolve_config({ write = { [key] = value } }, nil)
+  end, refusal)
 end
 
 T['resolve_config()']['takes the prompt that sends marked issues from either source, a request to check them by default'] = function()

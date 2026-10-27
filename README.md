@@ -169,7 +169,8 @@ resumes it.
 | `\vi`, `\VI` | the same, asking for potential issues instead of explanations (`\vi` the code alone, `\VI` with the project readable) |
 | `\VV`, `\VVI` | the deep versions of `\V` and `\VI`: a float with the whole prompt to edit opens first, then the request runs with higher effort |
 | `\Vf`, `\VVf` | propose a fix for the issue on the cursor's line, shown over the code, the buffer read-only, until you accept it with `\Va` (one undo step, no file written), reject it with `\Vr`, or see it as a diff with `\Vd`; `\VVf` opens the float to edit the prompt first; `\Vf` on unchanged code shows the fix kept from before |
-| `\vc` | cleans the buffer of everything the `\v` and `\V` keys added (answers, marks, a fix, requests that run, kept answers), leaving its text and undo history as they were |
+| `\w`, `\W` | write code for a request: in Normal mode a float asks for it and the code goes below the cursor's line; in Visual mode the selected lines are the request, sent at once, and the code replaces them. `\w` asks the cheapest model with the file alone, `\W` a stronger one at a higher effort that may read the project. The code shows and is decided as a fix is (`\Va`, `\Vr`, `\Vd`) |
+| `\vc` | cleans the buffer of everything the `\v`, `\V` and `\w` keys added (answers, marks, a fix or written code, requests that run, kept answers), leaving its text and undo history as they were |
 | `\vm` | marks the issues on the cursor's line (on each selected line in Visual mode), or unmarks them; `\s` then sends the marked issues to Claude |
 | `]v`, `[v` | jump to the next and the previous explanation or issue of the buffer |
 | `\z` | zooms the window of the right column the cursor is in, and gives the heights back when pressed again |
@@ -461,6 +462,27 @@ of this. The groups are `AineoFix`, `AineoFixGutter`,
 `AineoFixGutterFill`, `AineoFixOld`, `AineoFixWhy`, `AineoFixWhyGutter` and
 `AineoFixWhyGutterFill`.
 
+`\w` writes code for a request of yours. In Normal mode a float opens, empty,
+for you to type the request (`<CR>` sends it, `q` or `<Esc>` cancels), and the
+code goes below the cursor's line. In Visual mode the selected lines are the
+request, as you wrote them, comment markers and all: type
+`# a function that reads two values and returns the sum`, select the line and
+press `\w`, and the request is sent at once, with no float; the code replaces
+those lines. `\w` asks a Claude Code of its own with the file alone and no
+tool, on the model `write.model` (`'haiku'`, the cheapest), stopped after
+`write.timeout_ms`; `\W` lets it read the project with the read-only tools
+when that helps, on `write.deep_model` (`'sonnet'`; `'opus'` works too) at
+`write.deep_effort` (`'high'`), stopped after `write.deep_timeout_ms`. Neither
+may write anything. The code shows over the file as a fix does, with the
+request named above it, and is decided the same way: `\Va` accepts it as one
+undo step, writing no file, `\Vr` rejects it and leaves your request as you
+wrote it, `\Vd` shows it as a diff. aineo refuses an answer that would change
+any line outside the request, or the line under the cursor. A fix and written
+code replace each other, and the same request on unchanged code shows the code
+kept from before. `:Aineo write [deep]`, with a range for the request's lines,
+does the same. The groups are `AineoWrite`, `AineoWriteGutter` and
+`AineoWriteGutterFill`.
+
 An explanation shows as a band tinted from your colour scheme, its text italic
 in the accent of `DiagnosticInfo`, starting at the explained line's indent,
 with a `▎` and the label `expl` in the number column and the line's number in
@@ -671,6 +693,13 @@ vim.g.aineo = {
     fix_timeout_ms = 300000,
     issues_prompt = 'Some issues were found in this code, can you check and propose a fix if the issue holds:',
   },
+  write = {
+    model = 'haiku',
+    timeout_ms = 120000,
+    deep_model = 'sonnet',
+    deep_effort = 'high',
+    deep_timeout_ms = 300000,
+  },
   office = {
     idle_ms = 180000,
     pack = 'default',
@@ -707,6 +736,11 @@ vim.g.aineo = {
 | `explain.fix_effort` | `'high'` | The effort of that Claude Code, as `claude --effort` takes it: `'low'`, `'medium'`, `'high'`, `'xhigh'` or `'max'`. |
 | `explain.fix_timeout_ms` | `300000` | How long a request for a fix may run before aineo stops its Claude Code, a whole number of milliseconds of at least 1. |
 | `explain.issues_prompt` | `'Some issues were found in this code, can you check and propose a fix if the issue holds:'` | The words that open the message `\s` sends when issues are marked, before the line for each issue. A non-empty string. |
+| `write.model` | `'haiku'` | The model of the Claude Code that `\w` starts to write code, as `claude --model` takes it. A non-empty string. |
+| `write.timeout_ms` | `120000` | How long a request of `\w` may run before aineo stops its Claude Code, a whole number of milliseconds of at least 1. |
+| `write.deep_model` | `'sonnet'` | The model of the Claude Code that `\W` starts, as `claude --model` takes it, such as `'opus'`. A non-empty string. |
+| `write.deep_effort` | `'high'` | The effort of that Claude Code, as `claude --effort` takes it: `'low'`, `'medium'`, `'high'`, `'xhigh'` or `'max'`. `\w` passes none. |
+| `write.deep_timeout_ms` | `300000` | How long a request of `\W` may run before aineo stops its Claude Code, a whole number of milliseconds of at least 1. |
 | `office.idle_ms` | `180000` | How long the cursor stays out of the right side before the office shows by itself, in milliseconds, a whole number of at least 1; `false` turns that off, and the office then shows only for `\O`. It needs `'termguicolors'`. See `:help aineo-config-office.idle_ms`. |
 | `office.pack` | `'default'` | The pack the office draws: a name of letters, digits, `_` and `-`, or a list of names, one picked at random each time the office shows. `'default'` and `'space_station'` ship with aineo; others are found on `'runtimepath'` under `aineo-office/<name>/`. A pack that cannot be used gives way to the default, with a warning. `:Aineo office pack <name>` replaces it for this Neovim. See `:help aineo-config-office.pack`. |
 | `office.pieces` | `{}` | Art files of your own that replace pieces of the pack, by piece name: `{ desk = '~/art/desk.txt' }`. A file with a problem is left out, with a warning. See `:help aineo-config-office.pieces`. |
@@ -758,7 +792,8 @@ version may change the title.
 `:checkhealth aineo` reports the Neovim version, the configuration (an unknown
 key is named), whether `claude` runs, the shell, the server socket, the prefix
 mappings, the tab line, the activity indicator, the picker `\f` uses, how code
-is explained, the office packs found and why the autostart did or did not run.
+is explained and written, the office packs found and why the autostart did or
+did not run.
 It starts no Claude session and opens no layout; the one command it runs is
 `claude.cmd` with `--version` appended.
 

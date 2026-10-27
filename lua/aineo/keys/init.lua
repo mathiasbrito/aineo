@@ -29,11 +29,12 @@ local GROUPS = {
   { id = 'explorer', title = 'Explorer' },
   {
     id = 'explain',
-    title = 'Explain and fix',
+    title = 'Explain, fix and write',
     sections = {
       { id = 'explain', title = 'Explain' },
       { id = 'issues', title = 'Issues' },
       { id = 'fix', title = 'Fix' },
+      { id = 'write', title = 'Write' },
       { id = 'fix_shown', title = 'While a fix shows' },
       { id = 'steer', title = 'In the steering float' },
       { id = 'clean', title = 'Clean' },
@@ -318,6 +319,20 @@ local ROWS = vim.list_extend(
         'explain-fix-steered',
         nil,
         'propose a fix, editing the prompt first'
+      )
+    ),
+    in_section(
+      'write',
+      global_in_visual_too('explain', 'w', 'write', 'write', 'write code for a request')
+    ),
+    in_section(
+      'write',
+      global_in_visual_too(
+        'explain',
+        'W',
+        'write-deep',
+        'write deep',
+        'write code, reading the project'
       )
     ),
     in_section(

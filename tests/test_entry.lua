@@ -98,6 +98,7 @@ T[':Aineo']['completes its argument to its eighteen subcommands'] = function()
     'find',
     'zoom',
     'explain',
+    'write',
     'office',
     'cheatsheet',
   })
@@ -106,7 +107,7 @@ end
 T[':Aineo']['is described with every subcommand it takes'] = function()
   eq(
     child.lua_get('vim.api.nvim_get_commands({}).Aineo.definition'),
-    'aineo: send, open, report, input, claude, claude-numbers, sessions, new, pane agent|changes|terminal|run|explorer, run shell, claim [id], tab new|close|{n}, diff close, find, zoom or zoom full, [range]explain [issues] [tools] [new]|clear, office [check|states|preview [name]|new name|pack [name]|reset], cheatsheet'
+    'aineo: send, open, report, input, claude, claude-numbers, sessions, new, pane agent|changes|terminal|run|explorer, run shell, claim [id], tab new|close|{n}, diff close, find, zoom or zoom full, [range]explain [issues] [tools] [new]|clear, [range]write [deep], office [check|states|preview [name]|new name|pack [name]|reset], cheatsheet'
   )
 end
 

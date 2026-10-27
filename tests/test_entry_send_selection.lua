@@ -158,7 +158,10 @@ T[':Aineo send']['takes no range: after a Visual selection, it refuses it, and n
     input = { 'a1', 'a2', 'a3' },
   })
   eq(entry.messages(child), {
-    { message = 'aineo: only :Aineo explain takes a range', level = vim.log.levels.ERROR },
+    {
+      message = 'aineo: only :Aineo explain and :Aineo write take a range',
+      level = vim.log.levels.ERROR,
+    },
   })
 end
 

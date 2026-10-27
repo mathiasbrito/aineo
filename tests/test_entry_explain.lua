@@ -267,7 +267,7 @@ T[':Aineo explain']['with another word says which it takes, and asks nothing'] =
 end
 
 local RANGE_REFUSAL = {
-  message = 'aineo: only :Aineo explain takes a range',
+  message = 'aineo: only :Aineo explain and :Aineo write take a range',
   level = vim.log.levels.ERROR,
 }
 

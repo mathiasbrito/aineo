@@ -51,5 +51,7 @@ M.propose_fix = explaining.propose_fix
 M.accept_fix = explaining.accept_fix
 M.reject_fix = explaining.reject_fix
 M.toggle_fix_diff = explaining.toggle_fix_diff
+M.write = explaining.write
+M.write_selection = explaining.write_selection
 
 return M
