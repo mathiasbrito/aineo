@@ -1,6 +1,7 @@
---- The preview of a proposed fix: an overlay on the buffer, which stays
---- untouched until the fix is accepted. The old lines of each edit are
---- hidden and its new lines drawn as virtual lines in their place.
+--- The preview of a proposed fix, or of code written for a request: an
+--- overlay on the buffer, which stays untouched until it is accepted. The
+--- old lines of each edit are hidden and its new lines drawn as virtual
+--- lines in their place.
 
 local draw = require('aineo.explain.draw')
 local kinds = require('aineo.explain.kinds')
@@ -41,8 +42,8 @@ local CONCEALING = 2
 ---@field saved table<integer, aineo.explain.ConcealOptions> the options of each window it set, before it set them
 ---@field set table<integer, aineo.explain.ConcealOptions> the options it set in each window
 ---@field modifiable boolean the buffer's 'modifiable' before it, which it turns off while shown
----@field ask_key string what asks a fix again, as the user is told it
----@field issue string the text of the issue it fixes
+---@field ask_key string what asks the fix or the code again, as the user is told it
+---@field subject aineo.explain.Subject what it is proposed for
 ---@field stale boolean whether its edits no longer stand in the buffer, as when it was last drawn
 ---@field first_row integer the line, from 0, its first edit started on when it was last drawn
 ---@field redraw_pending? boolean whether a drawing again is scheduled (`redraw_lost()`)
@@ -76,14 +77,25 @@ local FIX_STYLE = {
   fill = kinds.FIX.groups.fill,
 }
 
---- The style the issue a fix fixes is drawn in at the top of its overlay.
----@type aineo.explain.Style
-local ISSUE_STYLE = {
-  gutter_mark = draw.GUTTER_MARK,
-  text = kinds.ISSUES.groups.text,
-  gutter = kinds.ISSUES.groups.gutter,
-  fill = kinds.ISSUES.groups.fill,
-}
+--- What a proposal is made for, shown at the top of its overlay: its text
+--- and the look it is drawn in, whose label names it in the gutter.
+---@class aineo.explain.Subject
+---@field text string
+---@field look aineo.explain.Look
+
+--- The style the subject of a proposal is drawn in at the top of its
+--- overlay: the band of its look.
+---
+---@param subject aineo.explain.Subject
+---@return aineo.explain.Style
+local function subject_style(subject)
+  return {
+    gutter_mark = draw.GUTTER_MARK,
+    text = subject.look.groups.text,
+    gutter = subject.look.groups.gutter,
+    fill = subject.look.groups.fill,
+  }
+end
 
 --- The style the fix explanation's rows are drawn in.
 ---@type aineo.explain.Style
@@ -358,12 +370,12 @@ local function blocks_of(spans)
 end
 
 --- Adds to `places` the edits of `block` as the overlay shows them: their
---- old lines hidden, which hides what is shown above them, the issue the
---- fix fixes among it, and their rows — first, for the first edit, that
---- issue's text in the issue look, labelled `issue`; then each edit's head
---- and explanation (`lead_rows()`), then its new lines — below the line
---- before the block,
---- else above the line after it. A block that spans the whole buffer has no
+--- old lines hidden, which hides what is shown above them, the issue a
+--- fix fixes among it, and their rows — first, for the first edit, the
+--- preview's subject in its look, labelled as the look is (the issue's
+--- text, labelled `issue`, or the request code is written for); then each
+--- edit's head and explanation (`lead_rows()`), then its new lines — below
+--- the line before the block, else above the line after it. A block that spans the whole buffer has no
 --- line to hang them on and shows as the diff view does (`add_diff()`).
 ---
 ---@param preview aineo.explain.Preview
@@ -383,7 +395,11 @@ local function add_overlay(preview, block, spans, geometry, places)
   local rows = {}
   for _, index in ipairs(block.indexes) do
     if index == 1 then
-      vim.list_extend(rows, band_rows({ preview.issue }, geometry, kinds.ISSUES.label, ISSUE_STYLE))
+      local subject = preview.subject
+      vim.list_extend(
+        rows,
+        band_rows({ subject.text }, geometry, subject.look.label, subject_style(subject))
+      )
     end
     vim.list_extend(rows, lead_rows(preview, index, geometry))
     vim.list_extend(rows, new_rows(preview.edits[index], geometry))
@@ -882,8 +898,8 @@ end
 ---@field summary string the whole fix in one sentence
 ---@field edits aineo.explain.PlacedEdit[] placed in the buffer's text as it reads, in the order of their lines
 ---@field keys? aineo.explain.FixKeys the keys that accept, reject and show the diff
----@field ask_key string what asks a fix again, as the user is told it
----@field issue string the text of the issue the fix fixes
+---@field ask_key string what asks the fix or the code again, as the user is told it
+---@field subject aineo.explain.Subject what it is proposed for: the issue a fix fixes, in the issue look, or the request code is written for
 
 --- Shows the edits of `order` in `buffer` as a preview: the buffer is not
 --- changed, and cannot be while it is shown, its 'modifiable' off; each
@@ -905,7 +921,7 @@ function M.show(buffer, order)
     set = {},
     modifiable = vim.bo[buffer].modifiable,
     ask_key = order.ask_key,
-    issue = order.issue,
+    subject = order.subject,
     stale = false,
     first_row = order.edits[1].first - 1,
   }

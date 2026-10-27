@@ -1,6 +1,7 @@
 --- aineo's explain home, `require('aineo.explain')`: asks a Claude Code of
 --- its own, started for one request and never kept, to explain the code of a
---- buffer, or of some of its lines, or to find its potential issues.
+--- buffer, or of some of its lines, to find its potential issues, to propose
+--- a fix of one, or to write code for a request of the user's.
 
 local answer = require('aineo.explain.answer')
 local fix = require('aineo.explain.fix')
@@ -13,6 +14,7 @@ local message = require('aineo.explain.message')
 local request = require('aineo.explain.request')
 local runs = require('aineo.explain.runs')
 local steer = require('aineo.explain.steer')
+local write = require('aineo.explain.write')
 
 local M = {}
 
@@ -415,13 +417,13 @@ end
 --- Returns `buffer` to how it behaved when it was opened, without a word:
 --- stops the requests that run for it, so that none of their answers is
 --- shown later; closes the float steering a request for it, if open
---- (`aineo.explain.steer`); rejects the fix it shows
---- (`aineo.explain.fix`), which gives back its 'modifiable' and its
+--- (`aineo.explain.steer`); rejects the fix or the code written that it
+--- shows (`aineo.explain.fix`), which gives back its 'modifiable' and its
 --- windows' options; removes every
 --- explanation and every issue it shows, with their marks, which takes back
---- its keys `]v` and `[v` and its windows' badges; and drops the answers and
---- fixes kept for it (`aineo.explain.kept`), so that the next request asks
---- anew. Its text and its undo history stay as they are.
+--- its keys `]v` and `[v` and its windows' badges; and drops the answers,
+--- fixes and code kept for it (`aineo.explain.kept`), so that the next
+--- request asks anew. Its text and its undo history stay as they are.
 ---
 ---@param buffer integer
 function M.clear(buffer)
@@ -498,25 +500,39 @@ function M.propose_fix(fixing)
   fix.propose(fixing, project_folder(vim.api.nvim_buf_get_name(fixing.buffer)))
 end
 
---- Accepts the fix `buffer` shows: its edits are applied as one undo step,
---- and the file is not written (`aineo.explain.fix`'s `accept()`).
+--- Asks a Claude Code of its own to write code in `writing.buffer` for a
+--- request of the user's (`aineo.explain.write`'s `propose()`), running
+--- Claude Code in the project's folder of the buffer's file
+--- (`project_folder()`).
+---
+--- Raises an error naming `claude.cmd` when its command cannot be run.
+---
+---@param writing aineo.explain.WriteRequest
+function M.propose_write(writing)
+  write.propose(writing, project_folder(vim.api.nvim_buf_get_name(writing.buffer)))
+end
+
+--- Accepts the fix or the code written that `buffer` shows: its edits are
+--- applied as one undo step, and the file is not written
+--- (`aineo.explain.fix`'s `accept()`).
 ---
 ---@param buffer integer
 function M.accept_fix(buffer)
   fix.accept(buffer)
 end
 
---- Shows the fix `buffer` shows as the diff view, its old lines struck
---- through above its new lines, or as the overlay again
---- (`aineo.explain.fix`'s `toggle_diff()`).
+--- Shows the fix or the code written that `buffer` shows as the diff view,
+--- its old lines struck through above its new lines, or as the overlay
+--- again (`aineo.explain.fix`'s `toggle_diff()`).
 ---
 ---@param buffer integer
 function M.toggle_fix_diff(buffer)
   fix.toggle_diff(buffer)
 end
 
---- Rejects the fix `buffer` shows, if any: its preview goes and the buffer
---- stays as it reads (`aineo.explain.fix`'s `reject()`).
+--- Rejects the fix or the code written that `buffer` shows, if any: its
+--- preview goes and the buffer stays as it reads (`aineo.explain.fix`'s
+--- `reject()`).
 ---
 ---@param buffer integer
 function M.reject_fix(buffer)
