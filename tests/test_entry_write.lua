@@ -171,9 +171,10 @@ T[':Aineo write']['with a range asks at once for the lines of the range, as \\w 
 
   child.cmd('3,3Aineo write')
 
-  local argv = recorded(2)[1].argv
-  eq({ argv[9], argv[#argv] }, { 'haiku', '' })
-  eq(vim.startswith(recorded(2)[2].stdin, 'Write code in the file src/code.lua'), true)
+  local records = recorded(2)
+  eq(#records, 2)
+  eq({ records[1].argv[9], records[1].argv[#records[1].argv] }, { 'haiku', '' })
+  eq(vim.startswith(records[2].stdin, 'Write code in the file src/code.lua'), true)
 end
 
 T[':Aineo write']['deep, with a range, asks as \\W does'] = function()
@@ -181,8 +182,9 @@ T[':Aineo write']['deep, with a range, asks as \\W does'] = function()
 
   child.cmd('3Aineo write deep')
 
-  local argv = recorded(2)[1].argv
-  eq({ argv[9], argv[#argv] }, { 'sonnet', 'high' })
+  local records = recorded(2)
+  eq(#records, 2)
+  eq({ records[1].argv[9], records[1].argv[#records[1].argv] }, { 'sonnet', 'high' })
 end
 
 T[':Aineo write']['without a range opens the float of the request below the cursor'] = function()
@@ -227,8 +229,8 @@ T['in Visual mode']['asks at once for the selected lines, with no float'] = func
 
   press('V', keys)
 
-  local stdin = vim.split(recorded(2)[2].stdin, '\n')
   eq(in_a_float(), false)
+  local stdin = vim.split(recorded(2)[2].stdin, '\n')
   eq(
     stdin[1],
     'Write code in the file src/code.lua (language: lua) for the request lines 3 to 3 hold,'
@@ -245,7 +247,9 @@ local function wait_for_preview()
   end, 20)
 end
 
-T['in Visual mode']['replaces the selected lines once \\Va accepts, and \\Vr leaves them'] = function(
+T['deciding in Visual mode'] = MiniTest.new_set({ parametrize = { { '\\w' }, { '\\W' } } })
+
+T['deciding in Visual mode']['replaces the selected lines once \\Va accepts, and \\Vr leaves them'] = function(
   keys
 )
   start(REPLACING_THE_REQUEST)
