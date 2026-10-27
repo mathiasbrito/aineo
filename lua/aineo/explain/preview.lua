@@ -44,6 +44,7 @@ local CONCEALING = 2
 ---@field modifiable boolean the buffer's 'modifiable' before it, which it turns off while shown
 ---@field ask_key string what asks the fix or the code again, as the user is told it
 ---@field subject aineo.explain.Subject what it is proposed for
+---@field kind aineo.explain.Kind what it is, a fix or written code, which names it in its head row and its messages
 ---@field stale boolean whether its edits no longer stand in the buffer, as when it was last drawn
 ---@field first_row integer the line, from 0, its first edit started on when it was last drawn
 ---@field redraw_pending? boolean whether a drawing again is scheduled (`redraw_lost()`)
@@ -134,14 +135,16 @@ end
 --- What the head row of `preview` says: that its buffer is read-only until
 --- it is accepted or rejected, while its 'modifiable' is off, and what
 --- accepts it, rejects it and shows its diff (`named_key()`). A stale
---- preview's says instead that the code under it changed, what rejects it
---- and what asks again.
+--- preview's says instead what its kind says when the code under it
+--- changed (`aineo.explain.kinds`' `changed`), what rejects it and what
+--- asks again.
 ---
 ---@param preview aineo.explain.Preview
 ---@return string
 local function head_text(preview)
   if preview.stale then
-    return ('the code under the fix changed · %s rejects · %s asks again'):format(
+    return ('%s · %s rejects · %s asks again'):format(
+      preview.kind.changed,
       named_key(preview, 'reject'),
       preview.ask_key
     )
@@ -244,7 +247,7 @@ end
 ---@param geometry aineo.explain.Geometry
 ---@return table[][]
 local function head_rows(preview, geometry)
-  return band_rows({ head_text(preview) }, geometry, kinds.FIX.label, FIX_STYLE)
+  return band_rows({ head_text(preview) }, geometry, preview.kind.label, FIX_STYLE)
 end
 
 --- The virtual lines drawn before the new lines of the edit `index` of
@@ -835,7 +838,7 @@ function M.apply(buffer)
   local spans = standing_spans(preview)
   if not spans then
     render(preview)
-    vim.notify('aineo: the code under the fix changed; ask again', vim.log.levels.WARN)
+    vim.notify(('aineo: %s; ask again'):format(preview.kind.changed), vim.log.levels.WARN)
     return false
   end
   local lowest_first = {}
@@ -905,7 +908,8 @@ function M.toggle_diff(buffer)
   end
   if is_stale(preview, spans_of(preview)) then
     vim.notify(
-      ('aineo: the fix is stale: %s rejects, %s asks again'):format(
+      ('aineo: %s: %s rejects, %s asks again'):format(
+        preview.kind.stale,
         named_key(preview, 'reject'),
         preview.ask_key
       ),
@@ -924,6 +928,7 @@ end
 ---@field edits aineo.explain.PlacedEdit[] placed in the buffer's text as it reads, in the order of their lines
 ---@field keys? aineo.explain.FixKeys the keys that accept, reject and show the diff
 ---@field ask_key string what asks the fix or the code again, as the user is told it
+---@field kind aineo.explain.Kind what it is: `kinds.FIX` or `kinds.WRITE`, which name it in its head row and its messages
 ---@field subject aineo.explain.Subject what it is proposed for: the issue a fix fixes, in the issue look, or the request code is written for
 
 --- Shows the edits of `order` in `buffer` as a preview: the buffer is not
@@ -947,6 +952,7 @@ function M.show(buffer, order)
     modifiable = vim.bo[buffer].modifiable,
     ask_key = order.ask_key,
     subject = order.subject,
+    kind = order.kind,
     stale = false,
     first_row = order.edits[1].first - 1,
   }

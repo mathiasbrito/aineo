@@ -1027,4 +1027,56 @@ T['writing below the cursor']['leaves the cursor’s line itself untouched on ac
   eq(marks_now(), { 1, 5, 0, 5 })
 end
 
+T['the words'] = MiniTest.new_set()
+
+--- Asks for code for the request of line 3 and waits for its preview,
+--- then edits line 3 under it, its 'modifiable' turned back on first, as a
+--- user forcing an edit does, which makes it stale.
+local function show_then_change()
+  start(REPLACING_THE_REQUEST)
+  ask_write({ range = { 3, 3 } })
+  wait_for_preview()
+  child.bo.modifiable = true
+  child.api.nvim_buf_set_text(0, 2, 0, 2, 0, { 'x' })
+  settle()
+end
+
+T['the words']['of an accept refused name the written code'] = function()
+  show_then_change()
+
+  child.lua("require('aineo.explain').accept_fix(vim.api.nvim_get_current_buf())")
+
+  eq(messages(), { 'aineo: the lines under the written code changed; ask again' })
+end
+
+T['the words']['of the diff of stale code name the written code'] = function()
+  show_then_change()
+
+  child.lua("require('aineo.explain').toggle_fix_diff(vim.api.nvim_get_current_buf())")
+
+  eq(messages(), { 'aineo: the written code is stale: \\Vr rejects, \\w asks again' })
+end
+
+T['the words']['of the head row label it write'] = function()
+  start(REPLACING_THE_REQUEST)
+  child.wo.number = true
+  child.wo.numberwidth = 6
+
+  ask_write({ range = { 3, 3 } })
+  wait_for_preview()
+
+  eq(
+    row_after(screen(), '▎writ ┊ ' .. CODE[3]),
+    '▎writ ┊ read-only until \\Va accepts or \\Vr rejects · \\Vd shows the diff'
+  )
+end
+
+T['the words']['of an accept with nothing shown name no fix'] = function()
+  start(REPLACING_THE_REQUEST)
+
+  child.lua("require('aineo.explain').accept_fix(vim.api.nvim_get_current_buf())")
+
+  eq(messages(), { 'aineo: no proposal is shown in this buffer' })
+end
+
 return T

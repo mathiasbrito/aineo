@@ -2079,8 +2079,12 @@ prefix is `false`.
 Normal mode it opens an empty float, titled `Write code`, in which you type
 the request: `<CR>` in Normal mode sends it, `q` and `<Esc>` cancel, a request
 of white space alone is not sent, and nothing you typed is kept for the next
-request; the code goes below the cursor's line. In Visual mode the lines the
-selection spans, whole lines whatever the kind of selection, are the request,
+request; the code goes below the cursor's line, followed while you type: lines
+added or deleted above it move it, and when the line itself is deleted
+nothing is sent and you are told `aineo: the line asked about is gone`. A
+`claude.cmd` that cannot be run is told once, from the float as from Visual
+mode. In Visual mode the lines the selection spans, whole lines whatever the
+kind of selection, are the request,
 sent at once as they are written, comment markers and all, with no float; the
 code replaces them. Selected lines of white space alone are refused with one
 message, and nothing is sent. `:Aineo write` does the same, with a range for
@@ -2118,9 +2122,16 @@ The code shows as a fix does, and is decided the same way: the buffer is
 read-only until `\Va` accepts it, as one undo step, writing no file, or `\Vr`
 rejects it, which leaves the buffer as it was, the request's lines too; `\Vd`
 shows it as a diff, and the stale mark, the keys and the 'conceallevel' are
-the fix's. Above it, in place of an issue, the request is named, on one line
-of at most 60 characters, labelled `write`, in the look of |hl-AineoWrite|,
-the accent being the foreground of `Special`, `#c678dd` without one.
+the fix's, in its own words: its head row is labelled `write`, a stale head
+row says `the lines under the written code changed`, accepting it then tells
+you `aineo: the lines under the written code changed; ask again`, and `\Vd`
+tells you `aineo: the written code is stale: \Vr rejects, \w asks again`.
+Accepting writes the code below the cursor's line without touching that line,
+so its marks and extmarks stay where they were (a fix whose new lines start
+with its old lines is applied the same way). Above it, in place of an issue,
+the request is named, on one line of at most 60 characters, labelled `write`,
+in the look of |hl-AineoWrite|, the accent being the foreground of `Special`,
+`#c678dd` without one.
 Accepting tells you `aineo: code written (u undoes it)`. A buffer shows one
 fix or written code at a time: asking for either replaces the other and stops
 the request that runs. Code that was shown is kept in memory, for the buffer,
@@ -3279,15 +3290,16 @@ row is a key, a few words on what it does and, dimmed, the `:Aineo` command
 that does the same. The keys are in groups, each with a heading and keys in a
 colour of its own: the layout and the tabs, Claude Code and its sessions, the
 agent pane, the changes pane and the diff, the run and terminal panes, the
-explorer, explaining code and its fixes, the office and the zoom, and the keys
-local to the changes pane and to the explorer. The group of explaining code
-has six sections, each under a heading of its own in the group's colour:
-Explain, Issues (with marking, sending the marked issues and jumping between
-them), Fix, While a fix shows, In the steering float, and Clean. A group is
-never split between the two columns. The sheet has two columns when the column
-is 80 cells wide or more, with the groups split so that they are as even as
-they can be, and one below that, and it is written again as the column is
-resized. The title is `aineo — keys`.
+explorer, explaining code, its fixes and writing code, the office and the
+zoom, and the keys local to the changes pane and to the explorer. The group
+of explaining code, `Explain, fix and write`, has seven sections, each under
+a heading of its own in the group's colour: Explain, Issues (with marking,
+sending the marked issues and jumping between them), Fix, Write, While a
+proposal shows (a fix or written code), In the steering float, and Clean. A
+group is never split between the two columns. The sheet has two columns
+when the column is 80 cells wide or more, with the groups split so that they
+are as even as they can be, and one below that, and it is written again as
+the column is resized. The title is `aineo — keys`.
 
 Every key is written as you type it. With the prefix (|aineo-config-prefix|)
 `,`, the sheet shows `,o` where it shows `\o` by default. With `prefix =

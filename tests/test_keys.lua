@@ -156,7 +156,7 @@ T['the sheet']['has one group for explaining, fixing and writing, in seven secti
       'Issues',
       'Fix',
       'Write',
-      'While a fix shows',
+      'While a proposal shows',
       'In the steering float',
       'Clean',
     }
@@ -186,7 +186,7 @@ T['the sheet']['lists the keys of each section in the order of the ruling'] = Mi
     { 'Issues', { 'vi', 'VI', 'VVI', 'vm', '(send)', ']v', '[v' } },
     { 'Fix', { 'Vf', 'VVf' } },
     { 'Write', { 'w', 'W' } },
-    { 'While a fix shows', { 'Va', 'Vr', 'Vd' } },
+    { 'While a proposal shows', { 'Va', 'Vr', 'Vd' } },
     { 'In the steering float', { '<CR>', 'q', 'R' } },
     { 'Clean', { 'vc' } },
   },
