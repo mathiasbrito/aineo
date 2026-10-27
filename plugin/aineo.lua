@@ -2,9 +2,10 @@
 --- `<Plug>(aineo-…)` mappings, and, once the editor has started, the prefix
 --- mappings, their twins in Terminal and Insert mode, and the autostart. It
 --- stays cheap: sourcing it requires no aineo module; once the editor has
---- started it loads the configuration alone, to read the prefixes and
---- `autostart`, and the other homes load when a command, a mapping or the
---- autostart first needs them. `aineo.entry`, the body of this composition
+--- started it loads the configuration, to read the prefixes and `autostart`,
+--- and the table of keys (`aineo.keys`, which loads nothing), to map them,
+--- and the other homes load when a command, a mapping or the autostart first
+--- needs them. `aineo.entry`, the body of this composition
 --- root, loads with the first command or mapping, and at startup only to
 --- tell the user an error (a wrong setting) or when a session plugin has
 --- restored a session.
@@ -51,6 +52,7 @@ local SUBCOMMANDS = {
   'zoom',
   'explain',
   'office',
+  'cheatsheet',
 }
 
 --- The words `:Aineo explain` takes, in the order it offers them: `tools`
@@ -371,41 +373,6 @@ for argument, action in pairs(VISUAL_ACTIONS) do
   end, { desc = 'aineo: ' .. argument .. ' the selection' })
 end
 
---- The keys that follow the prefix for each of `:Aineo`'s arguments in
---- `ACTION_ARGUMENTS` but `claim`, which has no prefix key.
-local PREFIX_KEYS = {
-  send = 's',
-  open = 'o',
-  report = 'r',
-  input = 'i',
-  claude = 'c',
-  ['claude-numbers'] = 'tcn',
-  sessions = 'S',
-  new = 'N',
-  ['pane agent'] = 'pa',
-  ['pane changes'] = 'g',
-  ['pane terminal'] = 'pt',
-  ['pane run'] = 'x',
-  ['pane explorer'] = 'e',
-  ['run shell'] = 'X',
-  ['tab new'] = 'T',
-  ['tab close'] = 'Q',
-  ['tab 1'] = '1',
-  ['tab 2'] = '2',
-  ['tab 3'] = '3',
-  ['tab 4'] = '4',
-  ['tab 5'] = '5',
-  ['tab 6'] = '6',
-  ['tab 7'] = '7',
-  ['tab 8'] = '8',
-  ['tab 9'] = '9',
-  ['diff close'] = 'd',
-  find = 'f',
-  zoom = 'z',
-  ['zoom full'] = 'Z',
-  office = 'O',
-}
-
 --- What explaining code asks for, by the words of its `<Plug>` mappings
 --- after `aineo-`, in Normal mode and in Visual mode: explanations or
 --- potential issues, from the code alone or with read-only tools, or as a
@@ -418,18 +385,6 @@ local EXPLAIN_ORDERS = {
   ['explain-issues-tools'] = { tools = true, kind = 'issues' },
   ['explain-deep'] = { tools = true, deep = true },
   ['explain-deep-issues'] = { tools = true, kind = 'issues', deep = true },
-}
-
---- The keys that follow the prefix for each of `EXPLAIN_ORDERS` and for
---- `<Plug>(aineo-explain-mark)`, the same in Normal mode and in Visual mode.
-local EXPLAIN_KEYS = {
-  explain = 'v',
-  ['explain-tools'] = 'V',
-  ['explain-issues'] = 'vi',
-  ['explain-issues-tools'] = 'VI',
-  ['explain-deep'] = 'VV',
-  ['explain-deep-issues'] = 'VVI',
-  ['explain-mark'] = 'vm',
 }
 
 for words, order in pairs(EXPLAIN_ORDERS) do
@@ -467,12 +422,6 @@ local FIX_ORDERS = {
   ['explain-fix-steered'] = { steered = true },
 }
 
---- The keys that follow the prefix for each of `FIX_ORDERS`, in Normal mode.
-local FIX_KEYS = {
-  ['explain-fix'] = 'Vf',
-  ['explain-fix-steered'] = 'VVf',
-}
-
 for words, order in pairs(FIX_ORDERS) do
   vim.keymap.set('n', ('<Plug>(aineo-%s)'):format(words), function()
     run(function()
@@ -489,10 +438,6 @@ vim.keymap.set('n', '<Plug>(aineo-explain-clean)', function()
     require('aineo.entry').clear_explanations()
   end)
 end, { desc = 'aineo: clean the explanations from this buffer' })
-
---- The keys that follow the prefix for `<Plug>(aineo-explain-clean)`, in
---- Normal mode.
-local CLEAN_KEYS = 'vc'
 
 --- The `<Plug>` mappings of a fix shown, which the keys of its buffer map
 --- to while it is shown, by the words after `aineo-fix-`: what each does
@@ -529,10 +474,6 @@ end
 --- repeats an insert by its count, which `<C-\><C-n>` does neither.
 local LEAVE_MODE = { t = '<C-\\><C-n>', i = '<C-]><Esc>' }
 
---- The prefix keys that have no twin in Terminal and Insert mode: Send acts
---- on a selection or on Normal mode's line.
-local HAS_NO_TWIN = { send = true }
-
 --- Whether `keys`, written as in a mapping, have a global mapping in
 --- `mode`: `n` for Normal mode, `x` for Visual mode, `t` for Terminal mode
 --- or `i` for Insert mode. A mapping local to a buffer does not count: it
@@ -550,68 +491,67 @@ local function has_global_mapping(mode, keys)
   end)
 end
 
---- Maps `keys` in `mode` to `argument`'s `<Plug>` mapping, typed after
+--- Maps `keys` in `mode` to the `<Plug>` mapping `plug` names, typed after
 --- `typed_before`, unless the user has mapped `keys` globally in `mode`
---- already (`has_global_mapping()`).
+--- already (`has_global_mapping()`). The mapping's description is the `:Aineo`
+--- argument that does the same, as it is typed (`pane agent`), or the words of
+--- the `<Plug>` mapping when there is none.
 ---
 ---@param mode 'n'|'x'|'t'|'i'
 ---@param keys string
----@param argument string
+---@param plug string the words after `aineo-` in the `<Plug>` mapping
 ---@param typed_before string keys typed before the `<Plug>` mapping, `''` for none
-local function map_unless_mapped(mode, keys, argument, typed_before)
+local function map_unless_mapped(mode, keys, plug, typed_before)
   if not has_global_mapping(mode, keys) then
+    local command = plug:gsub('-', ' ')
+    local described = vim.tbl_contains(ACTION_ARGUMENTS, command) and command or plug
     vim.keymap.set(
       mode,
       keys,
-      typed_before .. plug_mapping(argument),
-      { desc = 'aineo: ' .. argument }
+      typed_before .. plug_mapping(plug),
+      { desc = 'aineo: ' .. described }
     )
   end
 end
 
---- Maps `prefix` followed by each action's keys (`PREFIX_KEYS`) to the
---- action's `<Plug>` mapping, in Normal mode, and in Visual mode for each
---- action that has a Visual-mode form (`VISUAL_ACTIONS`), but for each key
---- sequence the user has mapped globally in that mode already — a mapping
---- of only the start of a sequence, of a longer one, or in the other mode,
---- does not count; maps nothing when `prefix` is `false`. An action with no
---- keys there, `claim`, gets none. Explaining code gets its keys
---- (`EXPLAIN_KEYS`) in both modes, and asking a fix its own (`FIX_KEYS`) and
---- cleaning a buffer its own (`CLEAN_KEYS`) in Normal mode.
+--- The rows of `aineo.keys` that are mapped in the editor after a prefix
+--- (`aineo.keys`' `rows()`).
+---
+---@return aineo.keys.Row[]
+local function prefixed_rows()
+  return vim.tbl_filter(function(row)
+    return row.scope == 'global'
+  end, require('aineo.keys').rows())
+end
+
+--- Maps `prefix` followed by the keys of each row `aineo.keys` declares as
+--- mapped in the editor (`prefixed_rows()`) to the row's `<Plug>` mapping, in
+--- the modes the row names, but for each key sequence the user has mapped
+--- globally in that mode already — a mapping of only the start of a sequence,
+--- of a longer one, or in the other mode, does not count; maps nothing when
+--- `prefix` is `false`. An action with no key there, `claim`, gets none.
 ---
 ---@param prefix string|false
 local function map_prefix(prefix)
   if prefix == false then
     return
   end
-  for _, argument in ipairs(ACTION_ARGUMENTS) do
-    if PREFIX_KEYS[argument] then
-      map_unless_mapped('n', prefix .. PREFIX_KEYS[argument], argument, '')
+  for _, row in ipairs(prefixed_rows()) do
+    for mode in row.modes:gmatch('.') do
+      map_unless_mapped(mode, prefix .. row.suffix, row.plug, '')
     end
   end
-  for argument in pairs(VISUAL_ACTIONS) do
-    map_unless_mapped('x', prefix .. PREFIX_KEYS[argument], argument, '')
-  end
-  for words, keys in pairs(EXPLAIN_KEYS) do
-    map_unless_mapped('n', prefix .. keys, words, '')
-    map_unless_mapped('x', prefix .. keys, words, '')
-  end
-  for words, keys in pairs(FIX_KEYS) do
-    map_unless_mapped('n', prefix .. keys, words, '')
-  end
-  map_unless_mapped('n', prefix .. CLEAN_KEYS, 'explain-clean', '')
 end
 
---- Maps `terminal_prefix` followed by each action's keys (`PREFIX_KEYS`) in
---- Terminal mode and in Insert mode to the keys that leave that mode for
---- Normal mode (`LEAVE_MODE`) and then the action's `<Plug>` mapping, so that
---- the action runs as it does from Normal mode. Skips each key sequence the
---- user has mapped globally in that mode already (`map_unless_mapped()`) and,
---- in a mode where the user has mapped `terminal_prefix` alone globally, every
---- twin: that key would otherwise wait for the next key, and a twin's letter
---- typed then would run aineo's action. Maps nothing when `terminal_prefix`
---- is `false`. Send, which has no twin (`HAS_NO_TWIN`), and `claim`, which
---- has no keys, get none.
+--- Maps `terminal_prefix` followed by the keys of each row that has a twin
+--- (`prefixed_rows()`) in Terminal mode and in Insert mode to the keys that
+--- leave that mode for Normal mode (`LEAVE_MODE`) and then the row's `<Plug>`
+--- mapping, so that the action runs as it does from Normal mode. Skips each
+--- key sequence the user has mapped globally in that mode already
+--- (`map_unless_mapped()`) and, in a mode where the user has mapped
+--- `terminal_prefix` alone globally, every twin: that key would otherwise
+--- wait for the next key, and a twin's letter typed then would run aineo's
+--- action. Maps nothing when `terminal_prefix` is `false`.
 ---
 ---@param terminal_prefix string|false
 local function map_terminal_prefix(terminal_prefix)
@@ -620,14 +560,9 @@ local function map_terminal_prefix(terminal_prefix)
   end
   for _, mode in ipairs({ 't', 'i' }) do
     if not has_global_mapping(mode, terminal_prefix) then
-      for _, argument in ipairs(ACTION_ARGUMENTS) do
-        if PREFIX_KEYS[argument] and not HAS_NO_TWIN[argument] then
-          map_unless_mapped(
-            mode,
-            terminal_prefix .. PREFIX_KEYS[argument],
-            argument,
-            LEAVE_MODE[mode]
-          )
+      for _, row in ipairs(prefixed_rows()) do
+        if row.twin then
+          map_unless_mapped(mode, terminal_prefix .. row.suffix, row.plug, LEAVE_MODE[mode])
         end
       end
     end
@@ -899,5 +834,5 @@ end, {
   range = true,
   bar = true,
   complete = complete_subcommand,
-  desc = 'aineo: send, open, report, input, claude, claude-numbers, sessions, new, pane agent|changes|terminal|run|explorer, run shell, claim [id], tab new|close|{n}, diff close, find, zoom or zoom full, [range]explain [issues] [tools] [new]|clear, office [check|states|preview [name]|new name|pack [name]|reset]',
+  desc = 'aineo: send, open, report, input, claude, claude-numbers, sessions, new, pane agent|changes|terminal|run|explorer, run shell, claim [id], tab new|close|{n}, diff close, find, zoom or zoom full, [range]explain [issues] [tools] [new]|clear, office [check|states|preview [name]|new name|pack [name]|reset], cheatsheet',
 })

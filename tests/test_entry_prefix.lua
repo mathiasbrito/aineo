@@ -33,6 +33,7 @@ local PREFIX_KEYS = {
   { 'z', '<Plug>(aineo-zoom)', 'n' },
   { 'Z', '<Plug>(aineo-zoom-full)', 'n' },
   { 'O', '<Plug>(aineo-office)', 'n' },
+  { '?', '<Plug>(aineo-cheatsheet)', 'n' },
   { 's', '<Plug>(aineo-send)', 'x' },
 }
 
@@ -230,6 +231,41 @@ T["the user's own mapping"]['local to the buffer the editor starts in stays ther
 
   eq(own_mapping, '<Cmd>let g:mine = 1<CR>')
   eq(child.fn.maparg('\\s', 'n'), '<Plug>(aineo-send)')
+end
+
+--- The description each sample key's mapping carries, as `:map` and a
+--- which-key popup show it: the mode, the keys, and the description. A key
+--- of `:Aineo`'s actions says the command as it is typed, with a space; the
+--- other keys say the words of their `<Plug>` mapping.
+local DESCRIPTIONS = {
+  { 'n', '\\pa', 'aineo: pane agent' },
+  { 'n', '\\X', 'aineo: run shell' },
+  { 'n', '\\1', 'aineo: tab 1' },
+  { 'n', '\\d', 'aineo: diff close' },
+  { 'n', '\\Z', 'aineo: zoom full' },
+  { 'n', '\\o', 'aineo: open' },
+  { 'n', '\\tcn', 'aineo: claude-numbers' },
+  { 'n', '\\V', 'aineo: explain-tools' },
+  { 'n', '\\vc', 'aineo: explain-clean' },
+  { 'n', '\\?', 'aineo: cheatsheet' },
+  { 'x', '\\s', 'aineo: send' },
+  { 'x', '\\VI', 'aineo: explain-issues-tools' },
+  { 't', '<C-\\>pa', 'aineo: pane agent' },
+  { 't', '<C-\\>tcn', 'aineo: claude-numbers' },
+  { 'i', '<C-\\>X', 'aineo: run shell' },
+  { 'i', '<C-\\>Z', 'aineo: zoom full' },
+}
+
+T['the descriptions'] = MiniTest.new_set({ parametrize = DESCRIPTIONS })
+
+T['the descriptions']['of the mappings are the ones the keys always carried'] = function(
+  mode,
+  keys,
+  description
+)
+  children.restart(child)
+
+  eq(child.fn.maparg(keys, mode, false, true).desc, description)
 end
 
 T['a wrong setting at startup'] = MiniTest.new_set()

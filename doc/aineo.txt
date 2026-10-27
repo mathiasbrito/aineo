@@ -55,6 +55,8 @@ window shrinking to a sliver, and gives the sizes back when pressed again
 (|aineo-zoom-full|).
 `\O` shows the office over the right column, an animation of your Claude Code
 at work (|aineo-office|).
+`\?` shows a cheatsheet of aineo's keys over the right column
+(|aineo-cheatsheet|).
 In Visual mode, in Input, `\s` sends the selection alone and removes it from
 Input (|aineo-v_\s|).
 
@@ -2571,7 +2573,8 @@ you type there.
 
 Restoring ~
 The three windows keep their sizes: the layout puts its proportions back
-when a window closes, when the editor is resized and when you enter its tab.
+when a window closes (a floating one aside), when the editor is resized and
+when you enter its tab.
 `\o` (|:Aineo-open|) restores the layout while any of its windows is left:
 it recreates the windows that were closed, in their places, and keeps the
 pane the right column shows (|aineo-panes|). The layout lives in one tab;
@@ -3173,6 +3176,61 @@ keeps the tab's claim, and the next start takes it up again (|aineo-tabs|).
 			With any word after it, it tells you, with one error,
 			what `:Aineo office` takes.
 
+                                                          *:Aineo-cheatsheet*
+:Aineo cheatsheet	Shows the cheatsheet over the right side of
+			the layout, or closes it when it shows
+			(|aineo-cheatsheet|). It acts on the aineo tab
+			of the current tab page and makes none: with no
+			aineo tab it tells you, with one warning, so. It
+			closes the office when that shows (|aineo-office|).
+			`\?` does the same (|aineo-keys|).
+
+                                                            *aineo-cheatsheet*
+The cheatsheet lists aineo's keys in a window over the right side of the
+layout, the whole column and its full height, whatever the column shows. Each
+row is a key, a few words on what it does and, dimmed, the `:Aineo` command
+that does the same. The keys are in groups, each with a heading and keys in a
+colour of its own: the layout and the tabs, Claude Code and its sessions, the
+agent pane, the changes pane and the diff, the run and terminal panes, the
+explorer, explaining code and its fixes, the office and the zoom, and the keys
+local to the changes pane and to the explorer. The group of explaining code
+has six sections, each under a heading of its own in the group's colour:
+Explain, Issues (with marking, sending the marked issues and jumping between
+them), Fix, While a fix shows, In the steering float, and Clean. A group is
+never split between the two columns. The sheet has two columns when the column
+is 80 cells wide or more, with the groups split so that they are as even as
+they can be, and one below that, and it is written again as the column is
+resized. The title is `aineo — keys`.
+
+Every key is written as you type it. With the prefix (|aineo-config-prefix|)
+`,`, the sheet shows `,o` where it shows `\o` by default. With `prefix =
+false` a key shows as its `<Plug>` mapping (|aineo-mappings|), or as the key
+you mapped to that `<Plug>` mapping yourself, written as `<Space>` and the
+like. The list is the one aineo maps its keys from, so no key is missing from
+it and no row lacks its key; a key another mapping of yours took shows as its
+`<Plug>` mapping, or as your own key for it. A key that exists only after the
+prefix, such as the one that edits a file in the changes pane, is left out
+when the prefix is `false`.
+
+The cursor moves into the sheet when it opens, so that `/` and the keys that
+scroll work in it. `q`, `<Esc>`, and `\?` again close it and give the cursor
+back to the window it came from, and the column shows as it was, a window you
+resized as you left it. The cursor leaving the sheet, a click on another
+window, say, closes it, and the cursor stays where it went. `\z` and `\Z` zoom
+the window the cursor is in, and from inside the sheet they have no window of
+the column to zoom: they tell you so and the sheet stays. It closes when the
+layout shows no right side. The sheet and the office (|aineo-office|) never
+show together: opening one closes the other. The sheet runs nothing and starts
+no request.
+
+Its colours are the highlight groups `AineoCheatTitle`, `AineoCheatHeader1` to
+`AineoCheatHeader8`, `AineoCheatSection1` to `AineoCheatSection8`,
+`AineoCheatKey1` to `AineoCheatKey8`, `AineoCheatPhrase` and
+`AineoCheatCommand`. They are drawn from the groups of your colour scheme,
+`Title`, `Function`, `String`, `Type`, `Constant`, `Special`, `Identifier`,
+`Statement`, `PreProc`, `Normal` and `Comment`, and defined again when the
+colour scheme changes; a group you defined yourself stays as it is.
+
 When an action fails — `claude.cmd` is not executable, say — aineo tells you
 once, with one error message starting with `aineo:`, and opens nothing.
 
@@ -3365,6 +3423,11 @@ you turn the prefix off, or when a prefix key is yours: >lua
 <Plug>(aineo-office)
 			Does what `:Aineo office` does (|:Aineo-office|).
 
+                                                    *<Plug>(aineo-cheatsheet)*
+<Plug>(aineo-cheatsheet)
+			Does what `:Aineo cheatsheet` does
+			(|:Aineo-cheatsheet|).
+
 Prefix keys ~
                                                                   *aineo-keys*
 Once the editor has started, aineo maps the prefix (|aineo-config-prefix|)
@@ -3419,6 +3482,8 @@ which has none, and those of a fix shown, whose keys are local to its buffer
 \Z		|<Plug>(aineo-zoom-full)|
                                                                     *aineo-\O*
 \O		|<Plug>(aineo-office)|
+                                                                    *aineo-\?*
+\?		|<Plug>(aineo-cheatsheet)|
                                                                     *aineo-\v*
 \v		|<Plug>(aineo-explain)|
                                                                     *aineo-\V*

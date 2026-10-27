@@ -175,6 +175,7 @@ resumes it.
 | `\z` | zooms the window of the right column the cursor is in, and gives the heights back when pressed again |
 | `\Z` | zooms the window the cursor is in to the whole tab page, and gives the sizes back when pressed again |
 | `\O` | shows the office, an animation of your Claude Code at work over the right column, which also shows by itself after `office.idle_ms` without the cursor in the right column; the cursor entering a window it covers closes it. A report that comes in shows as a card in its corner |
+| `\?` | shows a cheatsheet of aineo's keys over the right column, in two colourful columns when it is wide enough: each key as you type it, what it does and, dimmed, the `:Aineo` command that does the same. `q`, `<Esc>` or `\?` closes it, and the column is as it was; it and the office never show together. `:help aineo-cheatsheet` has the details |
 
 `\z` gives the right-column window with the cursor the column's whole height,
 in every pane, and the other windows of the column shrink to a line or so;
