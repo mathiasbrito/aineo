@@ -92,6 +92,13 @@ local function messages()
   end, _G.messages)]])
 end
 
+--- The line the cursor of the child's commits window is on.
+---
+---@return integer
+local function commits_cursor_line()
+  return child.lua_get('vim.api.nvim_win_get_cursor(vim.fn.bufwinid(...))[1]', { COMMITS })
+end
+
 --- Makes the directory `name` beside the repository at `top` a worktree of
 --- it on the new branch `branch`, and returns the worktree's top level.
 ---
@@ -359,6 +366,90 @@ T['Enter']['on another worktree’s Uncommitted line shows its whole diff from t
   })
 end
 
+T['the worktree shown alone'] = MiniTest.new_set()
+
+--- Shows the worktree first in the list `s` offers alone: presses `s` in
+--- the commits window with a picker that chooses the list's first item.
+local function show_first_worktree_alone()
+  child.lua([[
+    vim.ui.select = function(items, _, on_choice)
+      on_choice(items[1])
+    end
+  ]])
+  enter_window_of(COMMITS)
+  child.type_keys('s')
+end
+
+--- Switches the pane between the default view and the worktree shown alone,
+--- as `\g` does inside the pane.
+local function toggle_view()
+  child.lua("require('aineo.changes').toggle_focused_view()")
+end
+
+--- The lines of the commits window while the worktree `agent` on `agent`,
+--- with the one commit `commit` of subject `The agent’s`, is shown alone.
+---
+---@param commit string
+---@return string[]
+local function agent_alone(commit)
+  return {
+    'Worktree agent (agent)',
+    'Uncommitted — agent (agent)',
+    git_repo.commit_line(commit, 'The agent’s'),
+  }
+end
+
+T['the worktree shown alone']['lists its Uncommitted line under its heading, before its commits'] = function()
+  local top =
+    git_repo.create('wtuncommitted-alone', { ['notes.txt'] = { 'one' }, ['other.txt'] = { 'one' } })
+  local _, commit = agent_with_three_changes(top)
+  begin_and_show(top)
+  expect_lines(COMMITS, commits_then(agent_alone(commit)))
+
+  show_first_worktree_alone()
+
+  expect_lines(COMMITS, agent_alone(commit))
+  go_to_commits_line(2)
+  expect_lines(FILES, {
+    'Files in: Uncommitted — agent (agent)',
+    '  M notes.txt',
+    '  M other.txt',
+    '  ? new.txt',
+  })
+end
+
+T['the worktree shown alone']['keeps its Uncommitted chosen as the view switches back and forth'] = function()
+  local top = git_repo.create(
+    'wtuncommitted-alone-toggle',
+    { ['notes.txt'] = { 'one' }, ['other.txt'] = { 'one' } }
+  )
+  local _, commit = agent_with_three_changes(top)
+  begin_and_show(top)
+  expect_lines(COMMITS, commits_then(agent_alone(commit)))
+  show_first_worktree_alone()
+  expect_lines(COMMITS, agent_alone(commit))
+  go_to_commits_line(2)
+  local listed = {
+    'Files in: Uncommitted — agent (agent)',
+    '  M notes.txt',
+    '  M other.txt',
+    '  ? new.txt',
+  }
+  expect_lines(FILES, listed)
+
+  toggle_view()
+
+  expect_lines(COMMITS, commits_then(agent_alone(commit)))
+  expect_lines(FILES, listed)
+  eq(commits_cursor_line(), 5)
+
+  toggle_view()
+
+  expect_lines(COMMITS, agent_alone(commit))
+  expect_lines(FILES, listed)
+  eq(commits_cursor_line(), 2)
+end
+
 T['h'] = MiniTest.new_set()
 
 T['h']['on a file under another worktree’s Uncommitted shows Enter’s diff, from that worktree’s HEAD'] = function()
@@ -390,13 +481,6 @@ local WATCH_IN_HAND = [[
     return { stop = function() end, watches_subdirectories = true }
   end
 ]]
-
---- The line the cursor of the child's commits window is on.
----
----@return integer
-local function commits_cursor_line()
-  return child.lua_get('vim.api.nvim_win_get_cursor(vim.fn.bufwinid(...))[1]', { COMMITS })
-end
 
 T['the refresh']['of the watch reads another worktree’s Uncommitted again, the editor’s own files unchanged, and keeps it selected'] = function()
   local top = git_repo.create('wtuncommitted-watch', { ['notes.txt'] = { 'one' } })
