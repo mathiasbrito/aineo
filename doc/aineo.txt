@@ -1070,13 +1070,19 @@ untracked ones, read with git in that worktree, or says "No uncommitted
 changes", so you can follow an agent's work before it commits. It is read
 again at each read of the pane - the watch, the pane shown again, a report
 - and stays chosen while the worktree is listed. While it is chosen and the
-pane is shown, aineo watches that worktree as it watches yours: a file
-written, created or removed in its folder, its index and its commits are
-seen within a moment, as your own are; on Linux a file in a subdirectory
-of its folder is not seen until its agent stages or commits, or the pane
-is read again for another reason (|aineo-limits|). The watch stops once
-another line is chosen, the worktree is no longer listed, or the pane is
-hidden. The `*` marks of your
+pane is shown, aineo watches that worktree's folder as it watches yours,
+its git directory through your own watch, which already sees the
+directory both share; a worktree inside your own folder, where your watch
+sees subfolders, needs no watch of its own. A file written, created or
+removed there, what its agent stages and its commits are seen within a
+moment, as your own are. On Linux, where a watch sees no subfolder, only
+a change in the worktree's top folder is seen at once: a change in one of
+its subfolders, and what its agent stages, show when its agent commits or
+when the pane is read again for another reason (|aineo-limits|). The
+watch stops once another line is chosen, the worktree is no longer
+listed, or the pane is hidden; a watch that fails stops, the files window
+says why while that line is chosen, and it starts again only when the
+line is chosen again or the pane shown again. The `*` marks of your
 saves are your own worktree's and never show there. aineo only reads
 another worktree: it writes nothing there. With no other worktree, the
 pane shows only your own lines. A worktree git marks
@@ -7027,8 +7033,9 @@ The changes pane ~
 - Where aineo cannot watch the working tree's subdirectories (Linux), the
   files window says so below its first line: a change in a subdirectory
   shows at the next showing of the pane, save or commit - in another
-  worktree whose Uncommitted is chosen, at its agent's next stage or
-  commit - and a branch moved
+  worktree whose Uncommitted is chosen, a change in a subfolder, and what
+  its agent stages, at its agent's next commit or the pane's next read for
+  another reason - and a branch moved
   by `git update-ref` from another worktree, a tag, a commit on another
   worktree's detached `HEAD`, and a fetch another worktree ran are missed
   too, the commit graph's included (|aineo-changes-graph|); a fetch run in

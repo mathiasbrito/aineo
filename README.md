@@ -336,8 +336,9 @@ Every part takes its colour from your colour scheme, through the
   under its heading: the files the agent changed and has not committed yet,
   staged, unstaged and untracked, each with its diff from that worktree's
   `HEAD`, read again at each refresh, and watched while it is chosen and the
-  pane shows (on Linux, not in the worktree's subfolders), so you can
-  follow its work in flight.
+  pane shows (on Linux only its top folder at once: a subfolder's change,
+  and what the agent stages, show at its next commit), so you can follow
+  its work in flight.
   `s` lists the same tree first,
   then `[reported] All reported work`.
 - **The remembered view.** For each Claude Code session, the pane keeps the
