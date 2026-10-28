@@ -3152,7 +3152,9 @@ function M.new(label)
   --- chosen, the cursor on its heading, and the user is told once with
   --- `waiting.tell`, the worktree named with the branches reported of it
   --- (`scope.started_work()`); any other change is written and read again, the
-  --- focused view settled (`settle_reported_view()`). The other worktrees
+  --- focused view settled (`settle_reported_view()`), and the files of
+  --- another worktree's filter chosen are read again (`read_files()`), its
+  --- *Uncommitted* among them. The other worktrees
   --- are read again while the pane has been shown, so that the work's
   --- commits show.
   ---
@@ -3184,6 +3186,7 @@ function M.new(label)
     else
       settle_reported_view(false)
       show_commits()
+      read_files(false)
     end
     if session.shown then
       read_commits(false)
