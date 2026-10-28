@@ -92,6 +92,67 @@ local function messages()
   end, _G.messages)]])
 end
 
+--- The Lua that counts, in the child, every call made to a function of the
+--- git home but its watch, in `_G.git_asked`, and each answer once its
+--- caller's `done` has run, in `_G.git_answered`, both by the function's
+--- name.
+local COUNT_GIT_READS = [[
+  local git = require('aineo.git')
+  _G.git_asked, _G.git_answered = {}, {}
+  for name, operation in pairs(git) do
+    if type(operation) == 'function' and name ~= 'watch_repository' then
+      _G.git_asked[name], _G.git_answered[name] = 0, 0
+      git[name] = function(...)
+        _G.git_asked[name] = _G.git_asked[name] + 1
+        local arguments = { ... }
+        for index = 1, select('#', ...) do
+          if type(arguments[index]) == 'function' then
+            local done = arguments[index]
+            arguments[index] = function(...)
+              done(...)
+              _G.git_answered[name] = _G.git_answered[name] + 1
+            end
+            break
+          end
+        end
+        return operation(unpack(arguments, 1, select('#', ...)))
+      end
+    end
+  end
+]]
+
+--- The Lua expression saying whether the child has listed the worktrees
+--- `...` times at least, and every call it made to the git home has
+--- answered (`COUNT_GIT_READS`).
+local READS_ANSWERED = [[(function(lists)
+  for name, asked in pairs(_G.git_asked) do
+    if _G.git_answered[name] ~= asked then
+      return false
+    end
+  end
+  return _G.git_answered.list_worktrees >= lists
+end)(...)]]
+
+--- Waits until the child has listed the worktrees `lists` times, and every
+--- read it asked of the git home has answered (`COUNT_GIT_READS`), so that
+--- what the pane shows is what those reads gave.
+---
+---@param lists integer
+local function wait_for_the_reads(lists)
+  git_repo.wait_until('every read answered', function()
+    return child.lua_get(READS_ANSWERED, { lists })
+  end)
+end
+
+--- The lines of the child's buffer named `name`, the files window's
+--- `Against:` line kept.
+---
+---@param name string
+---@return string[]
+local function raw_lines_of(name)
+  return child.lua_get('vim.api.nvim_buf_get_lines(vim.fn.bufnr(...), 0, -1, true)', { name })
+end
+
 --- The line the cursor of the child's commits window is on.
 ---
 ---@return integer
@@ -859,6 +920,22 @@ T['a worktree whose read fails']['tells the diff of its Uncommitted unreadable, 
   eq(messages(), {
     'aineo: the diff of Uncommitted in the worktree agent could not be read: fatal: broken',
   })
+end
+
+T['a worktree whose read fails']['says what its Uncommitted compares in words alone, reading nothing of the editor’s'] = function()
+  local top = git_repo.create('wtuncommitted-failed-against', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  child.lua(COUNT_GIT_READS)
+  begin_and_show(top, { executable = git_broken_in('wtuncommitted-failed-against', agent) })
+  go_to_commits_line(5)
+  expect_lines(
+    FILES,
+    { 'Files in: Uncommitted — agent (agent)', 'The last refresh failed: fatal: broken' }
+  )
+
+  wait_for_the_reads(1)
+
+  eq(raw_lines_of(FILES)[2], 'Against: HEAD → working tree')
 end
 
 return T
