@@ -380,16 +380,48 @@ function M.propose(fixing, folder)
   })
 end
 
+--- Whether `buffer` shows a proposal of another kind than the one named
+--- `kind` (`aineo.explain.kinds`' `name`), and then tells the user, once,
+--- what it shows and which keys accept it, reject it and show its diff
+--- (`aineo.explain.preview`'s `shown()`). `false` when `kind` is `nil`: any
+--- kind will do.
+---
+---@param buffer integer
+---@param kind? 'fix'|'write'
+---@return boolean
+local function shows_another_kind(buffer, kind)
+  local shown, keys = preview.shown(buffer)
+  if not (kind and shown and shown.name ~= kind) then
+    return false
+  end
+  vim.notify(
+    ('aineo: %s is shown here: %s accepts it, %s rejects it, %s shows the diff'):format(
+      shown.shown,
+      keys.accept,
+      keys.reject,
+      keys.diff
+    ),
+    vim.log.levels.INFO
+  )
+  return true
+end
+
 --- Accepts the fix or the code written for a request that `buffer` shows
 --- (`aineo.explain.preview`'s `apply()`): its edits are applied as one undo
 --- step, the file is not written, and the issue a fix fixes is no longer
 --- shown; the user is told, once, that the fix was applied or the code
---- written. Tells the user when `buffer` shows neither.
+--- written. Tells the user when `buffer` shows neither, and changes nothing
+--- when it shows a proposal of another kind than `kind` names
+--- (`shows_another_kind()`).
 ---
 ---@param buffer integer
-function M.accept(buffer)
+---@param kind? 'fix'|'write' the kind of proposal to accept; any when absent
+function M.accept(buffer, kind)
   if not preview.is_shown(buffer) then
     vim.notify('aineo: no proposal is shown in this buffer', vim.log.levels.INFO)
+    return
+  end
+  if shows_another_kind(buffer, kind) then
     return
   end
   local issue = fixed_issues[buffer]
@@ -404,18 +436,29 @@ function M.accept(buffer)
 end
 
 --- Shows the fix or the code written that `buffer` shows as the diff view,
---- or as the overlay again (`aineo.explain.preview`'s `toggle_diff()`).
+--- or as the overlay again (`aineo.explain.preview`'s `toggle_diff()`),
+--- unless it is a proposal of another kind than `kind` names
+--- (`shows_another_kind()`).
 ---
 ---@param buffer integer
-function M.toggle_diff(buffer)
+---@param kind? 'fix'|'write' the kind of proposal to toggle; any when absent
+function M.toggle_diff(buffer, kind)
+  if shows_another_kind(buffer, kind) then
+    return
+  end
   preview.toggle_diff(buffer)
 end
 
 --- Rejects the fix or the code written that `buffer` shows: its preview
---- goes, and nothing changes.
+--- goes, and nothing changes; unless it is a proposal of another kind than
+--- `kind` names (`shows_another_kind()`).
 ---
 ---@param buffer integer
-function M.reject(buffer)
+---@param kind? 'fix'|'write' the kind of proposal to reject; any when absent
+function M.reject(buffer, kind)
+  if shows_another_kind(buffer, kind) then
+    return
+  end
   fixed_issues[buffer] = nil
   preview.clear(buffer)
 end

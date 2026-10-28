@@ -169,7 +169,7 @@ resumes it.
 | `\vi`, `\VI` | the same, asking for potential issues instead of explanations (`\vi` the code alone, `\VI` with the project readable) |
 | `\VV`, `\VVI` | the deep versions of `\V` and `\VI`: a float with the whole prompt to edit opens first, then the request runs with higher effort |
 | `\Vf`, `\VVf` | propose a fix for the issue on the cursor's line, shown over the code, the buffer read-only, until you accept it with `\Va` (one undo step, no file written), reject it with `\Vr`, or see it as a diff with `\Vd`; `\VVf` opens the float to edit the prompt first; `\Vf` on unchanged code shows the fix kept from before |
-| `\w`, `\W` | write code for a request: in Normal mode a float asks for it and the code goes below the cursor's line; in Visual mode the selected lines are the request, sent at once, and the code replaces them. `\w` asks the cheapest model with the file alone, `\W` a stronger one at a higher effort that may read the project. The code shows and is decided as a fix is (`\Va`, `\Vr`, `\Vd`) |
+| `\w`, `\W` | write code for a request: in Normal mode a float asks for it and the code goes below the cursor's line, or in its place when that line is blank; in Visual mode the selected lines are the request, sent at once, and the code replaces them. `\w` asks the cheapest model with the file alone, `\W` a stronger one at a higher effort that may read the project. The code shows as a fix does and has keys of its own: `\Wa` accepts it, `\Wr` rejects it, `\Wd` shows the diff |
 | `\vc` | cleans the buffer of everything the `\v`, `\V` and `\w` keys added (answers, marks, a fix or written code, requests that run, kept answers), leaving its text and undo history as they were |
 | `\vm` | marks the issues on the cursor's line (on each selected line in Visual mode), or unmarks them; `\s` then sends the marked issues to Claude |
 | `]v`, `[v` | jump to the next and the previous explanation or issue of the buffer |
@@ -464,7 +464,8 @@ of this. The groups are `AineoFix`, `AineoFixGutter`,
 
 `\w` writes code for a request of yours. In Normal mode a float opens, empty,
 for you to type the request (`<CR>` sends it, `q` or `<Esc>` cancels), and the
-code goes below the cursor's line. In Visual mode the selected lines are the
+code goes below the cursor's line, or in its place when that line is blank (an
+empty new file too). In Visual mode the selected lines are the
 request, as you wrote them, comment markers and all: type
 `# a function that reads two values and returns the sum`, select the line and
 press `\w`, and the request is sent at once, with no float; the code replaces
@@ -474,9 +475,10 @@ tool, on the model `write.model` (`'haiku'`, the cheapest), stopped after
 when that helps, on `write.deep_model` (`'sonnet'`; `'opus'` works too) at
 `write.deep_effort` (`'high'`), stopped after `write.deep_timeout_ms`. Neither
 may write anything. The code shows over the file as a fix does, with the
-request named above it, and is decided the same way: `\Va` accepts it as one
-undo step, writing no file, `\Vr` rejects it and leaves your request as you
-wrote it, `\Vd` shows it as a diff. aineo refuses an answer that would change
+request named above it and a row naming its keys, which are its own: `\Wa`
+accepts it as one undo step, writing no file, `\Wr` rejects it and leaves
+your request as you wrote it, `\Wd` shows it as a diff (`\W` alone still
+asks for code, after `'timeoutlen'`). aineo refuses an answer that would change
 any line outside the request, or the line under the cursor. A fix and written
 code replace each other, and the same request on unchanged code shows the code
 kept from before. `:Aineo write [deep]`, with a range for the request's lines,

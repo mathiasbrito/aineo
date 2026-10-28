@@ -102,18 +102,18 @@ end
 --- How code is asked for.
 ---@class aineo.entry.WriteOrder
 ---@field deep boolean whether Claude Code may read the project, with `write.deep_model`, `write.deep_effort` and `write.deep_timeout_ms`; else `write.model` and `write.timeout_ms`, from the file alone
----@field range? integer[] the first and last lines that hold the request, from 1; the request is typed in a float, the code going below the cursor's line, when absent
+---@field range? integer[] the first and last lines that hold the request, from 1; the request is typed in a float, the code going below the cursor's line, or in its place when it is blank, when absent
 
 --- What `\w`, `\W`, their `<Plug>` mappings and `:Aineo write` do: ask the
 --- explain home to write code in the current buffer, a file's
 --- (`aineo.explain`'s `propose_write()`), for the request the lines of
 --- `order.range` hold, or for one typed in a float, the code going below
---- the cursor's line; with `claude.cmd` and `write.model`, from the file
+--- the cursor's line, or in its place when it is blank; with `claude.cmd` and `write.model`, from the file
 --- alone, or, for a deep order, `write.deep_model` at `write.deep_effort`
 --- with the read-only tools. While the code shows, the prefix followed by
---- `Va`, `Vr` and `Vd` accept it, reject it and show its diff, as for a
---- fix, unless the prefix is `false`; what asks again is told as the prefix
---- followed by `w` or `W`, or as their `<Plug>` mapping.
+--- `Wa`, `Wr` and `Wd` accept it, reject it and show its diff, unless the
+--- prefix is `false`; what asks again is told as the prefix followed by `w`
+--- or `W`, or as their `<Plug>` mapping.
 ---
 --- Raises an error when the current buffer holds no file, and the
 --- configuration's or the explain home's errors.
@@ -138,7 +138,7 @@ function M.write(order)
     model = order.deep and settings.deep_model or settings.model,
     effort = order.deep and settings.deep_effort or nil,
     timeout_ms = order.deep and settings.deep_timeout_ms or settings.timeout_ms,
-    keys = prefix and { accept = prefix .. 'Va', reject = prefix .. 'Vr', diff = prefix .. 'Vd' }
+    keys = prefix and { accept = prefix .. 'Wa', reject = prefix .. 'Wr', diff = prefix .. 'Wd' }
       or nil,
     ask_key = prefix and prefix .. (order.deep and 'W' or 'w') or plug,
   })
@@ -155,23 +155,34 @@ function M.write_selection(order)
   M.write({ deep = order.deep, range = { math.min(first, last), math.max(first, last) } })
 end
 
---- What `<Plug>(aineo-fix-accept)` does: accepts the fix the current buffer
---- shows (`aineo.explain`'s `accept_fix()`).
-function M.accept_fix()
-  require('aineo.explain').accept_fix(vim.api.nvim_get_current_buf())
+--- What `<Plug>(aineo-fix-accept)` and `<Plug>(aineo-write-accept)` do:
+--- accept the fix, or the written code, the current buffer shows, as
+--- `kind` says (`aineo.explain`'s `accept_fix()`); a proposal of the other
+--- kind is left as it is.
+---
+---@param kind 'fix'|'write'
+function M.accept_fix(kind)
+  require('aineo.explain').accept_fix(vim.api.nvim_get_current_buf(), kind)
 end
 
---- What `<Plug>(aineo-fix-reject)` does: rejects the fix the current buffer
---- shows (`aineo.explain`'s `reject_fix()`).
-function M.reject_fix()
-  require('aineo.explain').reject_fix(vim.api.nvim_get_current_buf())
+--- What `<Plug>(aineo-fix-reject)` and `<Plug>(aineo-write-reject)` do:
+--- reject the fix, or the written code, the current buffer shows, as `kind`
+--- says (`aineo.explain`'s `reject_fix()`); a proposal of the other kind is
+--- left as it is.
+---
+---@param kind 'fix'|'write'
+function M.reject_fix(kind)
+  require('aineo.explain').reject_fix(vim.api.nvim_get_current_buf(), kind)
 end
 
---- What `<Plug>(aineo-fix-diff)` does: shows the fix the current buffer
---- shows as the diff view, or as the overlay again (`aineo.explain`'s
---- `toggle_fix_diff()`).
-function M.toggle_fix_diff()
-  require('aineo.explain').toggle_fix_diff(vim.api.nvim_get_current_buf())
+--- What `<Plug>(aineo-fix-diff)` and `<Plug>(aineo-write-diff)` do: show
+--- the fix, or the written code, the current buffer shows as the diff view,
+--- or as the overlay again, as `kind` says (`aineo.explain`'s
+--- `toggle_fix_diff()`); a proposal of the other kind is left as it is.
+---
+---@param kind 'fix'|'write'
+function M.toggle_fix_diff(kind)
+  require('aineo.explain').toggle_fix_diff(vim.api.nvim_get_current_buf(), kind)
 end
 
 --- What `\v`, `\V`, `\vi`, `\VI`, `\VV` and `\VVI` do in Visual mode: leave

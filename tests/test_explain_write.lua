@@ -73,7 +73,7 @@ end
 --- Asks the explain home, in the child, to write code in the current buffer
 --- with the fake `claude`, as the fields `fields` say over these defaults:
 --- below the cursor's line, the model `haiku`, no tools, no effort, a long
---- timeout, the keys `\Va`, `\Vr` and `\Vd`, and `\w` named as the key that
+--- timeout, the keys `\Wa`, `\Wr` and `\Wd`, and `\w` named as the key that
 --- asks again.
 ---
 ---@param fields? table
@@ -89,7 +89,7 @@ local function ask_write(fields)
       command = command,
       model = 'haiku',
       timeout_ms = 180000,
-      keys = { accept = '\\Va', reject = '\\Vr', diff = '\\Vd' },
+      keys = { accept = '\\Wa', reject = '\\Wr', diff = '\\Wd' },
       ask_key = '\\w',
     }, fields))
   ]],
@@ -536,6 +536,254 @@ T['writing below the cursor']['refuses an answer that edits another line too, an
   eq(preview_marks(), 0)
 end
 
+T['writing on a blank line'] = MiniTest.new_set()
+
+--- The answer that writes `ADD` in place of line 2, which is blank.
+local IN_PLACE_OF_LINE_2 = {
+  summary = 'Adds two values.',
+  edits = {
+    { line = 2, last = 2, old = { CODE[2] }, new = ADD, why = 'Returns the sum of a and b.' },
+  },
+}
+
+T['writing on a blank line']['sends the request typed, to write the code in place of that line'] = function()
+  start(IN_PLACE_OF_LINE_2)
+
+  send_request(2, { 'A function that adds two values.' })
+
+  local stdin = vim.split(recorded(2)[2].stdin, '\n')
+  eq(vim.list_slice(stdin, 1, 6), {
+    'Write code in the file src/code.lua (language: lua) for the request below,'
+      .. ' to replace line 2 as numbered below, which is blank.',
+    '',
+    'A function that adds two values.',
+    '',
+    'Answer in summary what the code does in one sentence, and one edit that replaces that line with it.'
+      .. ' Write only into this file.'
+      .. ' The edit gives in line and last the line 2, and repeats in old exactly that line'
+      .. ' of the numbered text below, verbatim with its white space and without its number;'
+      .. ' new holds the lines of the code alone, in the language of the file and its style,'
+      .. ' indented as the code around line 2 is,'
+      .. ' and why says what the code does.'
+      .. ' When the request cannot be fulfilled in this file, answer no edits and say why in the summary.',
+    '',
+  })
+end
+
+--- The lines of the child's current buffer once the proposal it shows is
+--- accepted, and then once that is undone.
+---
+---@return string[] accepted
+---@return string[] undone
+local function accept_then_undo()
+  child.lua("require('aineo.explain').accept_fix(vim.api.nvim_get_current_buf())")
+  local accepted = buffer_lines()
+  child.cmd('undo')
+  return accepted, buffer_lines()
+end
+
+T['writing on a blank line']['replaces it with the code on accept, leaving no blank line, as one undo step'] = function()
+  start(IN_PLACE_OF_LINE_2)
+  send_request(2, { 'A function that adds two values.' })
+  wait_for_preview()
+
+  local accepted, undone = accept_then_undo()
+
+  eq(accepted, { CODE[1], ADD[1], ADD[2], ADD[3], CODE[3], CODE[4], CODE[5] })
+  eq(undone, CODE)
+end
+
+T['writing on a blank line']['counts a line of white space alone as blank'] = function()
+  start(IN_PLACE_OF_LINE_2)
+  child.api.nvim_buf_set_lines(0, 1, 2, false, { '  \t' })
+
+  send_request(2, { 'A function that adds two values.' })
+
+  eq(
+    vim.split(recorded(2)[2].stdin, '\n')[1],
+    'Write code in the file src/code.lua (language: lua) for the request below,'
+      .. ' to replace line 2 as numbered below, which is blank.'
+  )
+end
+
+T['writing on a blank line']['counts spaces and tabs alone as blank: a page break is written below'] = function()
+  start(IN_PLACE_OF_LINE_2)
+  child.api.nvim_buf_set_lines(0, 1, 2, false, { '\f' })
+
+  send_request(2, { 'A function that adds two values.' })
+
+  eq(
+    vim.split(recorded(2)[2].stdin, '\n')[1],
+    'Write code in the file src/code.lua (language: lua) for the request below,'
+      .. ' to be inserted after line 2 as numbered below.'
+  )
+end
+
+T['writing on a blank line']['refuses an edit whose old line is not that line exactly, saying so'] = function()
+  local refused = 'aineo: the written code was refused:'
+    .. ' the edit’s old line does not match the cursor’s line exactly'
+  start(IN_PLACE_OF_LINE_2)
+  child.api.nvim_buf_set_lines(0, 1, 2, false, { '    ' })
+
+  send_request(2, { 'A function that adds two values.' })
+  wait_until_told(refused)
+
+  eq(messages(), { refused })
+  eq(preview_marks(), 0)
+end
+
+T['writing on a blank line']['drops a copy of that line the code starts with, leaving no blank line'] = function()
+  start({
+    summary = 'Adds two values.',
+    edits = {
+      {
+        line = 2,
+        last = 2,
+        old = { CODE[2] },
+        new = vim.list_extend({ CODE[2] }, ADD),
+        why = 'Adds.',
+      },
+    },
+  })
+  send_request(2, { 'A function that adds two values.' })
+  wait_for_preview()
+
+  local accepted, undone = accept_then_undo()
+
+  eq(accepted, { CODE[1], ADD[1], ADD[2], ADD[3], CODE[3], CODE[4], CODE[5] })
+  eq(undone, CODE)
+end
+
+T['writing on a blank line']['writes into line 1 of an empty file'] = function()
+  start({
+    summary = 'Adds two values.',
+    edits = { { line = 1, last = 1, old = { '' }, new = ADD, why = 'Adds.' } },
+  })
+  child.api.nvim_buf_set_lines(0, 0, -1, false, {})
+  send_request(1, { 'A function that adds two values.' })
+  wait_for_preview()
+
+  local accepted, undone = accept_then_undo()
+
+  eq(accepted, ADD)
+  eq(undone, { '' })
+end
+
+T['writing on a blank line']['refuses an answer that edits another line too, and shows nothing'] = function()
+  local refused =
+    'aineo: the written code was refused: it must replace the cursor’s blank line alone'
+  local in_place_and_more = vim.deepcopy(IN_PLACE_OF_LINE_2)
+  table.insert(in_place_and_more.edits, {
+    line = 5,
+    last = 5,
+    old = { CODE[5] },
+    new = { 'return { M = M }' },
+    why = 'Exports.',
+  })
+  start(in_place_and_more)
+
+  send_request(2, { 'A function that adds two values.' })
+  wait_until_told(refused)
+
+  eq(messages(), { refused })
+  eq(preview_marks(), 0)
+end
+
+T['writing at the last line'] = MiniTest.new_set()
+
+--- The answer that writes `ADD` below line `line` of `lines`, which it
+--- keeps as it is.
+---
+---@param lines string[]
+---@param line integer
+---@return table
+local function below_line(lines, line)
+  return {
+    summary = 'Adds two values.',
+    edits = {
+      {
+        line = line,
+        last = line,
+        old = { lines[line] },
+        new = vim.list_extend({ lines[line] }, ADD),
+        why = 'Adds.',
+      },
+    },
+  }
+end
+
+--- The answer that writes `ADD` in place of line `line` of `lines`.
+---
+---@param lines string[]
+---@param line integer
+---@return table
+local function in_place_of(lines, line)
+  return {
+    summary = 'Adds two values.',
+    edits = { { line = line, last = line, old = { lines[line] }, new = ADD, why = 'Adds.' } },
+  }
+end
+
+--- `CODE` with a blank last line.
+local ENDING_BLANK = vim.list_extend(vim.deepcopy(CODE), { '' })
+
+T['writing at the last line']['touches no other line, as one undo step, typed'] = MiniTest.new_set({
+  parametrize = {
+    { 'below it', CODE, '', below_line(CODE, 5), vim.list_extend(vim.deepcopy(CODE), ADD) },
+    {
+      'below it, with no line end at the end of the file',
+      CODE,
+      'setlocal noendofline nofixendofline',
+      below_line(CODE, 5),
+      vim.list_extend(vim.deepcopy(CODE), ADD),
+    },
+    {
+      'below the only line',
+      { CODE[1] },
+      '',
+      below_line({ CODE[1] }, 1),
+      vim.list_extend({ CODE[1] }, ADD),
+    },
+    {
+      'in place of a blank last line',
+      ENDING_BLANK,
+      '',
+      in_place_of(ENDING_BLANK, 6),
+      vim.list_extend(vim.deepcopy(CODE), ADD),
+    },
+  },
+})
+
+T['writing at the last line']['touches no other line, as one undo step, typed'][1] = function(
+  _,
+  lines,
+  options,
+  answer,
+  expected
+)
+  start(answer)
+  child.api.nvim_buf_set_lines(0, 0, -1, false, lines)
+  child.cmd(options)
+  send_request(#lines, { 'A function that adds two values.' })
+  wait_for_preview()
+
+  local accepted, undone = accept_then_undo()
+
+  eq(accepted, expected)
+  eq(undone, lines)
+end
+
+T['writing at the last line']['replaces the selected last line, and no other'] = function()
+  start(in_place_of(CODE, 5))
+  ask_write({ range = { 5, 5 } })
+  wait_for_preview()
+
+  local accepted, undone = accept_then_undo()
+
+  eq(accepted, vim.list_extend({ CODE[1], CODE[2], CODE[3], CODE[4] }, ADD))
+  eq(undone, CODE)
+end
+
 T['the preview'] = MiniTest.new_set()
 
 --- The rows of the child's screen once redrawn, white space at their ends
@@ -585,7 +833,7 @@ local function group_of(text)
 end
 
 --- What the head row of a preview says while the buffer is read-only.
-local KEYS_ROW = '┊ read-only until \\Va accepts or \\Vr rejects · \\Vd shows the diff'
+local KEYS_ROW = '┊ read-only until \\Wa accepts or \\Wr rejects · \\Wd shows the diff'
 
 T['the preview']['starts with the request, in the look of written code, above its keys'] = function()
   start(REPLACING_THE_REQUEST)
@@ -610,6 +858,275 @@ T['the preview']['names a long request on one line of 60 characters, cut with an
     row_after(screen(), '┊ A function that adds two values and returns their sum, chec…'),
     KEYS_ROW
   )
+end
+
+--- The answer that replaces the only line of a file, a request, with `ADD`.
+local REPLACING_THE_ONLY_LINE = {
+  summary = 'Adds two values.',
+  edits = {
+    { line = 1, last = 1, old = { CODE[3] }, new = ADD, why = 'Returns the sum of a and b.' },
+  },
+}
+
+T['the preview']['shows its keys row for code replacing the only line of a file'] = function()
+  start(REPLACING_THE_ONLY_LINE)
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { CODE[3] })
+
+  ask_write({ range = { 1, 1 } })
+  wait_for_preview()
+
+  eq(vim.tbl_contains(screen(), KEYS_ROW), true)
+end
+
+T['the preview']['shows its keys row for code inserted below the only line of a file'] = function()
+  start({
+    summary = 'Adds two values.',
+    edits = {
+      { line = 1, last = 1, old = { CODE[1] }, new = { CODE[1], ADD[1] }, why = 'Adds.' },
+    },
+  })
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { CODE[1] })
+
+  send_request(1, { 'A function that adds two values.' })
+  wait_for_preview()
+
+  eq(vim.tbl_contains(screen(), KEYS_ROW), true)
+end
+
+--- The answer that replaces line 1 with `ADD`.
+local REPLACING_LINE_1 = {
+  summary = 'Adds two values.',
+  edits = {
+    { line = 1, last = 1, old = { CODE[1] }, new = ADD, why = 'Returns the sum of a and b.' },
+  },
+}
+
+T['the preview']['shows its keys row in the diff view of code that starts on line 1'] = function()
+  start(REPLACING_LINE_1)
+  ask_write({ range = { 1, 1 } })
+  wait_for_preview()
+
+  child.lua("require('aineo.explain').toggle_fix_diff(vim.api.nvim_get_current_buf())")
+
+  eq(vim.tbl_contains(screen(), KEYS_ROW), true)
+end
+
+--- How many of `rows` are `text`.
+---
+---@param rows string[]
+---@param text string
+---@return integer
+local function count_of(rows, text)
+  return #vim.tbl_filter(function(row)
+    return row == text
+  end, rows)
+end
+
+T['the preview']['draws its keys row once in the diff view of code on line 1, even scrolled up'] = function()
+  start(REPLACING_LINE_1)
+  ask_write({ range = { 1, 1 } })
+  wait_for_preview()
+  child.lua("require('aineo.explain').toggle_fix_diff(vim.api.nvim_get_current_buf())")
+
+  child.cmd('normal! gg')
+  child.type_keys('<C-y>', '<C-y>', '<C-y>')
+
+  eq(count_of(screen(), KEYS_ROW), 1)
+end
+
+T['the preview']['shows its stale row on line 1 once its marks are cleared'] = function()
+  start(REPLACING_LINE_1)
+  ask_write({ range = { 1, 1 } })
+  wait_for_preview()
+
+  child.api.nvim_buf_clear_namespace(0, -1, 0, -1)
+
+  eq(
+    vim.tbl_contains(
+      screen(),
+      '┊ the lines under the written code changed · \\Wr rejects · \\w asks again'
+    ),
+    true
+  )
+end
+
+T['the preview']['names the <Plug> mappings of written code when it maps no key'] = function()
+  start(REPLACING_THE_REQUEST)
+
+  child.lua(
+    [[
+    require('aineo.explain').propose_write({
+      buffer = vim.api.nvim_get_current_buf(),
+      window = vim.api.nvim_get_current_win(),
+      line = 3,
+      range = { 3, 3 },
+      tools = false,
+      command = ...,
+      model = 'haiku',
+      timeout_ms = 180000,
+      ask_key = '<Plug>(aineo-write)',
+    })
+  ]],
+    { explained.FAKE_CLAUDE }
+  )
+  wait_for_preview()
+
+  eq(
+    row_after(screen(), '┊ ' .. CODE[3]),
+    '┊ read-only until <Plug>(aineo-write-accept) accepts or'
+  )
+end
+
+T['the preview in view'] = MiniTest.new_set()
+
+--- The answer that writes `ADD` below line 3, which it keeps as it is.
+local BELOW_LINE_3 = below_line(CODE, 3)
+
+--- Asks the child to write code below the cursor's line (`ask_write()`),
+--- where the cursor stands, types `request` in the float and sends it.
+---
+---@param request string[]
+local function ask_below_cursor(request)
+  ask_write()
+  child.api.nvim_buf_set_lines(0, 0, -1, false, request)
+  press('<CR>')
+end
+
+--- The cursor of the child's current window: its line, from 1, and its
+--- column, from 0.
+---
+---@return integer[]
+local function cursor()
+  return child.api.nvim_win_get_cursor(0)
+end
+
+T['the preview in view']['is brought into view when its line is the window’s top line, the cursor kept'] = function()
+  start(BELOW_LINE_3)
+  child.api.nvim_win_set_cursor(0, { 3, 5 })
+  child.cmd('normal! zt')
+
+  ask_below_cursor({ 'A function that adds two values.' })
+  wait_for_preview()
+
+  eq(vim.tbl_contains(screen(), KEYS_ROW), true)
+  eq(cursor(), { 3, 5 })
+end
+
+T['the preview in view']['is brought into view on line 1 of a window scrolled down, the cursor kept'] = function()
+  start(REPLACING_LINE_1)
+  ask_write({ range = { 1, 1 } })
+  wait_for_preview()
+  child.lua("require('aineo.explain').reject_fix(vim.api.nvim_get_current_buf())")
+  child.api.nvim_win_set_cursor(0, { 2, 0 })
+  child.lua('vim.fn.winrestview({ topline = 2 })')
+
+  ask_write({ range = { 1, 1 } })
+
+  eq(vim.tbl_contains(screen(), KEYS_ROW), true)
+  eq(cursor(), { 2, 0 })
+end
+
+--- The view of the child's current window: its top line and the filler
+--- lines it shows above it.
+---
+---@return integer[]
+local function view()
+  local saved = child.lua_get('vim.fn.winsaveview()')
+  return { saved.topline, saved.topfill }
+end
+
+T['the preview in view']['leaves a window that shows it as it is'] = function()
+  start(BELOW_LINE_3)
+  child.api.nvim_win_set_cursor(0, { 3, 0 })
+  local before = view()
+
+  ask_below_cursor({ 'A function that adds two values.' })
+  wait_for_preview()
+
+  eq(view(), before)
+end
+
+--- A file of 60 lines, for the cases whose windows show parts of it.
+local LONG = { 'local M = {}' }
+for number = 2, 59 do
+  LONG[number] = ('local v%d = %d'):format(number, number)
+end
+LONG[60] = 'return M'
+
+--- The view of every window of the child's tab page, in the order of the
+--- windows: its top line and the filler lines it shows above it.
+---
+---@return integer[][]
+local function views()
+  return child.lua([[return vim.tbl_map(function(window)
+    local saved = vim.api.nvim_win_call(window, vim.fn.winsaveview)
+    return { saved.topline, saved.topfill }
+  end, vim.api.nvim_tabpage_list_wins(0))]])
+end
+
+T['the preview in view']['leaves a window whose cursor is far from it as it was'] = function()
+  start(below_line(LONG, 5))
+  child.api.nvim_buf_set_lines(0, 0, -1, false, LONG)
+  child.cmd('split')
+  child.api.nvim_win_set_cursor(0, { 50, 2 })
+  child.lua('vim.fn.winrestview({ topline = 45 })')
+  child.cmd('wincmd j')
+  child.api.nvim_win_set_cursor(0, { 5, 0 })
+  child.cmd('normal! zt')
+
+  ask_below_cursor({ 'A function that adds two values.' })
+  wait_for_preview()
+
+  eq(views()[1], { 45, 0 })
+end
+
+T['the preview in view']['leaves the view of a user who scrolled away while it was asked'] = function()
+  start(below_line(LONG, 5))
+  child.api.nvim_buf_set_lines(0, 0, -1, false, LONG)
+  child.lua('vim.env.AINEO_FAKE_CLAUDE_PRINT_MS = "1500"')
+  child.api.nvim_win_set_cursor(0, { 5, 0 })
+  ask_below_cursor({ 'A function that adds two values.' })
+  child.api.nvim_win_set_cursor(0, { 50, 2 })
+  child.lua('vim.fn.winrestview({ topline = 40 })')
+
+  wait_for_preview()
+
+  eq({ views()[1], cursor() }, { { 40, 0 }, { 50, 2 } })
+end
+
+T['the preview in view']['leaves a window that shows it as it is, its top line showing part of its filler'] = function()
+  start(below_line(LONG, 38))
+  child.api.nvim_buf_set_lines(0, 0, -1, false, LONG)
+  child.lua([[
+    local rows = {}
+    for number = 1, 10 do
+      rows[number] = { { 'another plugin’s row ' .. number } }
+    end
+    vim.api.nvim_buf_set_extmark(0, vim.api.nvim_create_namespace('another_plugin'), 9, 0, {
+      virt_lines = rows,
+      virt_lines_above = true,
+    })
+  ]])
+  child.api.nvim_win_set_cursor(0, { 38, 0 })
+  child.lua('vim.fn.winrestview({ topline = 10, topfill = 2 })')
+
+  ask_below_cursor({ 'A function that adds two values.' })
+  wait_for_preview()
+
+  eq(views()[1], { 10, 2 })
+end
+
+T['the preview in view']['is brought into view again by the diff view, not before'] = function()
+  start(BELOW_LINE_3)
+  child.api.nvim_win_set_cursor(0, { 3, 0 })
+  ask_below_cursor({ 'A function that adds two values.' })
+  wait_for_preview()
+  child.cmd('normal! zt')
+  local scrolled_away = vim.tbl_contains(screen(), KEYS_ROW)
+
+  child.lua("require('aineo.explain').toggle_fix_diff(vim.api.nvim_get_current_buf())")
+
+  eq({ scrolled_away, vim.tbl_contains(screen(), KEYS_ROW) }, { false, true })
 end
 
 T['the preview']['says on accept that the code is written, and that u undoes it'] = function()
@@ -1057,7 +1574,7 @@ T['the words']['of the diff of stale code name the written code'] = function()
 
   child.lua("require('aineo.explain').toggle_fix_diff(vim.api.nvim_get_current_buf())")
 
-  eq(messages(), { 'aineo: the written code is stale: \\Vr rejects, \\w asks again' })
+  eq(messages(), { 'aineo: the written code is stale: \\Wr rejects, \\w asks again' })
 end
 
 T['the words']['of the head row label it write'] = function()
@@ -1070,7 +1587,7 @@ T['the words']['of the head row label it write'] = function()
 
   eq(
     row_after(screen(), '▎writ ┊ ' .. CODE[3]),
-    '▎writ ┊ read-only until \\Va accepts or \\Vr rejects · \\Vd shows the diff'
+    '▎writ ┊ read-only until \\Wa accepts or \\Wr rejects · \\Wd shows the diff'
   )
 end
 

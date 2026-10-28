@@ -52,6 +52,8 @@ local M = {}
 ---@field deep aineo.explain.DeepWords how it names a deep request's answer, and says it works
 ---@field changed? string what the preview of a proposal of this kind says when the code under it changed
 ---@field stale? string what the preview of a proposal of this kind says of itself once stale
+---@field shown? string what the user is told a proposal of this kind is, when keys of another kind are pressed
+---@field plugs? aineo.explain.FixKeys the `<Plug>` mappings that accept, reject and show the diff of a proposal of this kind, which its preview maps its keys to
 
 ---@type aineo.explain.Kind
 M.EXPLANATIONS = {
@@ -112,6 +114,12 @@ M.FIX = {
   working = 'proposing a fix…',
   changed = 'the code under the fix changed',
   stale = 'the fix is stale',
+  shown = 'a fix',
+  plugs = {
+    accept = '<Plug>(aineo-fix-accept)',
+    reject = '<Plug>(aineo-fix-reject)',
+    diff = '<Plug>(aineo-fix-diff)',
+  },
   deep = {
     label = 'fix',
     working = 'proposing a fix…',
@@ -146,6 +154,12 @@ M.WRITE = {
   working = 'writing code…',
   changed = 'the lines under the written code changed',
   stale = 'the written code is stale',
+  shown = 'written code',
+  plugs = {
+    accept = '<Plug>(aineo-write-accept)',
+    reject = '<Plug>(aineo-write-reject)',
+    diff = '<Plug>(aineo-write-diff)',
+  },
   deep = {
     label = 'write',
     working = 'writing code, reading the project…',

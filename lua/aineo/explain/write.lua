@@ -18,7 +18,7 @@ local M = {}
 ---@class aineo.explain.WriteRequest
 ---@field buffer integer the buffer of the file the code is written in
 ---@field window integer the window the request was made in
----@field line integer the cursor's line, from 1, which the code goes below, followed while the request is typed
+---@field line integer the cursor's line, from 1, which the code goes below, or in place of when it is blank, followed while the request is typed
 ---@field range? integer[] the first and last lines that hold the request, from 1
 ---@field tools boolean whether Claude Code may read the project with read-only tools
 ---@field command string[] the words that run Claude Code, `claude.cmd`
@@ -28,13 +28,19 @@ local M = {}
 ---@field keys? aineo.explain.FixKeys the keys the preview maps; none when absent
 ---@field ask_key string what asks for code again, as the user is told it
 
+--- Where code written for a request goes: below the line asked about
+--- (`below_line`) or in its place when it is blank (`in_blank_line`), for a
+--- request the user typed, or in place of the lines that hold the request
+--- (`in_request_lines`).
+---@alias aineo.explain.WritePlace 'below_line'|'in_blank_line'|'in_request_lines'
+
 --- What the code is asked for: the request, and the lines that hold it,
---- which the code replaces, or the line the code goes below.
+--- which the code replaces, or the line the code goes below or in place of.
 ---@class aineo.explain.WriteAsk
----@field first integer the first line of the request, from 1, or the line the code goes below
----@field last integer the last line of the request, or the line the code goes below
+---@field first integer the first line of the request, from 1, or the line asked about
+---@field last integer the last line of the request, or the line asked about
 ---@field request string the request: the text the user typed, or the text of the lines that hold it
----@field below boolean whether the code goes below the line `first`, for a request the user typed; else it replaces the lines that hold the request
+---@field place aineo.explain.WritePlace where the code goes
 
 --- What a request for code needs once its Claude Code has ended.
 ---@class aineo.explain.WriteAsked
@@ -75,10 +81,19 @@ local function shortened(text)
   return vim.fn.strcharpart(one_line, 0, MOST_REQUEST_CHARACTERS - 1) .. '…'
 end
 
+--- What the user is told code written for each place
+--- (`aineo.explain.WritePlace`) must be when its edits are not one edit of
+--- the lines asked about.
+local OUT_OF_PLACE = {
+  below_line = 'it must insert after the cursor’s line alone',
+  in_blank_line = 'it must replace the cursor’s blank line alone',
+  in_request_lines = 'it must replace the lines of the request alone',
+}
+
 --- Why the code of `edits`, placed in the text sent, cannot be shown for
 --- `ask`, or `nil`: it must be one edit of exactly the lines `ask.first` to
---- `ask.last`, and, for code that goes below a line, its new lines must
---- start with that line, as it reads.
+--- `ask.last` (`OUT_OF_PLACE`), and, for code that goes below a line, its
+--- new lines must start with that line, as it reads.
 ---
 ---@param edits aineo.explain.PlacedEdit[]
 ---@param ask aineo.explain.WriteAsk
@@ -86,12 +101,51 @@ end
 local function fault_of(edits, ask)
   local edit = edits[1]
   if #edits ~= 1 or edit.first ~= ask.first or edit.last ~= ask.last then
-    return ask.below and 'it must insert after the cursor’s line alone'
-      or 'it must replace the lines of the request alone'
+    return OUT_OF_PLACE[ask.place]
   end
-  if ask.below and edit.new[1] ~= edit.old[1] then
+  if ask.place == 'below_line' and edit.new[1] ~= edit.old[1] then
     return 'it must keep the cursor’s line as it is'
   end
+end
+
+--- Why `edits`, the edits answered for `asked`, cannot be placed in place
+--- of the blank line asked about, or `nil`: an edit names that line, but its
+--- old lines are not that line, byte for byte, as it was sent. Edits
+--- answered for any other place are not looked at.
+---
+---@param edits aineo.explain.Edit[]
+---@param asked aineo.explain.WriteAsked
+---@return string|nil
+local function blank_line_mismatch(edits, asked)
+  local ask = asked.ask
+  if ask.place ~= 'in_blank_line' then
+    return nil
+  end
+  for _, edit in ipairs(edits) do
+    if
+      type(edit) == 'table'
+      and edit.line == ask.first
+      and not vim.deep_equal(edit.old, { asked.lines[ask.first] })
+    then
+      return 'the edit’s old line does not match the cursor’s line exactly'
+    end
+  end
+end
+
+--- `edits`, the one edit of the code written for `ask` (`fault_of()`), with
+--- the copy of the blank line it replaces that its new lines start with, if
+--- any, dropped, for code that goes in place of a blank line, so that the
+--- code replaces it and leaves no blank line; any other edits as they are.
+---
+---@param edits aineo.explain.PlacedEdit[]
+---@param ask aineo.explain.WriteAsk
+---@return aineo.explain.PlacedEdit[]
+local function in_its_place(edits, ask)
+  local edit = edits[1]
+  if ask.place ~= 'in_blank_line' or edit.new[1] ~= edit.old[1] then
+    return edits
+  end
+  return { vim.tbl_extend('force', edit, { new = vim.list_slice(edit.new, 2) }) }
 end
 
 --- What the code written for `ask`, as `writing` asks it, is kept under
@@ -105,7 +159,7 @@ local function kept_key(writing, ask)
     first = ask.first,
     last = ask.last,
     request = ask.request,
-    below = ask.below,
+    place = ask.place,
     model = writing.model,
     effort = writing.effort,
   })
@@ -130,13 +184,14 @@ local function show(writing, ask, code)
 end
 
 --- Shows (`show()`) the code the run `ended` answered for `asked`, placed in
---- the lines sent (`aineo.explain.placement`), and keeps it for those lines
---- (`aineo.explain.kept`), or tells the user, once, why nothing is shown:
---- the buffer changed while the code was asked, which any move of its
---- `b:changedtick` says; the run failed or answered no code (`code_of()`);
---- the answer has no edits, when its summary is told; or the code was
---- refused, by the placement or for its lines (`fault_of()`), with the
---- reason.
+--- the lines sent (`aineo.explain.placement`, `in_its_place()`), and keeps
+--- it for those lines (`aineo.explain.kept`), or tells the user, once, why
+--- nothing is shown: the buffer changed while the code was asked, which any
+--- move of its `b:changedtick` says; the run failed or answered no code
+--- (`code_of()`); the answer has no edits, when its summary is told; or the
+--- code was refused, for an old line that is not the blank line asked about
+--- (`blank_line_mismatch()`), by the placement or for its lines
+--- (`fault_of()`), with the reason.
 ---
 ---@param asked aineo.explain.WriteAsked
 ---@param ended vim.SystemCompleted
@@ -159,12 +214,12 @@ local function show_answer(asked, ended)
     return
   end
   local edits, refusal = placement.place(asked.lines, answered.edits)
-  local fault = refusal or fault_of(edits, asked.ask)
+  local fault = blank_line_mismatch(answered.edits, asked) or refusal or fault_of(edits, asked.ask)
   if fault then
     vim.notify('aineo: the written code was refused: ' .. fault, vim.log.levels.WARN)
     return
   end
-  local code = { summary = answered.summary, edits = edits }
+  local code = { summary = answered.summary, edits = in_its_place(edits, asked.ask) }
   kept.keep(writing.buffer, kept_key(writing, asked.ask), asked.lines, code)
   show(writing, asked.ask, code)
 end
@@ -195,7 +250,8 @@ local function start(writing, ask, folder)
     language = vim.bo[buffer].filetype,
     first = ask.first,
     last = ask.last,
-    request = ask.below and ask.request or nil,
+    request = ask.place ~= 'in_request_lines' and ask.request or nil,
+    blank = ask.place == 'in_blank_line',
     lines = asked.lines,
   })
   local run = runs.begin({
@@ -311,10 +367,15 @@ local function take_anchor(buffer, anchor)
   return mark[1] + 1
 end
 
+--- What a blank line is, as a pattern: spaces and tabs alone, or nothing,
+--- as Vim's `\s` counts white space.
+local BLANK = '^[ \t]*$'
+
 --- Asks for code for `text`, the request the user sent from the float,
 --- below the line the mark `anchor` follows, where it stands now
---- (`take_anchor()`, `ask_for()`). Nothing is asked when the buffer is gone
---- by then, nor, with a word, when that line was deleted.
+--- (`take_anchor()`, `ask_for()`), or in its place when it is blank, empty
+--- or spaces and tabs alone (`BLANK`). Nothing is asked when the buffer is gone by then,
+--- nor, with a word, when that line was deleted.
 ---
 ---@param writing aineo.explain.WriteRequest
 ---@param folder string
@@ -329,7 +390,9 @@ local function ask_typed(writing, folder, anchor, text)
     vim.notify('aineo: the line asked about is gone', vim.log.levels.WARN)
     return
   end
-  ask_for(writing, { first = line, last = line, request = text, below = true }, folder)
+  local anchor_text = vim.api.nvim_buf_get_lines(writing.buffer, line - 1, line, true)[1]
+  local place = anchor_text:match(BLANK) and 'in_blank_line' or 'below_line'
+  ask_for(writing, { first = line, last = line, request = text, place = place }, folder)
 end
 
 --- What the float in which the user types a request says it does, when
@@ -343,8 +406,8 @@ local PLAIN_TITLE = 'Write code'
 --- marks the line `writing.line` (`mark_anchor()`), then opens an empty
 --- float in which the user types the request (`aineo.explain.steer`),
 --- remembering nothing of it, and asks for the request sent below that
---- line where it stands then (`ask_typed()`); nothing when the user
---- cancels.
+--- line where it stands then, or in its place when it is blank
+--- (`ask_typed()`); nothing when the user cancels.
 ---
 --- Raises an error naming `claude.cmd` when its command cannot be run; for
 --- a request sent from the float, the float tells it to the user instead.
@@ -373,7 +436,11 @@ function M.propose(writing, folder)
     )
     return
   end
-  ask_for(writing, { first = first, last = last, request = text, below = false }, folder)
+  ask_for(
+    writing,
+    { first = first, last = last, request = text, place = 'in_request_lines' },
+    folder
+  )
 end
 
 return M

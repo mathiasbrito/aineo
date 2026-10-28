@@ -951,7 +951,28 @@ T['the preview']['of an edit of every line shows it as the diff view does'] = fu
 
   local rows = screen()
   eq(line_highlights(), { { group = 'AineoFixOld', first = 1, last = 7 } })
-  eq(row_after(rows, '    7 end'), '▎     LOCAL FUNCTION SUB(A, B)')
+  eq(
+    row_after(rows, '    7 end'),
+    '▎ fix ┊ read-only until \\Va accepts or \\Vr rejects · \\Vd shows the diff'
+  )
+  eq(count_of(rows, '▎     LOCAL FUNCTION SUB(A, B)'), 1)
+end
+
+T['the preview']['is brought into view when the issue’s line is the window’s top line, the cursor kept'] = function()
+  start()
+  child.api.nvim_win_set_cursor(0, { 2, 4 })
+  child.cmd('normal! zt')
+
+  propose({ summary = 'Subtract.', edits = { SUBTRACT } })
+
+  eq(
+    vim.tbl_contains(
+      screen(),
+      '┊ read-only until \\Va accepts or \\Vr rejects · \\Vd shows the diff'
+    ),
+    true
+  )
+  eq(child.api.nvim_win_get_cursor(0), { 2, 4 })
 end
 
 T['the diff view'] = MiniTest.new_set()
