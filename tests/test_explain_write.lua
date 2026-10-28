@@ -73,7 +73,7 @@ end
 --- Asks the explain home, in the child, to write code in the current buffer
 --- with the fake `claude`, as the fields `fields` say over these defaults:
 --- below the cursor's line, the model `haiku`, no tools, no effort, a long
---- timeout, the keys `\Va`, `\Vr` and `\Vd`, and `\w` named as the key that
+--- timeout, the keys `\Wa`, `\Wr` and `\Wd`, and `\w` named as the key that
 --- asks again.
 ---
 ---@param fields? table
@@ -89,7 +89,7 @@ local function ask_write(fields)
       command = command,
       model = 'haiku',
       timeout_ms = 180000,
-      keys = { accept = '\\Va', reject = '\\Vr', diff = '\\Vd' },
+      keys = { accept = '\\Wa', reject = '\\Wr', diff = '\\Wd' },
       ask_key = '\\w',
     }, fields))
   ]],
@@ -585,7 +585,7 @@ local function group_of(text)
 end
 
 --- What the head row of a preview says while the buffer is read-only.
-local KEYS_ROW = '┊ read-only until \\Va accepts or \\Vr rejects · \\Vd shows the diff'
+local KEYS_ROW = '┊ read-only until \\Wa accepts or \\Wr rejects · \\Wd shows the diff'
 
 T['the preview']['starts with the request, in the look of written code, above its keys'] = function()
   start(REPLACING_THE_REQUEST)
@@ -673,7 +673,7 @@ T['the preview']['shows its stale row on line 1 once its marks are cleared'] = f
   eq(
     vim.tbl_contains(
       screen(),
-      '┊ the lines under the written code changed · \\Vr rejects · \\w asks again'
+      '┊ the lines under the written code changed · \\Wr rejects · \\w asks again'
     ),
     true
   )
@@ -1151,7 +1151,7 @@ T['the words']['of the diff of stale code name the written code'] = function()
 
   child.lua("require('aineo.explain').toggle_fix_diff(vim.api.nvim_get_current_buf())")
 
-  eq(messages(), { 'aineo: the written code is stale: \\Vr rejects, \\w asks again' })
+  eq(messages(), { 'aineo: the written code is stale: \\Wr rejects, \\w asks again' })
 end
 
 T['the words']['of the head row label it write'] = function()
@@ -1164,7 +1164,7 @@ T['the words']['of the head row label it write'] = function()
 
   eq(
     row_after(screen(), '▎writ ┊ ' .. CODE[3]),
-    '▎writ ┊ read-only until \\Va accepts or \\Vr rejects · \\Vd shows the diff'
+    '▎writ ┊ read-only until \\Wa accepts or \\Wr rejects · \\Wd shows the diff'
   )
 end
 
