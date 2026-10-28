@@ -2081,7 +2081,10 @@ the request: `<CR>` in Normal mode sends it, `q` and `<Esc>` cancel, a request
 of white space alone is not sent, and nothing you typed is kept for the next
 request; the code goes below the cursor's line, followed while you type: lines
 added or deleted above it move it, and when the line itself is deleted
-nothing is sent and you are told `aineo: the line asked about is gone`. A
+nothing is sent and you are told `aineo: the line asked about is gone`. On a
+blank line, empty or white space alone, the code goes in its place instead,
+leaving no blank line there; an empty new file is written from its first
+line. A
 `claude.cmd` that cannot be run is told once, from the float as from Visual
 mode. In Visual mode the lines the selection spans, whole lines whatever the
 kind of selection, are the request,
@@ -2107,7 +2110,8 @@ after or the lines that hold the request, and the rules of the answer, which
 has the shape of a fix's (|aineo-explain-fix|): a summary of what the code
 does and one edit of this file. Below the cursor, the edit replaces the
 cursor's line with itself followed by the code, in the file's style and
-indented as the code around it; for a request in the file, it replaces
+indented as the code around it; on a blank line, it replaces that line with
+the code alone; for a request in the file, it replaces
 exactly the lines of the request with the code, the first indented as the
 first of them. Every line of the buffer is sent too, numbered.
 
@@ -2118,20 +2122,29 @@ code never changes a line outside the request. When the buffer changed while
 the code was asked, nothing is shown: `aineo: the buffer changed while the
 code was written; ask again`. An answer with no edits tells its summary.
 
-The code shows as a fix does, and is decided the same way: the buffer is
-read-only until `\Va` accepts it, as one undo step, writing no file, or `\Vr`
-rejects it, which leaves the buffer as it was, the request's lines too; `\Vd`
-shows it as a diff, and the stale mark, the keys and the 'conceallevel' are
-the fix's, in its own words: its head row is labelled `write`, a stale head
-row says `the lines under the written code changed`, accepting it then tells
-you `aineo: the lines under the written code changed; ask again`, and `\Vd`
-tells you `aineo: the written code is stale: \Vr rejects, \w asks again`.
-Accepting writes the code below the cursor's line without touching that line,
-so its marks and extmarks stay where they were (a fix whose new lines start
-with its old lines is applied the same way). Above it, in place of an issue,
-the request is named, on one line of at most 60 characters, labelled `write`,
-in the look of |hl-AineoWrite|, the accent being the foreground of `Special`,
-`#c678dd` without one.
+The code shows as a fix does, and is decided with keys of its own: the buffer
+is read-only until `\Wa` accepts it, as one undo step, writing no file, or
+`\Wr` rejects it, which leaves the buffer as it was, the request's lines too;
+`\Wd` shows it as a diff. The three keys are mapped in the buffer's Normal
+mode while the code shows, never over a key of yours, and removed when it
+goes; the fix's `\Va`, `\Vr` and `\Vd` are not mapped for it. `\W` alone still
+asks for code meanwhile, once 'timeoutlen' has passed with no `a`, `r` or `d`
+after it. The head row names these keys: `read-only until \Wa accepts or \Wr
+rejects · \Wd shows the diff`. Shown as a diff from the buffer's first line,
+as code always is in a file of one line, the head row and the why rows are
+drawn below the old lines rather than above them, where Neovim would not show
+them; a fix's too. The stale mark and the 'conceallevel' are the fix's, in its
+own words: its head row is labelled `write`, a stale head row says `the lines
+under the written code changed · \Wr rejects · \w asks again`, accepting it
+then tells you `aineo: the lines under the written code changed; ask again`,
+and `\Wd` tells you `aineo: the written code is stale: \Wr rejects, \w asks
+again`.
+Accepting writes the code below a cursor's line that is not blank without
+touching that line, so its marks and extmarks stay where they were (a fix
+whose new lines start with its old lines is applied the same way). Above it,
+in place of an issue, the request is named, on one line of at most 60
+characters, labelled `write`, in the look of |hl-AineoWrite|, the accent being
+the foreground of `Special`, `#c678dd` without one.
 Accepting tells you `aineo: code written (u undoes it)`. A buffer shows one
 fix or written code at a time: asking for either replaces the other and stops
 the request that runs. Code that was shown is kept in memory, for the buffer,
@@ -2141,7 +2154,10 @@ again at once, asks nothing, and tells you `aineo: the code written before
 for this request, the file unchanged (change the request to ask anew)`. `\vc`
 or `:Aineo explain clear` removes it with the rest, stops its request and
 drops what was kept. The keys are |<Plug>(aineo-write)| and
-|<Plug>(aineo-write-deep)|.
+|<Plug>(aineo-write-deep)|, and, while the code shows,
+|<Plug>(aineo-write-accept)|, |<Plug>(aineo-write-reject)| and
+|<Plug>(aineo-write-diff)|; with |aineo-config-prefix| `false` none is mapped
+and the head row names these.
 
                                                          *aineo-explain-clean*
 `\vc` returns the current buffer to how it behaved when you opened it, at
@@ -2151,7 +2167,8 @@ request of code; rejects the fix or the written code it shows, applying
 nothing; removes every explanation and issue, with their marks, and the fix
 explanations; gives every window back the 'conceallevel' and
 'concealcursor' a fix set, and the buffer its 'modifiable'; takes back the
-keys aineo mapped for the buffer (`]v`, `[v`, `\Va`, `\Vr`, `\Vd`) and the
+keys aineo mapped for the buffer (`]v`, `[v`, `\Va`, `\Vr`, `\Vd`, `\Wa`,
+`\Wr`, `\Wd`) and the
 badges; and drops the answers, the fixes and the code kept for it, so that
 the next request asks anew. Its text and its undo history stay as they are,
 and your own keys and options too; the text you last sent in a steering
@@ -3342,11 +3359,11 @@ zoom, and the keys local to the changes pane and to the explorer. The group
 of explaining code, `Explain, fix and write`, has seven sections, each under
 a heading of its own in the group's colour: Explain, Issues (with marking,
 sending the marked issues and jumping between them), Fix, Write, While a
-proposal shows (a fix or written code), In the steering float, and Clean. A
-group is never split between the two columns. The sheet has two columns
-when the column is 80 cells wide or more, with the groups split so that they
-are as even as they can be, and one below that, and it is written again as
-the column is resized. The title is `aineo — keys`.
+proposal shows (the fix's keys, then those of written code), In the steering
+float, and Clean. A group is never split between the two columns. The sheet
+has two columns when the column is 80 cells wide or more, with the groups
+split so that they are as even as they can be, and one below that, and it is
+written again as the column is resized. The title is `aineo — keys`.
 
 Every key is written as you type it. With the prefix (|aineo-config-prefix|)
 `,`, the sheet shows `,o` where it shows `\o` by default. With `prefix =
@@ -3549,6 +3566,21 @@ you turn the prefix off, or when a prefix key is yours: >lua
                                                       *<Plug>(aineo-fix-diff)*
 <Plug>(aineo-fix-diff)	In Normal mode, shows the fix the current buffer
 			shows as a diff, or as the overlay again.
+
+                                                  *<Plug>(aineo-write-accept)*
+<Plug>(aineo-write-accept)
+			In Normal mode, accepts the written code the current
+			buffer shows, as one undo step, writing no file.
+
+                                                  *<Plug>(aineo-write-reject)*
+<Plug>(aineo-write-reject)
+			In Normal mode, rejects the written code the current
+			buffer shows.
+
+                                                    *<Plug>(aineo-write-diff)*
+<Plug>(aineo-write-diff)
+			In Normal mode, shows the written code the current
+			buffer shows as a diff, or as the overlay again.
 
                                                   *<Plug>(aineo-explain-mark)*
 <Plug>(aineo-explain-mark)
