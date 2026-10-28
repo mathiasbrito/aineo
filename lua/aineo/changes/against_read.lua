@@ -16,7 +16,8 @@ local M = {}
 ---@field options? aineo.git.Options how the git home runs git
 
 --- The repository the files of `listed` are read in: the other worktree's,
---- for a filter of one, else the editor's own.
+--- for a filter of one (`M.read()` reads nothing for one with none), else
+--- the editor's own.
 ---
 ---@param listed aineo.changes.Filter
 ---@param source aineo.changes.DiffSource
@@ -122,11 +123,21 @@ end
 --- last of the git runs, and calls `done(resolved)` once, on the main loop.
 --- Nothing is raised or told when a run fails: the names, which only
 --- embellish the sides, or a commit, whose side then says its words alone,
---- are left unread, and the next read tries again.
+--- are left unread, and the next read tries again. For a filter of another
+--- worktree that has no repository yet, nothing is read: every side says
+--- its words alone, and no commit of the editor's own repository stands
+--- for one of that worktree's.
 ---
 ---@param request aineo.changes.AgainstRead
 ---@param done fun(resolved: aineo.changes.Resolved)
 function M.read(request, done)
+  local worktree = request.listed.worktree
+  if worktree and not worktree.repository then
+    vim.schedule(function()
+      done({})
+    end)
+    return
+  end
   local resolved = {}
   read_needed(request, against.needs(request.listed, request.against_head), resolved, function()
     local sides = against.sides(request.listed, request.against_head, request.source, resolved)
