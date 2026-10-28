@@ -56,15 +56,6 @@ local CONCEALING = 2
 ---@field reject string
 ---@field diff string
 
---- The `<Plug>` mappings that do what a preview's keys do, said in its head
---- row when it maps no key.
----@type aineo.explain.FixKeys
-local PLUG_KEYS = {
-  accept = '<Plug>(aineo-fix-accept)',
-  reject = '<Plug>(aineo-fix-reject)',
-  diff = '<Plug>(aineo-fix-diff)',
-}
-
 --- The preview each buffer shows.
 ---@type table<integer, aineo.explain.Preview>
 local previews = {}
@@ -122,14 +113,15 @@ local function new_line_row(text, geometry)
 end
 
 --- What names `action` of `preview` to the user: the key it mapped for it
---- in its buffer, or its `<Plug>` mapping when it mapped none for it, the
---- key being the user's or none being given.
+--- in its buffer, or the `<Plug>` mapping of its kind
+--- (`aineo.explain.kinds`' `plugs`) when it mapped none for it, the key
+--- being the user's or none being given.
 ---
 ---@param preview aineo.explain.Preview
 ---@param action 'accept'|'reject'|'diff'
 ---@return string
 local function named_key(preview, action)
-  return preview.mapped[action] and preview.keys[action] or PLUG_KEYS[action]
+  return preview.mapped[action] and preview.keys[action] or preview.kind.plugs[action]
 end
 
 --- What the head row of `preview` says: that its buffer is read-only until
@@ -728,17 +720,22 @@ vim.api.nvim_create_autocmd('BufWipeout', {
 })
 
 --- The `desc` of the keys a preview maps, which tells them from the user's.
-local KEYS_DESCRIPTION = 'aineo: a key of the fix shown'
+local KEYS_DESCRIPTION = 'aineo: a key of the proposal shown'
 
 --- Each key of `preview` (`aineo.explain.FixKeys`) with its action and the
---- `<Plug>` mapping it is mapped to.
+--- `<Plug>` mapping of its kind it is mapped to (`aineo.explain.kinds`'
+--- `plugs`).
 ---
 ---@param preview aineo.explain.Preview
 ---@return { action: string, key: string, plug: string }[]
 local function key_mappings(preview)
   local found = {}
   for _, action in ipairs({ 'accept', 'reject', 'diff' }) do
-    table.insert(found, { action = action, key = preview.keys[action], plug = PLUG_KEYS[action] })
+    table.insert(found, {
+      action = action,
+      key = preview.keys[action],
+      plug = preview.kind.plugs[action],
+    })
   end
   return found
 end

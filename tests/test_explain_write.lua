@@ -679,6 +679,33 @@ T['the preview']['shows its stale row on line 1 once its marks are cleared'] = f
   )
 end
 
+T['the preview']['names the <Plug> mappings of written code when it maps no key'] = function()
+  start(REPLACING_THE_REQUEST)
+
+  child.lua(
+    [[
+    require('aineo.explain').propose_write({
+      buffer = vim.api.nvim_get_current_buf(),
+      window = vim.api.nvim_get_current_win(),
+      line = 3,
+      range = { 3, 3 },
+      tools = false,
+      command = ...,
+      model = 'haiku',
+      timeout_ms = 180000,
+      ask_key = '<Plug>(aineo-write)',
+    })
+  ]],
+    { explained.FAKE_CLAUDE }
+  )
+  wait_for_preview()
+
+  eq(
+    row_after(screen(), '┊ ' .. CODE[3]),
+    '┊ read-only until <Plug>(aineo-write-accept) accepts or'
+  )
+end
+
 T['the preview']['says on accept that the code is written, and that u undoes it'] = function()
   start(REPLACING_THE_REQUEST)
   ask_write({ range = { 3, 3 } })

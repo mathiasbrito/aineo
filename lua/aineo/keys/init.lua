@@ -348,11 +348,11 @@ local ROWS = vim.list_extend(
     listing_again('explain', 'issues', 'send', 'send the marked issues to Claude'),
     in_section(
       'fix_shown',
-      in_buffer_after_the_prefix('explain', 'Va', 'fix-accept', 'accept the proposal')
+      in_buffer_after_the_prefix('explain', 'Va', 'fix-accept', 'accept the fix')
     ),
     in_section(
       'fix_shown',
-      in_buffer_after_the_prefix('explain', 'Vr', 'fix-reject', 'reject the proposal')
+      in_buffer_after_the_prefix('explain', 'Vr', 'fix-reject', 'reject the fix')
     ),
     in_section(
       'fix_shown',
@@ -360,7 +360,24 @@ local ROWS = vim.list_extend(
         'explain',
         'Vd',
         'fix-diff',
-        'show the proposal as a diff, or as an overlay'
+        'show the fix as a diff, or as an overlay'
+      )
+    ),
+    in_section(
+      'fix_shown',
+      in_buffer_after_the_prefix('explain', 'Wa', 'write-accept', 'accept the written code')
+    ),
+    in_section(
+      'fix_shown',
+      in_buffer_after_the_prefix('explain', 'Wr', 'write-reject', 'reject the written code')
+    ),
+    in_section(
+      'fix_shown',
+      in_buffer_after_the_prefix(
+        'explain',
+        'Wd',
+        'write-diff',
+        'show the written code as a diff, or as an overlay'
       )
     ),
     in_section('steer', in_buffer('explain', '<CR>', nil, 'send the prompt')),
