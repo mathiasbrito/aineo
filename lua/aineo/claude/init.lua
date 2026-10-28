@@ -39,7 +39,7 @@ local M = {}
 ---@field on_session_switched? fun(id: string, source: string?, left: string, reason: string?) called when the session followed changes (`session_id()`): with the new id, how Claude Code started it (`clear`, `resume`, `fork`; `startup` or `resume` for a start that takes the place of the session followed), the id left, and why Claude Code left it (`clear`, `resume`; none for a start). Never for an editor's first start. For a start that resumes, it is called when Claude Code launches, once the list of the folder's sessions has answered, not before `start_session()` returns. An error it raises is told the user as a warning and goes no further
 ---@field on_session_ready? fun(id: string) called once per start of Claude Code — the new session's in place of a resume with no conversation among them — the first time it is ready for input (`session_status()` turns `'ready'`), with the session it follows then (`session_id()`): before that status is read, from the callback that sets it. Never for a start that is not the session any more, whose process has ended or whose terminal was wiped, or once Neovim is quitting (`v:exiting`): not for a resume Claude Code found no conversation for, a dialog never answered, or a Claude Code that exits before its input box settles. An error it raises is told the user as a warning and goes no further
 ---@field on_transcript? fun(session_id: string, path: string) called when a `SessionStart` hook of this start's Claude Code names the file it writes a session's transcript in (`receive_session_event()`): with the session and the absolute path. Never for a hook that names none or a path that is not absolute, a `SessionEnd`, a start whose hooks are ignored (`receive_session_event()`), or once Neovim is quitting (`v:exiting`). An error it raises is told the user as a warning and goes no further
----@field on_session_elsewhere? fun(id: string, source: string?) called when a `SessionStart` hook under this start's token tells of a session other than the one followed from a Claude Code process other than the start's own (`receive_session_event()`), as Claude Code's background service runs a conversation of the start in a process of its own: with that session and how Claude Code started it. The session followed (`session_id()`) stays the one the start's own Claude Code runs. Once for each session in a start; never once Neovim is quitting (`v:exiting`). An error it raises is told the user as a warning and goes no further
+---@field on_session_elsewhere? fun(id: string, source: string?) called when a `SessionStart` hook under this start's token tells of a session other than the one followed from a Claude Code process other than the start's own (`receive_session_event()`), as a session of Claude Code's background service under the start's hooks switches to another: with that session and how Claude Code started it. Never for a session that process began as its own, with the source `startup` or `fork`. The session followed (`session_id()`) stays the one the start's own Claude Code runs. Once for each session in a start; never once Neovim is quitting (`v:exiting`). An error it raises is told the user as a warning and goes no further
 ---@field on_session_ended? fun(session_id: string, reason: string?) called when this start's Claude Code tells that a session ended: with the session and the hook's `reason` when a `SessionEnd` hook under the start's token tells it (`receive_session_event()`), unless the home's stop stopped the start, or a `SessionStart` of that session whose hook ran after it was told already; with the session followed then and no reason when the start's own process ends by itself, not stopped by the home's stop as a start another takes the place of is. Never once Neovim is quitting (`v:exiting`). An error it raises is told the user as a warning and goes no further
 ---@field on_permission_wait? fun(session_id: string, agent_id: string?) called when a `PermissionRequest` hook of this start's Claude Code tells the editor that an agent waits for the user (`receive_permission_wait()`): with the session the hook ran in and, when a subagent asks, its `agent_id` (nil for the main agent). Never for a start whose process has ended, or once Neovim is quitting (`v:exiting`). An error it raises is told the user as a warning and goes no further
 
@@ -1469,9 +1469,9 @@ end
 --- Whether `told` is a `SessionStart` of a session other than the one
 --- `running` follows, from a Claude Code process other than the start's
 --- own (`own_claude_pid()`): one Claude Code started with the start's
---- `--settings`, such as the copy its background service runs a
---- conversation in, on a new session id — whatever process it descends
---- from, since that service can be a child of the start's own Claude Code.
+--- `--settings`, such as a process of its background service, on a new
+--- session id — whatever process it descends from, since that service can
+--- be a child of the start's own Claude Code.
 --- False when the hook told no pid, or the start's own pid is not known.
 ---
 ---@param running aineo.claude.Start
@@ -1483,6 +1483,24 @@ local function is_start_in_another_process(running, told)
   end
   local own_pid = own_claude_pid(running)
   return own_pid ~= nil and told.pid ~= own_pid
+end
+
+--- The sources of a `SessionStart` that begins a session of its own rather
+--- than moving one on: `startup`, as a spare process of Claude Code's
+--- background service starts with the `--settings` of the start whose agent
+--- view opened it, and `fork`, as the background copy of a conversation an
+--- in-session `/resume` moves out of the start's terminal starts.
+local NEW_SESSION_SOURCES = { startup = true, fork = true }
+
+--- Whether `told`, a `SessionStart` from a Claude Code process other than
+--- the start's own, began a session of its own there
+--- (`NEW_SESSION_SOURCES`), which is none of the tab's: such a session is
+--- never told as a session elsewhere.
+---
+---@param told aineo.claude.SessionEvent
+---@return boolean
+local function began_elsewhere(told)
+  return NEW_SESSION_SOURCES[told.cause] == true
 end
 
 --- Tells `running`'s `on_session_elsewhere` of the session `told` names,
@@ -1564,11 +1582,14 @@ end
 --- token for the start it took the place of (`home_holding()`), as an
 --- attach to a claimed session holds the token of the start it replaced: a
 --- `SessionStart` of a session other than the one followed is told as a
---- session elsewhere (`tell_session_elsewhere()`) — a fork, in Claude Code's
---- background service, of the session that start ran. Nothing else of such a
---- hook is taken: no pid is noted and no switch followed, since none of the
---- attach's own hooks runs. Nothing either once Neovim is quitting, for an id
---- of another form than Claude Code's, or once the attach has ended.
+--- session elsewhere (`tell_session_elsewhere()`) — a switch, in Claude
+--- Code's background service, of a session that start's hooks run in —
+--- unless it began a session of its own there (`began_elsewhere()`), as a
+--- spare process of the attached window's agent view does. Nothing else of
+--- such a hook is taken: no pid is noted and no switch followed, since none
+--- of the attach's own hooks runs. Nothing either once Neovim is quitting,
+--- for an id of another form than Claude Code's, or once the attach has
+--- ended.
 ---
 ---@param told aineo.claude.SessionEvent
 local function take_held_session_event(told)
@@ -1580,6 +1601,7 @@ local function take_held_session_event(told)
     or home.session.ended_at
     or told.event ~= 'SessionStart'
     or told.id == home.session.followed
+    or began_elsewhere(told)
   then
     return
   end
@@ -1589,8 +1611,10 @@ end
 --- What `told` does to the session of the home whose last start has its
 --- token (`started_homes`): a `SessionStart` of another session from
 --- another Claude Code process (`is_start_in_another_process()`) is told as
---- a session elsewhere (`tell_session_elsewhere()`), and the session
---- followed stays the one the start's own Claude Code runs. Else,
+--- a session elsewhere (`tell_session_elsewhere()`) unless it began a
+--- session of its own there (`began_elsewhere()`), which is taken no
+--- further, and the session followed stays the one the start's own Claude
+--- Code runs. Else,
 --- held with the hooks of that start not paired
 --- yet, it may complete a switch (`follow_switches()`), whatever order the
 --- hooks reach the editor in — each comes from a process of its own.
@@ -1622,7 +1646,9 @@ local function take_session_event(told)
     call_back(home.session.settings, 'on_transcript', told.id, told.transcript_path)
   end
   if is_start_in_another_process(home.session, told) then
-    tell_session_elsewhere(home.session, told)
+    if not began_elsewhere(told) then
+      tell_session_elsewhere(home.session, told)
+    end
     return
   end
   table.insert(home.session.unpaired, told)
@@ -1657,11 +1683,14 @@ end
 --- A `SessionStart` of another id from another Claude Code process, while
 --- the start's own runs, is no switch: a process Claude Code started with
 --- the start's `--settings`, as its background service starts one, on a
---- new session id, to run a conversation in. It calls
+--- new session id. When its source is `startup` or `fork` — a spare
+--- process of agent view, or the background copy an in-session `/resume`
+--- moves a conversation into — it is ignored: none of the start's
+--- sessions. Any other source, a switch in that process, calls
 --- `on_session_elsewhere(id, source)`, once for each such session in a
---- start, and the session followed stays the one the start's own Claude
---- Code runs. A switch makes the new id the one followed (`session_id()`),
---- keeps it for the working directory as the session the next start there
+--- start. Either way the session followed stays the one the start's own
+--- Claude Code runs. A switch makes the new id the one followed
+--- (`session_id()`), keeps it for the working directory as the session the next start there
 --- resumes, and calls `on_session_switched(id, source, left, reason)`. A
 --- `SessionStart` of
 --- the session followed (`/compact`, the start's own, a `/resume` of it), a

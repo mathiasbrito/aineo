@@ -388,13 +388,13 @@ local T = MiniTest.new_set({
 
 T['start_session()'] = MiniTest.new_set()
 
-T['start_session()']['gives Claude Code a SessionStart, a SessionEnd and a PostToolUse command hook as --settings, and no other setting'] = function()
+T['start_session()']['gives Claude Code a SessionStart, a SessionEnd and a PostToolUse command hook as --settings, with agent view turned off, and no other setting'] = function()
   local fake = claude.fake('switch-settings', 'exit')
 
   claude.start(child, fake, kept_in('switch-settings-state'))
 
   local given = claude.decoded_words_after(claude.arguments(fake), '--settings')
-  eq(vim.tbl_map(shape_of, given), { { hooks = AINEO_HOOKS_SHAPE } })
+  eq(vim.tbl_map(shape_of, given), { { hooks = AINEO_HOOKS_SHAPE, disableAgentView = true } })
 end
 
 T['start_session()']['gives each hook a command of words quoted for the shell, but "$PPID" for the shell to expand, then the directory Claude Code runs in'] = function()
@@ -436,7 +436,7 @@ end
 --- Settings of the user's own, as a `--settings` of `claude.cmd` gives them.
 local USER_SETTINGS = '{"permissions":{"deny":["Bash(rm:*)"]},"env":{}}'
 
-T['start_session()']['adds its hooks to the settings that claude.cmd gives, and passes one --settings'] =
+T['start_session()']['adds its hooks and agent view turned off to the settings that claude.cmd gives, and passes one --settings'] =
   MiniTest.new_set({
     parametrize = {
       {
@@ -472,7 +472,7 @@ T['start_session()']['adds its hooks to the settings that claude.cmd gives, and 
     },
   })
 
-T['start_session()']['adds its hooks to the settings that claude.cmd gives, and passes one --settings']['given'] = function(
+T['start_session()']['adds its hooks and agent view turned off to the settings that claude.cmd gives, and passes one --settings']['given'] = function(
   _,
   words_for
 )
@@ -491,6 +491,7 @@ T['start_session()']['adds its hooks to the settings that claude.cmd gives, and 
     permissions = { deny = { 'Bash(rm:*)' } },
     env = {},
     hooks = AINEO_HOOKS_SHAPE,
+    disableAgentView = true,
   })
 end
 
@@ -1409,6 +1410,66 @@ T['a session switch']['is not made by a SessionStart of another session that ano
     followed = claude.followed_session_id(child),
   }, {
     elsewhere = { { id = OTHER_SESSION_ID, source = 'resume' } },
+    switches = {},
+    followed = started_on,
+  })
+end
+
+T['a session switch']['is not made by a /clear that another process ran under the start’s token, which is told as a session elsewhere'] = function()
+  local fake = claude.fake('switch-other-process-clear', 'ready')
+  claude.start_noting_switches(child, fake, kept_in('switch-other-process-clear-state'))
+  local started_on = first_session_id(fake)
+
+  claude.run_session_hook_elsewhere(
+    child,
+    fake,
+    1,
+    'SessionStart',
+    hook_input('SessionStart', OTHER_SESSION_ID, 'clear')
+  )
+
+  eq({
+    elsewhere = claude.wait_for_sessions_elsewhere(child, 1),
+    switches = child.lua_get('_G.session_switches'),
+    followed = claude.followed_session_id(child),
+  }, {
+    elsewhere = { { id = OTHER_SESSION_ID, source = 'clear' } },
+    switches = {},
+    followed = started_on,
+  })
+end
+
+T['a session switch']['is not made, nor told as a session elsewhere, by a SessionStart of a new session that another process ran under the start’s token'] =
+  MiniTest.new_set({ parametrize = { { 'startup' }, { 'fork' } } })
+
+T['a session switch']['is not made, nor told as a session elsewhere, by a SessionStart of a new session that another process ran under the start’s token']['from'] = function(
+  source
+)
+  local fake = claude.fake('switch-other-process-new', 'ready')
+  claude.start_noting_switches(child, fake, kept_in('switch-other-process-new-state'))
+  local started_on = first_session_id(fake)
+
+  claude.run_session_hook_elsewhere(
+    child,
+    fake,
+    1,
+    'SessionStart',
+    hook_input('SessionStart', OTHER_SESSION_ID, source)
+  )
+  claude.run_session_hook_elsewhere(
+    child,
+    fake,
+    1,
+    'SessionStart',
+    hook_input('SessionStart', THIRD_SESSION_ID, 'resume')
+  )
+
+  eq({
+    elsewhere = claude.wait_for_sessions_elsewhere(child, 1),
+    switches = child.lua_get('_G.session_switches'),
+    followed = claude.followed_session_id(child),
+  }, {
+    elsewhere = { { id = THIRD_SESSION_ID, source = 'resume' } },
     switches = {},
     followed = started_on,
   })

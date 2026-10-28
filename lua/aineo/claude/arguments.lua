@@ -310,6 +310,26 @@ local function add_hook_entries(settings, entries)
   return settings
 end
 
+--- The setting that turns Claude Code's agent view off: with it, an
+--- in-session `/resume` of a conversation that runs in the background only
+--- tells how to attach to it, `/background` is no command, and `/fork` runs
+--- a forked subagent in the same process — none of them moves the
+--- conversation into a process of Claude Code's background service.
+local AGENT_VIEW_OFF = 'disableAgentView'
+
+--- Adds aineo's own settings to `settings`, in place, and returns it:
+--- `entries`, its hook entries (`add_hook_entries()`), and agent view
+--- turned off (`AGENT_VIEW_OFF`), whatever `settings` said of it.
+---
+---@param settings table settings decoded from JSON
+---@param entries table<string, table> `hook_entries()`
+---@return table settings
+local function add_aineo_settings(settings, entries)
+  add_hook_entries(settings, entries)
+  settings[AGENT_VIEW_OFF] = true
+  return settings
+end
+
 --- The settings `given` gives (`read_settings()`), when aineo can add its
 --- hook entries to them (`hooks_problem()`); else nil, with why.
 ---
@@ -355,14 +375,17 @@ local function write_private_file(text)
 end
 
 --- What aineo gives Claude Code as `--settings` for `settings`, with
---- `entries`, its own hook entries, in them, as `value`: the settings
---- `settings.cmd` gives (`given_settings()`, `settings_taking_hooks()`) with
---- `entries` added after its own hooks (`add_hook_entries()`), written to a
---- file only the user can read (`write_private_file()`), which `value` names,
---- and `cmd` without the words that gave them; or `entries` alone, as JSON,
---- and `cmd` whole, when it gives none. When `settings.cmd` gives settings
---- that cannot be read or added to, or the file cannot be written, `cmd` is
---- `settings.cmd` whole, `value` is nil, and `unread` is true.
+--- `entries`, its own hook entries, and agent view turned off in them, as
+--- `value`: the settings `settings.cmd` gives (`given_settings()`,
+--- `settings_taking_hooks()`) with `entries` added after its own hooks and
+--- agent view turned off (`add_aineo_settings()`), written to a file only
+--- the user can read (`write_private_file()`), which `value` names, and
+--- `cmd` without the words that gave them; or `entries` and agent view
+--- turned off alone, as JSON, and `cmd` whole, when it gives none. When
+--- `settings.cmd` gives settings that cannot be read or added to, or the
+--- file cannot be written, `cmd` is `settings.cmd` whole, `value` is nil,
+--- and `unread` is true: Claude Code then runs with neither aineo's hooks
+--- nor agent view turned off.
 ---
 ---@param settings aineo.claude.Settings
 ---@param entries table<string, table>
@@ -372,11 +395,11 @@ local function settings_with_hooks(settings, entries)
   if not given then
     return {
       cmd = settings.cmd,
-      value = vim.json.encode(add_hook_entries(vim.empty_dict(), entries)),
+      value = vim.json.encode(add_aineo_settings(vim.empty_dict(), entries)),
     }
   end
   local read = settings_taking_hooks(given, settings.cwd)
-  local merged = read and add_hook_entries(read, entries)
+  local merged = read and add_aineo_settings(read, entries)
   local file = merged and write_private_file(vim.json.encode(merged))
   if not file then
     return { cmd = settings.cmd, unread = true }
@@ -458,12 +481,14 @@ end
 --- `SessionStart` and a `SessionEnd` hook that tell the editor of each,
 --- naming `start_token`, a `PostToolUse` and a `PermissionRequest` hook that
 --- do so in the background, and, when `settings.subagent_context` is given,
---- a `SubagentStart` hook that prints it (`hook_entries()`): inline when
---- `settings.cmd` gives no `--settings`.
+--- a `SubagentStart` hook that prints it (`hook_entries()`), and agent view
+--- turned off (`AGENT_VIEW_OFF`): inline when `settings.cmd` gives no
+--- `--settings`.
 --- A `--settings` of `settings.cmd`, in a file or inline, gets aineo's hooks
---- after its own, nothing of it dropped, and is written to a new file only
---- the user can read, in Neovim's temporary directory, which that one
---- `--settings` names, so that nothing of it is on the command line
+--- after its own and agent view turned off, nothing else of it changed, and
+--- is written to a new file only the user can read, in Neovim's temporary
+--- directory, which that one `--settings` names, so that nothing of it is
+--- on the command line
 --- (`settings_with_hooks()`). When it cannot be read or added to, or that
 --- file cannot be written, `settings.cmd` is passed whole, aineo passes no
 --- `--settings`, and `unread` is true.
