@@ -329,11 +329,15 @@ Every part takes its colour from your colour scheme, through the
   them as on any commit line. Enter on a label shows all its
   work; on a worktree, that worktree alone; on a branch, its commits since
   its base, plus the worktree's uncommitted changes when that branch is
-  checked out there; the explorer follows. Every other worktree, reported or
+  checked out there; under a checked-out branch, an `Uncommitted` line
+  shows that worktree alone with its uncommitted work chosen; the explorer
+  follows. Every other worktree, reported or
   found by git, has its own `Uncommitted — <folder> (<branch>)` line first
   under its heading: the files the agent changed and has not committed yet,
   staged, unstaged and untracked, each with its diff from that worktree's
-  `HEAD`, read again at each refresh, so you can follow its work in flight.
+  `HEAD`, read again at each refresh, and watched while it is chosen and the
+  pane shows (on Linux, not in the worktree's subfolders), so you can
+  follow its work in flight.
   `s` lists the same tree first,
   then `[reported] All reported work`.
 - **The remembered view.** For each Claude Code session, the pane keeps the
