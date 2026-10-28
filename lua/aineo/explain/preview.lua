@@ -325,12 +325,29 @@ local function draw_places(buffer, places)
   end
 end
 
+--- The buffer's first line, from 0. Neovim shows the virtual lines above it
+--- only in a window scrolled up to them, which a window showing the buffer
+--- from its top is not.
+local FIRST_ROW = 0
+
+--- Adds `rows` to what is drawn above line `row`, from 0, or below it when
+--- it is the first line (`FIRST_ROW`), whose rows above are not seen.
+---
+---@param places aineo.explain.Places
+---@param row integer
+---@param rows table[][]
+local function add_rows_above_or_first(places, row, rows)
+  add_rows(places, row, row ~= FIRST_ROW, rows)
+end
+
 --- Adds to `places` the edit `index` of `preview`, spanning the lines of
 --- `span`, as the diff view shows it: its old lines stay, struck through
 --- (`AineoFixOld`), its head and explanation (`lead_rows()`) above them,
 --- after what the answers show above its first line, and its new lines
 --- below them, or after its explanation when no line is left in `span`, as
---- in a stale preview whose old lines were deleted.
+--- in a stale preview whose old lines were deleted. An edit that starts on
+--- the buffer's first line (`FIRST_ROW`) has its head and explanation
+--- below its old lines instead, before its new lines, where they are seen.
 ---
 ---@param preview aineo.explain.Preview
 ---@param index integer
@@ -344,11 +361,15 @@ local function add_diff(preview, index, span, geometry, places)
     hl_group = kinds.FIX.struck.group,
     strict = false,
   })
-  add_rows(places, span.first, true, lead_rows(preview, index, geometry))
+  local lead = lead_rows(preview, index, geometry)
+  local new = new_rows(preview.edits[index], geometry)
   if span.last < span.first then
-    add_rows(places, span.first, true, new_rows(preview.edits[index], geometry))
+    add_rows_above_or_first(places, span.first, vim.list_extend(lead, new))
+  elseif span.first == FIRST_ROW then
+    add_rows(places, span.last, false, vim.list_extend(lead, new))
   else
-    add_rows(places, span.last, false, new_rows(preview.edits[index], geometry))
+    add_rows(places, span.first, true, lead)
+    add_rows(places, span.last, false, new)
   end
 end
 
@@ -425,7 +446,8 @@ end
 --- (`add_overlay()`), or the diff view (`add_diff()`), which a stale preview
 --- always shows, so that the code as it reads now is seen. When an extmark
 --- of its edits is gone, it is stale and only its head row is drawn, above
---- the line its first edit last started on.
+--- the line its first edit last started on, or below it when that is the
+--- buffer's first line (`add_rows_above_or_first()`).
 ---
 ---@param preview aineo.explain.Preview
 local function render(preview)
@@ -437,7 +459,7 @@ local function render(preview)
   local places = { order = {}, rows = {} }
   if not spans then
     local row = math.min(preview.first_row, vim.api.nvim_buf_line_count(buffer) - 1)
-    add_rows(places, row, true, head_rows(preview, geometry))
+    add_rows_above_or_first(places, row, head_rows(preview, geometry))
   elseif preview.diff or preview.stale then
     preview.first_row = spans[1].first
     for index, span in ipairs(spans) do

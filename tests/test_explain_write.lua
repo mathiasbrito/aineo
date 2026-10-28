@@ -612,6 +612,73 @@ T['the preview']['names a long request on one line of 60 characters, cut with an
   )
 end
 
+--- The answer that replaces the only line of a file, a request, with `ADD`.
+local REPLACING_THE_ONLY_LINE = {
+  summary = 'Adds two values.',
+  edits = {
+    { line = 1, last = 1, old = { CODE[3] }, new = ADD, why = 'Returns the sum of a and b.' },
+  },
+}
+
+T['the preview']['shows its keys row for code replacing the only line of a file'] = function()
+  start(REPLACING_THE_ONLY_LINE)
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { CODE[3] })
+
+  ask_write({ range = { 1, 1 } })
+  wait_for_preview()
+
+  eq(vim.tbl_contains(screen(), KEYS_ROW), true)
+end
+
+T['the preview']['shows its keys row for code inserted below the only line of a file'] = function()
+  start({
+    summary = 'Adds two values.',
+    edits = {
+      { line = 1, last = 1, old = { CODE[1] }, new = { CODE[1], ADD[1] }, why = 'Adds.' },
+    },
+  })
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { CODE[1] })
+
+  send_request(1, { 'A function that adds two values.' })
+  wait_for_preview()
+
+  eq(vim.tbl_contains(screen(), KEYS_ROW), true)
+end
+
+--- The answer that replaces line 1 with `ADD`.
+local REPLACING_LINE_1 = {
+  summary = 'Adds two values.',
+  edits = {
+    { line = 1, last = 1, old = { CODE[1] }, new = ADD, why = 'Returns the sum of a and b.' },
+  },
+}
+
+T['the preview']['shows its keys row in the diff view of code that starts on line 1'] = function()
+  start(REPLACING_LINE_1)
+  ask_write({ range = { 1, 1 } })
+  wait_for_preview()
+
+  child.lua("require('aineo.explain').toggle_fix_diff(vim.api.nvim_get_current_buf())")
+
+  eq(vim.tbl_contains(screen(), KEYS_ROW), true)
+end
+
+T['the preview']['shows its stale row on line 1 once its marks are cleared'] = function()
+  start(REPLACING_LINE_1)
+  ask_write({ range = { 1, 1 } })
+  wait_for_preview()
+
+  child.api.nvim_buf_clear_namespace(0, -1, 0, -1)
+
+  eq(
+    vim.tbl_contains(
+      screen(),
+      '┊ the lines under the written code changed · \\Vr rejects · \\w asks again'
+    ),
+    true
+  )
+end
+
 T['the preview']['says on accept that the code is written, and that u undoes it'] = function()
   start(REPLACING_THE_REQUEST)
   ask_write({ range = { 3, 3 } })
