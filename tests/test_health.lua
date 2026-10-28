@@ -2049,7 +2049,7 @@ T['writing code']['says what Claude Code writes with, what it may use, and how t
   local report = health.report(child)
 
   eq(health.section(report, 'Write code'), {
-    "- \\w asks a Claude Code of its own, with the file alone and no tool, to write code for a request: in Normal mode a float asks for the request and the code goes below the cursor's line; in Visual mode the selected lines are the request, sent at once, and the code replaces them; model sonnet (write.model), stopped after 120 s (write.timeout_ms): :help |aineo-write|",
+    "- \\w asks a Claude Code of its own, with the file alone and no tool, to write code for a request: in Normal mode a float asks for the request and the code goes below the cursor's line, or in its place when that line is blank; in Visual mode the selected lines are the request, sent at once, and the code replaces them; model sonnet (write.model), stopped after 120 s (write.timeout_ms): :help |aineo-write|",
     '- \\W does the same with Read, Grep and Glob alone, without asking, to read the project when it helps, with model sonnet (write.deep_model) at effort max (write.deep_effort), stopped after 300 s (write.deep_timeout_ms)',
     '- the code shows over the file as a fix does, which it changes only when you accept it: the buffer is read-only until \\Wa accepts it as one undo step and writes no file, or \\Wr rejects it; \\Wd shows it as a diff; a fix and written code replace each other, and the same request on unchanged code shows the code kept from before',
   })
