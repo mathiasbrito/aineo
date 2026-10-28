@@ -155,23 +155,34 @@ function M.write_selection(order)
   M.write({ deep = order.deep, range = { math.min(first, last), math.max(first, last) } })
 end
 
---- What `<Plug>(aineo-fix-accept)` does: accepts the fix the current buffer
---- shows (`aineo.explain`'s `accept_fix()`).
-function M.accept_fix()
-  require('aineo.explain').accept_fix(vim.api.nvim_get_current_buf())
+--- What `<Plug>(aineo-fix-accept)` and `<Plug>(aineo-write-accept)` do:
+--- accept the fix, or the written code, the current buffer shows, as
+--- `kind` says (`aineo.explain`'s `accept_fix()`); a proposal of the other
+--- kind is left as it is.
+---
+---@param kind 'fix'|'write'
+function M.accept_fix(kind)
+  require('aineo.explain').accept_fix(vim.api.nvim_get_current_buf(), kind)
 end
 
---- What `<Plug>(aineo-fix-reject)` does: rejects the fix the current buffer
---- shows (`aineo.explain`'s `reject_fix()`).
-function M.reject_fix()
-  require('aineo.explain').reject_fix(vim.api.nvim_get_current_buf())
+--- What `<Plug>(aineo-fix-reject)` and `<Plug>(aineo-write-reject)` do:
+--- reject the fix, or the written code, the current buffer shows, as `kind`
+--- says (`aineo.explain`'s `reject_fix()`); a proposal of the other kind is
+--- left as it is.
+---
+---@param kind 'fix'|'write'
+function M.reject_fix(kind)
+  require('aineo.explain').reject_fix(vim.api.nvim_get_current_buf(), kind)
 end
 
---- What `<Plug>(aineo-fix-diff)` does: shows the fix the current buffer
---- shows as the diff view, or as the overlay again (`aineo.explain`'s
---- `toggle_fix_diff()`).
-function M.toggle_fix_diff()
-  require('aineo.explain').toggle_fix_diff(vim.api.nvim_get_current_buf())
+--- What `<Plug>(aineo-fix-diff)` and `<Plug>(aineo-write-diff)` do: show
+--- the fix, or the written code, the current buffer shows as the diff view,
+--- or as the overlay again, as `kind` says (`aineo.explain`'s
+--- `toggle_fix_diff()`); a proposal of the other kind is left as it is.
+---
+---@param kind 'fix'|'write'
+function M.toggle_fix_diff(kind)
+  require('aineo.explain').toggle_fix_diff(vim.api.nvim_get_current_buf(), kind)
 end
 
 --- What `\v`, `\V`, `\vi`, `\VI`, `\VV` and `\VVI` do in Visual mode: leave

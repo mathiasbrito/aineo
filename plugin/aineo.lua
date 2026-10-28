@@ -469,9 +469,9 @@ end, { desc = 'aineo: clean the explanations from this buffer' })
 
 --- The `<Plug>` mappings of a proposal shown, a fix or written code, which
 --- the keys of its buffer map to while it is shown, by the words after
---- `aineo-fix-` and `aineo-write-`: what each does to the proposal the
---- buffer shows (`aineo.entry`'s `accept_fix()`, `reject_fix()` and
---- `toggle_fix_diff()`).
+--- `aineo-fix-` and `aineo-write-`: what each does to the proposal of its
+--- own kind the buffer shows (`aineo.entry`'s `accept_fix()`, `reject_fix()`
+--- and `toggle_fix_diff()`, given the kind).
 local PROPOSAL_ACTIONS = {
   accept = 'accept_fix',
   reject = 'reject_fix',
@@ -482,7 +482,7 @@ for _, kind in ipairs({ 'fix', 'write' }) do
   for words, action in pairs(PROPOSAL_ACTIONS) do
     vim.keymap.set('n', ('<Plug>(aineo-%s-%s)'):format(kind, words), function()
       run(function()
-        require('aineo.entry')[action]()
+        require('aineo.entry')[action](kind)
       end)
     end, { desc = ('aineo: %s %s'):format(kind, words) })
   end
