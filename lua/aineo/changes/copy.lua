@@ -614,11 +614,14 @@ function M.new(label)
     end
   end
 
-  --- Watches the worktree whose *Uncommitted* is chosen, as the session's
-  --- own repository is watched (`aineo.git`'s `watch_repository()`), while
-  --- the pane shows it and the commits window has found its repository: each
-  --- call of that watch reads the files again (`read_files()`), and a failure
-  --- stops it. Once another filter is chosen, the worktree is no longer
+  --- Watches the files of the worktree whose *Uncommitted* is chosen, with
+  --- the watch the session's own repository has (`aineo.git`'s
+  --- `watch_repository()`), its working tree alone, as the session's watch
+  --- already sees the git directory they share, while the pane shows it and
+  --- the commits window has found its repository — none for a worktree whose
+  --- files the session's own watch already sees: each call of that watch
+  --- reads the files again (`read_files()`), and a failure stops it. Once
+  --- another filter is chosen, the worktree is no longer
   --- listed, or neither of the pane's buffers is shown, the watch is
   --- stopped. Defined once the pane's buffers can be told shown.
   ---@type fun()
@@ -4124,9 +4127,23 @@ function M.new(label)
     end
   end
 
+  --- Whether the session's own watch already sees the files of the folder
+  --- `top`: it watches subdirectories, and `top` lies under the session's
+  --- top level, as a worktree made inside the editor's own does.
+  ---
+  ---@param top string
+  ---@return boolean
+  local function own_watch_sees(top)
+    local own = session.watch
+    return own ~= nil
+      and own.watches_subdirectories
+      and vim.startswith(top, session.repository.top .. '/')
+  end
+
   --- The repository of the worktree whose *Uncommitted* is chosen, as the
-  --- commits window last listed it, while the pane is shown and the window
-  --- has found it; nil otherwise.
+  --- commits window last listed it, while the pane is shown, the window has
+  --- found it and the session's own watch does not already see its files
+  --- (`own_watch_sees()`); nil otherwise.
   ---
   ---@return aineo.git.Repository|nil
   local function chosen_worktree_repository()
@@ -4137,7 +4154,11 @@ function M.new(label)
     if not (is_shown(buffers.files) or is_shown(buffers.commits)) then
       return nil
     end
-    return section_as_last_read(selected.worktree).repository
+    local repository = section_as_last_read(selected.worktree).repository
+    if repository and own_watch_sees(repository.top) then
+      return nil
+    end
+    return repository
   end
 
   follow_chosen_worktree = function()
@@ -4159,7 +4180,7 @@ function M.new(label)
       else
         read_files(false)
       end
-    end, session.settings.git)
+    end, vim.tbl_extend('force', session.settings.git or {}, { working_tree_only = true }))
     if started then
       session.worktree_watch = { top = repository.top, watch = started }
     end
