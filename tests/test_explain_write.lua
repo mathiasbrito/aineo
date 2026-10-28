@@ -1046,6 +1046,54 @@ T['the preview in view']['leaves a window that shows it as it is'] = function()
   eq(view(), before)
 end
 
+--- A file of 60 lines, for the cases whose windows show parts of it.
+local LONG = { 'local M = {}' }
+for number = 2, 59 do
+  LONG[number] = ('local v%d = %d'):format(number, number)
+end
+LONG[60] = 'return M'
+
+--- The view of every window of the child's tab page, in the order of the
+--- windows: its top line and the filler lines it shows above it.
+---
+---@return integer[][]
+local function views()
+  return child.lua([[return vim.tbl_map(function(window)
+    local saved = vim.api.nvim_win_call(window, vim.fn.winsaveview)
+    return { saved.topline, saved.topfill }
+  end, vim.api.nvim_tabpage_list_wins(0))]])
+end
+
+T['the preview in view']['leaves a window whose cursor is far from it as it was'] = function()
+  start(below_line(LONG, 5))
+  child.api.nvim_buf_set_lines(0, 0, -1, false, LONG)
+  child.cmd('split')
+  child.api.nvim_win_set_cursor(0, { 50, 2 })
+  child.lua('vim.fn.winrestview({ topline = 45 })')
+  child.cmd('wincmd j')
+  child.api.nvim_win_set_cursor(0, { 5, 0 })
+  child.cmd('normal! zt')
+
+  ask_below_cursor({ 'A function that adds two values.' })
+  wait_for_preview()
+
+  eq(views()[1], { 45, 0 })
+end
+
+T['the preview in view']['leaves the view of a user who scrolled away while it was asked'] = function()
+  start(below_line(LONG, 5))
+  child.api.nvim_buf_set_lines(0, 0, -1, false, LONG)
+  child.lua('vim.env.AINEO_FAKE_CLAUDE_PRINT_MS = "1500"')
+  child.api.nvim_win_set_cursor(0, { 5, 0 })
+  ask_below_cursor({ 'A function that adds two values.' })
+  child.api.nvim_win_set_cursor(0, { 50, 2 })
+  child.lua('vim.fn.winrestview({ topline = 40 })')
+
+  wait_for_preview()
+
+  eq({ views()[1], cursor() }, { { 40, 0 }, { 50, 2 } })
+end
+
 T['the preview in view']['is brought into view again by the diff view, not before'] = function()
   start(BELOW_LINE_3)
   child.api.nvim_win_set_cursor(0, { 3, 0 })

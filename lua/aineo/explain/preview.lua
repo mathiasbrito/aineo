@@ -555,9 +555,12 @@ end
 --- its buffer and does not show that row (`lead_row_seen()`): the window
 --- shows the line it was drawn above at its top, with every filler line of
 --- it ('topfill'), as far as Neovim keeps the cursor's line on the screen;
---- the cursor stays where it is. A window that shows that row is left as it
---- is, and so is every window of a preview drawn after the buffer's last
---- line, which follows that line.
+--- the cursor stays where it is. When Neovim, keeping the cursor's line on
+--- the screen (`line('w0')`), moves that line from the top and the row is
+--- still not shown, as for a cursor far from the preview, the window's view
+--- is given back as it was. A window that shows that row is left as it is,
+--- and so is every window of a preview drawn after the buffer's last line,
+--- which follows that line.
 ---
 ---@param preview aineo.explain.Preview
 local function bring_into_view(preview)
@@ -568,6 +571,7 @@ local function bring_into_view(preview)
   for _, window in ipairs(vim.fn.win_findbuf(preview.buffer)) do
     if not lead_row_seen(window, line) then
       vim.api.nvim_win_call(window, function()
+        local before = vim.fn.winsaveview()
         vim.fn.winrestview({
           topline = line,
           topfill = vim.api.nvim_win_text_height(window, {
@@ -575,6 +579,9 @@ local function bring_into_view(preview)
             end_row = line - 1,
           }).fill,
         })
+        if vim.fn.line('w0') ~= line and not lead_row_seen(window, line) then
+          vim.fn.winrestview(before)
+        end
       end)
     end
   end
