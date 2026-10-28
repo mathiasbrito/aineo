@@ -108,6 +108,30 @@ local function fault_of(edits, ask)
   end
 end
 
+--- Why `edits`, the edits answered for `asked`, cannot be placed in place
+--- of the blank line asked about, or `nil`: an edit names that line, but its
+--- old lines are not that line, byte for byte, as it was sent. Edits
+--- answered for any other place are not looked at.
+---
+---@param edits aineo.explain.Edit[]
+---@param asked aineo.explain.WriteAsked
+---@return string|nil
+local function blank_line_mismatch(edits, asked)
+  local ask = asked.ask
+  if ask.place ~= 'in_blank_line' then
+    return nil
+  end
+  for _, edit in ipairs(edits) do
+    if
+      type(edit) == 'table'
+      and edit.line == ask.first
+      and not vim.deep_equal(edit.old, { asked.lines[ask.first] })
+    then
+      return 'the edit’s old line does not match the cursor’s line exactly'
+    end
+  end
+end
+
 --- `edits`, the one edit of the code written for `ask` (`fault_of()`), with
 --- the copy of the blank line it replaces that its new lines start with, if
 --- any, dropped, for code that goes in place of a blank line, so that the
@@ -165,8 +189,9 @@ end
 --- nothing is shown: the buffer changed while the code was asked, which any
 --- move of its `b:changedtick` says; the run failed or answered no code
 --- (`code_of()`); the answer has no edits, when its summary is told; or the
---- code was refused, by the placement or for its lines (`fault_of()`), with
---- the reason.
+--- code was refused, for an old line that is not the blank line asked about
+--- (`blank_line_mismatch()`), by the placement or for its lines
+--- (`fault_of()`), with the reason.
 ---
 ---@param asked aineo.explain.WriteAsked
 ---@param ended vim.SystemCompleted
@@ -189,7 +214,7 @@ local function show_answer(asked, ended)
     return
   end
   local edits, refusal = placement.place(asked.lines, answered.edits)
-  local fault = refusal or fault_of(edits, asked.ask)
+  local fault = blank_line_mismatch(answered.edits, asked) or refusal or fault_of(edits, asked.ask)
   if fault then
     vim.notify('aineo: the written code was refused: ' .. fault, vim.log.levels.WARN)
     return
