@@ -606,6 +606,28 @@ T['writing on a blank line']['counts a line of white space alone as blank'] = fu
   )
 end
 
+T['writing on a blank line']['drops a copy of that line the code starts with, leaving no blank line'] = function()
+  start({
+    summary = 'Adds two values.',
+    edits = {
+      {
+        line = 2,
+        last = 2,
+        old = { CODE[2] },
+        new = vim.list_extend({ CODE[2] }, ADD),
+        why = 'Adds.',
+      },
+    },
+  })
+  send_request(2, { 'A function that adds two values.' })
+  wait_for_preview()
+
+  local accepted, undone = accept_then_undo()
+
+  eq(accepted, { CODE[1], ADD[1], ADD[2], ADD[3], CODE[3], CODE[4], CODE[5] })
+  eq(undone, CODE)
+end
+
 T['writing on a blank line']['writes into line 1 of an empty file'] = function()
   start({
     summary = 'Adds two values.',
