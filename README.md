@@ -314,8 +314,9 @@ Every part takes its colour from your colour scheme, through the
   belongs to: another worktree's file in that worktree, a branch's file in the
   worktree that has the branch checked out.
 - **Show one worktree or branch alone.** `s` offers the other worktrees and
-  the local branches, and shows the one you pick alone; `\g` in the pane
-  switches back to the default view and forth again.
+  the local branches, and shows the one you pick alone, a worktree with its
+  own Uncommitted line; `\g` in the pane switches back to the default view
+  and forth again, keeping what you chose.
 - **Work Claude reports.** Claude Code and its subagents tell aineo of each
   worktree they work in and every branch they work on there, each with the
   commit it started from (see What Claude tells aineo), and the pane shows
