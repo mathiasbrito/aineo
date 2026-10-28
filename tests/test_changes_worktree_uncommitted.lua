@@ -986,4 +986,28 @@ T['a reported worktree not listed yet']['says its Uncommitted is being read, the
   expect_lines(FILES, { 'Files in: Uncommitted — agent-1 (feature/a)', '  ? b.txt' })
 end
 
+T['the refresh']['of a second report of the worktree reads its chosen Uncommitted again'] = function()
+  local top = git_repo.create('wtuncommitted-report-again', { ['notes.txt'] = { 'one' } })
+  child.lua(WATCH_IN_HAND)
+  begin_and_show(top)
+  expect_lines(COMMITS, commits_then({}))
+  local agent = add_worktree(top, 'agent-1', 'feature/a')
+  git_repo.write(agent, 'a.txt', { 'a' })
+  local report = { { worktree = agent, label = 'T', branches = { { name = 'feature/a' } } } }
+  child.lua("require('aineo.changes').add_reported_work(..., function() end)", report)
+  expect_lines(COMMITS, {
+    'Worktree agent-1 (feature/a)',
+    'Uncommitted — agent-1 (feature/a)',
+    'No commits in this worktree',
+  })
+  go_to_commits_line(2)
+  expect_lines(FILES, { 'Files in: Uncommitted — agent-1 (feature/a)', '  ? a.txt' })
+  git_repo.write(agent, 'b.txt', { 'b' })
+
+  child.lua("require('aineo.changes').add_reported_work(..., function() end)", report)
+
+  expect_lines(FILES, { 'Files in: Uncommitted — agent-1 (feature/a)', '  ? a.txt', '  ? b.txt' })
+  eq(commits_cursor_line(), 2)
+end
+
 return T
