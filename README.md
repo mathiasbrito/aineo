@@ -254,7 +254,8 @@ one per line with a letter for the kind of change (`A` added, `M` modified,
 `D` deleted, `R` renamed, `?` new and untracked) and a `*` on a file you saved
 from this editor. The lower one lists Uncommitted and Session work, then the
 session's commits, then what landed in your working branch, then each other
-worktree of the repository with its commits. The line under the cursor
+worktree of the repository with its own Uncommitted and its commits. The
+line under the cursor
 chooses what the upper window lists. aineo never fetches: what landed is what
 your repository last knew.
 
@@ -327,7 +328,12 @@ Every part takes its colour from your colour scheme, through the
   them as on any commit line. Enter on a label shows all its
   work; on a worktree, that worktree alone; on a branch, its commits since
   its base, plus the worktree's uncommitted changes when that branch is
-  checked out there; the explorer follows. `s` lists the same tree first,
+  checked out there; the explorer follows. Every other worktree, reported or
+  found by git, has its own `Uncommitted — <folder> (<branch>)` line first
+  under its heading: the files the agent changed and has not committed yet,
+  staged, unstaged and untracked, each with its diff from that worktree's
+  `HEAD`, read again at each refresh, so you can follow its work in flight.
+  `s` lists the same tree first,
   then `[reported] All reported work`.
 - **The remembered view.** For each Claude Code session, the pane keeps the
   worktree or branch you picked with `s`, the worktrees and branches Claude
