@@ -199,6 +199,7 @@ function M.new(label)
   ---@field following_soon boolean whether the pane's showing is followed at the main loop's next turn
   ---@field watch? aineo.git.Watch the running watch, from the pane's first showing; nil once it failed
   ---@field worktree_watch? { top: string, watch: aineo.git.Watch } the running watch of the worktree whose *Uncommitted* is chosen, by its top level, while the pane shows it (`follow_chosen_worktree()`)
+  ---@field worktree_watch_failure? { top: string, failure: aineo.git.Failure } why the watch of the worktree whose *Uncommitted* is chosen stopped, by the worktree's top level as the commits window lists it, kept while that line stays chosen and the pane shown
   ---@field watch_failure? aineo.git.Failure why the watch failed, until one starts again
   ---@field graph_shown boolean whether the commits window shows the commit graph in place of its sections, which `t` switches
   ---@field graph? aineo.git.CommitGraph the commit graph, as last read; nil while none was read
@@ -351,10 +352,23 @@ function M.new(label)
     return { line = line, colours = line_colours }
   end
 
+  --- Why the watch of the worktree whose *Uncommitted* is chosen stopped,
+  --- while that line is chosen (`follow_chosen_worktree()`); nil otherwise.
+  ---
+  ---@return aineo.git.Failure|nil
+  local function chosen_worktree_watch_failure()
+    local failed, selected = session.worktree_watch_failure, session.selected
+    if failed and selected.kind == 'uncommitted' and selected.worktree then
+      return failed.top == selected.worktree.top and failed.failure or nil
+    end
+    return nil
+  end
+
   --- The files window's page for what the session knows: why it has no
   --- repository, when it has none, or the files of the one filter it lists
   --- (`filter_named()`), and what their diffs compare against
-  --- (`against_row()`).
+  --- (`against_row()`), under the line saying a read or a watch failed, the
+  --- chosen worktree's watch included (`chosen_worktree_watch_failure()`).
   ---
   ---@return aineo.changes.Page
   local function files_page()
@@ -366,7 +380,7 @@ function M.new(label)
       filter = session.repository and filter_named(listed) or nil,
       against = session.repository and against_row(listed) or nil,
       changes = listed and listed.changes,
-      failure = session.files_failure or session.watch_failure,
+      failure = session.files_failure or session.watch_failure or chosen_worktree_watch_failure(),
       worktree = listed and listed.worktree,
       saved = session.saved,
       unwatched_subdirectories = session.watch ~= nil and not session.watch.watches_subdirectories,
@@ -620,10 +634,13 @@ function M.new(label)
   --- already sees the git directory they share, while the pane shows it and
   --- the commits window has found its repository — none for a worktree whose
   --- files the session's own watch already sees: each call of that watch
-  --- reads the files again (`read_files()`), and a failure stops it. Once
-  --- another filter is chosen, the worktree is no longer
-  --- listed, or neither of the pane's buffers is shown, the watch is
-  --- stopped. Defined once the pane's buffers can be told shown.
+  --- reads the files again (`read_files()`). A failure stops it, is kept and
+  --- told in the files window while that line is chosen
+  --- (`chosen_worktree_watch_failure()`), and starts no watch again until
+  --- the line is chosen again or the pane shown again. Once another filter
+  --- is chosen, the worktree is no longer listed, or neither of the pane's
+  --- buffers is shown, the watch is stopped. Defined once the pane's
+  --- buffers can be told shown.
   ---@type fun()
   local follow_chosen_worktree
 
@@ -4166,17 +4183,24 @@ function M.new(label)
       return
     end
     local repository = chosen_worktree_repository()
+    local chosen_top = repository and session.selected.worktree.top
+    local failed = session.worktree_watch_failure
+    if failed and failed.top ~= chosen_top then
+      session.worktree_watch_failure, failed = nil, nil
+    end
     local watched = session.worktree_watch
     if watched and repository and watched.top == repository.top then
       return
     end
     stop_worktree_watch()
-    if not repository then
+    if not repository or failed then
       return
     end
     local started = git.watch_repository(repository, function(failure)
       if failure then
         stop_worktree_watch()
+        session.worktree_watch_failure = { top = chosen_top, failure = failure }
+        show_files()
       else
         read_files(false)
       end
