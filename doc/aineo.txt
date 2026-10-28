@@ -2045,17 +2045,19 @@ head row says so: `read-only until \Va accepts or \Vr rejects · \Vd shows the
 diff`; with 'modifiable' set back on it says `\Va accepts · \Vr rejects · \Vd
 shows the diff`. When the fix is drawn, or turned to the diff view or back, a
 window showing the buffer that does not show its first row, as when the fixed
-line is the window's top line, is scrolled so that it does, its cursor staying
-on its line and column; a window that shows it is left as it is, and so is any
-scrolling you do later. A fix taller than the window shows its last rows above
-the cursor's line, which Neovim keeps on the screen. The buffer gets its
-'modifiable' back, as it was before the fix, when the fix goes. Accepting
-first checks again that the lines under each edit are exactly its old lines
-and that the edits still stand in their order, none sharing a line with the
-next; when not, nothing changes and you are told to ask again. Otherwise every
-edit is applied, as one undo step (`u` takes them all back), the file is not
-written, the issue is no longer shown, and you are told `aineo: fix applied (u
-undoes it)`. Rejecting changes nothing, and the issue stays.
+line is the window's top line, is scrolled so that it does, when it can with
+its cursor kept on its line and column; a window whose cursor is too far from
+the fix for both, and a window that already shows the row, are left as they
+were, and so is any scrolling you do later. A fix taller than the window shows
+the rows nearest the cursor's line, which Neovim keeps on the screen. The
+buffer gets its 'modifiable' back, as it was before the fix, when the fix
+goes. Accepting first checks again that the lines under each edit are exactly
+its old lines and that the edits still stand in their order, none sharing a
+line with the next; when not, nothing changes and you are told to ask again.
+Otherwise every edit is applied, as one undo step (`u` takes them all back),
+the file is not written, the issue is no longer shown, and you are told
+`aineo: fix applied (u undoes it)`. Rejecting changes nothing, and the issue
+stays.
 
 When the code under a fix changes anyway, 'modifiable' set back on, a
 reload, or a plugin's edit, the fix stays, shown as the diff view so the code
