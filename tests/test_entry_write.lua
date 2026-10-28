@@ -363,8 +363,11 @@ T['the keys']['of code whose lines changed name the key that asked it, which ask
   eq(vim.tbl_contains(screen_rows(), stale_head), true)
 end
 
-T['the keys']['with no prefix name the <Plug> mapping that asks again'] = function()
-  local stale_end = '┊ <Plug>(aineo-write) asks again'
+T['the keys']['with no prefix name the <Plug> mappings that reject and ask again'] = function()
+  local stale_head = {
+    '┊ the lines under the written code changed · <Plug>(aineo-write-reject) rejects',
+    '┊ · <Plug>(aineo-write) asks again',
+  }
   explained.start(child, 'entry-write', CODE, {
     claude = { cmd = explained.FAKE_CLAUDE },
     prefix = false,
@@ -377,10 +380,12 @@ T['the keys']['with no prefix name the <Plug> mapping that asks again'] = functi
   child.bo.modifiable = true
   child.api.nvim_buf_set_text(0, 2, 0, 2, 0, { 'x' })
   vim.wait(explained.PATIENCE_MS, function()
-    return vim.tbl_contains(screen_rows(), stale_end)
+    return vim.tbl_contains(screen_rows(), stale_head[2])
   end, 20)
 
-  eq(vim.tbl_contains(screen_rows(), stale_end), true)
+  local rows = screen_rows()
+  local head_row = vim.fn.index(rows, stale_head[1]) + 1
+  eq(vim.list_slice(rows, head_row, head_row + 1), stale_head)
 end
 
 T['the keys']['have their <Plug> mappings in Normal and in Visual mode'] = function()
