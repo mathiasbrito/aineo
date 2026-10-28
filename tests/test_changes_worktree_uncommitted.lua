@@ -1088,15 +1088,20 @@ end
 
 --- The Lua that keeps, in the child, the top level of every repository the
 --- git home is asked to watch in `_G.watched`, `true` while that watch runs
---- and `false` once it is stopped, the watch itself left to run.
+--- and `false` once it is stopped, how many times each was started in
+--- `_G.starts` and its callback in `_G.callbacks`, the watch itself left to
+--- run; and defines `_G.fs_events()`, the folders the event loop's file
+--- system watches watch, sorted.
 local RECORD_WATCHES = [[
   local git = require('aineo.git')
   local watch_repository = git.watch_repository
-  _G.watched = {}
-  git.watch_repository = function(found, ...)
-    local started, failure = watch_repository(found, ...)
+  _G.watched, _G.starts, _G.callbacks = {}, {}, {}
+  git.watch_repository = function(found, on_change, ...)
+    local started, failure = watch_repository(found, on_change, ...)
     if started then
       _G.watched[found.top] = true
+      _G.starts[found.top] = (_G.starts[found.top] or 0) + 1
+      _G.callbacks[found.top] = on_change
       local stop = started.stop
       started.stop = function()
         _G.watched[found.top] = false
@@ -1104,6 +1109,16 @@ local RECORD_WATCHES = [[
       end
     end
     return started, failure
+  end
+  _G.fs_events = function()
+    local paths = {}
+    vim.uv.walk(function(handle)
+      if handle:get_type() == 'fs_event' and handle:is_active() and not handle:is_closing() then
+        table.insert(paths, handle:getpath())
+      end
+    end)
+    table.sort(paths)
+    return paths
   end
 ]]
 
@@ -1141,6 +1156,46 @@ T['the watch of the worktree chosen']['stops when another line is chosen, starts
   ]])
 
   expect_watched(agent, false)
+end
+
+--- The folders the child's file system watches watch (`RECORD_WATCHES`).
+---
+---@return string[]
+local function fs_events()
+  return child.lua_get('_G.fs_events()')
+end
+
+T['the watch of the worktree chosen']['adds one folder to what is watched, the worktree’s, not the git directory the session watches'] = function()
+  local top = git_repo.create('wtuncommitted-watch-one-more', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  child.lua(RECORD_WATCHES)
+  begin_and_show(top)
+  expect_watched(top, true)
+  local before = fs_events()
+
+  go_to_commits_line(5)
+
+  expect_watched(agent, true)
+  eq(#fs_events(), #before + 1)
+end
+
+T['the watch of the worktree chosen']['starts none for a worktree inside the editor’s, which the session’s watch sees with its subfolders'] = function()
+  local top = git_repo.create(
+    'wtuncommitted-watch-inside',
+    { ['notes.txt'] = { 'one' }, ['.gitignore'] = { 'inside/' } }
+  )
+  local agent = vim.fs.joinpath(top, 'inside')
+  git_repo.git(top, { 'worktree', 'add', '--quiet', '-b', 'inside', agent })
+  child.lua(RECORD_WATCHES)
+  begin_and_show(top, { system_name = 'Darwin' })
+  expect_watched(top, true)
+  go_to_commits_line(5)
+  expect_lines(FILES, { 'Files in: Uncommitted — inside (inside)', 'No uncommitted changes' })
+
+  git_repo.write(agent, 'new.txt', { 'new' })
+
+  expect_lines(FILES, { 'Files in: Uncommitted — inside (inside)', '  ? new.txt' })
+  eq(child.lua_get('_G.starts[...] or 0', { agent }), 0)
 end
 
 return T

@@ -266,14 +266,19 @@ end
 --- (`packed-refs.lock`), each through a file written directly in the common
 --- git directory.
 ---
+--- With `how.working_tree_only`, the git directories are not watched: the
+--- watch sees the working tree's files alone and calls back for them,
+--- reading no `HEAD` — for a worktree whose common git directory another
+--- watch already sees.
+---
 ---@param run aineo.git.Run
 ---@param found aineo.git.Repository
 ---@param on_change fun(failure: aineo.git.Failure|nil, change: aineo.git.RepositoryChange|nil)
----@param system_name string
+---@param how { system_name: string, working_tree_only?: boolean } the platform, as libuv names it, and whether the working tree alone is watched
 ---@return aineo.git.Watch|nil watch
 ---@return aineo.git.Failure|nil failure
-function M.watch_repository(run, found, on_change, system_name)
-  local recursive = RECURSIVE_PLATFORMS[system_name] == true
+function M.watch_repository(run, found, on_change, how)
+  local recursive = RECURSIVE_PLATFORMS[how.system_name] == true
   ---@type aineo.git.WatchState
   local state = {
     run = run,
@@ -286,7 +291,7 @@ function M.watch_repository(run, found, on_change, system_name)
     cancel_read = function() end,
     stopped = false,
   }
-  local handles, failure = start_watches({
+  local directories = {
     {
       path = found.top,
       on_event = function(watch_error, name)
@@ -297,7 +302,9 @@ function M.watch_repository(run, found, on_change, system_name)
         end
       end,
     },
-    {
+  }
+  if not how.working_tree_only then
+    table.insert(directories, {
       path = found.common_directory,
       on_event = function(watch_error, name)
         if watch_error then
@@ -312,8 +319,9 @@ function M.watch_repository(run, found, on_change, system_name)
         end
         note(state, 'git')
       end,
-    },
-  }, recursive)
+    })
+  end
+  local handles, failure = start_watches(directories, recursive)
   if not handles then
     release({ state.timer })
     return nil, failure
