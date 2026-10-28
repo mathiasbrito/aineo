@@ -687,6 +687,7 @@ T['F']['in the diff of another worktree’s file shows the whole file'] = functi
     'Session work',
     'No commits on this session',
     'Worktree agent (agent)',
+    'Uncommitted — agent (agent)',
     'No commits in this worktree',
   })
   enter_window_of(COMMITS)
@@ -717,6 +718,7 @@ T['F']['in the diff of another worktree’s heading shows every file whole'] = f
     'Session work',
     'No commits on this session',
     'Worktree agent (agent)',
+    'Uncommitted — agent (agent)',
     'No commits in this worktree',
   })
   enter_window_of(COMMITS)
@@ -745,10 +747,11 @@ T['F']['in the diff of a file under another worktree’s commit shows the whole 
     'Session work',
     'No commits on this session',
     'Worktree agent (agent)',
+    'Uncommitted — agent (agent)',
     git_repo.commit_line(commit, 'The agent’s'),
   })
   enter_window_of(COMMITS)
-  child.type_keys('5G')
+  child.type_keys('6G')
   expect_lines(FILES, {
     'Files in: ' .. git_repo.commit_line(commit, 'The agent’s (worktree agent)'),
     '  M a.txt',

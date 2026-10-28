@@ -178,6 +178,7 @@ local function pane_with_three_authors(case)
     'Session work',
     'No commits on this session',
     'Worktree agent (agent)',
+    'Uncommitted — agent (agent)',
     git_repo.commit_line_of(agent, GRACE, 'Agent work'),
   })
   git_repo.write(top, 'a.txt', { 'two' })
@@ -193,6 +194,7 @@ local function pane_with_three_authors(case)
     git_repo.commit_line_of(second, BARTHOLOMEW, 'Write three'),
     git_repo.commit_line_of(first, ADA, 'Write two'),
     'Worktree agent (agent)',
+    'Uncommitted — agent (agent)',
     git_repo.commit_line_of(agent, GRACE, 'Agent work'),
   })
   return top, first, second, agent
@@ -209,6 +211,7 @@ T['the commits window']['puts each commit’s author and age in one column, whic
     git_repo.commit_line_of(second, BARTHOLOMEW, 'Write three'),
     git_repo.commit_line_of(first, ADA, 'Write two'),
     'Worktree agent (agent)',
+    'Uncommitted — agent (agent)',
     git_repo.commit_line_of(agent, GRACE, 'Agent work'),
   })
 end
@@ -224,7 +227,7 @@ T['the files window']['names a commit under its author and age too, as the commi
     '  M a.txt',
     '  M b.txt',
   })
-  go_to_commits_line(6)
+  go_to_commits_line(7)
   expect_lines(FILES, {
     'Files in: ' .. git_repo.commit_line_of(agent, GRACE, 'Agent work (worktree agent)'),
     '  M a.txt',
@@ -285,7 +288,7 @@ T['l']['on a commit of another worktree moves to the files window listing it'] =
   local _, _, _, agent = pane_with_three_authors('author-l-worktree')
   enter_window_of(COMMITS)
 
-  child.type_keys('6Gl')
+  child.type_keys('7Gl')
 
   expect_lines(FILES, {
     'Files in: ' .. git_repo.commit_line_of(agent, GRACE, 'Agent work (worktree agent)'),
@@ -340,14 +343,14 @@ end
 
 T['<BS>']['in the files window goes to the line of another worktree’s commit it lists'] = function()
   pane_with_three_authors('author-bs-worktree')
-  go_to_commits_line(6)
+  go_to_commits_line(7)
   child.type_keys('l')
   expect_in_window_of(FILES)
 
   child.type_keys('<BS>')
 
   expect_in_window_of(COMMITS)
-  expect_cursor({ 6, 0 })
+  expect_cursor({ 7, 0 })
 end
 
 T['<BS>']['in the files window goes to Session work’s line when it lists that'] = function()
