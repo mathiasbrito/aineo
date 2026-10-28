@@ -1069,7 +1069,14 @@ every file that differs from that worktree's `HEAD`, staged or not, and its
 untracked ones, read with git in that worktree, or says "No uncommitted
 changes", so you can follow an agent's work before it commits. It is read
 again at each read of the pane - the watch, the pane shown again, a report
-- and stays chosen while the worktree is listed; the `*` marks of your
+- and stays chosen while the worktree is listed. While it is chosen and the
+pane is shown, aineo watches that worktree as it watches yours: a file
+written, created or removed in its folder, its index and its commits are
+seen within a moment, as your own are; on Linux a file in a subdirectory
+of its folder is not seen until its agent stages or commits, or the pane
+is read again for another reason (|aineo-limits|). The watch stops once
+another line is chosen, the worktree is no longer listed, or the pane is
+hidden. The `*` marks of your
 saves are your own worktree's and never show there. aineo only reads
 another worktree: it writes nothing there. With no other worktree, the
 pane shows only your own lines. A worktree git marks
@@ -1594,9 +1601,11 @@ reported: >
           2c3d4e5 Ada 5m               Handle the empty report
           1a2b3c5 Ada 1h               Draw the tree
         feature/a * from 1a2b3c4
+          Uncommitted
     (no label) now
       agent-2
         feature/c * from 9f8e7d6
+          Uncommitted
 <
 A label's line gives the label, or `(no label)` for the worktrees aineo's
 hook reported that no agent's call labelled yet, and how long ago the
@@ -1608,6 +1617,16 @@ the abbreviated id of the base its work is read from (above) — on your
 own worktree's checked-out branch, the base the default view reads, which
 Enter on that line shows — or `from ?` for a report made before reports
 gave one.
+Below the line of a branch its worktree has checked out now, the one with
+the `*`, indented six cells and before its commits, is `Uncommitted`, in
+|hl-AineoChangesFilter|: that worktree's Uncommitted, the files that
+differ from its `HEAD`, staged or not, and its untracked ones, read and
+watched in it as its own section's Uncommitted line is (above); under your
+own worktree's branch, your own Uncommitted, the same list as the
+default view's. A branch not checked out has none, and the line moves with
+the checkout at each read of the section. Enter on it shows that worktree
+alone, its Uncommitted chosen; on your own worktree's, it keeps the
+default view, your Uncommitted chosen.
 Below a branch's line, indented six cells, are its commits from that base,
 the one its line shows, to the branch's tip, newest first, each as any
 commit line of the window: its abbreviated id, its author and age, and its
@@ -1641,8 +1660,10 @@ does, the explorer following (|aineo-explorer|):
                         and its uncommitted changes; else the branch alone,
                         its commits from its base to its tip, its heading
                         saying `(not checked out: commits only)`
+    an `Uncommitted`    that worktree alone, its Uncommitted chosen
 Your own worktree's line, and that of the branch it has checked out, show
-the default view, Session work chosen. The heading shows in
+the default view, Session work chosen; its `Uncommitted`, the default view
+with your Uncommitted chosen. The heading shows in
 |hl-AineoChangesReportedHeading|, a label in |hl-AineoChangesReportedLabel|,
 its age in |hl-AineoChangesReportedAge|, a worktree's folder in
 |hl-AineoChangesReportedWorktree|, a branch's name in
@@ -7005,7 +7026,9 @@ The changes pane ~
   then on.
 - Where aineo cannot watch the working tree's subdirectories (Linux), the
   files window says so below its first line: a change in a subdirectory
-  shows at the next showing of the pane, save or commit, and a branch moved
+  shows at the next showing of the pane, save or commit - in another
+  worktree whose Uncommitted is chosen, at its agent's next stage or
+  commit - and a branch moved
   by `git update-ref` from another worktree, a tag, a commit on another
   worktree's detached `HEAD`, and a fetch another worktree ran are missed
   too, the commit graph's included (|aineo-changes-graph|); a fetch run in
