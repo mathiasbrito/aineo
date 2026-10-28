@@ -606,6 +606,19 @@ T['writing on a blank line']['counts a line of white space alone as blank'] = fu
   )
 end
 
+T['writing on a blank line']['counts spaces and tabs alone as blank: a page break is written below'] = function()
+  start(IN_PLACE_OF_LINE_2)
+  child.api.nvim_buf_set_lines(0, 1, 2, false, { '\f' })
+
+  send_request(2, { 'A function that adds two values.' })
+
+  eq(
+    vim.split(recorded(2)[2].stdin, '\n')[1],
+    'Write code in the file src/code.lua (language: lua) for the request below,'
+      .. ' to be inserted after line 2 as numbered below.'
+  )
+end
+
 T['writing on a blank line']['drops a copy of that line the code starts with, leaving no blank line'] = function()
   start({
     summary = 'Adds two values.',

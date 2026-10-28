@@ -342,10 +342,14 @@ local function take_anchor(buffer, anchor)
   return mark[1] + 1
 end
 
+--- What a blank line is, as a pattern: spaces and tabs alone, or nothing,
+--- as Vim's `\s` counts white space.
+local BLANK = '^[ \t]*$'
+
 --- Asks for code for `text`, the request the user sent from the float,
 --- below the line the mark `anchor` follows, where it stands now
 --- (`take_anchor()`, `ask_for()`), or in its place when it is blank, empty
---- or white space alone. Nothing is asked when the buffer is gone by then,
+--- or spaces and tabs alone (`BLANK`). Nothing is asked when the buffer is gone by then,
 --- nor, with a word, when that line was deleted.
 ---
 ---@param writing aineo.explain.WriteRequest
@@ -362,7 +366,7 @@ local function ask_typed(writing, folder, anchor, text)
     return
   end
   local anchor_text = vim.api.nvim_buf_get_lines(writing.buffer, line - 1, line, true)[1]
-  local place = vim.trim(anchor_text) == '' and 'in_blank_line' or 'below_line'
+  local place = anchor_text:match(BLANK) and 'in_blank_line' or 'below_line'
   ask_for(writing, { first = line, last = line, request = text, place = place }, folder)
 end
 
