@@ -450,6 +450,265 @@ T['the worktree shown alone']['keeps its Uncommitted chosen as the view switches
   eq(commits_cursor_line(), 2)
 end
 
+T['the Reported tree'] = MiniTest.new_set()
+
+--- Hands the child's home an agent's report of the worktree at `path`,
+--- labelled `T`, listing `branches`, and waits until the commits window lists
+--- the heading `heading` it shows; then switches to the default view, which
+--- lists the Reported section, from the commits window.
+---
+---@param path string
+---@param branches { name: string, base?: string }[]
+---@param heading string
+local function report_then_default_view(path, branches, heading)
+  child.lua(
+    "require('aineo.changes').add_reported_work(..., function() end)",
+    { { worktree = path, label = 'T', branches = branches } }
+  )
+  git_repo.wait_until('the report shown', function()
+    return vim.tbl_contains(lines_of(COMMITS), heading)
+  end)
+  enter_window_of(COMMITS)
+  toggle_view()
+end
+
+--- The abbreviated id of `commit`, as a branch's line shows its base.
+---
+---@param commit string
+---@return string
+local function short(commit)
+  return commit:sub(1, 7)
+end
+
+--- Waits until the child's commits window starts with the lines `expected`,
+--- at most `git_repo.PATIENCE_MS`, and asserts that it does.
+---
+---@param expected string[]
+local function expect_commits_start(expected)
+  vim.wait(git_repo.PATIENCE_MS, function()
+    return vim.deep_equal(vim.list_slice(lines_of(COMMITS), 1, #expected), expected)
+  end, 10)
+  eq(vim.list_slice(lines_of(COMMITS), 1, #expected), expected)
+end
+
+T['the Reported tree']['lists Uncommitted first under the branch another worktree has checked out'] = function()
+  local top, base = git_repo.create('wtuncommitted-tree', { ['notes.txt'] = { 'one' } })
+  begin_and_show(top)
+  local agent = add_worktree(top, 'agent-1', 'feature/a')
+  git_repo.write(agent, 'a.txt', { 'a' })
+  local commit = git_repo.commit_all(agent, 'Work a')
+
+  report_then_default_view(
+    agent,
+    { { name = 'feature/a', base = base } },
+    'Worktree agent-1 (feature/a)'
+  )
+
+  expect_commits_start({
+    'Reported',
+    'T now',
+    '  agent-1',
+    ('    feature/a * from %s'):format(short(base)),
+    '      Uncommitted',
+    '      ' .. git_repo.commit_line(commit, 'Work a'),
+    'Uncommitted',
+  })
+end
+
+T['the Reported tree']['lists no Uncommitted under a branch no worktree has checked out'] = function()
+  local top, base = git_repo.create('wtuncommitted-tree-not-out', { ['notes.txt'] = { 'one' } })
+  begin_and_show(top)
+  local agent = add_worktree(top, 'agent-1', 'feature/a')
+  git_repo.git(top, { 'branch', 'feature/p' })
+
+  report_then_default_view(
+    agent,
+    { { name = 'feature/a', base = base }, { name = 'feature/p', base = base } },
+    'Worktree agent-1 (feature/a)'
+  )
+
+  expect_commits_start({
+    'Reported',
+    'T now',
+    '  agent-1',
+    ('    feature/a * from %s'):format(short(base)),
+    '      Uncommitted',
+    ('    feature/p from %s'):format(short(base)),
+    'Uncommitted',
+  })
+end
+
+--- Makes, in the repository at `top`, the worktree `agent-1` on
+--- `feature/a`, with an untracked `b.txt`, and an untracked `editor.txt` in
+--- the editor's own worktree; reports it with the base `base` and shows the
+--- default view, whose Reported section lists the branch's Uncommitted on
+--- line 5. Returns the worktree's top level.
+---
+---@param top string
+---@param base string
+---@return string agent
+local function reported_agent_with_untracked(top, base)
+  local agent = add_worktree(top, 'agent-1', 'feature/a')
+  git_repo.write(agent, 'b.txt', { 'b' })
+  git_repo.write(top, 'editor.txt', { 'the editor’s' })
+  report_then_default_view(
+    agent,
+    { { name = 'feature/a', base = base } },
+    'Worktree agent-1 (feature/a)'
+  )
+  expect_commits_start({
+    'Reported',
+    'T now',
+    '  agent-1',
+    ('    feature/a * from %s'):format(short(base)),
+    '      Uncommitted',
+  })
+  return agent
+end
+
+T['the Reported tree']['lists, on another worktree’s Uncommitted, that worktree’s files'] = function()
+  local top, base = git_repo.create('wtuncommitted-tree-files', { ['notes.txt'] = { 'one' } })
+  begin_and_show(top)
+  reported_agent_with_untracked(top, base)
+
+  go_to_commits_line(5)
+
+  expect_lines(FILES, { 'Files in: Uncommitted — agent-1 (feature/a)', '  ? b.txt' })
+end
+
+--- Makes the repository `name`, with an untracked `editor.txt`, shows its
+--- pane in the child and reports its own worktree on `main`, its base the
+--- repository's first commit: the default view's Reported section then
+--- lists `main`'s Uncommitted on line 5. Returns the top level.
+---
+---@param name string
+---@return string top
+local function own_worktree_reported(name)
+  local top, base = git_repo.create(name, { ['notes.txt'] = { 'one' } })
+  git_repo.write(top, 'editor.txt', { 'the editor’s' })
+  begin_and_show(top)
+  child.lua(
+    "require('aineo.changes').add_reported_work(..., function() end)",
+    { { worktree = top, label = 'T', branches = { { name = 'main', base = base } } } }
+  )
+  expect_commits_start({
+    'Reported',
+    'T now',
+    '  ' .. vim.fs.basename(top),
+    ('    main * from %s'):format(short(base)),
+    '      Uncommitted',
+    'Uncommitted',
+  })
+  return top
+end
+
+T['the Reported tree']['lists, on the editor’s own branch’s Uncommitted, the editor’s own Uncommitted'] = function()
+  own_worktree_reported('wtuncommitted-tree-own')
+
+  go_to_commits_line(5)
+
+  expect_lines(FILES, { 'Files in: Uncommitted', '  ? editor.txt' })
+end
+
+T['the Reported tree']['shows, at Enter on another worktree’s Uncommitted, that worktree alone, its Uncommitted chosen'] = function()
+  local top, base = git_repo.create('wtuncommitted-tree-enter', { ['notes.txt'] = { 'one' } })
+  begin_and_show(top)
+  reported_agent_with_untracked(top, base)
+  go_to_commits_line(5)
+
+  child.type_keys('<CR>')
+
+  expect_lines(COMMITS, {
+    'Worktree agent-1 (feature/a)',
+    'Uncommitted — agent-1 (feature/a)',
+    'No commits in this worktree',
+  })
+  expect_lines(FILES, { 'Files in: Uncommitted — agent-1 (feature/a)', '  ? b.txt' })
+  eq(commits_cursor_line(), 2)
+end
+
+T['the Reported tree']['keeps, at Enter on the editor’s own branch’s Uncommitted, the default view with its Uncommitted chosen'] = function()
+  own_worktree_reported('wtuncommitted-tree-own-enter')
+  go_to_commits_line(5)
+  expect_lines(FILES, { 'Files in: Uncommitted', '  ? editor.txt' })
+
+  child.type_keys('<CR>')
+
+  eq(commits_cursor_line(), 5)
+  expect_lines(FILES, { 'Files in: Uncommitted', '  ? editor.txt' })
+end
+
+T['the Reported tree']['offers another worktree’s Uncommitted to s, whose pick does what Enter does'] = function()
+  local top, base = git_repo.create('wtuncommitted-tree-s', { ['notes.txt'] = { 'one' } })
+  begin_and_show(top)
+  reported_agent_with_untracked(top, base)
+  child.lua([[
+    _G.offered = nil
+    vim.ui.select = function(items, options, on_choice)
+      _G.offered = vim.tbl_map(options.format_item, items)
+      on_choice(vim.iter(items):find(function(item)
+        return options.format_item(item) == '[reported]       Uncommitted'
+      end))
+    end
+  ]])
+  enter_window_of(COMMITS)
+
+  child.type_keys('s')
+
+  git_repo.wait_until('s offered its list', function()
+    return child.lua_get('_G.offered ~= nil')
+  end)
+  eq(vim.list_slice(child.lua_get('_G.offered'), 1, 6), {
+    '[reported] T now',
+    '[reported]   agent-1',
+    '[reported]     feature/a * from ' .. short(base),
+    '[reported]       Uncommitted',
+    '[reported] All reported work (1)',
+    '[worktree] agent-1 (feature/a)',
+  })
+  expect_lines(COMMITS, {
+    'Worktree agent-1 (feature/a)',
+    'Uncommitted — agent-1 (feature/a)',
+    'No commits in this worktree',
+  })
+  expect_lines(FILES, { 'Files in: Uncommitted — agent-1 (feature/a)', '  ? b.txt' })
+  eq(commits_cursor_line(), 2)
+end
+
+T['the Reported tree']['moves the Uncommitted to the branch the worktree checks out between two reads'] = function()
+  local top, base = git_repo.create('wtuncommitted-tree-switch', { ['notes.txt'] = { 'one' } })
+  begin_and_show(top)
+  local agent = add_worktree(top, 'agent-1', 'feature/a')
+  git_repo.git(top, { 'branch', 'feature/p' })
+  report_then_default_view(
+    agent,
+    { { name = 'feature/a', base = base }, { name = 'feature/p', base = base } },
+    'Worktree agent-1 (feature/a)'
+  )
+  expect_commits_start({
+    'Reported',
+    'T now',
+    '  agent-1',
+    ('    feature/a * from %s'):format(short(base)),
+    '      Uncommitted',
+    ('    feature/p from %s'):format(short(base)),
+    'Uncommitted',
+  })
+  git_repo.git(agent, { 'switch', '--quiet', 'feature/p' })
+
+  child.lua("require('aineo.changes').refresh_shown_pane()")
+
+  expect_commits_start({
+    'Reported',
+    'T now',
+    '  agent-1',
+    ('    feature/a from %s'):format(short(base)),
+    ('    feature/p * from %s'):format(short(base)),
+    '      Uncommitted',
+    'Uncommitted',
+  })
+end
+
 T['h'] = MiniTest.new_set()
 
 T['h']['on a file under another worktree’s Uncommitted shows Enter’s diff, from that worktree’s HEAD'] = function()

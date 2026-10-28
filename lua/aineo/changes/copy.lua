@@ -3045,7 +3045,8 @@ function M.new(label)
     })
   end
 
-  --- Shows the worktree `item` names alone, and chooses its whole change
+  --- Shows the worktree `item` names alone, and chooses its whole change,
+  --- or its *Uncommitted* for an item that asks for it
   --- (`select_filter()`), which the files window then lists: as the commits
   --- window last listed it, or, for one of the Reported section it has not
   --- listed yet, as git listed it when it was reported (`node_at()`). Any
@@ -3063,7 +3064,9 @@ function M.new(label)
     end
     session.scope, session.focused, session.branch = scope.of(section), true, nil
     session.shows_reported = false
-    select_filter(filter.of_worktree(section))
+    select_filter(
+      item.uncommitted and filter.of_worktree_uncommitted(section) or filter.of_worktree(section)
+    )
     show_commits()
     read_files(true)
   end
@@ -3525,10 +3528,13 @@ function M.new(label)
     end, options)
   end
 
-  --- Shows the editor's own work: the default view, *Session work* chosen.
-  local function show_own_work()
+  --- Shows the editor's own work: the default view, *Session work* chosen,
+  --- or *Uncommitted* when `uncommitted`.
+  ---
+  ---@param uncommitted? boolean
+  local function show_own_work(uncommitted)
     session.focused, session.shows_reported, session.shown_label = false, false, nil
-    select_filter(filter.SESSION_WORK)
+    select_filter(uncommitted and filter.UNCOMMITTED or filter.SESSION_WORK)
     show_commits()
     read_files(true)
   end
@@ -3574,7 +3580,7 @@ function M.new(label)
     elseif type(item.branch) == 'string' then
       show_branch_alone(item)
     elseif item.own == true then
-      show_own_work()
+      show_own_work(item.uncommitted == true)
     elseif type(item.group) == 'string' then
       show_reported(item.group)
     elseif item.reported == true then
@@ -3659,16 +3665,18 @@ function M.new(label)
       if failure then
         vim.notify(scope.branches_unlisted(failure), vim.log.levels.WARN)
       end
-      pick_among(
-        scope.items_of(
-          session.commits_others,
-          candidates,
-          #session.nodes,
-          vim.tbl_map(function(line)
-            return lines.report_item(line, clock_now())
-          end, reported_lines())
-        )
-      )
+      pick_among(scope.items_of(
+        session.commits_others,
+        candidates,
+        #session.nodes,
+        vim
+          .iter(reported_lines())
+          :map(function(line)
+            return lines.report_items(line, clock_now())
+          end)
+          :flatten()
+          :totable()
+      ))
     end)
   end
 

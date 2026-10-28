@@ -283,12 +283,12 @@ T['Enter on a branch’s line']['shows its commits alone, and the explorer follo
   local lonely_line = ('    lonely from %s'):format(repository.head:sub(1, 7))
   eq(
     wait_until(function()
-      return lines_of('aineo://changes-commits')[5] == lonely_line
+      return lines_of('aineo://changes-commits')[6] == lonely_line
     end),
     true
   )
 
-  child.lua('vim.api.nvim_win_set_cursor(0, { 5, 0 })')
+  child.lua('vim.api.nvim_win_set_cursor(0, { 6, 0 })')
   entry.press(child, '<CR>')
   entry.press(child, '\\e')
 
@@ -342,7 +342,7 @@ T['a report of aineo’s hook']['through the editor, adds its branch beside the 
       shown[2],
       shown[3],
       (shown[4] or ''):match('^    (%S+)'),
-      (shown[5] or ''):match('^    (%S+)'),
+      (shown[6] or ''):match('^    (%S+)'),
     }
   end
   wait_until(function()

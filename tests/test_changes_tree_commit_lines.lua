@@ -111,8 +111,9 @@ end
 T['the commits under a branch']['are listed below a checked-out branch’s line too'] = function()
   local page = page_with_commits_at(FEATURE_A, { commit('3', 'On the checked-out branch', 1) })
 
-  eq(vim.list_slice(page.text, 5, 6), {
+  eq(vim.list_slice(page.text, 5, 7), {
     '    feature/a * from 0123456',
+    '      Uncommitted',
     '      3333333 Ada 1m               On the checked-out branch',
   })
 end
@@ -148,7 +149,7 @@ T['the commits under a branch']['of a branch checked out in another worktree lis
 
   local page = page_of_tree(tree)
 
-  eq(page.entries[6], {
+  eq(page.entries[7], {
     key = AGENT.top .. '\0\0branch\0feature/a\0' .. newer.id,
     commit = newer,
     filter = { kind = 'commit', commit = newer, branch = 'feature/a', worktree = listed },
@@ -161,7 +162,7 @@ T['the commits under a branch']['of a branch checked out in the editor’s own w
 
   local page = page_of_tree(tree_with_commits_at(AGENT.top, FEATURE_A, { newer }))
 
-  eq(page.entries[6], {
+  eq(page.entries[7], {
     key = '\0branch\0feature/a\0' .. newer.id,
     commit = newer,
     filter = { kind = 'commit', commit = newer, branch = 'feature/a' },
@@ -199,7 +200,7 @@ end
 T['the commits under a branch']['stop at 20 with none left out, and say nothing more'] = function()
   local page = page_with_commits_at(FEATURE_B, commits_of(20))
 
-  eq(#page.text, 4 + 20 + 1 + 3)
+  eq(#page.text, 4 + 20 + 1 + 1 + 3)
   eq(page.text[24], '      0000000 Ada 20m              Work 20')
   eq(page.text[25], '    feature/a * from 0123456')
 end

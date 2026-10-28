@@ -184,6 +184,7 @@ end
 ---@field top? string
 ---@field own? boolean
 ---@field branch? string
+---@field uncommitted? boolean whether the worktree's *Uncommitted* is chosen in place of its whole change, or the editor's own in place of *Session work*: the pick of the *Uncommitted* line under a branch a worktree has checked out
 
 --- One line of the Reported section, by its depth: a group's label line
 --- (0), a worktree's line (1) or a branch's (2), with what it shows and
