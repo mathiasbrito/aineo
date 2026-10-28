@@ -1220,8 +1220,8 @@ function M.new(label)
   --- listed becomes the selected filter's as it was last read, and the files
   --- window is written again when its branch changed, for its first line
   --- names it — or read, for its *Uncommitted* chosen before the window had
-  --- found its repository, once it has. The scope is kept or cleared first
-  --- (`keep_scope_listed_in()`).
+  --- found its repository, once it has found it or failed to. The scope is
+  --- kept or cleared first (`keep_scope_listed_in()`).
   ---
   ---@param others aineo.changes.OtherWorktrees
   local function reselect_in_worktrees(others)
@@ -1247,7 +1247,7 @@ function M.new(label)
     else
       local unread = selected.kind == 'uncommitted' and not selected.worktree.repository
       session.selected = filter.in_worktree(selected, section)
-      if unread and section.repository then
+      if unread and (section.repository or section.failure) then
         read_files(true)
       elseif section.branch ~= selected.worktree.branch then
         show_files()

@@ -992,6 +992,61 @@ T['a reported worktree not listed yet']['says its Uncommitted is being read, the
   expect_lines(FILES, { 'Files in: Uncommitted — agent-1 (feature/a)', '  ? b.txt' })
 end
 
+--- Writes a stand-in for git under the fixture `git-<name>` that holds
+--- every run in the directory `held` while the file `hold` exists, then
+--- fails every `rev-parse` there with `fatal: broken`, and runs git for any
+--- other; returns its path.
+---
+---@param name string
+---@param held string
+---@param hold string
+---@return string stand_in
+local function git_holding_then_broken_in(name, held, hold)
+  return git_repo.script(name, 'git', {
+    ('case " $* " in *" -C %s "*) while [ -e "%s" ]; do sleep 0.05; done ;; esac'):format(
+      held,
+      hold
+    ),
+    ('case " $* " in *" -C %s "*" rev-parse "*) echo "fatal: broken" >&2; exit 128 ;; esac'):format(
+      held
+    ),
+    ('exec %s "$@"'):format(REAL_GIT),
+  })
+end
+
+T['a reported worktree not listed yet']['says its Uncommitted is being read, then the failure the worktree is listed with'] = function()
+  local top = git_repo.create('wtuncommitted-not-listed-failed', { ['notes.txt'] = { 'one' } })
+  local agent = vim.fs.joinpath(vim.fs.dirname(top), 'agent-1')
+  local hold = vim.fs.joinpath(git_repo.directory('wtuncommitted-not-listed-failed-hold'), 'hold')
+  child.lua(WATCH_IN_HAND)
+  begin_and_show(
+    top,
+    { executable = git_holding_then_broken_in('wtuncommitted-not-listed-failed', agent, hold) }
+  )
+  expect_lines(COMMITS, commits_then({}))
+  git_repo.git(top, { 'worktree', 'add', '--quiet', '-b', 'feature/a', agent })
+  assert(vim.fn.writefile({}, hold) == 0, 'cannot write ' .. hold)
+  child.lua(
+    "require('aineo.changes').add_reported_work(..., function() end)",
+    { { worktree = agent, label = 'T', branches = { { name = 'feature/a' } } } }
+  )
+  git_repo.wait_until('the reported view shows', function()
+    return lines_of(COMMITS)[2] == 'Uncommitted — agent-1 (feature/a)'
+  end)
+  go_to_commits_line(2)
+  expect_lines(
+    FILES,
+    { 'Files in: Uncommitted — agent-1 (feature/a)', 'aineo is reading the repository' }
+  )
+
+  assert(os.remove(hold))
+
+  git_repo.wait_until('the worktree listed with a failure', function()
+    return vim.startswith(lines_of(COMMITS)[3] or '', 'The last refresh failed: ')
+  end)
+  expect_lines(FILES, { 'Files in: Uncommitted — agent-1 (feature/a)', lines_of(COMMITS)[3] })
+end
+
 T['the refresh']['of a second report of the worktree reads its chosen Uncommitted again'] = function()
   local top = git_repo.create('wtuncommitted-report-again', { ['notes.txt'] = { 'one' } })
   child.lua(WATCH_IN_HAND)
