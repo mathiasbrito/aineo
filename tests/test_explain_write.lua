@@ -906,6 +906,88 @@ T['the preview']['names the <Plug> mappings of written code when it maps no key'
   )
 end
 
+T['the preview in view'] = MiniTest.new_set()
+
+--- The answer that writes `ADD` below line 3, which it keeps as it is.
+local BELOW_LINE_3 = below_line(CODE, 3)
+
+--- Asks the child to write code below the cursor's line (`ask_write()`),
+--- where the cursor stands, types `request` in the float and sends it.
+---
+---@param request string[]
+local function ask_below_cursor(request)
+  ask_write()
+  child.api.nvim_buf_set_lines(0, 0, -1, false, request)
+  press('<CR>')
+end
+
+--- The cursor of the child's current window: its line, from 1, and its
+--- column, from 0.
+---
+---@return integer[]
+local function cursor()
+  return child.api.nvim_win_get_cursor(0)
+end
+
+T['the preview in view']['is brought into view when its line is the window’s top line, the cursor kept'] = function()
+  start(BELOW_LINE_3)
+  child.api.nvim_win_set_cursor(0, { 3, 5 })
+  child.cmd('normal! zt')
+
+  ask_below_cursor({ 'A function that adds two values.' })
+  wait_for_preview()
+
+  eq(vim.tbl_contains(screen(), KEYS_ROW), true)
+  eq(cursor(), { 3, 5 })
+end
+
+T['the preview in view']['is brought into view on line 1 of a window scrolled down, the cursor kept'] = function()
+  start(REPLACING_LINE_1)
+  ask_write({ range = { 1, 1 } })
+  wait_for_preview()
+  child.lua("require('aineo.explain').reject_fix(vim.api.nvim_get_current_buf())")
+  child.api.nvim_win_set_cursor(0, { 2, 0 })
+  child.lua('vim.fn.winrestview({ topline = 2 })')
+
+  ask_write({ range = { 1, 1 } })
+
+  eq(vim.tbl_contains(screen(), KEYS_ROW), true)
+  eq(cursor(), { 2, 0 })
+end
+
+--- The view of the child's current window: its top line and the filler
+--- lines it shows above it.
+---
+---@return integer[]
+local function view()
+  local saved = child.lua_get('vim.fn.winsaveview()')
+  return { saved.topline, saved.topfill }
+end
+
+T['the preview in view']['leaves a window that shows it as it is'] = function()
+  start(BELOW_LINE_3)
+  child.api.nvim_win_set_cursor(0, { 3, 0 })
+  local before = view()
+
+  ask_below_cursor({ 'A function that adds two values.' })
+  wait_for_preview()
+
+  eq(view(), before)
+end
+
+T['the preview in view']['is brought into view again by the diff view, not before'] = function()
+  start(BELOW_LINE_3)
+  child.api.nvim_win_set_cursor(0, { 3, 0 })
+  ask_below_cursor({ 'A function that adds two values.' })
+  wait_for_preview()
+  child.cmd('normal! zt')
+  local scrolled_away = vim.tbl_contains(screen(), KEYS_ROW)
+
+  child.lua("require('aineo.explain').toggle_fix_diff(vim.api.nvim_get_current_buf())")
+
+  eq({ scrolled_away, vim.tbl_contains(screen(), KEYS_ROW) }, { false, true })
+end
+
 T['the preview']['says on accept that the code is written, and that u undoes it'] = function()
   start(REPLACING_THE_REQUEST)
   ask_write({ range = { 3, 3 } })
