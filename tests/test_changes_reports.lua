@@ -71,9 +71,11 @@ T['the Reported section']['lists the tree above Uncommitted: each label, its wor
     '  agent-1',
     '    feature/b from 0123456',
     '    feature/a * from 0123456',
+    '      Uncommitted',
     '(no label) 2h',
     '  agent-2',
     '    feature/c * from ?',
+    '      Uncommitted',
     'Uncommitted',
     'Session work',
     'No commits on this session',
@@ -83,7 +85,7 @@ end
 T['the Reported section']['colours its heading, each label and age, worktree, branch and base in their groups'] = function()
   local page = lines.commits_window(view_with(report_rules.tree_lines(NODES, OWN_TOP)))
 
-  eq(vim.list_slice(page.colours, 1, 8), {
+  eq(vim.list_slice(page.colours, 1, 10), {
     { { first_column = 0, end_column = 8, group = 'AineoChangesReportedHeading' } },
     {
       { first_column = 0, end_column = 18, group = 'AineoChangesReportedLabel' },
@@ -98,12 +100,14 @@ T['the Reported section']['colours its heading, each label and age, worktree, br
       { first_column = 4, end_column = 13, group = 'AineoChangesReportedBranch' },
       { first_column = 21, end_column = 28, group = 'AineoChangesCommitId' },
     },
+    { { first_column = 6, end_column = 17, group = 'AineoChangesFilter' } },
     {
       { first_column = 0, end_column = 10, group = 'AineoChangesReportedLabel' },
       { first_column = 11, end_column = 13, group = 'AineoChangesReportedAge' },
     },
     { { first_column = 2, end_column = 9, group = 'AineoChangesReportedWorktree' } },
     { { first_column = 4, end_column = 13, group = 'AineoChangesReportedBranch' } },
+    { { first_column = 6, end_column = 17, group = 'AineoChangesFilter' } },
   })
 end
 

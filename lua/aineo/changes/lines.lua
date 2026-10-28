@@ -787,6 +787,51 @@ function M.report_item(line, now)
   return vim.tbl_extend('force', line.picks, { text = '[reported] ' .. tree_text(line, now) })
 end
 
+--- What the Reported section's line under a branch's line says for its
+--- worktree's *Uncommitted*.
+local TREE_UNCOMMITTED = 'Uncommitted'
+
+--- The text of the *Uncommitted* under `line`, the line of a branch its
+--- worktree has checked out: `TREE_UNCOMMITTED`, indented a depth below the
+--- line's.
+---
+---@param line aineo.changes.TreeLine
+---@return string
+local function tree_uncommitted_text(line)
+  return (' '):rep((line.depth + 1) * INDENT_CELLS) .. TREE_UNCOMMITTED
+end
+
+--- The choice of the list `s` offers, and of Enter on its line, for the
+--- *Uncommitted* under `line`, the line of a branch its worktree has checked
+--- out: what `line` picks, its *Uncommitted* chosen, as `[reported] ` and
+--- its text (`tree_uncommitted_text()`).
+---
+---@param line aineo.changes.TreeLine
+---@return aineo.changes.ScopeItem
+local function uncommitted_report_item(line)
+  return vim.tbl_extend(
+    'force',
+    line.picks,
+    { uncommitted = true, text = '[reported] ' .. tree_uncommitted_text(line) }
+  )
+end
+
+--- The choices of the list `s` offers for `line`, a line of the Reported
+--- section, at the time `now`: its own (`M.report_item()`), then, for the
+--- line of a branch its worktree has checked out, its *Uncommitted*'s
+--- (`uncommitted_report_item()`), in the order the section lists them.
+---
+---@param line aineo.changes.TreeLine
+---@param now integer seconds since the epoch
+---@return aineo.changes.ScopeItem[]
+function M.report_items(line, now)
+  local items = { M.report_item(line, now) }
+  if line.checked_out then
+    table.insert(items, uncommitted_report_item(line))
+  end
+  return items
+end
+
 --- How many of a branch's commits the Reported section lists below its
 --- line.
 M.MOST_TREE_COMMITS = 20
@@ -903,10 +948,56 @@ local function tree_row(line, now)
   return { line = text, colours = line_colours, entry = entry }
 end
 
+--- The filter of the *Uncommitted* under `line`, the line of a branch its
+--- worktree has checked out: the editor's own *Uncommitted* on the editor's
+--- own worktree; else that worktree's, as the commits window last listed it
+--- (`aineo.changes.TreeLine`'s `worktree_section`), or as git listed it when
+--- it was reported.
+---
+---@param line aineo.changes.TreeLine
+---@return aineo.changes.Filter
+local function tree_uncommitted_filter(line)
+  if line.picks.own then
+    return filter.UNCOMMITTED
+  end
+  return filter.of_worktree_uncommitted(line.worktree_section or line.node.worktree)
+end
+
+--- The row of the *Uncommitted* under `line`, the line of a branch its
+--- worktree has checked out: its text (`tree_uncommitted_text()`), the word
+--- in the group of filters, listing its filter
+--- (`tree_uncommitted_filter()`) and the choice Enter on it picks
+--- (`uncommitted_report_item()`).
+---
+---@param line aineo.changes.TreeLine
+---@return aineo.changes.Row
+local function tree_uncommitted_row(line)
+  local text = tree_uncommitted_text(line)
+  local listed_under = tree_uncommitted_filter(line)
+  return {
+    line = text,
+    colours = {
+      {
+        first_column = #text - #TREE_UNCOMMITTED,
+        end_column = #text,
+        group = colours.FILTER_GROUP,
+      },
+    },
+    entry = {
+      key = filter.key(listed_under),
+      filter = listed_under,
+      worktree = listed_under.worktree,
+      picks = uncommitted_report_item(line),
+    },
+  }
+end
+
 --- The rows of the Reported section, for `reported`, its lines in their
 --- order (`aineo.changes.reports`' `tree_lines()`): its heading, whole in
---- its group, and a row per line (`tree_row()`), a branch's followed by
---- its commits (`tree_commit_rows()`); none without a line.
+--- its group, and a row per line (`tree_row()`), a branch's followed, when
+--- its worktree has it checked out, by its *Uncommitted*
+--- (`tree_uncommitted_row()`), then by its commits (`tree_commit_rows()`);
+--- none without a line.
 ---
 ---@param reported aineo.changes.TreeLine[]|nil
 ---@param now integer seconds since the epoch
@@ -919,6 +1010,9 @@ local function reported_rows(reported, now)
   for _, line in ipairs(reported) do
     local row = tree_row(line, now)
     table.insert(rows, row)
+    if line.checked_out then
+      table.insert(rows, tree_uncommitted_row(line))
+    end
     if line.branch then
       vim.list_extend(rows, tree_commit_rows(line, now, row.entry))
     end

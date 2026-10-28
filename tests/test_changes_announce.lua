@@ -258,7 +258,8 @@ end
 
 --- The Reported section atop the default view once the worktree `agent-1`
 --- on `feature/a` was reported by `agent_call()` a moment ago.
-local REPORTED_AGENT = { 'Reported', 'T now', '  agent-1', '    feature/a * from ?' }
+local REPORTED_AGENT =
+  { 'Reported', 'T now', '  agent-1', '    feature/a * from ?', '      Uncommitted' }
 
 --- `rows`, the default view's rows below the Reported section, under
 --- `REPORTED_AGENT`.
@@ -781,6 +782,7 @@ T['the reported work']['drops a branch git no longer lists from its worktree, th
     'T now',
     '  agent-1',
     ('    feature/a * from %s'):format(short(base)),
+    '      Uncommitted',
     'Uncommitted',
   })
   eq(messages(), {})
@@ -1015,12 +1017,13 @@ T['the focused view']['is offered by s after the tree, as all reported work, and
       '[reported] T now',
       '[reported]   agent-1',
       '[reported]     feature/a * from ?',
+      '[reported]       Uncommitted',
       '[reported] All reported work (1)',
       '[worktree] agent-1 (feature/a)',
       '[worktree] agent-2 (feature/b)',
     },
   })
-  child.lua('_G.choose(6)')
+  child.lua('_G.choose(7)')
   expect_pane_lines('module', 'commits', {
     'Worktree agent-2 (feature/b)',
     'Uncommitted — agent-2 (feature/b)',
@@ -1064,6 +1067,7 @@ T['the editor’s own worktree']['is listed in the tree, the default view kept, 
     'main work now',
     '  ' .. own_folder,
     ('    main * from %s'):format(short(base)),
+    '      Uncommitted',
     'Uncommitted',
     'Session work',
     'No commits on this session',
@@ -1083,6 +1087,7 @@ T['the editor’s own worktree']['picked by Enter on its line, from a worktree p
     'main work now',
     '  ' .. vim.fs.basename(top),
     ('    main * from %s'):format(short(base)),
+    '      Uncommitted',
     'agent now',
     '  agent-1',
   })
@@ -1123,6 +1128,7 @@ T['the editor’s own worktree']['shows on its checked-out branch’s line the b
     'own now',
     '  ' .. vim.fs.basename(top),
     ('    main * from %s'):format(short(newer)),
+    '      Uncommitted',
     'Uncommitted',
     'Session work',
     'No commits on this session',
@@ -1157,10 +1163,12 @@ T['the Reported section']['lists the tree atop the default view: labels newest f
     'second task now',
     '  agent-2',
     ('    feature/b * from %s'):format(short(base)),
+    '      Uncommitted',
     'first task now',
     '  agent-1',
     ('    feature/c from %s'):format(short(base)),
     ('    feature/a * from %s'):format(short(base)),
+    '      Uncommitted',
     'Uncommitted',
     'Session work',
     'No commits on this session',
@@ -1189,6 +1197,7 @@ T['the Reported section']['takes an agent’s call made again in place of the fi
     'second now',
     '  agent-1',
     ('    feature/a * from %s'):format(short(two)),
+    '      Uncommitted',
     'Uncommitted',
   })
   eq(#told('module'), 1)
@@ -1209,12 +1218,14 @@ T['the Reported section']['picks by Enter on a worktree’s line that worktree a
     'T now',
     '  agent-2',
     ('    feature/b * from %s'):format(short(base)),
+    '      Uncommitted',
     '  agent-1',
     ('    feature/a * from %s'):format(short(base)),
+    '      Uncommitted',
     'Uncommitted',
   })
 
-  enter_on_line(5)
+  enter_on_line(6)
 
   expect_pane_lines('module', 'commits', AGENT_VIEW)
   expect_pane_lines(
@@ -1242,8 +1253,10 @@ T['the Reported section']['picks by Enter on a label’s line every worktree and
     'T now',
     '  agent-3',
     ('    feature/c * from %s'):format(short(base)),
+    '      Uncommitted',
     '  agent-1',
     ('    feature/a * from %s'):format(short(base)),
+    '      Uncommitted',
     ('    feature/d from %s'):format(short(base)),
     'other now',
   })
@@ -1276,11 +1289,12 @@ T['the Reported section']['picks by Enter on a branch’s line its commits alone
     'T now',
     '  agent-1',
     ('    feature/a * from %s'):format(short(one)),
+    '      Uncommitted',
     ('    feature/b from %s'):format(short(one)),
     'Uncommitted',
   })
 
-  enter_on_line(5)
+  enter_on_line(6)
   expect_pane_lines('module', 'commits', {
     'Branch feature/b (not checked out: commits only)',
     commit_line(two, 'Two'),
@@ -1315,9 +1329,10 @@ T['the Reported section']['shows a file’s diff from a branch’s base by Enter
     'T now',
     '  agent-1',
     ('    feature/a * from %s'):format(short(base)),
+    '      Uncommitted',
     ('    feature/b from %s'):format(short(base)),
   })
-  enter_on_line(5)
+  enter_on_line(6)
   expect_pane_lines('module', 'files', { 'Files in: Branch feature/b', '  A branch.txt' })
 
   enter_window_of('module', 'files')
@@ -1362,10 +1377,11 @@ T['the Reported section']['says on the Against line that a branch’s base is th
     'T now',
     '  agent-1',
     ('    feature/a * from %s'):format(short(base)),
+    '      Uncommitted',
     ('    feature/b from %s'):format(short(base)),
   })
 
-  enter_on_line(5)
+  enter_on_line(6)
 
   expect_against_line(
     ('Against: %s (feature/a, main) reported base → %s (feature/b)'):format(
@@ -1391,10 +1407,11 @@ T['the Reported section']['says on the Against line that a branch’s base is a 
     'T now',
     '  agent-1',
     ('    feature/a * from %s'):format(short(base)),
+    '      Uncommitted',
     ('    feature/b from %s'):format(short(moved)),
   })
 
-  enter_on_line(5)
+  enter_on_line(6)
 
   expect_against_line(
     ('Against: %s (feature/a) merge base with %s → %s (feature/b)'):format(
@@ -1422,14 +1439,16 @@ T['the Reported section']['is offered first by s, as the tree, an item picked sh
     '[reported] second now',
     '[reported]   agent-2',
     ('[reported]     feature/b * from %s'):format(short(base)),
+    '[reported]       Uncommitted',
     '[reported] first now',
     '[reported]   agent-1',
     ('[reported]     feature/a * from %s'):format(short(base)),
+    '[reported]       Uncommitted',
     '[reported] All reported work (2)',
     '[worktree] agent-1 (feature/a)',
     '[worktree] agent-2 (feature/b)',
   })
-  child.lua('_G.choose(5)')
+  child.lua('_G.choose(6)')
 
   expect_pane_lines('module', 'commits', AGENT_VIEW)
 end
@@ -1448,7 +1467,7 @@ T['the Reported section']['offers all reported work in s counting the worktrees,
 
   press_s()
 
-  eq(last_offered().texts[7], '[reported] All reported work (2)')
+  eq(last_offered().texts[9], '[reported] All reported work (2)')
 end
 
 T['the Reported section']['picks a reported worktree by Enter before the commits window has listed it'] = function()
@@ -1495,6 +1514,7 @@ T['the Reported section']['adds a branch aineo’s hook saw made in a reported w
     ('    feature/a from %s'):format(short(base)),
     '      ' .. commit_line(one, 'One'),
     ('    feature/b * from %s'):format(short(one)),
+    '      Uncommitted',
     'Uncommitted',
   })
   eq(#told('module'), 1)
@@ -1513,6 +1533,7 @@ T['the Reported section']['lists a worktree aineo’s hook saw added under no la
     '(no label) now',
     '  agent-1',
     ('    feature/a * from %s'):format(short(base)),
+    '      Uncommitted',
     'Uncommitted',
   })
   toggle_in_pane()
@@ -1524,6 +1545,7 @@ T['the Reported section']['lists a worktree aineo’s hook saw added under no la
     'task now',
     '  agent-1',
     ('    feature/a * from %s'):format(short(base)),
+    '      Uncommitted',
     'Uncommitted',
   })
 end
@@ -1543,6 +1565,7 @@ T['the Reported section']['takes the agent’s base over the report of aineo’s
     'task now',
     '  agent-1',
     ('    feature/a * from %s'):format(short(two)),
+    '      Uncommitted',
     'Uncommitted',
   })
 end
@@ -1596,6 +1619,7 @@ T['a reported base']['gives way to the pane’s own after a rebase onto newer wo
     'T now',
     '  agent-1',
     ('    feature/a * from %s'):format(short(moved_on)),
+    '      Uncommitted',
   })
 end
 
@@ -1643,7 +1667,13 @@ T['a reported base']['missing, as in a report kept before reports gave one, show
     commit_line(two, 'Two'),
     commit_line(one, 'One'),
   })
-  expect_reported_lines({ 'Reported', 'T now', '  agent-1', '    feature/a * from ?' })
+  expect_reported_lines({
+    'Reported',
+    'T now',
+    '  agent-1',
+    '    feature/a * from ?',
+    '      Uncommitted',
+  })
 end
 
 return T
