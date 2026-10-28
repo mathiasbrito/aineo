@@ -911,6 +911,29 @@ T['the preview']['shows its keys row in the diff view of code that starts on lin
   eq(vim.tbl_contains(screen(), KEYS_ROW), true)
 end
 
+--- How many of `rows` are `text`.
+---
+---@param rows string[]
+---@param text string
+---@return integer
+local function count_of(rows, text)
+  return #vim.tbl_filter(function(row)
+    return row == text
+  end, rows)
+end
+
+T['the preview']['draws its keys row once in the diff view of code on line 1, even scrolled up'] = function()
+  start(REPLACING_LINE_1)
+  ask_write({ range = { 1, 1 } })
+  wait_for_preview()
+  child.lua("require('aineo.explain').toggle_fix_diff(vim.api.nvim_get_current_buf())")
+
+  child.cmd('normal! gg')
+  child.type_keys('<C-y>', '<C-y>', '<C-y>')
+
+  eq(count_of(screen(), KEYS_ROW), 1)
+end
+
 T['the preview']['shows its stale row on line 1 once its marks are cleared'] = function()
   start(REPLACING_LINE_1)
   ask_write({ range = { 1, 1 } })
