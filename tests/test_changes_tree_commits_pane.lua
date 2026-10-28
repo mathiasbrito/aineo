@@ -189,6 +189,7 @@ T['the Reported section']['lists the commits of a checked-out branch below its l
     'Session work',
     'No commits on this session',
     'Worktree agent-1 (feature/a)',
+    'Uncommitted — agent-1 (feature/a)',
     git_repo.commit_line(two, 'Two'),
   })
 end
@@ -254,6 +255,7 @@ T['the Reported section']['lists, after a rebase, the commits of the base the li
     'Session work',
     git_repo.commit_line(moved_on, 'Dev moved on, not the agent'),
     'Worktree agent-1 (feature/a)',
+    'Uncommitted — agent-1 (feature/a)',
     git_repo.commit_line(rebased, 'Agent work'),
   })
 end
@@ -297,6 +299,7 @@ T['the Reported section']['lists no commit below a branch with nothing past its 
     'Session work',
     'No commits on this session',
     'Worktree agent-1 (feature/a)',
+    'Uncommitted — agent-1 (feature/a)',
     'No commits in this worktree',
   })
 end

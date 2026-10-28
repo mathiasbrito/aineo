@@ -3,8 +3,8 @@
 --- — then the commits that landed in the working branch since that base
 --- (`aineo.changes.landed`), and then each other worktree of its
 --- repository's commits since that worktree's own base
---- (`aineo.changes.worktrees`), listed in a buffer of the pane; and in
---- another, the files of the one filter the commits window's cursor chose
+--- (`aineo.changes.worktrees`), each under its own *Uncommitted*, listed in
+--- a buffer of the pane; and in another, the files of the one filter the commits window's cursor chose
 --- (`aineo.changes.filter`): what differs from `HEAD`, what changed since
 --- the base — the user's saves marked — what one commit changed, what landed
 --- in the working branch or one of its commits, or, read in another

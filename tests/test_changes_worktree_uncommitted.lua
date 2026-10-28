@@ -1,0 +1,521 @@
+local MiniTest = require('mini.test')
+local git_repo = dofile('tests/helpers/git_repo.lua')
+
+local eq = MiniTest.expect.equality
+
+local child = MiniTest.new_child_neovim()
+
+local T = MiniTest.new_set({
+  hooks = {
+    pre_case = function()
+      git_repo.start_editor(child)
+    end,
+    post_once = child.stop,
+  },
+})
+
+--- The name of the changes pane's files buffer.
+local FILES = 'aineo://changes-files'
+
+--- The name of the changes pane's commits buffer.
+local COMMITS = 'aineo://changes-commits'
+
+--- The Lua that begins the changes home's session in the child for the
+--- directory `...`, with the git options that follow, and shows the pane's
+--- two buffers there: the files buffer in the current window, the commits
+--- buffer in a window below it. Every buffer the home asks to show as a
+--- diff is kept in `_G.shown_diffs` and shown in a window of its own at the
+--- bottom, the cursor left where it is; every message told is kept in
+--- `_G.messages`.
+local BEGIN_AND_SHOW = [[
+  local directory, git_options = ...
+  local changes = require('aineo.changes')
+  _G.shown_diffs, _G.messages = {}, {}
+  vim.notify = function(message, level)
+    table.insert(_G.messages, { message = message, level = level })
+  end
+  changes.begin_session({
+    directory = directory,
+    git = git_options,
+    show_diff = function(diff)
+      table.insert(_G.shown_diffs, diff)
+      local showing = vim.fn.bufwinid(diff)
+      if showing ~= -1 then
+        return showing
+      end
+      return vim.api.nvim_open_win(diff, false, { split = 'below', win = -1 })
+    end,
+  })
+  local pane = changes.pane_buffers()
+  vim.api.nvim_win_set_buf(0, pane.files)
+  vim.api.nvim_open_win(pane.commits, false, { split = 'below' })
+]]
+
+--- Begins the session in the child for `directory`, with the git options
+--- `git_options` when given, and shows the pane (`BEGIN_AND_SHOW`).
+---
+---@param directory string
+---@param git_options? table
+local function begin_and_show(directory, git_options)
+  child.lua(BEGIN_AND_SHOW, { directory, git_options })
+end
+
+--- The lines of the child's buffer named `name`, less the files window's
+--- `Against:` line.
+---
+---@param name string
+---@return string[]
+local function lines_of(name)
+  return git_repo.without_against_line(
+    child.lua_get('vim.api.nvim_buf_get_lines(vim.fn.bufnr(...), 0, -1, true)', { name })
+  )
+end
+
+--- Waits until the child's buffer named `name` holds `expected`, at most
+--- `git_repo.PATIENCE_MS`, and asserts that it does.
+---
+---@param name string
+---@param expected string[]
+local function expect_lines(name, expected)
+  vim.wait(git_repo.PATIENCE_MS, function()
+    return vim.deep_equal(lines_of(name), expected)
+  end, 10)
+  eq(lines_of(name), expected)
+end
+
+--- The messages the child told through `vim.notify`.
+---
+---@return string[]
+local function messages()
+  return child.lua_get([[vim.tbl_map(function(told)
+    return told.message
+  end, _G.messages)]])
+end
+
+--- Makes the directory `name` beside the repository at `top` a worktree of
+--- it on the new branch `branch`, and returns the worktree's top level.
+---
+---@param top string
+---@param name string
+---@param branch string
+---@return string worktree
+local function add_worktree(top, name, branch)
+  local worktree = vim.fs.joinpath(vim.fs.dirname(top), name)
+  git_repo.git(top, { 'worktree', 'add', '--quiet', '-b', branch, worktree })
+  return worktree
+end
+
+--- The commits window's lines for an editor with no commit of its own, then
+--- the lines `listed` for its worktrees.
+---
+---@param listed string[]
+---@return string[]
+local function commits_then(listed)
+  return vim.list_extend({ 'Uncommitted', 'Session work', 'No commits on this session' }, listed)
+end
+
+--- Makes the window showing the child's buffer named `name` the current one.
+---
+---@param name string
+local function enter_window_of(name)
+  child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { name })
+end
+
+--- Makes the commits window the current one and puts its cursor on line
+--- `line`, as the user's keys do.
+---
+---@param line integer
+local function go_to_commits_line(line)
+  git_repo.wait_until('the commits window lists line ' .. line, function()
+    return child.lua_get('vim.api.nvim_buf_line_count(vim.fn.bufnr(...))', { COMMITS }) >= line
+  end)
+  enter_window_of(COMMITS)
+  child.type_keys(line .. 'G')
+end
+
+--- Makes, in the repository at `top`, the worktree `agent` on the branch
+--- `agent`, with one commit of its own, `committed.txt` added as `The
+--- agent’s`, and three changes not committed: `notes.txt` changed and
+--- staged, `other.txt` changed and not staged, `new.txt` new and untracked;
+--- the editor's own worktree gets an untracked `editor.txt`. Returns the
+--- worktree's top level and the commit's full id.
+---
+---@param top string the top level of a repository holding `notes.txt` and `other.txt`
+---@return string worktree
+---@return string commit
+local function agent_with_three_changes(top)
+  local agent = add_worktree(top, 'agent', 'agent')
+  git_repo.write(agent, 'committed.txt', { 'committed' })
+  local commit = git_repo.commit_all(agent, 'The agent’s')
+  git_repo.write(agent, 'notes.txt', { 'staged' })
+  git_repo.git(agent, { 'add', 'notes.txt' })
+  git_repo.write(agent, 'other.txt', { 'unstaged' })
+  git_repo.write(agent, 'new.txt', { 'untracked' })
+  git_repo.write(top, 'editor.txt', { 'the editor’s' })
+  return agent, commit
+end
+
+T['another worktree’s Uncommitted line'] = MiniTest.new_set()
+
+T['another worktree’s Uncommitted line']['sits first under its heading, before its commits'] = function()
+  local top = git_repo.create('wtuncommitted-line', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  git_repo.write(agent, 'agent.txt', { 'new' })
+  local commit = git_repo.commit_all(agent, 'The agent’s')
+
+  begin_and_show(top)
+
+  expect_lines(
+    COMMITS,
+    commits_then({
+      'Worktree agent (agent)',
+      'Uncommitted — agent (agent)',
+      git_repo.commit_line(commit, 'The agent’s'),
+    })
+  )
+end
+
+T['another worktree’s Uncommitted line']['lists the worktree’s staged, unstaged and untracked files once selected'] = function()
+  local top =
+    git_repo.create('wtuncommitted-files', { ['notes.txt'] = { 'one' }, ['other.txt'] = { 'one' } })
+  agent_with_three_changes(top)
+  begin_and_show(top)
+
+  go_to_commits_line(5)
+
+  expect_lines(FILES, {
+    'Files in: Uncommitted — agent (agent)',
+    '  M notes.txt',
+    '  M other.txt',
+    '  ? new.txt',
+  })
+end
+
+T['another worktree’s Uncommitted line']['says there is nothing uncommitted in a clean worktree with commits'] = function()
+  local top = git_repo.create('wtuncommitted-clean', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  git_repo.write(agent, 'committed.txt', { 'committed' })
+  git_repo.commit_all(agent, 'The agent’s')
+  begin_and_show(top)
+
+  go_to_commits_line(5)
+
+  expect_lines(FILES, { 'Files in: Uncommitted — agent (agent)', 'No uncommitted changes' })
+end
+
+T['another worktree’s Uncommitted line']['marks none of its files as saved by the user, whose saves are the editor’s worktree’s'] = function()
+  local top = git_repo.create('wtuncommitted-saved', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  git_repo.write(agent, 'notes.txt', { 'the agent’s' })
+  begin_and_show(top)
+  child.lua(
+    [[
+      local path = ...
+      local files = vim.api.nvim_get_current_win()
+      vim.cmd('aboveleft split ' .. vim.fn.fnameescape(path))
+      vim.cmd("call setline(1, 'the user’s') | write")
+      vim.api.nvim_set_current_win(files)
+    ]],
+    { vim.fs.joinpath(top, 'notes.txt') }
+  )
+  expect_lines(FILES, { 'Files in: Session work', '* M notes.txt' })
+
+  go_to_commits_line(5)
+
+  expect_lines(FILES, { 'Files in: Uncommitted — agent (agent)', '  M notes.txt' })
+end
+
+T['another worktree’s Uncommitted line']['sits first under the heading of a worktree an agent reported, shown alone'] = function()
+  local top = git_repo.create('wtuncommitted-reported', { ['notes.txt'] = { 'one' } })
+  begin_and_show(top)
+  expect_lines(COMMITS, commits_then({}))
+  local agent = add_worktree(top, 'agent-1', 'feature/a')
+  git_repo.write(agent, 'a.txt', { 'a' })
+  local commit = git_repo.commit_all(agent, 'Work a')
+  git_repo.write(agent, 'b.txt', { 'b' })
+
+  child.lua(
+    "require('aineo.changes').add_reported_work(..., function() end)",
+    { { worktree = agent, label = 'T', branches = { { name = 'feature/a' } } } }
+  )
+
+  expect_lines(COMMITS, {
+    'Worktree agent-1 (feature/a)',
+    'Uncommitted — agent-1 (feature/a)',
+    git_repo.commit_line(commit, 'Work a'),
+  })
+  go_to_commits_line(2)
+  expect_lines(FILES, { 'Files in: Uncommitted — agent-1 (feature/a)', '  ? b.txt' })
+end
+
+T['Enter'] = MiniTest.new_set()
+
+--- Puts the cursor of the files window, entered, on line `line`, counted
+--- without its `Against:` line (`git_repo.files_window_line()`).
+---
+---@param line integer
+local function go_to_files_line(line)
+  enter_window_of(FILES)
+  child.lua('vim.api.nvim_win_set_cursor(0, { ..., 0 })', { git_repo.files_window_line(line) })
+end
+
+--- Waits until the home has asked the child to show `count` diffs.
+---
+---@param count integer
+local function wait_for_diffs(count)
+  git_repo.wait_until(('%d diffs shown'):format(count), function()
+    return child.lua_get('#_G.shown_diffs') >= count
+  end)
+end
+
+--- The Lua expression giving the name and the last two lines of the diff
+--- buffer the home asked the child to show `...`-th.
+local SHOWN_DIFF = [[(function(index)
+  local diff = _G.shown_diffs[index]
+  return { name = vim.api.nvim_buf_get_name(diff), last = vim.api.nvim_buf_get_lines(diff, -3, -1, true) }
+end)(...)]]
+
+--- Makes, in the repository at `top`, the worktree `name` on the branch
+--- `name`, whose one commit changed `notes.txt` to `committed` and whose
+--- working tree has it as `text`; returns the worktree's top level.
+---
+---@param top string
+---@param name string
+---@param text string
+---@return string worktree
+local function agent_changing_notes(top, name, text)
+  local agent = add_worktree(top, name, name)
+  git_repo.write(agent, 'notes.txt', { 'committed' })
+  git_repo.commit_all(agent, 'The agent’s')
+  git_repo.write(agent, 'notes.txt', { text })
+  return agent
+end
+
+T['Enter']['on a file under another worktree’s Uncommitted shows its diff from that worktree’s HEAD, named for the worktree'] = function()
+  local top = git_repo.create('wtuncommitted-enter', { ['notes.txt'] = { 'one' } })
+  local agent = agent_changing_notes(top, 'agent', 'uncommitted')
+  git_repo.write(top, 'notes.txt', { 'the editor’s' })
+  begin_and_show(top)
+  go_to_commits_line(5)
+  expect_lines(FILES, { 'Files in: Uncommitted — agent (agent)', '  M notes.txt' })
+  go_to_files_line(2)
+
+  child.type_keys('<CR>')
+
+  wait_for_diffs(1)
+  eq(child.lua_get(SHOWN_DIFF, { 1 }), {
+    name = ('aineo://worktree%s//uncommitted/notes.txt'):format(agent),
+    last = { '-committed', '+uncommitted' },
+  })
+end
+
+T['Enter']['on one path uncommitted in two worktrees shows two diff buffers, each its worktree’s'] = function()
+  local top = git_repo.create('wtuncommitted-enter-two', { ['notes.txt'] = { 'one' } })
+  local first = agent_changing_notes(top, 'first', 'first')
+  local second = agent_changing_notes(top, 'second', 'second')
+  begin_and_show(top)
+  go_to_commits_line(5)
+  expect_lines(FILES, { 'Files in: Uncommitted — first (first)', '  M notes.txt' })
+  go_to_files_line(2)
+  child.type_keys('<CR>')
+  wait_for_diffs(1)
+  go_to_commits_line(8)
+  expect_lines(FILES, { 'Files in: Uncommitted — second (second)', '  M notes.txt' })
+  go_to_files_line(2)
+
+  child.type_keys('<CR>')
+
+  wait_for_diffs(2)
+  eq({
+    distinct = child.lua_get('_G.shown_diffs[1] ~= _G.shown_diffs[2]'),
+    first = child.lua_get(SHOWN_DIFF, { 1 }),
+    second = child.lua_get(SHOWN_DIFF, { 2 }),
+  }, {
+    distinct = true,
+    first = {
+      name = ('aineo://worktree%s//uncommitted/notes.txt'):format(first),
+      last = { '-committed', '+first' },
+    },
+    second = {
+      name = ('aineo://worktree%s//uncommitted/notes.txt'):format(second),
+      last = { '-committed', '+second' },
+    },
+  })
+end
+
+T['Enter']['on another worktree’s Uncommitted line shows its whole diff from that worktree’s HEAD, named for the worktree'] = function()
+  local top = git_repo.create('wtuncommitted-enter-whole', { ['notes.txt'] = { 'one' } })
+  local agent = agent_changing_notes(top, 'agent', 'uncommitted')
+  git_repo.write(top, 'notes.txt', { 'the editor’s' })
+  begin_and_show(top)
+  go_to_commits_line(5)
+
+  child.type_keys('<CR>')
+
+  wait_for_diffs(1)
+  eq(child.lua_get(SHOWN_DIFF, { 1 }), {
+    name = ('aineo://worktree%s//uncommitted'):format(agent),
+    last = { '-committed', '+uncommitted' },
+  })
+end
+
+T['h'] = MiniTest.new_set()
+
+T['h']['on a file under another worktree’s Uncommitted shows Enter’s diff, from that worktree’s HEAD'] = function()
+  local top = git_repo.create('wtuncommitted-h', { ['notes.txt'] = { 'one' } })
+  local agent = agent_changing_notes(top, 'agent', 'uncommitted')
+  git_repo.write(top, 'notes.txt', { 'the editor’s' })
+  begin_and_show(top)
+  go_to_commits_line(5)
+  expect_lines(FILES, { 'Files in: Uncommitted — agent (agent)', '  M notes.txt' })
+  go_to_files_line(2)
+
+  child.type_keys('h')
+
+  wait_for_diffs(1)
+  eq(child.lua_get(SHOWN_DIFF, { 1 }), {
+    name = ('aineo://worktree%s//uncommitted/notes.txt'):format(agent),
+    last = { '-committed', '+uncommitted' },
+  })
+end
+
+T['the refresh'] = MiniTest.new_set()
+
+--- The Lua that replaces, in the child, the git home's watch with one that
+--- calls back only when a case calls `_G.on_change(failure, change)`, so
+--- that only what a case asks for reads the pane.
+local WATCH_IN_HAND = [[
+  require('aineo.git').watch_repository = function(_, on_change)
+    _G.on_change = on_change
+    return { stop = function() end, watches_subdirectories = true }
+  end
+]]
+
+--- The line the cursor of the child's commits window is on.
+---
+---@return integer
+local function commits_cursor_line()
+  return child.lua_get('vim.api.nvim_win_get_cursor(vim.fn.bufwinid(...))[1]', { COMMITS })
+end
+
+T['the refresh']['of the watch reads another worktree’s Uncommitted again, the editor’s own files unchanged, and keeps it selected'] = function()
+  local top = git_repo.create('wtuncommitted-watch', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  git_repo.write(agent, 'notes.txt', { 'agent' })
+  child.lua(WATCH_IN_HAND)
+  begin_and_show(top)
+  go_to_commits_line(5)
+  expect_lines(FILES, { 'Files in: Uncommitted — agent (agent)', '  M notes.txt' })
+  git_repo.write(agent, 'new.txt', { 'new' })
+
+  child.lua('_G.on_change(nil, { files_changed = false, branch_moved = false })')
+
+  expect_lines(FILES, { 'Files in: Uncommitted — agent (agent)', '  M notes.txt', '  ? new.txt' })
+  eq(commits_cursor_line(), 5)
+end
+
+T['the refresh']['of the pane keeps another worktree’s Uncommitted selected once the agent commits what it listed'] = function()
+  local top = git_repo.create('wtuncommitted-refresh', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  git_repo.write(agent, 'notes.txt', { 'agent' })
+  begin_and_show(top)
+  go_to_commits_line(5)
+  expect_lines(FILES, { 'Files in: Uncommitted — agent (agent)', '  M notes.txt' })
+  local commit = git_repo.commit_all(agent, 'The agent’s')
+
+  child.lua("require('aineo.changes').refresh_shown_pane()")
+
+  expect_lines(
+    COMMITS,
+    commits_then({
+      'Worktree agent (agent)',
+      'Uncommitted — agent (agent)',
+      git_repo.commit_line(commit, 'The agent’s'),
+    })
+  )
+  expect_lines(FILES, { 'Files in: Uncommitted — agent (agent)', 'No uncommitted changes' })
+  eq(commits_cursor_line(), 5)
+end
+
+T['the refresh']['goes back to Session work, with no error, once the worktree of the Uncommitted selected is removed'] = function()
+  local top = git_repo.create('wtuncommitted-removed', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  git_repo.write(agent, 'notes.txt', { 'agent' })
+  begin_and_show(top)
+  go_to_commits_line(5)
+  expect_lines(FILES, { 'Files in: Uncommitted — agent (agent)', '  M notes.txt' })
+  git_repo.git(top, { 'worktree', 'remove', '--force', agent })
+
+  child.lua("require('aineo.changes').refresh_shown_pane()")
+
+  expect_lines(COMMITS, commits_then({}))
+  expect_lines(FILES, { 'Files in: Session work', 'No files changed on this session' })
+  eq({ cursor = commits_cursor_line(), messages = messages() }, { cursor = 2, messages = {} })
+end
+
+T['a worktree whose read fails'] = MiniTest.new_set()
+
+--- The git the suites run, by its absolute path, for the stand-in that runs
+--- it in its turn.
+local REAL_GIT = vim.fn.exepath('git')
+
+--- Writes a stand-in for git under the fixture `git-<name>` that fails
+--- with `fatal: broken`, as git words a failure, every `rev-parse` it is
+--- asked to run in the directory `broken`, and runs git for any other; returns
+--- its path.
+---
+---@param name string
+---@param broken string
+---@return string stand_in
+local function git_broken_in(name, broken)
+  return git_repo.script(name, 'git', {
+    ('case " $* " in *" -C %s "*" rev-parse "*) echo "fatal: broken" >&2; exit 128 ;; esac'):format(
+      broken
+    ),
+    ('exec %s "$@"'):format(REAL_GIT),
+  })
+end
+
+T['a worktree whose read fails']['shows its Uncommitted line, which lists git’s words and no file, never an error'] = function()
+  local top = git_repo.create('wtuncommitted-failed', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  begin_and_show(top, { executable = git_broken_in('wtuncommitted-failed', agent) })
+  expect_lines(
+    COMMITS,
+    commits_then({
+      'Worktree agent (agent)',
+      'Uncommitted — agent (agent)',
+      'The last refresh failed: fatal: broken',
+    })
+  )
+
+  go_to_commits_line(5)
+
+  expect_lines(
+    FILES,
+    { 'Files in: Uncommitted — agent (agent)', 'The last refresh failed: fatal: broken' }
+  )
+  eq(messages(), {})
+end
+
+T['a worktree whose read fails']['tells the diff of its Uncommitted unreadable, naming it and its worktree'] = function()
+  local top = git_repo.create('wtuncommitted-failed-diff', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  begin_and_show(top, { executable = git_broken_in('wtuncommitted-failed-diff', agent) })
+  go_to_commits_line(5)
+  expect_lines(
+    FILES,
+    { 'Files in: Uncommitted — agent (agent)', 'The last refresh failed: fatal: broken' }
+  )
+
+  child.type_keys('<CR>')
+
+  git_repo.wait_until('a message told', function()
+    return #messages() > 0
+  end)
+  eq(messages(), {
+    'aineo: the diff of Uncommitted in the worktree agent could not be read: fatal: broken',
+  })
+end
+
+return T

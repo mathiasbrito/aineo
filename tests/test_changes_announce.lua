@@ -205,13 +205,18 @@ local DEFAULT_VIEW = { 'Uncommitted', 'Session work', 'No commits on this sessio
 
 --- The default view of a repository with no commit of the session's own and
 --- the worktree `agent-1` on `feature/a`, of no commit, listed.
-local DEFAULT_VIEW_WITH_AGENT = vim.list_extend(
-  vim.list_slice(DEFAULT_VIEW),
-  { 'Worktree agent-1 (feature/a)', 'No commits in this worktree' }
-)
+local DEFAULT_VIEW_WITH_AGENT = vim.list_extend(vim.list_slice(DEFAULT_VIEW), {
+  'Worktree agent-1 (feature/a)',
+  'Uncommitted — agent-1 (feature/a)',
+  'No commits in this worktree',
+})
 
 --- The view of the reported worktree `agent-1` on `feature/a`, of no commit.
-local AGENT_VIEW = { 'Worktree agent-1 (feature/a)', 'No commits in this worktree' }
+local AGENT_VIEW = {
+  'Worktree agent-1 (feature/a)',
+  'Uncommitted — agent-1 (feature/a)',
+  'No commits in this worktree',
+}
 
 --- The branch `name`, reported made from `base`, none when not given.
 ---
@@ -430,6 +435,7 @@ T['a reported worktree']['shows under its heading with its commits, nothing else
 
   expect_pane_lines('module', 'commits', {
     'Worktree agent-1 (feature/a)',
+    'Uncommitted — agent-1 (feature/a)',
     commit_line(work_a, 'Work a'),
   })
   eq(told('module'), { started_in('Worktree agent-1 (feature/a)') })
@@ -504,8 +510,10 @@ T['a reported worktree']['has its path resolved off the main loop, the reports k
 
   expect_pane_lines('module', 'commits', {
     'Worktree agent-2 (feature/b)',
+    'Uncommitted — agent-2 (feature/b)',
     'No commits in this worktree',
     'Worktree agent-1 (feature/a)',
+    'Uncommitted — agent-1 (feature/a)',
     'No commits in this worktree',
   })
   eq(told('module'), {
@@ -528,8 +536,10 @@ T['a report git does not list yet']['is added once a read lists it, a worktree a
 
   expect_pane_lines('module', 'commits', {
     'Worktree agent-late (feature/late)',
+    'Uncommitted — agent-late (feature/late)',
     'No commits in this worktree',
     'Worktree agent-1 (feature/a)',
+    'Uncommitted — agent-1 (feature/a)',
     'No commits in this worktree',
   })
   eq(told('module'), {
@@ -681,10 +691,13 @@ T['the reported work']['adds up newest first, a worktree reported again moving f
 
   expect_pane_lines('module', 'commits', {
     'Worktree agent-3 (feature/c)',
+    'Uncommitted — agent-3 (feature/c)',
     'No commits in this worktree',
     'Worktree agent-1 (feature/a)',
+    'Uncommitted — agent-1 (feature/a)',
     'No commits in this worktree',
     'Worktree agent-2 (feature/b)',
+    'Uncommitted — agent-2 (feature/b)',
     'No commits in this worktree',
   })
   eq(told('module'), {
@@ -709,6 +722,7 @@ T['the reported work']['shows each worktree under its heading, then each branch 
 
   expect_pane_lines('module', 'commits', {
     'Worktree agent-1 (feature/a)',
+    'Uncommitted — agent-1 (feature/a)',
     commit_line(work_a, 'Work a'),
     'Branch feature/b (not checked out: commits only)',
     commit_line(work_b, 'Work b'),
@@ -723,17 +737,19 @@ T['the reported work']['drops a worktree git no longer lists, telling nothing, a
   report('module', call_for(second, 'T', { on('feature/b') }))
   expect_pane_lines('module', 'commits', {
     'Worktree agent-2 (feature/b)',
+    'Uncommitted — agent-2 (feature/b)',
     'No commits in this worktree',
     'Worktree agent-1 (feature/a)',
+    'Uncommitted — agent-1 (feature/a)',
     'No commits in this worktree',
   })
 
   git_repo.git(top, { 'worktree', 'remove', first })
-  expect_pane_lines(
-    'module',
-    'commits',
-    { 'Worktree agent-2 (feature/b)', 'No commits in this worktree' }
-  )
+  expect_pane_lines('module', 'commits', {
+    'Worktree agent-2 (feature/b)',
+    'Uncommitted — agent-2 (feature/b)',
+    'No commits in this worktree',
+  })
   eq(messages(), {})
 
   git_repo.git(top, { 'worktree', 'remove', second })
@@ -750,6 +766,7 @@ T['the reported work']['drops a branch git no longer lists from its worktree, th
   report('module', call_for(agent, 'T', { on('feature/a', base), on('feature/b', base) }))
   expect_pane_lines('module', 'commits', {
     'Worktree agent-1 (feature/a)',
+    'Uncommitted — agent-1 (feature/a)',
     'No commits in this worktree',
     'Branch feature/b (not checked out: commits only)',
     'No commits on this branch',
@@ -777,18 +794,20 @@ T['the reported work']['loses a worktree an agent’s call lists no branch of'] 
   report('module', call_for(second, 'T', { on('feature/b') }))
   expect_pane_lines('module', 'commits', {
     'Worktree agent-2 (feature/b)',
+    'Uncommitted — agent-2 (feature/b)',
     'No commits in this worktree',
     'Worktree agent-1 (feature/a)',
+    'Uncommitted — agent-1 (feature/a)',
     'No commits in this worktree',
   })
 
   report('module', call_for(first, 'T', {}))
 
-  expect_pane_lines(
-    'module',
-    'commits',
-    { 'Worktree agent-2 (feature/b)', 'No commits in this worktree' }
-  )
+  expect_pane_lines('module', 'commits', {
+    'Worktree agent-2 (feature/b)',
+    'Uncommitted — agent-2 (feature/b)',
+    'No commits in this worktree',
+  })
 end
 
 T['the reported work']['is emptied, and the reports still waiting dropped, when another session is followed'] = function()
@@ -864,16 +883,17 @@ T['the focused view']['becomes the reported work at a new report, from a worktre
     'commits',
     vim.list_extend(vim.list_slice(DEFAULT_VIEW_WITH_AGENT), {
       'Worktree agent-2 (feature/b)',
+      'Uncommitted — agent-2 (feature/b)',
       'No commits in this worktree',
     })
   )
   press_s()
   child.lua('_G.choose(2)')
-  expect_pane_lines(
-    'module',
-    'commits',
-    { 'Worktree agent-2 (feature/b)', 'No commits in this worktree' }
-  )
+  expect_pane_lines('module', 'commits', {
+    'Worktree agent-2 (feature/b)',
+    'Uncommitted — agent-2 (feature/b)',
+    'No commits in this worktree',
+  })
 
   report('module', agent_call(agent))
 
@@ -896,22 +916,27 @@ T['the focused view']['of the reported work stays, untold, when the worktree pic
     'commits',
     vim.list_extend(vim.list_slice(DEFAULT_VIEW_WITH_AGENT), {
       'Worktree agent-2 (feature/b)',
+      'Uncommitted — agent-2 (feature/b)',
       'No commits in this worktree',
     })
   )
   press_s()
   child.lua('_G.choose(2)')
-  expect_pane_lines(
-    'module',
-    'commits',
-    { 'Worktree agent-2 (feature/b)', 'No commits in this worktree' }
-  )
+  expect_pane_lines('module', 'commits', {
+    'Worktree agent-2 (feature/b)',
+    'Uncommitted — agent-2 (feature/b)',
+    'No commits in this worktree',
+  })
   report('module', agent_call(agent))
   expect_pane_lines('module', 'commits', AGENT_VIEW)
 
   git_repo.git(top, { 'worktree', 'remove', picked })
   local late = commit_only(agent, 'late.txt', 'late', 'Late a')
-  local agent_view = { 'Worktree agent-1 (feature/a)', commit_line(late, 'Late a') }
+  local agent_view = {
+    'Worktree agent-1 (feature/a)',
+    'Uncommitted — agent-1 (feature/a)',
+    commit_line(late, 'Late a'),
+  }
   expect_pane_lines('module', 'commits', agent_view)
   eq(messages(), {})
   toggle_in_pane()
@@ -923,6 +948,7 @@ T['the focused view']['of the reported work stays, untold, when the worktree pic
       'Session work',
       'No commits on this session',
       'Worktree agent-1 (feature/a)',
+      'Uncommitted — agent-1 (feature/a)',
       commit_line(late, 'Late a'),
     })
   )
@@ -950,7 +976,11 @@ T['the focused view']['of the reported work stays, untold, when the branch picke
 
   git_repo.git(top, { 'branch', '-D', 'feature/p' })
   local late = commit_only(agent, 'late.txt', 'late', 'Late a')
-  local agent_view = { 'Worktree agent-1 (feature/a)', commit_line(late, 'Late a') }
+  local agent_view = {
+    'Worktree agent-1 (feature/a)',
+    'Uncommitted — agent-1 (feature/a)',
+    commit_line(late, 'Late a'),
+  }
   expect_pane_lines('module', 'commits', agent_view)
   eq(messages(), {})
   toggle_in_pane()
@@ -962,6 +992,7 @@ T['the focused view']['of the reported work stays, untold, when the branch picke
       'Session work',
       'No commits on this session',
       'Worktree agent-1 (feature/a)',
+      'Uncommitted — agent-1 (feature/a)',
       commit_line(late, 'Late a'),
     })
   )
@@ -990,11 +1021,11 @@ T['the focused view']['is offered by s after the tree, as all reported work, and
     },
   })
   child.lua('_G.choose(6)')
-  expect_pane_lines(
-    'module',
-    'commits',
-    { 'Worktree agent-2 (feature/b)', 'No commits in this worktree' }
-  )
+  expect_pane_lines('module', 'commits', {
+    'Worktree agent-2 (feature/b)',
+    'Uncommitted — agent-2 (feature/b)',
+    'No commits in this worktree',
+  })
   press_s()
   child.lua('_G.choose(4)')
 
@@ -1109,6 +1140,7 @@ T['the Reported section']['lists the tree atop the default view: labels newest f
   report('module', call_for(first, 'first task', { on('feature/c', base), on('feature/a', base) }))
   expect_pane_lines('module', 'commits', {
     'Worktree agent-1 (feature/a)',
+    'Uncommitted — agent-1 (feature/a)',
     'No commits in this worktree',
     'Branch feature/c (not checked out: commits only)',
     'No commits on this branch',
@@ -1133,8 +1165,10 @@ T['the Reported section']['lists the tree atop the default view: labels newest f
     'Session work',
     'No commits on this session',
     'Worktree agent-1 (feature/a)',
+    'Uncommitted — agent-1 (feature/a)',
     'No commits in this worktree',
     'Worktree agent-2 (feature/b)',
+    'Uncommitted — agent-2 (feature/b)',
     'No commits in this worktree',
   })
 end
@@ -1218,8 +1252,10 @@ T['the Reported section']['picks by Enter on a label’s line every worktree and
 
   expect_pane_lines('module', 'commits', {
     'Worktree agent-3 (feature/c)',
+    'Uncommitted — agent-3 (feature/c)',
     'No commits in this worktree',
     'Worktree agent-1 (feature/a)',
+    'Uncommitted — agent-1 (feature/a)',
     'No commits in this worktree',
     'Branch feature/d (not checked out: commits only)',
     'No commits on this branch',
@@ -1253,11 +1289,11 @@ T['the Reported section']['picks by Enter on a branch’s line its commits alone
   toggle_in_pane()
   enter_on_line(4)
 
-  expect_pane_lines(
-    'module',
-    'commits',
-    { 'Worktree agent-1 (feature/a)', commit_line(two, 'Two') }
-  )
+  expect_pane_lines('module', 'commits', {
+    'Worktree agent-1 (feature/a)',
+    'Uncommitted — agent-1 (feature/a)',
+    commit_line(two, 'Two'),
+  })
   expect_pane_lines(
     'module',
     'files',
@@ -1447,6 +1483,7 @@ T['the Reported section']['adds a branch aineo’s hook saw made in a reported w
 
   expect_pane_lines('module', 'commits', {
     'Worktree agent-1 (feature/b)',
+    'Uncommitted — agent-1 (feature/b)',
     'No commits in this worktree',
     'Branch feature/a (not checked out: commits only)',
     commit_line(one, 'One'),
@@ -1521,6 +1558,7 @@ T['a reported base']['shows a worktree’s commits since its checked-out branch�
 
   expect_pane_lines('module', 'commits', {
     'Worktree agent-1 (feature/a)',
+    'Uncommitted — agent-1 (feature/a)',
     commit_line(two, 'Two'),
   })
   expect_pane_lines(
@@ -1545,6 +1583,7 @@ T['a reported base']['gives way to the pane’s own after a rebase onto newer wo
 
   expect_pane_lines('module', 'commits', {
     'Worktree agent-1 (feature/a)',
+    'Uncommitted — agent-1 (feature/a)',
     commit_line(rebased, 'Agent work'),
   })
   expect_pane_lines(
@@ -1568,6 +1607,7 @@ T['a reported base']['that the repository does not have gives way to the pane’
 
   expect_pane_lines('module', 'commits', {
     'Worktree agent-1 (feature/a)',
+    'Uncommitted — agent-1 (feature/a)',
     commit_line(two, 'Two'),
     commit_line(one, 'One'),
   })
@@ -1583,6 +1623,7 @@ T['a reported base']['of a branch not checked out, that the repository does not 
 
   expect_pane_lines('module', 'commits', {
     'Worktree agent-2 (feature/o)',
+    'Uncommitted — agent-2 (feature/o)',
     'No commits in this worktree',
     'Branch feature/a (not checked out: commits only)',
     commit_line(two, 'Two'),
@@ -1598,6 +1639,7 @@ T['a reported base']['missing, as in a report kept before reports gave one, show
 
   expect_pane_lines('module', 'commits', {
     'Worktree agent-1 (feature/a)',
+    'Uncommitted — agent-1 (feature/a)',
     commit_line(two, 'Two'),
     commit_line(one, 'One'),
   })

@@ -695,6 +695,7 @@ local function commits_with_agent(commits)
     SESSION_WORK,
     NO_COMMITS,
     'Worktree agent (agent)',
+    'Uncommitted — agent (agent)',
   }, commits)
 end
 
@@ -710,7 +711,7 @@ T['the filter in another worktree']['a cursor on its commit lists that commit’
   begin_and_show(top)
   expect_lines(COMMITS, commits_with_agent({ git_repo.commit_line(commit, 'The agent’s') }))
 
-  go_to_commits_line(5)
+  go_to_commits_line(6)
 
   expect_lines(FILES, {
     'Files in: ' .. git_repo.commit_line(commit, 'The agent’s (worktree agent)'),
@@ -753,7 +754,7 @@ T['the filter in another worktree']['says so when its whole change, or its commi
 
   go_to_commits_line(4)
   expect_lines(FILES, { 'Files in: Worktree agent (agent)', 'No files changed in this worktree' })
-  go_to_commits_line(5)
+  go_to_commits_line(6)
 
   expect_lines(FILES, {
     'Files in: ' .. git_repo.commit_line(commit, 'Nothing (worktree agent)'),
@@ -774,6 +775,7 @@ T['the filter in another worktree']['leaves no other worktree’s section in the
     SESSION_WORK,
     git_repo.commit_line(own, 'Mine'),
     'Worktree agent (agent)',
+    'Uncommitted — agent (agent)',
     'No commits in this worktree',
   })
   expect_lines(FILES, { 'Files in: Session work', '  M notes.txt' })
@@ -798,16 +800,18 @@ T['the filter in another worktree']['is one filter per worktree for the same com
     SESSION_WORK,
     NO_COMMITS,
     'Worktree first (first)',
+    'Uncommitted — first (first)',
     git_repo.commit_line(commit, 'Shared'),
     'Worktree second (second)',
+    'Uncommitted — second (second)',
     git_repo.commit_line(commit, 'Shared'),
   })
-  go_to_commits_line(5)
+  go_to_commits_line(6)
   git_repo.wait_until('the first worktree’s commit read', function()
     return child.lua_get('#_G.commit_files_tops') == 1
   end)
 
-  go_to_commits_line(7)
+  go_to_commits_line(9)
 
   git_repo.wait_until('the second worktree’s commit read', function()
     return child.lua_get('#_G.commit_files_tops') == 2
@@ -828,7 +832,7 @@ T['the filter in another worktree']['stays what it was on a line that lists none
   go_to_commits_line(4)
   expect_lines(FILES, { 'Files in: Worktree agent (agent)', '  M notes.txt' })
 
-  go_to_commits_line(5)
+  go_to_commits_line(6)
 
   vim.wait(600)
   eq(lines_of(FILES), { 'Files in: Worktree agent (agent)', '  M notes.txt' })

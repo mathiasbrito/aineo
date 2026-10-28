@@ -319,6 +319,7 @@ T['the commits window']['lists the section above the other worktrees'] = functio
     HEADING,
     commit_line(landed_commit, 'Add b'),
     'Worktree other (other)',
+    'Uncommitted — other (other)',
     commit_line(other_commit, 'Add o'),
   })
 end
