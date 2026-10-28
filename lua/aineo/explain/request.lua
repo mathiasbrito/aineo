@@ -306,7 +306,8 @@ end
 ---@field language string the buffer's `'filetype'`, empty when it has none
 ---@field first integer the first line of the request, from 1, or the line the code goes after
 ---@field last integer the last line of the request, or the line the code goes after
----@field request? string the request the user typed, the code going after the line `first`; absent when the lines `first` to `last` hold the request, which the code replaces
+---@field request? string the request the user typed, the code going after the line `first`, or in its place when it is blank; absent when the lines `first` to `last` hold the request, which the code replaces
+---@field blank? boolean whether the line `first`, which the code for the request typed goes to, is blank: the code then replaces it
 ---@field lines string[] every line of the buffer, as it stands
 
 --- What a prompt for code written in place of the lines that hold its
@@ -347,32 +348,50 @@ local WRITE_BELOW_RULES = 'Answer in summary what the code does in one sentence,
   .. ' and why says what the code does.'
   .. ' When the request cannot be fulfilled in this file, answer no edits and say why in the summary.'
 
---- The prompt Claude Code reads to write code for `code.request`, after the
---- line `code.first`: the file, its language — `unknown` when the buffer has
---- no `'filetype'` — and that line, the request as typed, how to answer
---- (`WRITE_BELOW_RULES`), then every line of the buffer, numbered
---- (`numbered()`).
+--- What a prompt for code written in place of a blank line says first, as
+--- a `string.format()` pattern given the file, its language and the line.
+local WRITE_IN_BLANK_HEAD = 'Write code in the file %s (language: %s) for the request below,'
+  .. ' to replace line %d as numbered below, which is blank.'
+
+--- What a prompt for code written in place of a blank line always says
+--- after the request, as a `string.format()` pattern given the line twice:
+--- how to answer, which `aineo.explain.write` holds the answer to.
+local WRITE_IN_BLANK_RULES = 'Answer in summary what the code does in one sentence,'
+  .. ' and one edit that replaces that line with it.'
+  .. ' Write only into this file.'
+  .. ' The edit gives in line and last the line %d, and repeats in old exactly that line'
+  .. ' of the numbered text below, verbatim with its white space and without its number;'
+  .. ' new holds the lines of the code alone, in the language of the file and its style,'
+  .. ' indented as the code around line %d is,'
+  .. ' and why says what the code does.'
+  .. ' When the request cannot be fulfilled in this file, answer no edits and say why in the summary.'
+
+--- The prompt Claude Code reads to write code for `code.request`, the
+--- request typed: after the line `code.first`, or in its place when
+--- `code.blank`: the file, its language — `unknown` when the buffer has no
+--- `'filetype'` — and that line, the request as typed, how to answer
+--- (`WRITE_BELOW_RULES`, `WRITE_IN_BLANK_RULES`), then every line of the
+--- buffer, numbered (`numbered()`).
 ---
 ---@param code aineo.explain.WriteCode
 ---@return string
-local function write_below_prompt(code)
+local function write_typed_prompt(code)
+  local head = code.blank and WRITE_IN_BLANK_HEAD or WRITE_BELOW_HEAD
+  local rules = code.blank and WRITE_IN_BLANK_RULES or WRITE_BELOW_RULES
   return table.concat({
-    WRITE_BELOW_HEAD:format(
-      code.path,
-      code.language ~= '' and code.language or 'unknown',
-      code.first
-    ),
+    head:format(code.path, code.language ~= '' and code.language or 'unknown', code.first),
     '',
     code.request,
     '',
-    WRITE_BELOW_RULES:format(code.first, code.first),
+    rules:format(code.first, code.first),
     '',
     table.concat(numbered(code.lines), '\n'),
   }, '\n')
 end
 
 --- The prompt Claude Code reads to write code for `code`: for the request
---- typed, the code going after a line (`write_below_prompt()`); else for
+--- typed, the code going after a line or in place of a blank one
+--- (`write_typed_prompt()`); else for
 --- the request that the lines `code.first` to `code.last` hold: the file,
 --- its language — `unknown` when the buffer has no `'filetype'` — and those
 --- lines, which the code replaces, how to answer (`WRITE_IN_PLACE_RULES`),
@@ -382,7 +401,7 @@ end
 ---@return string
 function M.write_prompt(code)
   if code.request then
-    return write_below_prompt(code)
+    return write_typed_prompt(code)
   end
   return table.concat({
     WRITE_IN_PLACE_HEAD:format(

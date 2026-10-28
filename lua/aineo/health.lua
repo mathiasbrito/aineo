@@ -1018,7 +1018,7 @@ local function check_write(resolved_config)
   local settings = resolved_config.write
   vim.health.start('Write code')
   vim.health.info(
-    ("\\w asks a Claude Code of its own, with the file alone and no tool, to write code for a request: in Normal mode a float asks for the request and the code goes below the cursor's line; in Visual mode the selected lines are the request, sent at once, and the code replaces them; model %s (write.model), stopped after %g s (write.timeout_ms): :help |aineo-write|"):format(
+    ("\\w asks a Claude Code of its own, with the file alone and no tool, to write code for a request: in Normal mode a float asks for the request and the code goes below the cursor's line, or in its place when that line is blank; in Visual mode the selected lines are the request, sent at once, and the code replaces them; model %s (write.model), stopped after %g s (write.timeout_ms): :help |aineo-write|"):format(
       settings.model,
       settings.timeout_ms / 1000
     )

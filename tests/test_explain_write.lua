@@ -536,6 +536,206 @@ T['writing below the cursor']['refuses an answer that edits another line too, an
   eq(preview_marks(), 0)
 end
 
+T['writing on a blank line'] = MiniTest.new_set()
+
+--- The answer that writes `ADD` in place of line 2, which is blank.
+local IN_PLACE_OF_LINE_2 = {
+  summary = 'Adds two values.',
+  edits = {
+    { line = 2, last = 2, old = { CODE[2] }, new = ADD, why = 'Returns the sum of a and b.' },
+  },
+}
+
+T['writing on a blank line']['sends the request typed, to write the code in place of that line'] = function()
+  start(IN_PLACE_OF_LINE_2)
+
+  send_request(2, { 'A function that adds two values.' })
+
+  local stdin = vim.split(recorded(2)[2].stdin, '\n')
+  eq(vim.list_slice(stdin, 1, 6), {
+    'Write code in the file src/code.lua (language: lua) for the request below,'
+      .. ' to replace line 2 as numbered below, which is blank.',
+    '',
+    'A function that adds two values.',
+    '',
+    'Answer in summary what the code does in one sentence, and one edit that replaces that line with it.'
+      .. ' Write only into this file.'
+      .. ' The edit gives in line and last the line 2, and repeats in old exactly that line'
+      .. ' of the numbered text below, verbatim with its white space and without its number;'
+      .. ' new holds the lines of the code alone, in the language of the file and its style,'
+      .. ' indented as the code around line 2 is,'
+      .. ' and why says what the code does.'
+      .. ' When the request cannot be fulfilled in this file, answer no edits and say why in the summary.',
+    '',
+  })
+end
+
+--- The lines of the child's current buffer once the proposal it shows is
+--- accepted, and then once that is undone.
+---
+---@return string[] accepted
+---@return string[] undone
+local function accept_then_undo()
+  child.lua("require('aineo.explain').accept_fix(vim.api.nvim_get_current_buf())")
+  local accepted = buffer_lines()
+  child.cmd('undo')
+  return accepted, buffer_lines()
+end
+
+T['writing on a blank line']['replaces it with the code on accept, leaving no blank line, as one undo step'] = function()
+  start(IN_PLACE_OF_LINE_2)
+  send_request(2, { 'A function that adds two values.' })
+  wait_for_preview()
+
+  local accepted, undone = accept_then_undo()
+
+  eq(accepted, { CODE[1], ADD[1], ADD[2], ADD[3], CODE[3], CODE[4], CODE[5] })
+  eq(undone, CODE)
+end
+
+T['writing on a blank line']['counts a line of white space alone as blank'] = function()
+  start(IN_PLACE_OF_LINE_2)
+  child.api.nvim_buf_set_lines(0, 1, 2, false, { '  \t' })
+
+  send_request(2, { 'A function that adds two values.' })
+
+  eq(
+    vim.split(recorded(2)[2].stdin, '\n')[1],
+    'Write code in the file src/code.lua (language: lua) for the request below,'
+      .. ' to replace line 2 as numbered below, which is blank.'
+  )
+end
+
+T['writing on a blank line']['writes into line 1 of an empty file'] = function()
+  start({
+    summary = 'Adds two values.',
+    edits = { { line = 1, last = 1, old = { '' }, new = ADD, why = 'Adds.' } },
+  })
+  child.api.nvim_buf_set_lines(0, 0, -1, false, {})
+  send_request(1, { 'A function that adds two values.' })
+  wait_for_preview()
+
+  local accepted, undone = accept_then_undo()
+
+  eq(accepted, ADD)
+  eq(undone, { '' })
+end
+
+T['writing on a blank line']['refuses an answer that edits another line too, and shows nothing'] = function()
+  local refused =
+    'aineo: the written code was refused: it must replace the cursor’s blank line alone'
+  local in_place_and_more = vim.deepcopy(IN_PLACE_OF_LINE_2)
+  table.insert(in_place_and_more.edits, {
+    line = 5,
+    last = 5,
+    old = { CODE[5] },
+    new = { 'return { M = M }' },
+    why = 'Exports.',
+  })
+  start(in_place_and_more)
+
+  send_request(2, { 'A function that adds two values.' })
+  wait_until_told(refused)
+
+  eq(messages(), { refused })
+  eq(preview_marks(), 0)
+end
+
+T['writing at the last line'] = MiniTest.new_set()
+
+--- The answer that writes `ADD` below line `line` of `lines`, which it
+--- keeps as it is.
+---
+---@param lines string[]
+---@param line integer
+---@return table
+local function below_line(lines, line)
+  return {
+    summary = 'Adds two values.',
+    edits = {
+      {
+        line = line,
+        last = line,
+        old = { lines[line] },
+        new = vim.list_extend({ lines[line] }, ADD),
+        why = 'Adds.',
+      },
+    },
+  }
+end
+
+--- The answer that writes `ADD` in place of line `line` of `lines`.
+---
+---@param lines string[]
+---@param line integer
+---@return table
+local function in_place_of(lines, line)
+  return {
+    summary = 'Adds two values.',
+    edits = { { line = line, last = line, old = { lines[line] }, new = ADD, why = 'Adds.' } },
+  }
+end
+
+--- `CODE` with a blank last line.
+local ENDING_BLANK = vim.list_extend(vim.deepcopy(CODE), { '' })
+
+T['writing at the last line']['touches no other line, as one undo step, typed'] = MiniTest.new_set({
+  parametrize = {
+    { 'below it', CODE, '', below_line(CODE, 5), vim.list_extend(vim.deepcopy(CODE), ADD) },
+    {
+      'below it, with no line end at the end of the file',
+      CODE,
+      'setlocal noendofline nofixendofline',
+      below_line(CODE, 5),
+      vim.list_extend(vim.deepcopy(CODE), ADD),
+    },
+    {
+      'below the only line',
+      { CODE[1] },
+      '',
+      below_line({ CODE[1] }, 1),
+      vim.list_extend({ CODE[1] }, ADD),
+    },
+    {
+      'in place of a blank last line',
+      ENDING_BLANK,
+      '',
+      in_place_of(ENDING_BLANK, 6),
+      vim.list_extend(vim.deepcopy(CODE), ADD),
+    },
+  },
+})
+
+T['writing at the last line']['touches no other line, as one undo step, typed'][1] = function(
+  _,
+  lines,
+  options,
+  answer,
+  expected
+)
+  start(answer)
+  child.api.nvim_buf_set_lines(0, 0, -1, false, lines)
+  child.cmd(options)
+  send_request(#lines, { 'A function that adds two values.' })
+  wait_for_preview()
+
+  local accepted, undone = accept_then_undo()
+
+  eq(accepted, expected)
+  eq(undone, lines)
+end
+
+T['writing at the last line']['replaces the selected last line, and no other'] = function()
+  start(in_place_of(CODE, 5))
+  ask_write({ range = { 5, 5 } })
+  wait_for_preview()
+
+  local accepted, undone = accept_then_undo()
+
+  eq(accepted, vim.list_extend({ CODE[1], CODE[2], CODE[3], CODE[4] }, ADD))
+  eq(undone, CODE)
+end
+
 T['the preview'] = MiniTest.new_set()
 
 --- The rows of the child's screen once redrawn, white space at their ends
