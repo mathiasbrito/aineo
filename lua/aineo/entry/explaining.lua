@@ -111,9 +111,9 @@ end
 --- the cursor's line; with `claude.cmd` and `write.model`, from the file
 --- alone, or, for a deep order, `write.deep_model` at `write.deep_effort`
 --- with the read-only tools. While the code shows, the prefix followed by
---- `Va`, `Vr` and `Vd` accept it, reject it and show its diff, as for a
---- fix, unless the prefix is `false`; what asks again is told as the prefix
---- followed by `w` or `W`, or as their `<Plug>` mapping.
+--- `Wa`, `Wr` and `Wd` accept it, reject it and show its diff, unless the
+--- prefix is `false`; what asks again is told as the prefix followed by `w`
+--- or `W`, or as their `<Plug>` mapping.
 ---
 --- Raises an error when the current buffer holds no file, and the
 --- configuration's or the explain home's errors.
@@ -138,7 +138,7 @@ function M.write(order)
     model = order.deep and settings.deep_model or settings.model,
     effort = order.deep and settings.deep_effort or nil,
     timeout_ms = order.deep and settings.deep_timeout_ms or settings.timeout_ms,
-    keys = prefix and { accept = prefix .. 'Va', reject = prefix .. 'Vr', diff = prefix .. 'Vd' }
+    keys = prefix and { accept = prefix .. 'Wa', reject = prefix .. 'Wr', diff = prefix .. 'Wd' }
       or nil,
     ask_key = prefix and prefix .. (order.deep and 'W' or 'w') or plug,
   })

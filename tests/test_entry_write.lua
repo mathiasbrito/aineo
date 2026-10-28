@@ -260,19 +260,19 @@ end
 
 T['deciding in Visual mode'] = MiniTest.new_set({ parametrize = { { '\\w' }, { '\\W' } } })
 
-T['deciding in Visual mode']['replaces the selected lines once \\Va accepts, and \\Vr leaves them'] = function(
+T['deciding in Visual mode']['replaces the selected lines once \\Wa accepts, and \\Wr leaves them'] = function(
   keys
 )
   start(REPLACING_THE_REQUEST)
   child.cmd('3')
   press('V', keys)
   wait_for_preview()
-  press('\\Vr')
+  press('\\Wr')
   local rejected = child.api.nvim_buf_get_lines(0, 0, -1, false)
   press('V', keys)
   wait_for_preview()
 
-  press('\\Va')
+  press('\\Wa')
 
   eq(rejected, CODE)
   eq(
@@ -348,7 +348,7 @@ end
 
 T['the keys']['of code whose lines changed name the key that asked it, which asks again'] = function()
   local stale_head =
-    '┊ the lines under the written code changed · \\Vr rejects · \\W asks again'
+    '┊ the lines under the written code changed · \\Wr rejects · \\W asks again'
   start(REPLACING_THE_REQUEST)
   child.cmd('3')
   press('V', '\\W')
@@ -386,6 +386,74 @@ T['the keys']['with no prefix name the <Plug> mappings that reject and ask again
   local rows = screen_rows()
   local head_row = vim.fn.index(rows, stale_head[1]) + 1
   eq(vim.list_slice(rows, head_row, head_row + 1), stale_head)
+end
+
+--- Whether each of `keys` is mapped in Normal mode in the child's current
+--- buffer.
+---
+---@param keys string[]
+---@return boolean[]
+local function mapped(keys)
+  return child.lua(
+    [[return vim.tbl_map(function(key)
+      return vim.fn.maparg(key, 'n') ~= ''
+    end, ...)]],
+    { keys }
+  )
+end
+
+--- The keys a proposal shown can map, the fix's then the written code's.
+local PROPOSAL_KEYS = { '\\Va', '\\Vr', '\\Vd', '\\Wa', '\\Wr', '\\Wd' }
+
+T['the keys']['of written code shown are \\Wa, \\Wr and \\Wd, never the fix’s, until it goes'] = function()
+  start(REPLACING_THE_REQUEST)
+  child.cmd('3')
+  press('V', '\\w')
+  wait_for_preview()
+  local shown = mapped(PROPOSAL_KEYS)
+
+  child.lua("require('aineo.explain').reject_fix(vim.api.nvim_get_current_buf())")
+
+  eq(shown, { false, false, false, true, true, true })
+  eq(mapped(PROPOSAL_KEYS), { false, false, false, false, false, false })
+end
+
+T['the keys']['of written code shown are named in its head row'] = function()
+  start(REPLACING_THE_REQUEST)
+  child.cmd('3')
+
+  press('V', '\\w')
+  wait_for_preview()
+
+  eq(
+    vim.tbl_contains(
+      screen_rows(),
+      '┊ read-only until \\Wa accepts or \\Wr rejects · \\Wd shows the diff'
+    ),
+    true
+  )
+end
+
+T['the keys']['of written code shown leave \\W alone to ask for code once they time out'] = function()
+  start(REPLACING_THE_REQUEST)
+  child.cmd('3')
+  press('V', '\\w')
+  wait_for_preview()
+
+  press('\\W')
+
+  eq(in_a_float(), true)
+end
+
+T['the keys']['of written code shown leave a \\Wa of the user’s as it is'] = function()
+  start(REPLACING_THE_REQUEST)
+  child.lua([[vim.keymap.set('n', '\\Wa', '<Cmd>let g:mine = 1<CR>')]])
+  child.cmd('3')
+
+  press('V', '\\w')
+  wait_for_preview()
+
+  eq(child.lua_get([[vim.fn.maparg('\\Wa', 'n')]]), '<Cmd>let g:mine = 1<CR>')
 end
 
 T['the keys']['have their <Plug> mappings in Normal and in Visual mode'] = function()
