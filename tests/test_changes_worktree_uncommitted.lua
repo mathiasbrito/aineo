@@ -807,14 +807,18 @@ T['the refresh']['of the watch reads another worktree’s Uncommitted again, the
   local agent = add_worktree(top, 'agent', 'agent')
   git_repo.write(agent, 'notes.txt', { 'agent' })
   child.lua(WATCH_IN_HAND)
+  child.lua(COUNT_GIT_READS)
   begin_and_show(top)
   go_to_commits_line(5)
   expect_lines(FILES, { 'Files in: Uncommitted — agent (agent)', '  M notes.txt' })
   git_repo.write(agent, 'new.txt', { 'new' })
+  wait_for_the_reads(1)
+  local lists_before = child.lua_get('_G.git_answered.list_worktrees')
 
   child.lua('_G.on_change(nil, { files_changed = false, branch_moved = false })')
 
-  expect_lines(FILES, { 'Files in: Uncommitted — agent (agent)', '  M notes.txt', '  ? new.txt' })
+  wait_for_the_reads(lists_before + 1)
+  eq(lines_of(FILES), { 'Files in: Uncommitted — agent (agent)', '  M notes.txt', '  ? new.txt' })
   eq(commits_cursor_line(), 5)
 end
 
