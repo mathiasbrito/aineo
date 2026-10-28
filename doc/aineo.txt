@@ -2043,14 +2043,19 @@ removes a fix: the buffer is read-only meanwhile, its 'modifiable' off, so a
 key that would edit it gets Neovim's own `E21` and changes nothing, and the
 head row says so: `read-only until \Va accepts or \Vr rejects · \Vd shows the
 diff`; with 'modifiable' set back on it says `\Va accepts · \Vr rejects · \Vd
-shows the diff`. The buffer gets its 'modifiable' back, as it was before the
-fix, when the fix goes. Accepting first checks again that the lines under each
-edit are exactly its old lines and that the edits still stand in their order,
-none sharing a line with the next; when not, nothing changes and you are told
-to ask again. Otherwise every edit is applied, as one undo step (`u` takes
-them all back), the file is not written, the issue is no longer shown, and you
-are told `aineo: fix applied (u undoes it)`. Rejecting changes nothing, and
-the issue stays.
+shows the diff`. When the fix is drawn, or turned to the diff view or back, a
+window showing the buffer that does not show its first row, as when the fixed
+line is the window's top line, is scrolled so that it does, its cursor staying
+on its line and column; a window that shows it is left as it is, and so is any
+scrolling you do later. A fix taller than the window shows its last rows above
+the cursor's line, which Neovim keeps on the screen. The buffer gets its
+'modifiable' back, as it was before the fix, when the fix goes. Accepting
+first checks again that the lines under each edit are exactly its old lines
+and that the edits still stand in their order, none sharing a line with the
+next; when not, nothing changes and you are told to ask again. Otherwise every
+edit is applied, as one undo step (`u` takes them all back), the file is not
+written, the issue is no longer shown, and you are told `aineo: fix applied (u
+undoes it)`. Rejecting changes nothing, and the issue stays.
 
 When the code under a fix changes anyway, 'modifiable' set back on, a
 reload, or a plugin's edit, the fix stays, shown as the diff view so the code
@@ -2080,18 +2085,17 @@ Normal mode it opens an empty float, titled `Write code`, in which you type
 the request: `<CR>` in Normal mode sends it, `q` and `<Esc>` cancel, a request
 of white space alone is not sent, and nothing you typed is kept for the next
 request; the code goes below the cursor's line, followed while you type: lines
-added or deleted above it move it, and when the line itself is deleted
-nothing is sent and you are told `aineo: the line asked about is gone`. On a
-blank line, empty or white space alone, the code goes in its place instead,
-leaving no blank line there; an empty new file is written from its first
-line. A
-`claude.cmd` that cannot be run is told once, from the float as from Visual
+added or deleted above it move it, and when the line itself is deleted nothing
+is sent and you are told `aineo: the line asked about is gone`. On a blank
+line, empty or spaces and tabs alone, the code goes in its place instead,
+leaving no blank line there; an empty new file is written from its first line.
+A `claude.cmd` that cannot be run is told once, from the float as from Visual
 mode. In Visual mode the lines the selection spans, whole lines whatever the
-kind of selection, are the request,
-sent at once as they are written, comment markers and all, with no float; the
-code replaces them. Selected lines of white space alone are refused with one
-message, and nothing is sent. `:Aineo write` does the same, with a range for
-the lines that hold the request (|:Aineo-write|).
+kind of selection, are the request, sent at once as they are written, comment
+markers and all, with no float; the code replaces them. Selected lines of
+white space alone are refused with one message, and nothing is sent. `:Aineo
+write` does the same, with a range for the lines that hold the request
+(|:Aineo-write|).
 
 `\w` asks a Claude Code of its own, as `\v` does, with the file alone and no
 tool, at its own effort, with the model `write.model`, the cheapest by
@@ -2111,16 +2115,19 @@ has the shape of a fix's (|aineo-explain-fix|): a summary of what the code
 does and one edit of this file. Below the cursor, the edit replaces the
 cursor's line with itself followed by the code, in the file's style and
 indented as the code around it; on a blank line, it replaces that line with
-the code alone; for a request in the file, it replaces
-exactly the lines of the request with the code, the first indented as the
-first of them. Every line of the buffer is sent too, numbered.
+the code alone, and a copy of that line the code starts with is dropped; for a
+request in the file, it replaces exactly the lines of the request with the
+code, the first indented as the first of them. Every line of the buffer is
+sent too, numbered.
 
 aineo places the edit as it places a fix's, byte for byte, and refuses,
 telling you why, once, an answer that is not one edit of exactly those lines,
-or, below the cursor, one that does not keep the cursor's line as it is: the
-code never changes a line outside the request. When the buffer changed while
-the code was asked, nothing is shown: `aineo: the buffer changed while the
-code was written; ask again`. An answer with no edits tells its summary.
+or, below the cursor, one that does not keep the cursor's line as it is, or,
+on a blank line, one whose old line is not that line exactly (`the edit's old
+line does not match the cursor's line exactly`): the code never changes a line
+outside the request. When the buffer changed while the code was asked, nothing
+is shown: `aineo: the buffer changed while the code was written; ask again`.
+An answer with no edits tells its summary.
 
 The code shows as a fix does, and is decided with keys of its own: the buffer
 is read-only until `\Wa` accepts it, as one undo step, writing no file, or
@@ -2132,13 +2139,13 @@ asks for code meanwhile, once 'timeoutlen' has passed with no `a`, `r` or `d`
 after it. The head row names these keys: `read-only until \Wa accepts or \Wr
 rejects · \Wd shows the diff`. Shown as a diff from the buffer's first line,
 as code always is in a file of one line, the head row and the why rows are
-drawn below the old lines rather than above them, where Neovim would not show
-them; a fix's too. The stale mark and the 'conceallevel' are the fix's, in its
-own words: its head row is labelled `write`, a stale head row says `the lines
-under the written code changed · \Wr rejects · \w asks again`, accepting it
-then tells you `aineo: the lines under the written code changed; ask again`,
-and `\Wd` tells you `aineo: the written code is stale: \Wr rejects, \w asks
-again`.
+drawn once, below the old lines and before the new ones, rather than above
+line 1, which a window shows only once scrolled up past it; a fix's too. The
+stale mark and the 'conceallevel' are the fix's, in its own words: its head
+row is labelled `write`, a stale head row says `the lines under the written
+code changed · \Wr rejects · \w asks again`, accepting it then tells you
+`aineo: the lines under the written code changed; ask again`, and `\Wd` tells
+you `aineo: the written code is stale: \Wr rejects, \w asks again`.
 Accepting writes the code below a cursor's line that is not blank without
 touching that line, so its marks and extmarks stay where they were (a fix
 whose new lines start with its old lines is applied the same way). Above it,
@@ -3544,7 +3551,8 @@ you turn the prefix off, or when a prefix key is yours: >lua
 <Plug>(aineo-write)
 			In Normal mode, opens the float in which you type a
 			request, and writes the code for it below the
-			cursor's line; in Visual mode, writes code for the
+			cursor's line, or in its place when that line is
+			blank; in Visual mode, writes code for the
 			request the selected lines hold, in their place,
 			leaving Visual mode (|aineo-write|).
 
