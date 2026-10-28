@@ -794,10 +794,12 @@ T['the refresh'] = MiniTest.new_set()
 
 --- The Lua that replaces, in the child, the git home's watch with one that
 --- calls back only when a case calls `_G.on_change(failure, change)`, so
---- that only what a case asks for reads the pane.
+--- that only what a case asks for reads the pane: `_G.on_change` is the
+--- first watch's, the session's own repository's; a later one, of a
+--- worktree whose Uncommitted is chosen, never calls back.
 local WATCH_IN_HAND = [[
   require('aineo.git').watch_repository = function(_, on_change)
-    _G.on_change = on_change
+    _G.on_change = _G.on_change or on_change
     return { stop = function() end, watches_subdirectories = true }
   end
 ]]
@@ -1012,6 +1014,78 @@ T['the refresh']['of a second report of the worktree reads its chosen Uncommitte
 
   expect_lines(FILES, { 'Files in: Uncommitted — agent-1 (feature/a)', '  ? a.txt', '  ? b.txt' })
   eq(commits_cursor_line(), 2)
+end
+
+T['the watch of the worktree chosen'] = MiniTest.new_set()
+
+T['the watch of the worktree chosen']['lists a file the agent writes in its folder, outside the editor’s'] = function()
+  local top = git_repo.create('wtuncommitted-watched', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  git_repo.write(agent, 'notes.txt', { 'agent' })
+  begin_and_show(top)
+  go_to_commits_line(5)
+  expect_lines(FILES, { 'Files in: Uncommitted — agent (agent)', '  M notes.txt' })
+
+  git_repo.write(agent, 'new.txt', { 'new' })
+
+  expect_lines(FILES, { 'Files in: Uncommitted — agent (agent)', '  M notes.txt', '  ? new.txt' })
+end
+
+--- The Lua that keeps, in the child, the top level of every repository the
+--- git home is asked to watch in `_G.watched`, `true` while that watch runs
+--- and `false` once it is stopped, the watch itself left to run.
+local RECORD_WATCHES = [[
+  local git = require('aineo.git')
+  local watch_repository = git.watch_repository
+  _G.watched = {}
+  git.watch_repository = function(found, ...)
+    local started, failure = watch_repository(found, ...)
+    if started then
+      _G.watched[found.top] = true
+      local stop = started.stop
+      started.stop = function()
+        _G.watched[found.top] = false
+        stop()
+      end
+    end
+    return started, failure
+  end
+]]
+
+--- Waits until the child's watch of the folder `top` runs, when `running`,
+--- or is stopped, and asserts it (`RECORD_WATCHES`).
+---
+---@param top string
+---@param running boolean
+local function expect_watched(top, running)
+  vim.wait(git_repo.PATIENCE_MS, function()
+    return child.lua_get('_G.watched[...]', { top }) == running
+  end, 10)
+  eq(child.lua_get('_G.watched[...]', { top }), running)
+end
+
+T['the watch of the worktree chosen']['stops when another line is chosen, starts again on the line, and stops when the pane hides'] = function()
+  local top = git_repo.create('wtuncommitted-watch-stops', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  child.lua(RECORD_WATCHES)
+  begin_and_show(top)
+  go_to_commits_line(5)
+  expect_watched(agent, true)
+
+  go_to_commits_line(2)
+  expect_watched(agent, false)
+  go_to_commits_line(5)
+  expect_watched(agent, true)
+  child.lua([[
+    for _, window in ipairs(vim.fn.win_findbuf(vim.fn.bufnr('aineo://changes-files'))) do
+      vim.api.nvim_win_set_buf(window, vim.api.nvim_create_buf(true, false))
+    end
+    for _, window in ipairs(vim.fn.win_findbuf(vim.fn.bufnr('aineo://changes-commits'))) do
+      vim.api.nvim_win_set_buf(window, vim.api.nvim_create_buf(true, false))
+    end
+  ]])
+
+  expect_watched(agent, false)
 end
 
 return T
