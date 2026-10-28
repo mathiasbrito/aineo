@@ -629,9 +629,14 @@ local function scoped_to_the_agent_worktree(name)
     'Session work',
     'No commits on this session',
     'Worktree agent (agent)',
+    'Uncommitted — agent (agent)',
     git_repo.commit_line(commit, 'Agent one'),
   }
-  local scope_view = { 'Worktree agent (agent)', git_repo.commit_line(commit, 'Agent one') }
+  local scope_view = {
+    'Worktree agent (agent)',
+    'Uncommitted — agent (agent)',
+    git_repo.commit_line(commit, 'Agent one'),
+  }
   entry.press(child, '\\g')
   expect_lines(COMMITS, default_view)
   entry.press(child, 's')

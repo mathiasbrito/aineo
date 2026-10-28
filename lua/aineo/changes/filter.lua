@@ -1,18 +1,18 @@
 --- The filters the commits window selects and the files window lists
 --- under: *Uncommitted*, *Session work*, one commit of the session, what
 --- landed in the working branch or one commit of it, another worktree's
---- whole change or one of its commits, or a local branch's whole change or
---- one of its commits.
+--- whole change, its *Uncommitted* or one of its commits, or a local
+--- branch's whole change or one of its commits.
 
 local M = {}
 
 --- What the files window lists the files of.
 ---@class aineo.changes.Filter
----@field kind 'uncommitted'|'session_work'|'commit'|'worktree'|'landed'|'branch' what differs from `HEAD`; what differs from the session's base; what one commit changed; what differs in another worktree from its own base; what landed in the working branch since the session's base; or what a local branch gained since its base
+---@field kind 'uncommitted'|'session_work'|'commit'|'worktree'|'landed'|'branch' what differs from `HEAD`, in the editor's own worktree or in the other worktree `worktree` names; what differs from the session's base; what one commit changed; what differs in another worktree from its own base; what landed in the working branch since the session's base; or what a local branch gained since its base
 ---@field commit? aineo.git.Commit the commit, for a `commit` filter
 ---@field branch? string the local branch's name, for a `branch` filter and for a `commit` filter of one of its commits; nil for every other
 ---@field landed? string the working branch's name, for a `landed` filter and for a `commit` filter of one of the commits that landed in it; nil for every other
----@field worktree? aineo.changes.WorktreeSection the worktree other than the editor's that the files are read in, for a `worktree` filter and for a `commit` filter of one of its commits; nil for the editor's own
+---@field worktree? aineo.changes.WorktreeSection the worktree other than the editor's that the files are read in, for a `worktree` filter, for an `uncommitted` filter of that worktree and for a `commit` filter of one of its commits; nil for the editor's own
 ---@field graph? true for a `commit` filter of a commit of the commit graph; nil for every other
 
 --- The filter of the files that differ from `HEAD`, staged or not, and the
@@ -39,6 +39,16 @@ end
 ---@return aineo.changes.Filter
 function M.of_worktree(worktree)
   return { kind = 'worktree', worktree = worktree }
+end
+
+--- The filter of the files that differ, in the worktree `worktree`, from
+--- that worktree's own `HEAD`, staged or not, and its untracked ones: its
+--- *Uncommitted*.
+---
+---@param worktree aineo.changes.WorktreeSection
+---@return aineo.changes.Filter
+function M.of_worktree_uncommitted(worktree)
+  return { kind = 'uncommitted', worktree = worktree }
 end
 
 --- The filter of the files `commit` changed, read in the worktree
@@ -118,7 +128,7 @@ end
 --- `landed`. Another worktree's are told from the editor's own, and from
 --- each other, by the worktree's top level and a byte no path holds, then
 --- the commit's id, or two such bytes and the kind for the worktree's
---- whole change. A local branch's whole change and its commits are told
+--- whole change and for its *Uncommitted*. A local branch's whole change and its commits are told
 --- by that byte, `branch`, a second such byte and the branch's name, then,
 --- for a commit, a third and its id. A commit of the commit graph is told
 --- by that byte, `graph`, a second such byte and its id.

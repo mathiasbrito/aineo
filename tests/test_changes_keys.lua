@@ -386,10 +386,11 @@ T['h']['on a file under another worktree’s commit shows the file from that com
     'Session work',
     'No commits on this session',
     'Worktree agent (agent)',
+    'Uncommitted — agent (agent)',
     git_repo.commit_line(second, 'Agent second'),
     git_repo.commit_line(first, 'Agent first'),
   })
-  go_to_commits_line(6)
+  go_to_commits_line(7)
   expect_lines(FILES, {
     'Files in: ' .. git_repo.commit_line(first, 'Agent first (worktree agent)'),
     '  M notes.txt',
@@ -414,6 +415,7 @@ T['h']['on a file under another worktree’s whole change shows the file from th
     'Session work',
     'No commits on this session',
     'Worktree agent (agent)',
+    'Uncommitted — agent (agent)',
     git_repo.commit_line(first, 'Agent first'),
   })
   go_to_commits_line(4)
@@ -548,6 +550,7 @@ local function pane_under_another_worktree(case)
     'Session work',
     'No commits on this session',
     'Worktree agent (agent)',
+    'Uncommitted — agent (agent)',
     git_repo.commit_line(first, 'Agent first'),
   })
   go_to_commits_line(4)

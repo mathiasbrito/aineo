@@ -289,9 +289,11 @@ local function default_view_of(work, own)
     'Landed in origin/dev',
     commit_line(work.landed, 'Landed'),
     'Worktree agent (agent)',
+    'Uncommitted — agent (agent)',
     commit_line(work.agent_two, 'Agent two'),
     commit_line(work.agent_one, 'Agent one'),
     'Worktree other (other)',
+    'Uncommitted — other (other)',
     commit_line(work.other_one, 'Other one'),
   }
 end
@@ -362,8 +364,10 @@ T['s']['offers the other worktrees, each marked and named by folder and branch, 
     'Session work',
     'No commits on this session',
     'Worktree agent (feature/x)',
+    'Uncommitted — agent (feature/x)',
     'No commits in this worktree',
     'Worktree loose (detached)',
+    'Uncommitted — loose (detached)',
     'No commits in this worktree',
   })
 
@@ -383,6 +387,7 @@ T['s']['offers the same list from the files window'] = function()
     'Session work',
     'No commits on this session',
     'Worktree agent (agent)',
+    'Uncommitted — agent (agent)',
     'No commits in this worktree',
   })
 
@@ -415,6 +420,7 @@ T['s']['is mapped again in a pane buffer made anew'] = function()
     'Session work',
     'No commits on this session',
     'Worktree agent (agent)',
+    'Uncommitted — agent (agent)',
     'No commits in this worktree',
   })
 
@@ -434,6 +440,7 @@ T['picking']['a worktree shows it alone: its heading, in the colour of filters, 
 
   expect_pane_lines('module', 'commits', {
     'Worktree agent (agent)',
+    'Uncommitted — agent (agent)',
     commit_line(work.agent_two, 'Agent two'),
     commit_line(work.agent_one, 'Agent one'),
   })
@@ -478,7 +485,7 @@ T['picking']['shows the cursor on a commit of the scope as the files of that com
   })
 
   enter_window_of('module', 'commits')
-  child.type_keys('2G')
+  child.type_keys('3G')
 
   expect_pane_lines('module', 'files', {
     'Files in: ' .. commit_line(work.agent_two, 'Agent two') .. ' (worktree agent)',
@@ -501,6 +508,7 @@ T['picking']['under a scope offers the same list, and another worktree replaces 
 
   expect_pane_lines('module', 'commits', {
     'Worktree other (other)',
+    'Uncommitted — other (other)',
     commit_line(work.other_one, 'Other one'),
   })
   expect_pane_lines('module', 'files', { 'Files in: Worktree other (other)', '  A other.txt' })
@@ -563,6 +571,7 @@ T['s']['opens its picker at once while a global map starts with s'] = function()
     'Session work',
     'No commits on this session',
     'Worktree agent (agent)',
+    'Uncommitted — agent (agent)',
     'No commits in this worktree',
   })
   child.lua("vim.o.timeoutlen = 20000; vim.keymap.set('n', 'sa', function() end)")
@@ -593,6 +602,7 @@ T['s']['ignores an answer of the picker that is not an item it offered']['answer
     'Session work',
     'No commits on this session',
     'Worktree agent (agent)',
+    'Uncommitted — agent (agent)',
     'No commits in this worktree',
   })
   press_s('module', 'commits')
@@ -605,6 +615,7 @@ T['s']['ignores an answer of the picker that is not an item it offered']['answer
     'Session work',
     'No commits on this session',
     'Worktree agent (agent)',
+    'Uncommitted — agent (agent)',
     'No commits in this worktree',
   })
 end
@@ -688,6 +699,7 @@ T['s']['tells a picker that raises from a Lua file without the position, on its 
     'Session work',
     'No commits on this session',
     'Worktree agent (agent)',
+    'Uncommitted — agent (agent)',
     'No commits in this worktree',
   })
   child.lua(
@@ -708,6 +720,7 @@ T['s']['tells once, as an error, a picker that raises'] = function()
     'Session work',
     'No commits on this session',
     'Worktree agent (agent)',
+    'Uncommitted — agent (agent)',
     'No commits in this worktree',
   })
   child.lua("vim.ui.select = function() error('the menu failed', 0) end")
@@ -771,6 +784,7 @@ T['toggling']['from the default view shows the scope view again, the scope kept'
 
   expect_pane_lines('module', 'commits', {
     'Worktree agent (agent)',
+    'Uncommitted — agent (agent)',
     commit_line(work.agent_two, 'Agent two'),
     commit_line(work.agent_one, 'Agent one'),
   })
@@ -782,7 +796,7 @@ T['toggling']['keeps a commit of the scope chosen, the cursor on its line in the
   press_s('module', 'commits')
   child.lua('_G.choose(1)')
   enter_window_of('module', 'commits')
-  child.type_keys('3G')
+  child.type_keys('4G')
   expect_pane_lines('module', 'files', {
     'Files in: ' .. commit_line(work.agent_one, 'Agent one') .. ' (worktree agent)',
     '  M notes.txt',
@@ -791,7 +805,7 @@ T['toggling']['keeps a commit of the scope chosen, the cursor on its line in the
   toggle('module')
 
   expect_pane_lines('module', 'commits', default_view_of(work, work.own))
-  eq(commits_cursor('module'), { 8, 0 })
+  eq(commits_cursor('module'), { 9, 0 })
   expect_pane_lines('module', 'files', {
     'Files in: ' .. commit_line(work.agent_one, 'Agent one') .. ' (worktree agent)',
     '  M notes.txt',
@@ -854,6 +868,7 @@ T['toggling']['while the pane is not shown changes nothing: the view it was left
   child.lua('_G.choose(1)')
   expect_pane_lines('module', 'commits', {
     'Worktree agent (agent)',
+    'Uncommitted — agent (agent)',
     commit_line(work.agent_two, 'Agent two'),
     commit_line(work.agent_one, 'Agent one'),
   })
@@ -927,6 +942,7 @@ T['a scope gone']['is cleared at the read that no longer lists its worktree: the
     'Landed in origin/dev',
     commit_line(work.landed, 'Landed'),
     'Worktree other (other)',
+    'Uncommitted — other (other)',
     commit_line(work.other_one, 'Other one'),
   })
   expect_pane_lines('module', 'files', { 'Files in: Session work', '  A own.txt' })
@@ -951,6 +967,7 @@ T['a scope gone']['is cleared while hidden too, and a worktree listed again does
     'Landed in origin/dev',
     commit_line(work.landed, 'Landed'),
     'Worktree other (other)',
+    'Uncommitted — other (other)',
     commit_line(work.other_one, 'Other one'),
   })
   git_repo.git(work.top, { 'worktree', 'add', '--quiet', work.agent, 'agent' })
@@ -975,6 +992,7 @@ T['a scope gone']['between the picker and the pick tells that the worktree is go
     'Landed in origin/dev',
     commit_line(work.landed, 'Landed'),
     'Worktree other (other)',
+    'Uncommitted — other (other)',
     commit_line(work.other_one, 'Other one'),
   })
 
@@ -993,7 +1011,7 @@ T['a scope’s commit']['no longer listed after an amend becomes the scope’s w
   press_s('module', 'commits')
   child.lua('_G.choose(1)')
   enter_window_of('module', 'commits')
-  child.type_keys('2G')
+  child.type_keys('3G')
   expect_pane_lines('module', 'files', {
     'Files in: ' .. commit_line(work.agent_two, 'Agent two') .. ' (worktree agent)',
     '  A agent.txt',
@@ -1005,6 +1023,7 @@ T['a scope’s commit']['no longer listed after an amend becomes the scope’s w
 
   expect_pane_lines('module', 'commits', {
     'Worktree agent (agent)',
+    'Uncommitted — agent (agent)',
     commit_line(amended, 'Amended'),
     commit_line(work.agent_one, 'Agent one'),
   })
@@ -1052,6 +1071,7 @@ T['following another session']['keeps a scope picked before the first session wa
   wait_for_the_reads()
   expect_pane_lines('module', 'commits', {
     'Worktree agent (agent)',
+    'Uncommitted — agent (agent)',
     commit_line(work.agent_two, 'Agent two'),
     commit_line(work.agent_one, 'Agent one'),
   })
@@ -1108,6 +1128,7 @@ T['a scope']['shown alone chooses its whole change again when the commits buffer
 
   expect_pane_lines('module', 'commits', {
     'Worktree agent (agent)',
+    'Uncommitted — agent (agent)',
     commit_line(work.agent_two, 'Agent two'),
     commit_line(work.agent_one, 'Agent one'),
   })
@@ -1142,6 +1163,7 @@ T['a scope']['lists the failure line of its worktree’s read under its heading,
 
   expect_pane_lines('module', 'commits', {
     'Worktree agent (agent)',
+    'Uncommitted — agent (agent)',
     'The last refresh failed: broken',
     commit_line(work.agent_two, 'Agent two'),
     commit_line(work.agent_one, 'Agent one'),
@@ -1172,6 +1194,7 @@ T['a scope']['leaves out the line saying the session’s own read failed, which 
 
   expect_pane_lines('module', 'commits', {
     'Worktree agent (agent)',
+    'Uncommitted — agent (agent)',
     commit_line(work.agent_two, 'Agent two'),
     commit_line(work.agent_one, 'Agent one'),
   })
@@ -1184,9 +1207,11 @@ T['a scope']['leaves out the line saying the session’s own read failed, which 
     'Landed in origin/dev',
     commit_line(work.landed, 'Landed'),
     'Worktree agent (agent)',
+    'Uncommitted — agent (agent)',
     commit_line(work.agent_two, 'Agent two'),
     commit_line(work.agent_one, 'Agent one'),
     'Worktree other (other)',
+    'Uncommitted — other (other)',
     commit_line(work.other_one, 'Other one'),
   })
 end
@@ -1215,9 +1240,11 @@ T['a scope']['leaves out the line saying the other worktrees could not be listed
     commit_line(work.landed, 'Landed'),
     'The other worktrees could not be listed: broken',
     'Worktree agent (agent)',
+    'Uncommitted — agent (agent)',
     commit_line(work.agent_two, 'Agent two'),
     commit_line(work.agent_one, 'Agent one'),
     'Worktree other (other)',
+    'Uncommitted — other (other)',
     commit_line(work.other_one, 'Other one'),
   })
 
@@ -1225,6 +1252,7 @@ T['a scope']['leaves out the line saying the other worktrees could not be listed
 
   expect_pane_lines('module', 'commits', {
     'Worktree agent (agent)',
+    'Uncommitted — agent (agent)',
     commit_line(work.agent_two, 'Agent two'),
     commit_line(work.agent_one, 'Agent one'),
   })
@@ -1238,6 +1266,7 @@ T['a scope']['is a changes home’s own: another tab’s home still shows the de
     'Session work',
     'No commits on this session',
     'Worktree agent (agent)',
+    'Uncommitted — agent (agent)',
     'No commits in this worktree',
   }
   start_copy('first', top)
@@ -1247,7 +1276,11 @@ T['a scope']['is a changes home’s own: another tab’s home still shows the de
 
   press_s('first', 'commits')
   child.lua('_G.choose(1)')
-  expect_pane_lines('first', 'commits', { 'Worktree agent (agent)', 'No commits in this worktree' })
+  expect_pane_lines(
+    'first',
+    'commits',
+    { 'Worktree agent (agent)', 'Uncommitted — agent (agent)', 'No commits in this worktree' }
+  )
   child.lua(COUNT_GIT_CALLS)
 
   refresh('second')
@@ -1285,9 +1318,11 @@ T['a scope']['leaves the reads as they are: a commit of the editor’s own is li
     'Landed in origin/dev',
     commit_line(work.landed, 'Landed'),
     'Worktree agent (agent)',
+    'Uncommitted — agent (agent)',
     commit_line(work.agent_two, 'Agent two'),
     commit_line(work.agent_one, 'Agent one'),
     'Worktree other (other)',
+    'Uncommitted — other (other)',
     commit_line(work.other_one, 'Other one'),
   })
 end
@@ -1431,9 +1466,11 @@ T['branches in s']['leave out a working branch that names a local branch alone, 
     'Landed in feature/dev',
     commit_line(work.landed, 'Landed'),
     'Worktree agent (agent)',
+    'Uncommitted — agent (agent)',
     commit_line(work.agent_two, 'Agent two'),
     commit_line(work.agent_one, 'Agent one'),
     'Worktree other (other)',
+    'Uncommitted — other (other)',
     commit_line(work.other_one, 'Other one'),
   })
 

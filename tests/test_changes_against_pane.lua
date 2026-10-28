@@ -477,7 +477,7 @@ T['the second heading line']['under a commit of another worktree says its parent
   local _, commit = with_agent_worktree(top)
   begin_and_show(top)
 
-  go_to_commits_line(5, 'Agent work')
+  go_to_commits_line(6, 'Agent work')
 
   git_repo.wait_until('the files window lists the commit', function()
     return vim.startswith(lines_of(FILES)[1] or '', 'Files in: ' .. short(commit))

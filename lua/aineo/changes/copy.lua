@@ -970,8 +970,11 @@ function M.new(label)
   local WORKTREE_GONE = { reason = 'failed', message = 'the worktree is gone' }
 
   --- Reads the files of the selected filter, a filter of another worktree,
-  --- in that worktree, and calls `done(failure, listing)`: a commit's files in
-  --- the repository the commits window found for the worktree; its whole
+  --- in that worktree, and calls `done(failure, listing)`: a commit's files,
+  --- and its *Uncommitted* from its own `HEAD`, in the repository the commits
+  --- window found for the worktree — an *Uncommitted* whose worktree it found
+  --- none for fails with that worktree's failure, else with `WORKTREE_GONE`;
+  --- its whole
   --- change from its base, read again now (`aineo.changes.worktrees`'
   --- `read_worktree()`), which fails with `WORKTREE_GONE` when the worktree's
   --- directory is gone. The listing names the worktree as the read found it.
@@ -983,6 +986,16 @@ function M.new(label)
     local section = section_as_last_read(selected.worktree)
     if selected.kind == 'commit' then
       git.commit_files(section.repository, selected.commit.id, function(failure, changes)
+        done(failure, { filter = selected, changes = changes, worktree = section })
+      end, options)
+      return
+    end
+    if selected.kind == 'uncommitted' and not section.repository then
+      done(section.failure or WORKTREE_GONE, { filter = selected, worktree = section })
+      return
+    end
+    if selected.kind == 'uncommitted' then
+      git.uncommitted_files(section.repository, function(failure, changes)
         done(failure, { filter = selected, changes = changes, worktree = section })
       end, options)
       return
@@ -1099,12 +1112,15 @@ function M.new(label)
   --- Reads the files of the selected filter again, and shows them
   --- (`ask_for_files()`), when asked with `with_own` — the editor's own
   --- files may differ — or, always, when the filter is another worktree's
-  --- whole change, which a commit in that worktree changes whatever the
-  --- editor's own files do.
+  --- whole change or its *Uncommitted*, which a change in that worktree
+  --- changes whatever the editor's own files do.
   ---
   ---@param with_own boolean
   local function read_files(with_own)
-    ask_for_files(with_own or session.selected.kind == 'worktree')
+    local selected = session.selected
+    local reads_other_working_tree = selected.kind == 'worktree'
+      or (selected.kind == 'uncommitted' and selected.worktree ~= nil)
+    ask_for_files(with_own or reads_other_working_tree)
   end
 
   --- Selects `selected`, the commits window's cursor to be put on its line
