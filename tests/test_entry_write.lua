@@ -456,6 +456,25 @@ T['the keys']['of written code shown leave a \\Wa of the user’s as it is'] = f
   eq(child.lua_get([[vim.fn.maparg('\\Wa', 'n')]]), '<Cmd>let g:mine = 1<CR>')
 end
 
+T['the keys']['of a fix leave written code as it is, and say which keys apply'] = function()
+  start(REPLACING_THE_REQUEST)
+  child.cmd('3')
+  press('V', '\\w')
+  wait_for_preview()
+  child.lua([[vim.keymap.set('n', 'Q', '<Plug>(aineo-fix-accept)')]])
+
+  press('Q')
+
+  eq(child.api.nvim_buf_get_lines(0, 0, -1, false), CODE)
+  eq(explained.told(child), {
+    {
+      message = 'aineo: written code is shown here: \\Wa accepts it, \\Wr rejects it,'
+        .. ' \\Wd shows the diff',
+      level = vim.log.levels.INFO,
+    },
+  })
+end
+
 T['the keys']['have their <Plug> mappings in Normal and in Visual mode'] = function()
   start(REPLACING_THE_REQUEST)
 

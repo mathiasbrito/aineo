@@ -514,29 +514,35 @@ end
 
 --- Accepts the fix or the code written that `buffer` shows: its edits are
 --- applied as one undo step, and the file is not written
---- (`aineo.explain.fix`'s `accept()`).
+--- (`aineo.explain.fix`'s `accept()`); with `kind`, only a proposal of that
+--- kind, the user being told which keys apply to another.
 ---
 ---@param buffer integer
-function M.accept_fix(buffer)
-  fix.accept(buffer)
+---@param kind? 'fix'|'write'
+function M.accept_fix(buffer, kind)
+  fix.accept(buffer, kind)
 end
 
 --- Shows the fix or the code written that `buffer` shows as the diff view,
 --- its old lines struck through above its new lines, or as the overlay
---- again (`aineo.explain.fix`'s `toggle_diff()`).
+--- again (`aineo.explain.fix`'s `toggle_diff()`); with `kind`, only a
+--- proposal of that kind, the user being told which keys apply to another.
 ---
 ---@param buffer integer
-function M.toggle_fix_diff(buffer)
-  fix.toggle_diff(buffer)
+---@param kind? 'fix'|'write'
+function M.toggle_fix_diff(buffer, kind)
+  fix.toggle_diff(buffer, kind)
 end
 
 --- Rejects the fix or the code written that `buffer` shows, if any: its
 --- preview goes and the buffer stays as it reads (`aineo.explain.fix`'s
---- `reject()`).
+--- `reject()`); with `kind`, only a proposal of that kind, the user being
+--- told which keys apply to another.
 ---
 ---@param buffer integer
-function M.reject_fix(buffer)
-  fix.reject(buffer)
+---@param kind? 'fix'|'write'
+function M.reject_fix(buffer, kind)
+  fix.reject(buffer, kind)
 end
 
 --- Moves the cursor of `window` to the line of the next or the previous

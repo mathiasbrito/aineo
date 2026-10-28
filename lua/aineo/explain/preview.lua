@@ -885,6 +885,26 @@ function M.is_shown(buffer)
   return previews[buffer] ~= nil
 end
 
+--- The kind of the preview `buffer` shows (`aineo.explain.kinds`' `FIX` or
+--- `WRITE`), and what accepts it, rejects it and shows its diff, as its
+--- head row names them (`named_key()`); `nil` when it shows none.
+---
+---@param buffer integer
+---@return aineo.explain.Kind|nil kind
+---@return aineo.explain.FixKeys|nil keys
+function M.shown(buffer)
+  local preview = previews[buffer]
+  if not preview then
+    return nil
+  end
+  return preview.kind,
+    {
+      accept = named_key(preview, 'accept'),
+      reject = named_key(preview, 'reject'),
+      diff = named_key(preview, 'diff'),
+    }
+end
+
 --- Whether the new lines of `edit` start with its old lines, unchanged: it
 --- then only adds lines after them.
 ---

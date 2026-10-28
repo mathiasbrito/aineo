@@ -248,6 +248,24 @@ T['the preview keys']['of a fix are \\Va, \\Vr and \\Vd, never those of written 
   )
 end
 
+T['the preview keys']['of written code leave a fix as it is, and say which keys apply'] = function()
+  start()
+  press('\\Vf')
+  wait_for_answer()
+  child.lua([[vim.keymap.set('n', 'Q', '<Plug>(aineo-write-reject)')]])
+  child.lua('_G.told = {}')
+
+  press('Q')
+
+  eq(marks_in('aineo_explain_fix_drawn') > 0, true)
+  eq(explained.told(child), {
+    {
+      message = 'aineo: a fix is shown here: \\Va accepts it, \\Vr rejects it, \\Vd shows the diff',
+      level = vim.log.levels.INFO,
+    },
+  })
+end
+
 T['the preview keys']['with no prefix are none, and the head row names the <Plug> mappings'] = function()
   start_without_prefix()
 
