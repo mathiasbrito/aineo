@@ -1198,4 +1198,117 @@ T['the watch of the worktree chosen']['starts none for a worktree inside the edi
   eq(child.lua_get('_G.starts[...] or 0', { agent }), 0)
 end
 
+--- How many times the child started a watch of the folder `top`
+--- (`RECORD_WATCHES`).
+---
+---@param top string
+---@return integer
+local function starts_of(top)
+  return child.lua_get('_G.starts[...] or 0', { top })
+end
+
+T['the watch of the worktree chosen']['is started once while the line stays chosen, across reads of the pane'] = function()
+  local top = git_repo.create('wtuncommitted-watch-once', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  git_repo.write(agent, 'notes.txt', { 'agent' })
+  child.lua(RECORD_WATCHES)
+  child.lua(COUNT_GIT_READS)
+  begin_and_show(top)
+  go_to_commits_line(5)
+  expect_watched(agent, true)
+
+  child.lua("require('aineo.changes').refresh_shown_pane()")
+  wait_for_the_reads(2)
+  child.lua("require('aineo.changes').refresh_shown_pane()")
+  wait_for_the_reads(3)
+
+  eq(starts_of(agent), 1)
+end
+
+T['the watch of the worktree chosen']['is stopped as the editor quits'] = function()
+  local top = git_repo.create('wtuncommitted-watch-quit', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  local left = vim.fs.joinpath(git_repo.directory('wtuncommitted-watch-quit-left'), 'left.json')
+  child.lua(RECORD_WATCHES)
+  begin_and_show(top)
+  go_to_commits_line(5)
+  expect_watched(agent, true)
+  child.lua(
+    [[
+      local left, agent = ...
+      vim.api.nvim_create_autocmd('VimLeavePre', {
+        callback = function()
+          vim.fn.writefile({ vim.json.encode({ watched = _G.watched[agent] }) }, left)
+        end,
+      })
+    ]],
+    { left, agent }
+  )
+
+  child.lua_notify('vim.cmd("qall!")')
+
+  git_repo.wait_until('the quit recorded', function()
+    return vim.uv.fs_stat(left) ~= nil
+  end)
+  eq(vim.json.decode(vim.fn.readfile(left)[1]), { watched = false })
+end
+
+T['the watch of the worktree chosen']['is stopped when its home is let go, as when its tab closes'] = function()
+  local top = git_repo.create('wtuncommitted-watch-let-go', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  child.lua(RECORD_WATCHES)
+  child.lua(
+    [[
+      local directory = ...
+      _G.home = require('aineo.changes').new()
+      _G.home.begin_session({ directory = directory, show_diff = function() end })
+      _G.pane = _G.home.pane_buffers()
+      vim.api.nvim_win_set_buf(0, _G.pane.files)
+      vim.api.nvim_open_win(_G.pane.commits, false, { split = 'below' })
+    ]],
+    { top }
+  )
+  git_repo.wait_until('the worktree listed', function()
+    return child.lua_get('vim.api.nvim_buf_line_count(_G.pane.commits)') >= 5
+  end)
+  child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(_G.pane.commits))')
+  child.type_keys('5G')
+  expect_watched(agent, true)
+
+  child.lua('_G.home.let_go()')
+
+  eq(child.lua_get('_G.watched[...]', { agent }), false)
+end
+
+T['the watch of the worktree chosen']['that fails is stopped, told in the files window, and started again only when its line is chosen again'] = function()
+  local top = git_repo.create('wtuncommitted-watch-failed', { ['notes.txt'] = { 'one' } })
+  local agent = add_worktree(top, 'agent', 'agent')
+  git_repo.write(agent, 'notes.txt', { 'agent' })
+  child.lua(RECORD_WATCHES)
+  child.lua(COUNT_GIT_READS)
+  begin_and_show(top)
+  go_to_commits_line(5)
+  expect_watched(agent, true)
+
+  child.lua('_G.callbacks[...]({ reason = "failed", message = "cannot watch it" })', { agent })
+
+  eq(child.lua_get('_G.watched[...]', { agent }), false)
+  expect_lines(FILES, {
+    'Files in: Uncommitted — agent (agent)',
+    'The last refresh failed: cannot watch it',
+    '  M notes.txt',
+  })
+  wait_for_the_reads(1)
+  local lists_before = child.lua_get('_G.git_answered.list_worktrees')
+  child.lua("require('aineo.changes').refresh_shown_pane()")
+  wait_for_the_reads(lists_before + 1)
+  eq(starts_of(agent), 1)
+  go_to_commits_line(2)
+  expect_lines(FILES, { 'Files in: Session work', 'No files changed on this session' })
+  go_to_commits_line(5)
+  expect_watched(agent, true)
+  eq(starts_of(agent), 2)
+  expect_lines(FILES, { 'Files in: Uncommitted — agent (agent)', '  M notes.txt' })
+end
+
 return T
