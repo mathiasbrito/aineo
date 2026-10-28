@@ -830,13 +830,14 @@ lists: `Files in: Session work`, `Files in: Uncommitted`, or `Files in: `
 and a commit's line as the commits window shows it, its abbreviated id,
 author and age, and subject; `Files in: Landed in <branch>` for what landed
 in your working branch (below); or, for another worktree, `Files in: ` and
-the worktree's heading as the commits window shows it, or a commit's line
-followed by
-`(worktree <folder>)`; the commits window chooses (below). The window
-lists the files of that one choice and nothing else, no other worktree's
-heading or files among them, whichever choice it is. It shows its first
-line, the cursor on it, each time the choice changes, and when a list is
-read again for the same choice the cursor stays on its file.
+the worktree's heading as the commits window shows it, `Uncommitted — `
+and the worktree's folder and branch for its Uncommitted, or a commit's
+line followed by `(worktree <folder>)`; the commits window chooses
+(below). The window lists the files of that one choice and nothing else,
+no other worktree's heading or files among them, whichever choice it is.
+It shows its first line, the cursor on it, each time the choice changes,
+and when a list is read again for the same choice the cursor stays on its
+file.
 
                                                     *aineo-changes-against*
 The second line, `Against: <left> → <right>`, says what Enter on a file of
@@ -923,7 +924,9 @@ as under any commit.
 
 Under another worktree's heading the window lists the files that differ in
 that worktree from its base, in the same form, with no `*` on any line, or
-says "No files changed in this worktree"; under one of its commits, the
+says "No files changed in this worktree"; under its Uncommitted, the files
+that differ from its `HEAD`, staged or not, and its untracked ones, with no
+`*`, or "No uncommitted changes"; under one of its commits, the
 files that commit changed, against its first parent, read in that
 worktree, also with no `*`, or "No files in this commit". The worktree's
 base is read again each time the files are, and never kept (below).
@@ -1054,11 +1057,22 @@ Below those, the commits window lists the repository's other worktrees, in
 the order `git worktree list` gives them, each under a heading naming its
 folder and its branch, or `detached`: >
     Worktree agent-1 (feature/x)
+    Uncommitted — agent-1 (feature/x)
     1a2b3c4 Add the report
 <
-then that worktree's commits since its base, in the same form, or "No
-commits in this worktree". With no other worktree, the pane shows only your
-own lines. A worktree git marks
+then that worktree's own Uncommitted line, then its commits since its base,
+in the same form, or "No commits in this worktree". Its Uncommitted line,
+under the heading of every other worktree, reported by an agent or found by
+git, and shown alone too, is that worktree's as Uncommitted is yours: the
+files window lists, under `Files in: Uncommitted — agent-1 (feature/x)`,
+every file that differs from that worktree's `HEAD`, staged or not, and its
+untracked ones, read with git in that worktree, or says "No uncommitted
+changes", so you can follow an agent's work before it commits. It is read
+again at each read of the pane - the watch, the pane shown again, a report
+- and stays chosen while the worktree is listed; the `*` marks of your
+saves are your own worktree's and never show there. aineo only reads
+another worktree: it writes nothing there. With no other worktree, the
+pane shows only your own lines. A worktree git marks
 prunable, one whose directory is gone, locked or not, and the directory of
 a bare repository are left out; a locked one is listed. A worktree's base
 is read again at each read and never kept: its merge base with the commit
@@ -1191,13 +1205,18 @@ never touched; an untracked repository with no commit yet is left out. A
 diff is read-only: a buffer with 'filetype' `diff`, wiped once hidden.
 For another worktree, Enter on a file listed under its whole change shows
 that file's diff from the worktree's base, in
-`aineo://worktree{top}//diff/{path}`; on a file listed under one of its
-commits, the commit's header and that file's change in it, in
-`aineo://worktree{top}//commit/{id}/{path}`, {id} its full id; in the
-commits window, on one of its commits, that commit's diff, a merge's
-against its first parent, in `aineo://worktree{top}//commit/{id}`, and on
-its heading the whole diff of the worktree from its base to its working
-tree, its untracked files included, in `aineo://worktree{top}//since-base`.
+`aineo://worktree{top}//diff/{path}`; on a file listed under its
+Uncommitted, that file's diff from the worktree's `HEAD` to its working
+tree, in `aineo://worktree{top}//uncommitted/{path}`, which `h` shows too;
+on a file listed under one of its commits, the commit's header and that
+file's change in it, in `aineo://worktree{top}//commit/{id}/{path}`, {id}
+its full id; in the commits window, on one of its commits, that commit's
+diff, a merge's against its first parent, in
+`aineo://worktree{top}//commit/{id}`; on its
+Uncommitted line the whole diff from its `HEAD` to its working tree, in
+`aineo://worktree{top}//uncommitted`; and on its heading the whole diff of
+the worktree from its base to its working tree, its untracked files
+included, in `aineo://worktree{top}//since-base`.
 All are read in that worktree, and {top} is its top level, so two
 worktrees' diffs of one path are two buffers; no key opens another
 worktree's file. For a branch shown alone, Enter on its heading shows the
@@ -1362,7 +1381,9 @@ one of yours; under Uncommitted and Session work, from
 `HEAD` to the working tree, in `aineo://uncommitted/{path}`, which is
 Enter's diff under Uncommitted; under another worktree's whole change, from
 that worktree's `HEAD` to its working tree, in
-`aineo://worktree{top}//head/{path}`. A file `HEAD` lacks is shown wholly
+`aineo://worktree{top}//head/{path}`, and under its Uncommitted in
+`aineo://worktree{top}//uncommitted/{path}`, which is Enter's diff there. A
+file `HEAD` lacks is shown wholly
 added or removed. Both show only the last key's diff when you press keys
 again before one was read, and tell a failure or a middle column with no
 room as Enter does; `F` works in the diff they show, once the cursor is there,
