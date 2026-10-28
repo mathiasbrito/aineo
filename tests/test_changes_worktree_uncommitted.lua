@@ -938,4 +938,52 @@ T['a worktree whose read fails']['says what its Uncommitted compares in words al
   eq(raw_lines_of(FILES)[2], 'Against: HEAD → working tree')
 end
 
+T['a reported worktree not listed yet'] = MiniTest.new_set()
+
+--- Writes a stand-in for git under the fixture `git-<name>` that holds
+--- every `log` it is asked to run in the directory `held` while the file
+--- `hold` exists, and runs git; returns its path.
+---
+---@param name string
+---@param held string
+---@param hold string
+---@return string stand_in
+local function git_holding_log_in(name, held, hold)
+  return git_repo.script(name, 'git', {
+    ('case " $* " in *" -C %s "*" log "*) while [ -e "%s" ]; do sleep 0.05; done ;; esac'):format(
+      held,
+      hold
+    ),
+    ('exec %s "$@"'):format(REAL_GIT),
+  })
+end
+
+T['a reported worktree not listed yet']['says its Uncommitted is being read, then lists it once the worktree is listed'] = function()
+  local top = git_repo.create('wtuncommitted-not-listed', { ['notes.txt'] = { 'one' } })
+  local agent = vim.fs.joinpath(vim.fs.dirname(top), 'agent-1')
+  local hold = vim.fs.joinpath(git_repo.directory('wtuncommitted-not-listed-hold'), 'hold')
+  child.lua(WATCH_IN_HAND)
+  begin_and_show(top, { executable = git_holding_log_in('wtuncommitted-not-listed', agent, hold) })
+  expect_lines(COMMITS, commits_then({}))
+  git_repo.git(top, { 'worktree', 'add', '--quiet', '-b', 'feature/a', agent })
+  git_repo.write(agent, 'b.txt', { 'b' })
+  assert(vim.fn.writefile({}, hold) == 0, 'cannot write ' .. hold)
+  child.lua(
+    "require('aineo.changes').add_reported_work(..., function() end)",
+    { { worktree = agent, label = 'T', branches = { { name = 'feature/a' } } } }
+  )
+  git_repo.wait_until('the reported view shows', function()
+    return lines_of(COMMITS)[2] == 'Uncommitted — agent-1 (feature/a)'
+  end)
+
+  go_to_commits_line(2)
+
+  expect_lines(
+    FILES,
+    { 'Files in: Uncommitted — agent-1 (feature/a)', 'aineo is reading the repository' }
+  )
+  assert(os.remove(hold))
+  expect_lines(FILES, { 'Files in: Uncommitted — agent-1 (feature/a)', '  ? b.txt' })
+end
+
 return T

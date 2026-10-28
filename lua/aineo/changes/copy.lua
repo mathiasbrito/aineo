@@ -973,8 +973,9 @@ function M.new(label)
   --- in that worktree, and calls `done(failure, listing)`: a commit's files,
   --- and its *Uncommitted* from its own `HEAD`, in the repository the commits
   --- window found for the worktree — an *Uncommitted* whose worktree it found
-  --- none for fails with that worktree's failure, else with `WORKTREE_GONE`;
-  --- its whole
+  --- none for gives that worktree's failure, else no file and no failure,
+  --- which the window shows as still reading, until a read of the commits
+  --- window finds its repository (`reselect_in_worktrees()`); its whole
   --- change from its base, read again now (`aineo.changes.worktrees`'
   --- `read_worktree()`), which fails with `WORKTREE_GONE` when the worktree's
   --- directory is gone. The listing names the worktree as the read found it.
@@ -991,7 +992,7 @@ function M.new(label)
       return
     end
     if selected.kind == 'uncommitted' and not section.repository then
-      done(section.failure or WORKTREE_GONE, { filter = selected, worktree = section })
+      done(section.failure, { filter = selected, worktree = section })
       return
     end
     if selected.kind == 'uncommitted' then
@@ -1205,7 +1206,9 @@ function M.new(label)
   --- section lists, which `take_tree_commits()` gives way. A worktree still
   --- listed becomes the selected filter's as it was last read, and the files
   --- window is written again when its branch changed, for its first line
-  --- names it. The scope is kept or cleared first (`keep_scope_listed_in()`).
+  --- names it — or read, for its *Uncommitted* chosen before the window had
+  --- found its repository, once it has. The scope is kept or cleared first
+  --- (`keep_scope_listed_in()`).
   ---
   ---@param others aineo.changes.OtherWorktrees
   local function reselect_in_worktrees(others)
@@ -1229,8 +1232,11 @@ function M.new(label)
       select_filter(filter.of_worktree(section))
       read_files(true)
     else
+      local unread = selected.kind == 'uncommitted' and not selected.worktree.repository
       session.selected = filter.in_worktree(selected, section)
-      if section.branch ~= selected.worktree.branch then
+      if unread and section.repository then
+        read_files(true)
+      elseif section.branch ~= selected.worktree.branch then
         show_files()
       end
     end
