@@ -1128,9 +1128,11 @@ does not wait for 'timeoutlen', whatever global maps begin with `s`.
 
 Picking a worktree shows it alone. The commits window then lists nothing
 but its heading, `Worktree <folder> (<branch>)`, whole in
-|hl-AineoChangesFilter|, and below it that worktree's commits, newest
-first, or "No commits in this worktree", with the line saying its last read
-failed when it did: no Uncommitted, Session work, commit of your own, Landed
+|hl-AineoChangesFilter|, below it that worktree's own Uncommitted line,
+`Uncommitted — <folder> (<branch>)`, which lists what it has not committed
+yet as in the default view, and below that its commits, newest first, or
+"No commits in this worktree", with the line saying its last read failed
+when it did: no Uncommitted of yours, Session work, commit of your own, Landed
 section, other worktree, or line saying the worktrees could not be listed;
 nor the lines saying the session's own read failed, the watch stopped, or the
 base is no longer behind `HEAD`, which the default view shows.
@@ -1167,10 +1169,11 @@ changes pane shows the default view" - also when the default view hides it.
 `\g` (|:Aineo-pane|), pressed with the cursor in one of the pane's two
 windows, switches between the default view and the worktree or branch shown
 alone, read again each time. It is kept while the default view shows.
-Back in the default view, the choice stays, the worktree's heading or one of
-its commits, the cursor on its line; the default view lists no branch, so a
-choice of a branch's gives way there to Session work. Back in the scope
-view, the choice stays when it lists it, else the whole change is chosen.
+Back in the default view, the choice stays, the worktree's heading, its
+Uncommitted or one of its commits, the cursor on its line; the default
+view lists no branch, so a choice of a branch's gives way there to Session
+work. Back in the scope view, the choice stays when it lists it, else the
+whole change is chosen.
 Pressed anywhere else — Claude's window, Input, the Report, a diff in the file
 column — `\g` does not switch: it moves the cursor into the commits window,
 the pane in the view it was last shown, read again; when the pane is not on
