@@ -14,7 +14,7 @@ A regular packet of wave 21 (D26: the whole suite once before the push). Every w
 
 ## Task lines
 
-- [X] T157 each other worktree's Uncommitted line (D133, A653, A654): `filter.of_worktree_uncommitted()`; the row `Uncommitted — <folder> (<branch>)` first under each other worktree's heading, in the default view and shown alone (`s`, `\g`, the reported work), kept chosen across `\g`; its files read with `git.uncommitted_files()` in the worktree's repository, again at every read of the pane; a file's diff, the whole diff and `h` read with the editor's own readers there, in `aineo://worktree{top}//uncommitted[/{path}]`; a worktree whose read failed lists its section's failure; save marks kept to the editor's worktree; help and README. No key changed.
+- [X] T157 each other worktree's Uncommitted line (D133, A653, A654, A655, A657; D135, A656) — added during review: the Reported tree's `Uncommitted` under each checked-out branch; the fix round: no Against of the editor's for a worktree with no repository, read once listed, read at a report, the chosen worktree watched while the pane shows: `filter.of_worktree_uncommitted()`; the row `Uncommitted — <folder> (<branch>)` first under each other worktree's heading, in the default view and shown alone (`s`, `\g`, the reported work), kept chosen across `\g`; its files read with `git.uncommitted_files()` in the worktree's repository, again at every read of the pane; a file's diff, the whole diff and `h` read with the editor's own readers there, in `aineo://worktree{top}//uncommitted[/{path}]`; a worktree whose read failed lists its section's failure; save marks kept to the editor's worktree; help and README. No key changed.
 
 ## What was done, and why
 
@@ -105,11 +105,46 @@ Each run alone, on the code of the commit `Give each other worktree its own Unco
 
 The test files the change touches, each green on the final code: the new file (16 cases), and `test_changes_against_pane`, `test_changes_author_pane`, `test_changes_announce`, `test_changes_filter`, `test_changes_full_context`, `test_changes_keep_view`, `test_changes_keys`, `test_changes_landed`, `test_changes_open_file`, `test_changes_tree_commits_pane`, `test_changes_scope`, `test_changes_worktrees`, `test_entry_changes`, `test_entry_explorer_pick`, `test_entry_tabs_routing`, `test_changes_reported_tree`, `test_changes`, `test_changes_follow`, `test_doc`: Fails (0) each. Their earlier expectations gain the line after each heading and move their cursor lines by one below it. `make lint` clean. The whole suite: see the pull request.
 
+After D135 and A657 (no whole suite: the orchestrator verifies): the new file, 29 cases, and `test_changes_worktrees`, `test_changes_scope`, `test_changes_announce`, `test_changes_keep_view`, `test_changes_filter`, `test_changes_follow`, `test_changes_keys`, `test_changes_open_file`, `test_changes_edit_file`, `test_changes_copies`, `test_changes_sessions`, `test_changes`, `test_entry_changes`, `test_entry_reported_work`, `test_changes_tree_commits_pane`, `test_changes_against_pane`, then `test_changes_reports`, `test_changes_tree_commit_lines`, `test_changes_against_read`, `test_changes_graph_pane`, `test_entry_explorer_pick`, `test_changes_reported_tree`, `test_doc`: Fails (0) each; `make lint` clean.
+
+## D135 with A656, added during review: the Reported tree's Uncommitted line
+
+The user asked for the line in the Reported tree too (D135). Under the line of a branch its worktree has checked out now, `Uncommitted`, six cells in, comes first before its commits (`lines.lua`'s `tree_uncommitted_row()`): another worktree's chooses `filter.of_worktree_uncommitted()` of that worktree, as the commits window last listed it or as git listed it at the report; the editor's own chooses `filter.UNCOMMITTED`, the default view's own line, no second reading (A656 (2)). Its pick carries `uncommitted = true` (`TreePick`, `ScopeItem`): Enter, and its item in `s` (`lines.report_items()`, `[reported]       Uncommitted`), show that worktree alone with its Uncommitted chosen, or keep the default view with the editor's own Uncommitted chosen (`show_worktree_alone()`, `show_own_work(uncommitted)`). Existing suites gain the line under each checked-out branch and move their lines and picker positions by one.
+
+| Case (group `the Reported tree`) | Red, or green and why |
+|---|---|
+| lists Uncommitted first under the branch another worktree has checked out | red: key 5 the commit line where `      Uncommitted` was expected |
+| lists no Uncommitted under a branch no worktree has checked out | red against the first, minimal code (a line under every branch): key 7 `      Uncommitted` where `Uncommitted` |
+| lists, on another worktree's Uncommitted, that worktree's files | red: `Files in: Worktree agent-1 (feature/a)` (the row listed no entry) |
+| lists, on the editor's own branch's Uncommitted, the editor's own Uncommitted | red, after the own branch of `tree_uncommitted_filter()`, written ahead, was taken out: `Files in: Uncommitted — repo (main)`; put back, green |
+| shows, at Enter on another worktree's Uncommitted, that worktree alone, its Uncommitted chosen | red: the default view stayed |
+| keeps, at Enter on the editor's own branch's Uncommitted, the default view with its Uncommitted chosen | red: cursor 3 (Session work's key) where 5 |
+| offers another worktree's Uncommitted to s, whose pick does what Enter does | red: the item missing from the list |
+| moves the Uncommitted to the branch the worktree checks out between two reads | green by nature: the tree is drawn anew from git's checkout at each read — killed by MA1 |
+
+| # | Literal edit | Result |
+|---|---|---|
+| MA1 (A656: the line under a branch not checked out) | `lines.lua` `reported_rows()`: `if line.checked_out then table.insert(rows, tree_uncommitted_row(line))` → `if line.branch then …` | killed by 2, assertion |
+| MA2 (A656: read from the editor's repository for another worktree) | `lines.lua` `tree_uncommitted_filter()`: `return filter.of_worktree_uncommitted(line.worktree_section or line.node.worktree)` → `return filter.UNCOMMITTED` | killed by 1, assertion: `Files in: Uncommitted` |
+
+## A657, the fix round of the review of PR #387
+
+| Ruling | What was built | Red | Mutant (literal edit) → result |
+|---|---|---|---|
+| 1 | `against_read.read()` reads nothing, `done({})` scheduled, for a filter of another worktree with no repository (the reviewer's measured fix) | `Against: 383b5c2 (agent, main) HEAD → working tree` where `Against: HEAD → working tree`, the editor's `HEAD` named | MB1 `if worktree and not worktree.repository then` → `if false then` → killed by 1, assertion |
+| 2 | `read_worktree_files()` gives the section's failure alone (none: still reading); `reselect_in_worktrees()` reads the files once the listed section has the repository the chosen one lacked (the reviewer's measured fix) | `The last refresh failed: the worktree is gone` where `aineo is reading the repository` | MB2 `if unread and section.repository then` → `if false then` → killed by 1 (stays reading); MB2b the old `section.failure or WORKTREE_GONE` → killed by 1 |
+| 3 | `take_waiting()`'s second branch reads the files, `read_files(false)` (the reviewer's measured fix) | key 3 nil where `  ? b.txt` after a second report | MB3 that `read_files(false)` removed → killed by 1 |
+| 4 | `follow_chosen_worktree()`: while another worktree's Uncommitted is chosen and the pane shows, `git.watch_repository()` on that worktree, each call reading the files; stopped on another choice, the worktree gone, the pane hidden (`BufWinLeave`), let go, quit | `? new.txt` never listed; no watch of the worktree's folder ran (`_G.watched[agent]` nil) — both cases written before the code, each seen red | MB4 `follow_chosen_worktree()` removed from `show_files()` (the watch not started) → killed by 2; MB4b the `BufWinLeave` callback returns at once → killed by 1 (the watch kept after the pane hid) |
+| 5 | the watch case counts the git home's calls and waits for the worktrees listed once more and every read answered before it asserts | test-only | M3 (its edit now inserted before `else local unread = …`) killed by this case 3 runs of 3, and by the pane-refresh case |
+
+The suite's watch stand-in keeps the first watch asked, the session's, as `_G.on_change`, since a chosen worktree's watch is asked of the same function. The help says what the worktree's watch sees and its Linux limit (`aineo-limits`), and README.
+
 ## Open threads
 
-- **The Reported tree's branch lines.** A653 (1) places the line in each worktree's section (default view's other worktrees, and the focused view); the Reported tree atop the default view keeps its own shape (a worktree line, its branch lines and their commits) with no Uncommitted line of its own. Its checked-out branch line already picks the worktree's whole change, uncommitted files included. Whether the tree should also get an Uncommitted line under the checked-out branch is the user's to say.
-- **A653 (3) names `R` among the pane's refreshes; the changes pane has no `R` key** (`R` puts back a default text elsewhere). The pane is read again by its watch, when it is shown again (`refresh_shown_pane()`) and at a report; the help names those, and the line is read again at each.
-- The label of an agent's call is not on a worktree section, so the name says the folder and the branch (A653 (4) gave `<worktree label or branch>` as an example).
+- ~~The Reported tree's branch lines~~ — built as D135, A656.
+- ~~A653 (3)'s `R`~~ — A655 (1) accepts the help's real reads.
+- ~~The label in the line's name~~ — A655 (2) accepts the folder and branch.
+- The watch of a chosen worktree is a second watch for as long as the line is chosen; on Linux, as for the editor's own, a file in a subdirectory of that worktree waits for its agent's next stage or commit.
 
 ## Commits
 
