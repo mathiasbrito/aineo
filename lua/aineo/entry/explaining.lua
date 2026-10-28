@@ -102,13 +102,13 @@ end
 --- How code is asked for.
 ---@class aineo.entry.WriteOrder
 ---@field deep boolean whether Claude Code may read the project, with `write.deep_model`, `write.deep_effort` and `write.deep_timeout_ms`; else `write.model` and `write.timeout_ms`, from the file alone
----@field range? integer[] the first and last lines that hold the request, from 1; the request is typed in a float, the code going below the cursor's line, when absent
+---@field range? integer[] the first and last lines that hold the request, from 1; the request is typed in a float, the code going below the cursor's line, or in its place when it is blank, when absent
 
 --- What `\w`, `\W`, their `<Plug>` mappings and `:Aineo write` do: ask the
 --- explain home to write code in the current buffer, a file's
 --- (`aineo.explain`'s `propose_write()`), for the request the lines of
 --- `order.range` hold, or for one typed in a float, the code going below
---- the cursor's line; with `claude.cmd` and `write.model`, from the file
+--- the cursor's line, or in its place when it is blank; with `claude.cmd` and `write.model`, from the file
 --- alone, or, for a deep order, `write.deep_model` at `write.deep_effort`
 --- with the read-only tools. While the code shows, the prefix followed by
 --- `Wa`, `Wr` and `Wd` accept it, reject it and show its diff, unless the
