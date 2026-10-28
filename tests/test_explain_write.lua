@@ -1094,6 +1094,28 @@ T['the preview in view']['leaves the view of a user who scrolled away while it w
   eq({ views()[1], cursor() }, { { 40, 0 }, { 50, 2 } })
 end
 
+T['the preview in view']['leaves a window that shows it as it is, its top line showing part of its filler'] = function()
+  start(below_line(LONG, 38))
+  child.api.nvim_buf_set_lines(0, 0, -1, false, LONG)
+  child.lua([[
+    local rows = {}
+    for number = 1, 10 do
+      rows[number] = { { 'another plugin’s row ' .. number } }
+    end
+    vim.api.nvim_buf_set_extmark(0, vim.api.nvim_create_namespace('another_plugin'), 9, 0, {
+      virt_lines = rows,
+      virt_lines_above = true,
+    })
+  ]])
+  child.api.nvim_win_set_cursor(0, { 38, 0 })
+  child.lua('vim.fn.winrestview({ topline = 10, topfill = 2 })')
+
+  ask_below_cursor({ 'A function that adds two values.' })
+  wait_for_preview()
+
+  eq(views()[1], { 10, 2 })
+end
+
 T['the preview in view']['is brought into view again by the diff view, not before'] = function()
   start(BELOW_LINE_3)
   child.api.nvim_win_set_cursor(0, { 3, 0 })
