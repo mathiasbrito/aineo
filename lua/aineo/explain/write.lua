@@ -108,6 +108,22 @@ local function fault_of(edits, ask)
   end
 end
 
+--- `edits`, the one edit of the code written for `ask` (`fault_of()`), with
+--- the copy of the blank line it replaces that its new lines start with, if
+--- any, dropped, for code that goes in place of a blank line, so that the
+--- code replaces it and leaves no blank line; any other edits as they are.
+---
+---@param edits aineo.explain.PlacedEdit[]
+---@param ask aineo.explain.WriteAsk
+---@return aineo.explain.PlacedEdit[]
+local function in_its_place(edits, ask)
+  local edit = edits[1]
+  if ask.place ~= 'in_blank_line' or edit.new[1] ~= edit.old[1] then
+    return edits
+  end
+  return { vim.tbl_extend('force', edit, { new = vim.list_slice(edit.new, 2) }) }
+end
+
 --- What the code written for `ask`, as `writing` asks it, is kept under
 --- (`aineo.explain.kept`'s `write_key()`).
 ---
@@ -144,13 +160,13 @@ local function show(writing, ask, code)
 end
 
 --- Shows (`show()`) the code the run `ended` answered for `asked`, placed in
---- the lines sent (`aineo.explain.placement`), and keeps it for those lines
---- (`aineo.explain.kept`), or tells the user, once, why nothing is shown:
---- the buffer changed while the code was asked, which any move of its
---- `b:changedtick` says; the run failed or answered no code (`code_of()`);
---- the answer has no edits, when its summary is told; or the code was
---- refused, by the placement or for its lines (`fault_of()`), with the
---- reason.
+--- the lines sent (`aineo.explain.placement`, `in_its_place()`), and keeps
+--- it for those lines (`aineo.explain.kept`), or tells the user, once, why
+--- nothing is shown: the buffer changed while the code was asked, which any
+--- move of its `b:changedtick` says; the run failed or answered no code
+--- (`code_of()`); the answer has no edits, when its summary is told; or the
+--- code was refused, by the placement or for its lines (`fault_of()`), with
+--- the reason.
 ---
 ---@param asked aineo.explain.WriteAsked
 ---@param ended vim.SystemCompleted
@@ -178,7 +194,7 @@ local function show_answer(asked, ended)
     vim.notify('aineo: the written code was refused: ' .. fault, vim.log.levels.WARN)
     return
   end
-  local code = { summary = answered.summary, edits = edits }
+  local code = { summary = answered.summary, edits = in_its_place(edits, asked.ask) }
   kept.keep(writing.buffer, kept_key(writing, asked.ask), asked.lines, code)
   show(writing, asked.ask, code)
 end
