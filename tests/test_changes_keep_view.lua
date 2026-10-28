@@ -559,6 +559,7 @@ T['a restart']['shows the tree again with each branch’s base, the label and ag
     'task now',
     '  agent-1',
     ('    feature/a * from %s'):format(one:sub(1, 7)),
+    '      Uncommitted',
     '      ' .. commit_line(two, 'Two'),
     'Uncommitted',
     'Session work',
@@ -638,6 +639,7 @@ T['a restart']['loads the reports kept before reports were a tree: a worktree wi
     'old task now',
     '  agent-1',
     ('    feature/a * from %s'):format(one:sub(1, 7)),
+    '      Uncommitted',
     '      ' .. commit_line(two, 'Two'),
     'branch task',
     '  ' .. vim.fs.basename(top),
@@ -1194,11 +1196,11 @@ T['a restart']['gives way to reported work made before the session was followed,
   expect_pane_lines('module', 'commits', DEFAULT_VIEW_WITH_THREE)
   report('module', agent_call(worktree_at(top, 'agent-1')))
   expect_pane_lines('module', 'commits', bare_worktree('agent-1', 'feature/a'))
-  pick('module', 6)
+  pick('module', 7)
   expect_pane_lines('module', 'commits', bare_worktree('agent-2', 'feature/b'))
   git_repo.git(top, { 'worktree', 'remove', worktree_at(top, 'agent-2') })
   local reported_default_view = vim.list_extend(
-    { 'Reported', 'T now', '  agent-1', '    feature/a * from ?' },
+    { 'Reported', 'T now', '  agent-1', '    feature/a * from ?', '      Uncommitted' },
     default_view_with(bare_worktree('agent-1', 'feature/a'), bare_worktree('agent-3', 'feature/c'))
   )
   expect_pane_lines('module', 'commits', reported_default_view)

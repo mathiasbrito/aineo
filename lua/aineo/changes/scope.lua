@@ -31,6 +31,7 @@ M.NONE_TO_SHOW = 'aineo: no other worktree or branch to show alone'
 ---@field own? boolean whether it shows the editor's own work, in the default view
 ---@field group? string the label whose reported work it shows, `''` for the worktrees with none
 ---@field reported? boolean whether it shows every reported worktree's work
+---@field uncommitted? boolean whether, shown, the worktree's *Uncommitted* is chosen in place of its whole change, or the editor's own in place of *Session work*
 ---@field text string how the picker shows it: its kind, then its name
 
 --- What the list `s` chooses its branches from, read when `s` is pressed.
@@ -87,9 +88,9 @@ local function branches_offered(candidates)
   end, candidates.branches)
 end
 
---- The list `s` offers: first `report_items`, the item of each line of the
+--- The list `s` offers: first `report_items`, the items of the lines of the
 --- Reported section, in their order (`aineo.changes.lines`'
---- `report_item()`); then, while `reported_worktrees`, how many worktrees
+--- `report_items()`); then, while `reported_worktrees`, how many worktrees
 --- the Reported section holds, is not 0, the item of all of them,
 --- `[reported] All reported work (<n>)`; then one item per worktree of
 --- `others`, what the commits window last listed of the other worktrees, in
