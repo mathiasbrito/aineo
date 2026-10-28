@@ -47,6 +47,7 @@ local CONCEALING = 2
 ---@field kind aineo.explain.Kind what it is, a fix or written code, which names it in its head row and its messages
 ---@field stale boolean whether its edits no longer stand in the buffer, as when it was last drawn
 ---@field first_row integer the line, from 0, its first edit started on when it was last drawn
+---@field lead_line? integer the line, from 1, above which its first row was drawn when it was last drawn, as Neovim's filler lines of that line; `nil` when it was drawn after the buffer's last line
 ---@field redraw_pending? boolean whether a drawing again is scheduled (`redraw_lost()`)
 
 --- The keys a preview maps in its buffer, each a left-hand side as
@@ -432,6 +433,21 @@ local function add_overlay(preview, block, spans, geometry, places)
   end
 end
 
+--- The line, from 1, whose filler lines, the virtual lines Neovim draws
+--- above it, start with the first rows of `places` (the place first
+--- added): the line a place above a line hangs on, or the line after the
+--- one a place below a line hangs on; `nil` when that is past the last of
+--- the buffer's `line_count` lines.
+---
+---@param places aineo.explain.Places
+---@param line_count integer
+---@return integer|nil
+local function lead_line_of(places, line_count)
+  local place = places.rows[places.order[1]]
+  local line = place.row + (place.above and 1 or 2)
+  return line <= line_count and line or nil
+end
+
 --- Draws `preview` as it shows now, marking it stale when its edits no
 --- longer stand (`stands()`), and not when they stand again: the overlay,
 --- its edits' old lines hidden and their rows in their place
@@ -464,6 +480,7 @@ local function render(preview)
     end
   end
   draw_places(buffer, places)
+  preview.lead_line = lead_line_of(places, vim.api.nvim_buf_line_count(buffer))
 end
 
 --- The namespace of the decoration provider that notices a preview's
@@ -508,6 +525,59 @@ end
 ---@param watching boolean
 local function watch_drawings(watching)
   vim.api.nvim_set_decoration_provider(REDRAW, watching and { on_win = redraw_lost } or {})
+end
+
+--- Whether the first of the filler lines of `line`, from 1, is on the
+--- screen of `window`: `line` is below the window's top line and the rows
+--- before that filler line fit in the window's height, or `line` is its top
+--- line and the window shows every filler line of it ('topfill').
+---
+---@param window integer
+---@param line integer
+---@return boolean
+local function lead_row_seen(window, line)
+  local view = vim.api.nvim_win_call(window, vim.fn.winsaveview)
+  local function height_of(first, last)
+    return vim.api.nvim_win_text_height(window, { start_row = first - 1, end_row = last - 1 })
+  end
+  if view.topline > line then
+    return false
+  end
+  if view.topline == line then
+    return view.topfill >= height_of(line, line).fill
+  end
+  local unseen_above_top = height_of(view.topline, view.topline).fill - view.topfill
+  local rows_before = height_of(view.topline, line - 1).all - unseen_above_top
+  return rows_before < vim.api.nvim_win_get_height(window)
+end
+
+--- Brings the first row of `preview` into view in every window that shows
+--- its buffer and does not show that row (`lead_row_seen()`): the window
+--- shows the line it was drawn above at its top, with every filler line of
+--- it ('topfill'), as far as Neovim keeps the cursor's line on the screen;
+--- the cursor stays where it is. A window that shows that row is left as it
+--- is, and so is every window of a preview drawn after the buffer's last
+--- line, which follows that line.
+---
+---@param preview aineo.explain.Preview
+local function bring_into_view(preview)
+  local line = preview.lead_line
+  if not line then
+    return
+  end
+  for _, window in ipairs(vim.fn.win_findbuf(preview.buffer)) do
+    if not lead_row_seen(window, line) then
+      vim.api.nvim_win_call(window, function()
+        vim.fn.winrestview({
+          topline = line,
+          topfill = vim.api.nvim_win_text_height(window, {
+            start_row = line - 1,
+            end_row = line - 1,
+          }).fill,
+        })
+      end)
+    end
+  end
 end
 
 --- The options of `window` that hide old lines, its own for the buffer it
@@ -914,8 +984,9 @@ local function watch_edits(preview)
 end
 
 --- Shows the preview `buffer` shows as the diff view, its old lines struck
---- through above its new lines, or as the overlay again; nothing when
---- `buffer` shows none. A stale preview (`is_stale()`), always shown as the
+--- through above its new lines, or as the overlay again, brought into
+--- view in a window that does not show its first row
+--- (`bring_into_view()`); nothing when `buffer` shows none. A stale preview (`is_stale()`), always shown as the
 --- diff view, is left so, and the user is told, once, what rejects it and
 --- what asks again.
 ---
@@ -938,6 +1009,7 @@ function M.toggle_diff(buffer)
   end
   preview.diff = not preview.diff
   render(preview)
+  bring_into_view(preview)
 end
 
 --- What a preview is shown with.
@@ -953,7 +1025,8 @@ end
 --- Shows the edits of `order` in `buffer` as a preview: the buffer is not
 --- changed, and cannot be while it is shown, its 'modifiable' off; each
 --- edit's old lines are hidden in every window showing it and its new lines
---- drawn in their place.
+--- drawn in their place, brought into view in a window that does not show
+--- its first row (`bring_into_view()`). Later scrolling is left alone.
 ---
 ---@param buffer integer
 ---@param order aineo.explain.PreviewOrder
@@ -992,6 +1065,7 @@ function M.show(buffer, order)
   conceal_in_windows(preview)
   map_keys(preview)
   render(preview)
+  bring_into_view(preview)
   watch_edits(preview)
 end
 
