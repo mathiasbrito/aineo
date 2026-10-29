@@ -683,6 +683,49 @@ T['the view']['chooses its whole change once the commit chosen in it is gone aft
   end)
 end
 
+--- The Lua that makes, in the child, every `git log` fail with `fatal:
+--- probe` while `_G.fail_logs` holds.
+local FAIL_LOGS = [[
+  _G.fail_logs = true
+  local system = vim.system
+  vim.system = function(command, ...)
+    if _G.fail_logs and vim.tbl_contains(command, 'log') then
+      command = { 'sh', '-c', 'echo fatal: probe >&2; exit 128' }
+    end
+    return system(command, ...)
+  end
+]]
+
+T['the view']['keeps its commits under a read that fails, the failure told above them'] = function()
+  local work = start_on_own_branch('own-view-failed-read')
+  enter_on_line(3)
+  expect_pane_lines('commits', own_view(work))
+  child.lua(FAIL_LOGS)
+
+  child.lua("require('aineo.changes').refresh_shown_pane()")
+
+  expect_pane_lines('commits', {
+    ('Worktree %s (feature/own) · yours'):format(work.folder),
+    'Uncommitted',
+    'The last refresh failed: fatal: probe',
+    git_repo.commit_line(work.on_branch, 'On the branch'),
+  })
+end
+
+T['the view']['says on its files’ Against line that they are compared with the reported base'] = function()
+  local work = start_on_own_branch('own-view-against')
+
+  enter_on_line(3)
+
+  git_repo.wait_until('the whole change listed', function()
+    return pane_lines('files')[2] == '  A branch.txt'
+  end)
+  eq(
+    child.lua_get('vim.api.nvim_buf_get_lines(_G.pane.files, 1, 2, true)[1]'),
+    ('Against: %s reported base → working tree'):format(short(work.reported_base))
+  )
+end
+
 T['the view']['ends once the editor’s own worktree has another branch checked out, the default view shown and told'] = function()
   local work = start_on_own_branch('own-view-checkout')
   enter_on_line(3)
