@@ -688,15 +688,20 @@ T['the Reported tree']['shows, at Enter on another worktree’s Uncommitted, tha
   eq(commits_cursor_line(), 2)
 end
 
-T['the Reported tree']['keeps, at Enter on the editor’s own branch’s Uncommitted, the default view with its Uncommitted chosen'] = function()
-  own_worktree_reported('wtuncommitted-tree-own-enter')
+T['the Reported tree']['shows, at Enter on the editor’s own branch’s Uncommitted, its own worktree alone, its own Uncommitted chosen'] = function()
+  local top = own_worktree_reported('wtuncommitted-tree-own-enter')
   go_to_commits_line(5)
   expect_lines(FILES, { 'Files in: Uncommitted', '  ? editor.txt' })
 
   child.type_keys('<CR>')
 
-  eq(commits_cursor_line(), 5)
+  expect_lines(COMMITS, {
+    ('Worktree %s (main) · yours'):format(vim.fs.basename(top)),
+    'Uncommitted',
+    'No commits in this worktree',
+  })
   expect_lines(FILES, { 'Files in: Uncommitted', '  ? editor.txt' })
+  eq(commits_cursor_line(), 2)
 end
 
 T['the Reported tree']['offers another worktree’s Uncommitted to s, whose pick does what Enter does'] = function()

@@ -51,6 +51,34 @@ function M.of_worktree_uncommitted(worktree)
   return { kind = 'uncommitted', worktree = worktree }
 end
 
+--- The filter of the *Uncommitted* of `worktree`, a worktree section: the
+--- editor's own (`M.UNCOMMITTED`) for the editor's own worktree, shown
+--- alone, else that worktree's (`M.of_worktree_uncommitted()`).
+---
+---@param worktree aineo.changes.WorktreeSection
+---@return aineo.changes.Filter
+function M.uncommitted_in(worktree)
+  if worktree.own then
+    return M.UNCOMMITTED
+  end
+  return M.of_worktree_uncommitted(worktree)
+end
+
+--- The filter of the files `commit` changed, a commit listed under
+--- `worktree`, a worktree section: the editor's own commit's
+--- (`M.of_commit()`) for the editor's own worktree, shown alone, else that
+--- worktree's (`M.of_worktree_commit()`).
+---
+---@param worktree aineo.changes.WorktreeSection
+---@param commit aineo.git.Commit
+---@return aineo.changes.Filter
+function M.commit_in(worktree, commit)
+  if worktree.own then
+    return M.of_commit(commit)
+  end
+  return M.of_worktree_commit(worktree, commit)
+end
+
 --- The filter of the files `commit` changed, read in the worktree
 --- `worktree`.
 ---
