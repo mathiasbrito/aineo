@@ -11,6 +11,7 @@ local kept = require('aineo.explain.kept')
 local look = require('aineo.explain.look')
 local marks = require('aineo.explain.marks')
 local message = require('aineo.explain.message')
+local preview = require('aineo.explain.preview')
 local request = require('aineo.explain.request')
 local runs = require('aineo.explain.runs')
 local steer = require('aineo.explain.steer')
@@ -514,35 +515,77 @@ end
 
 --- Accepts the fix or the code written that `buffer` shows: its edits are
 --- applied as one undo step, and the file is not written
---- (`aineo.explain.fix`'s `accept()`); with `kind`, only a proposal of that
---- kind, the user being told which keys apply to another.
+--- (`aineo.explain.fix`'s `accept()`); for code whose edits are proposals
+--- of their own, the one on the cursor's line `line`, else the one last
+--- moved to; with `kind`, only a proposal of that kind, the user being told
+--- which keys apply to another.
 ---
 ---@param buffer integer
 ---@param kind? 'fix'|'write'
-function M.accept_fix(buffer, kind)
-  fix.accept(buffer, kind)
+---@param line? integer the cursor's line, from 1
+function M.accept_fix(buffer, kind, line)
+  fix.accept(buffer, kind, line)
 end
 
 --- Shows the fix or the code written that `buffer` shows as the diff view,
 --- its old lines struck through above its new lines, or as the overlay
---- again (`aineo.explain.fix`'s `toggle_diff()`); with `kind`, only a
---- proposal of that kind, the user being told which keys apply to another.
+--- again (`aineo.explain.fix`'s `toggle_diff()`); for code whose edits are
+--- proposals of their own, the one on the cursor's line `line`, else the
+--- one last moved to; with `kind`, only a proposal of that kind, the user
+--- being told which keys apply to another.
 ---
 ---@param buffer integer
 ---@param kind? 'fix'|'write'
-function M.toggle_fix_diff(buffer, kind)
-  fix.toggle_diff(buffer, kind)
+---@param line? integer the cursor's line, from 1
+function M.toggle_fix_diff(buffer, kind, line)
+  fix.toggle_diff(buffer, kind, line)
 end
 
 --- Rejects the fix or the code written that `buffer` shows, if any: its
 --- preview goes and the buffer stays as it reads (`aineo.explain.fix`'s
---- `reject()`); with `kind`, only a proposal of that kind, the user being
---- told which keys apply to another.
+--- `reject_chosen()`); for code whose edits are proposals of their own, the
+--- one on the cursor's line `line`, else the one last moved to; with
+--- `kind`, only a proposal of that kind, the user being told which keys
+--- apply to another.
 ---
 ---@param buffer integer
 ---@param kind? 'fix'|'write'
-function M.reject_fix(buffer, kind)
+---@param line? integer the cursor's line, from 1
+function M.reject_fix(buffer, kind, line)
+  fix.reject_chosen(buffer, kind, line)
+end
+
+--- Accepts every proposal of the written code `buffer` shows that still
+--- stands, as one undo step (`aineo.explain.fix`'s `accept_all()`); with
+--- `kind`, only a proposal of that kind, the user being told which keys
+--- apply to another.
+---
+---@param buffer integer
+---@param kind 'write'
+function M.accept_all(buffer, kind)
+  fix.accept_all(buffer, kind)
+end
+
+--- Rejects every proposal of the written code `buffer` shows, which leaves
+--- the buffer as it reads (`aineo.explain.fix`'s `reject()`); with `kind`,
+--- only a proposal of that kind, the user being told which keys apply to
+--- another.
+---
+---@param buffer integer
+---@param kind 'write'
+function M.reject_all(buffer, kind)
   fix.reject(buffer, kind)
+end
+
+--- Moves the cursor of `window` to the first line of the next or the
+--- previous proposal of the written code its buffer shows, wrapping around,
+--- when its edits are proposals of their own, and has it chosen for the
+--- next decision (`aineo.explain.preview`'s `jump()`).
+---
+---@param window integer
+---@param way 'next'|'previous'
+function M.jump_to_proposal(window, way)
+  preview.jump(window, way)
 end
 
 --- Moves the cursor of `window` to the line of the next or the previous
