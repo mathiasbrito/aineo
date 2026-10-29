@@ -910,6 +910,37 @@ local TWO_LINE_REQUEST = {
   },
 }
 
+T['the preview in view']['is the proposal toggled last, though another above it shows as a diff'] = function()
+  local lines = numbered_lines(63)
+  local anchor =
+    { line = 50, last = 50, old = { lines[50] }, new = { lines[50], 'y = 1' }, why = 'Adds y.' }
+  local first = {
+    line = 10,
+    last = 10,
+    old = { lines[10] },
+    new = { 'local x', lines[10] },
+    why = 'Declares x.',
+  }
+  local second = {
+    line = 30,
+    last = 30,
+    old = { lines[30] },
+    new = { 'local y', lines[30] },
+    why = 'Declares y.',
+  }
+  start({ summary = 'Adds y.', edits = { anchor, first, second } }, lines)
+  send_request(50, 'Add y.')
+  wait_for_preview()
+  child.lua("require('aineo.explain').toggle_fix_diff(vim.api.nvim_get_current_buf(), 'write', 10)")
+  child.cmd('30')
+  child.cmd('normal! zt')
+
+  child.lua("require('aineo.explain').toggle_fix_diff(vim.api.nvim_get_current_buf(), 'write', 30)")
+
+  local view = child.fn.winsaveview()
+  eq({ view.topline, view.topfill > 0, child.fn.line('.') }, { 30, true, 30 })
+end
+
 T['a proposal of two lines'] = MiniTest.new_set()
 
 T['a proposal of two lines']['is moved to at its first line'] = function()
