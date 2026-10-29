@@ -198,6 +198,8 @@ function M.new(label)
   ---@field shown boolean whether the pane has been shown
   ---@field following_soon boolean whether the pane's showing is followed at the main loop's next turn
   ---@field watch? aineo.git.Watch the running watch, from the pane's first showing; nil once it failed
+  ---@field worktree_watch? { top: string, watch: aineo.git.Watch } the running watch of the worktree whose *Uncommitted* is chosen, by its top level, while the pane shows it (`follow_chosen_worktree()`)
+  ---@field worktree_watch_failure? { top: string, failure: aineo.git.Failure } why the watch of the worktree whose *Uncommitted* is chosen stopped, by the worktree's top level as the commits window lists it, kept while that line stays chosen and the pane shown
   ---@field watch_failure? aineo.git.Failure why the watch failed, until one starts again
   ---@field graph_shown boolean whether the commits window shows the commit graph in place of its sections, which `t` switches
   ---@field graph? aineo.git.CommitGraph the commit graph, as last read; nil while none was read
@@ -350,10 +352,23 @@ function M.new(label)
     return { line = line, colours = line_colours }
   end
 
+  --- Why the watch of the worktree whose *Uncommitted* is chosen stopped,
+  --- while that line is chosen (`follow_chosen_worktree()`); nil otherwise.
+  ---
+  ---@return aineo.git.Failure|nil
+  local function chosen_worktree_watch_failure()
+    local failed, selected = session.worktree_watch_failure, session.selected
+    if failed and selected.kind == 'uncommitted' and selected.worktree then
+      return failed.top == selected.worktree.top and failed.failure or nil
+    end
+    return nil
+  end
+
   --- The files window's page for what the session knows: why it has no
   --- repository, when it has none, or the files of the one filter it lists
   --- (`filter_named()`), and what their diffs compare against
-  --- (`against_row()`).
+  --- (`against_row()`), under the line saying a read or a watch failed, the
+  --- chosen worktree's watch included (`chosen_worktree_watch_failure()`).
   ---
   ---@return aineo.changes.Page
   local function files_page()
@@ -365,7 +380,7 @@ function M.new(label)
       filter = session.repository and filter_named(listed) or nil,
       against = session.repository and against_row(listed) or nil,
       changes = listed and listed.changes,
-      failure = session.files_failure or session.watch_failure,
+      failure = session.files_failure or session.watch_failure or chosen_worktree_watch_failure(),
       worktree = listed and listed.worktree,
       saved = session.saved,
       unwatched_subdirectories = session.watch ~= nil and not session.watch.watches_subdirectories,
@@ -613,11 +628,29 @@ function M.new(label)
     end
   end
 
+  --- Watches the files of the worktree whose *Uncommitted* is chosen, with
+  --- the watch the session's own repository has (`aineo.git`'s
+  --- `watch_repository()`), its working tree alone, as the session's watch
+  --- already sees the git directory they share, while the pane shows it and
+  --- the commits window has found its repository — none for a worktree whose
+  --- files the session's own watch already sees: each call of that watch
+  --- reads the files again (`read_files()`). A failure stops it, is kept and
+  --- told in the files window while that line is chosen
+  --- (`chosen_worktree_watch_failure()`), and starts no watch again until
+  --- the line is chosen again or the pane shown again. Once another filter
+  --- is chosen, the worktree is no longer listed, or neither of the pane's
+  --- buffers is shown, the watch is stopped. Defined once the pane's
+  --- buffers can be told shown.
+  ---@type fun()
+  local follow_chosen_worktree
+
   --- Writes the files buffer for what the session knows (`files_page()`,
   --- `show_page()`), then keeps the wait of the cursor for its files
-  --- (`place_awaited_files_cursor()`).
+  --- (`place_awaited_files_cursor()`), and watches the worktree its
+  --- *Uncommitted* lists, if any (`follow_chosen_worktree()`).
   local function show_files()
     show_page(buffers.files, files_page, place_awaited_files_cursor)
+    follow_chosen_worktree()
   end
 
   --- How many times what the files window's diffs compare has been asked of
@@ -970,8 +1003,12 @@ function M.new(label)
   local WORKTREE_GONE = { reason = 'failed', message = 'the worktree is gone' }
 
   --- Reads the files of the selected filter, a filter of another worktree,
-  --- in that worktree, and calls `done(failure, listing)`: a commit's files in
-  --- the repository the commits window found for the worktree; its whole
+  --- in that worktree, and calls `done(failure, listing)`: a commit's files,
+  --- and its *Uncommitted* from its own `HEAD`, in the repository the commits
+  --- window found for the worktree — an *Uncommitted* whose worktree it found
+  --- none for gives that worktree's failure, else no file and no failure,
+  --- which the window shows as still reading, until a read of the commits
+  --- window finds its repository (`reselect_in_worktrees()`); its whole
   --- change from its base, read again now (`aineo.changes.worktrees`'
   --- `read_worktree()`), which fails with `WORKTREE_GONE` when the worktree's
   --- directory is gone. The listing names the worktree as the read found it.
@@ -983,6 +1020,16 @@ function M.new(label)
     local section = section_as_last_read(selected.worktree)
     if selected.kind == 'commit' then
       git.commit_files(section.repository, selected.commit.id, function(failure, changes)
+        done(failure, { filter = selected, changes = changes, worktree = section })
+      end, options)
+      return
+    end
+    if selected.kind == 'uncommitted' and not section.repository then
+      done(section.failure, { filter = selected, worktree = section })
+      return
+    end
+    if selected.kind == 'uncommitted' then
+      git.uncommitted_files(section.repository, function(failure, changes)
         done(failure, { filter = selected, changes = changes, worktree = section })
       end, options)
       return
@@ -1099,12 +1146,15 @@ function M.new(label)
   --- Reads the files of the selected filter again, and shows them
   --- (`ask_for_files()`), when asked with `with_own` — the editor's own
   --- files may differ — or, always, when the filter is another worktree's
-  --- whole change, which a commit in that worktree changes whatever the
-  --- editor's own files do.
+  --- whole change or its *Uncommitted*, which a change in that worktree
+  --- changes whatever the editor's own files do.
   ---
   ---@param with_own boolean
   local function read_files(with_own)
-    ask_for_files(with_own or session.selected.kind == 'worktree')
+    local selected = session.selected
+    local reads_other_working_tree = selected.kind == 'worktree'
+      or (selected.kind == 'uncommitted' and selected.worktree ~= nil)
+    ask_for_files(with_own or reads_other_working_tree)
   end
 
   --- Selects `selected`, the commits window's cursor to be put on its line
@@ -1189,7 +1239,9 @@ function M.new(label)
   --- section lists, which `take_tree_commits()` gives way. A worktree still
   --- listed becomes the selected filter's as it was last read, and the files
   --- window is written again when its branch changed, for its first line
-  --- names it. The scope is kept or cleared first (`keep_scope_listed_in()`).
+  --- names it — or read, for its *Uncommitted* chosen before the window had
+  --- found its repository, once it has found it or failed to. The scope is
+  --- kept or cleared first (`keep_scope_listed_in()`).
   ---
   ---@param others aineo.changes.OtherWorktrees
   local function reselect_in_worktrees(others)
@@ -1213,8 +1265,11 @@ function M.new(label)
       select_filter(filter.of_worktree(section))
       read_files(true)
     else
+      local unread = selected.kind == 'uncommitted' and not selected.worktree.repository
       session.selected = filter.in_worktree(selected, section)
-      if section.branch ~= selected.worktree.branch then
+      if unread and (section.repository or section.failure) then
+        read_files(true)
+      elseif section.branch ~= selected.worktree.branch then
         show_files()
       end
     end
@@ -2100,6 +2155,9 @@ function M.new(label)
       callback = function()
         if session.watch then
           session.watch.stop()
+        end
+        if session.worktree_watch then
+          session.worktree_watch.watch.stop()
         end
       end,
     })
@@ -3029,7 +3087,8 @@ function M.new(label)
     })
   end
 
-  --- Shows the worktree `item` names alone, and chooses its whole change
+  --- Shows the worktree `item` names alone, and chooses its whole change,
+  --- or its *Uncommitted* for an item that asks for it
   --- (`select_filter()`), which the files window then lists: as the commits
   --- window last listed it, or, for one of the Reported section it has not
   --- listed yet, as git listed it when it was reported (`node_at()`). Any
@@ -3047,7 +3106,9 @@ function M.new(label)
     end
     session.scope, session.focused, session.branch = scope.of(section), true, nil
     session.shows_reported = false
-    select_filter(filter.of_worktree(section))
+    select_filter(
+      item.uncommitted and filter.of_worktree_uncommitted(section) or filter.of_worktree(section)
+    )
     show_commits()
     read_files(true)
   end
@@ -3127,7 +3188,9 @@ function M.new(label)
   --- chosen, the cursor on its heading, and the user is told once with
   --- `waiting.tell`, the worktree named with the branches reported of it
   --- (`scope.started_work()`); any other change is written and read again, the
-  --- focused view settled (`settle_reported_view()`). The other worktrees
+  --- focused view settled (`settle_reported_view()`), and the files of
+  --- another worktree's filter chosen are read again (`read_files()`), its
+  --- *Uncommitted* among them. The other worktrees
   --- are read again while the pane has been shown, so that the work's
   --- commits show.
   ---
@@ -3159,6 +3222,7 @@ function M.new(label)
     else
       settle_reported_view(false)
       show_commits()
+      read_files(false)
     end
     if session.shown then
       read_commits(false)
@@ -3509,10 +3573,13 @@ function M.new(label)
     end, options)
   end
 
-  --- Shows the editor's own work: the default view, *Session work* chosen.
-  local function show_own_work()
+  --- Shows the editor's own work: the default view, *Session work* chosen,
+  --- or *Uncommitted* when `uncommitted`.
+  ---
+  ---@param uncommitted? boolean
+  local function show_own_work(uncommitted)
     session.focused, session.shows_reported, session.shown_label = false, false, nil
-    select_filter(filter.SESSION_WORK)
+    select_filter(uncommitted and filter.UNCOMMITTED or filter.SESSION_WORK)
     show_commits()
     read_files(true)
   end
@@ -3558,7 +3625,7 @@ function M.new(label)
     elseif type(item.branch) == 'string' then
       show_branch_alone(item)
     elseif item.own == true then
-      show_own_work()
+      show_own_work(item.uncommitted == true)
     elseif type(item.group) == 'string' then
       show_reported(item.group)
     elseif item.reported == true then
@@ -3643,16 +3710,18 @@ function M.new(label)
       if failure then
         vim.notify(scope.branches_unlisted(failure), vim.log.levels.WARN)
       end
-      pick_among(
-        scope.items_of(
-          session.commits_others,
-          candidates,
-          #session.nodes,
-          vim.tbl_map(function(line)
-            return lines.report_item(line, clock_now())
-          end, reported_lines())
-        )
-      )
+      pick_among(scope.items_of(
+        session.commits_others,
+        candidates,
+        #session.nodes,
+        vim
+          .iter(reported_lines())
+          :map(function(line)
+            return lines.report_items(line, clock_now())
+          end)
+          :flatten()
+          :totable()
+      ))
     end)
   end
 
@@ -3697,6 +3766,13 @@ function M.new(label)
       desc = 'aineo: read the changes pane again',
       callback = function()
         pane_shown()
+      end,
+    })
+    vim.api.nvim_create_autocmd('BufWinLeave', {
+      buffer = buffer,
+      desc = 'aineo: stop watching the worktree chosen once the changes pane hides',
+      callback = function()
+        vim.schedule(follow_chosen_worktree)
       end,
     })
     vim.keymap.set('n', '<CR>', function()
@@ -4059,6 +4135,81 @@ function M.new(label)
     return buffer ~= nil and vim.api.nvim_buf_is_valid(buffer) and #vim.fn.win_findbuf(buffer) > 0
   end
 
+  --- Stops the watch of the worktree whose *Uncommitted* was chosen, when
+  --- one runs.
+  local function stop_worktree_watch()
+    if session and session.worktree_watch then
+      session.worktree_watch.watch.stop()
+      session.worktree_watch = nil
+    end
+  end
+
+  --- Whether the session's own watch already sees the files of the folder
+  --- `top`: it watches subdirectories, and `top` lies under the session's
+  --- top level, as a worktree made inside the editor's own does.
+  ---
+  ---@param top string
+  ---@return boolean
+  local function own_watch_sees(top)
+    local own = session.watch
+    return own ~= nil
+      and own.watches_subdirectories
+      and vim.startswith(top, session.repository.top .. '/')
+  end
+
+  --- The repository of the worktree whose *Uncommitted* is chosen, as the
+  --- commits window last listed it, while the pane is shown, the window has
+  --- found it and the session's own watch does not already see its files
+  --- (`own_watch_sees()`); nil otherwise.
+  ---
+  ---@return aineo.git.Repository|nil
+  local function chosen_worktree_repository()
+    local selected = session.selected
+    if not (selected.kind == 'uncommitted' and selected.worktree) then
+      return nil
+    end
+    if not (is_shown(buffers.files) or is_shown(buffers.commits)) then
+      return nil
+    end
+    local repository = section_as_last_read(selected.worktree).repository
+    if repository and own_watch_sees(repository.top) then
+      return nil
+    end
+    return repository
+  end
+
+  follow_chosen_worktree = function()
+    if not session or released then
+      return
+    end
+    local repository = chosen_worktree_repository()
+    local chosen_top = repository and session.selected.worktree.top
+    local failed = session.worktree_watch_failure
+    if failed and failed.top ~= chosen_top then
+      session.worktree_watch_failure, failed = nil, nil
+    end
+    local watched = session.worktree_watch
+    if watched and repository and watched.top == repository.top then
+      return
+    end
+    stop_worktree_watch()
+    if not repository or failed then
+      return
+    end
+    local started = git.watch_repository(repository, function(failure)
+      if failure then
+        stop_worktree_watch()
+        session.worktree_watch_failure = { top = chosen_top, failure = failure }
+        show_files()
+      else
+        read_files(false)
+      end
+    end, vim.tbl_extend('force', session.settings.git or {}, { working_tree_only = true }))
+    if started then
+      session.worktree_watch = { top = repository.top, watch = started }
+    end
+  end
+
   --- Reads both lists again, as a showing of the pane does, while either of
   --- the pane's buffers is shown in a window of any tab page (`is_shown()`);
   --- does nothing otherwise, or before the session has begun.
@@ -4153,6 +4304,7 @@ function M.new(label)
       session.watch.stop()
       session.watch = nil
     end
+    stop_worktree_watch()
     if session then
       drop_waiting()
     end

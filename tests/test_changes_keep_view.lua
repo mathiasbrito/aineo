@@ -367,34 +367,38 @@ T['a restart']['shows the worktree picked with s alone again'] = function()
   add_worktree(top, 'agent-2', 'feature/b')
   child.lua('_G.homes.module.refresh_shown_pane()')
   wait_until('both worktrees listed', function()
-    return #pane_lines('module', 'commits') == 7
+    return #pane_lines('module', 'commits') == 9
   end)
   pick('module', 2)
-  expect_pane_lines(
-    'module',
-    'commits',
-    { 'Worktree agent-2 (feature/b)', 'No commits in this worktree' }
-  )
+  expect_pane_lines('module', 'commits', {
+    'Worktree agent-2 (feature/b)',
+    'Uncommitted — agent-2 (feature/b)',
+    'No commits in this worktree',
+  })
 
   restart_on(top, SESSION_A, state)
 
-  expect_pane_lines(
-    'module',
-    'commits',
-    { 'Worktree agent-2 (feature/b)', 'No commits in this worktree' }
-  )
+  expect_pane_lines('module', 'commits', {
+    'Worktree agent-2 (feature/b)',
+    'Uncommitted — agent-2 (feature/b)',
+    'No commits in this worktree',
+  })
   expect_files_heading('module', 'Files in: Worktree agent-2 (feature/b)')
   eq(messages(), {})
 end
 
 --- The lines of the commits window for the worktree `folder` on `branch`
---- with no commit.
+--- with no commit: its heading, its Uncommitted line and the note.
 ---
 ---@param folder string
 ---@param branch string
 ---@return string[]
 local function bare_worktree(folder, branch)
-  return { ('Worktree %s (%s)'):format(folder, branch), 'No commits in this worktree' }
+  return {
+    ('Worktree %s (%s)'):format(folder, branch),
+    ('Uncommitted — %s (%s)'):format(folder, branch),
+    'No commits in this worktree',
+  }
 end
 
 --- The default view of a repository whose other worktrees, each of no
@@ -481,7 +485,7 @@ local function start_with_two_worktrees(name, state)
   add_worktree(top, 'agent-1', 'feature/a')
   add_worktree(top, 'agent-2', 'feature/b')
   child.lua('_G.homes.module.refresh_shown_pane()')
-  wait_for_lines(7)
+  wait_for_lines(9)
   return top
 end
 
@@ -500,7 +504,7 @@ T['a restart']['shows the branch picked with s alone again'] = function()
   add_worktree(top, 'agent-1', 'feature/a')
   add_branch(top, 'feature/p', 'Work p')
   child.lua('_G.homes.module.refresh_shown_pane()')
-  wait_for_lines(5)
+  wait_for_lines(6)
   pick('module', 2)
   eq(last_offered().prompt, PROMPT)
   local alone = { 'Branch feature/p', last_commit_line(top, 'feature/p', 'Work p') }
@@ -539,7 +543,11 @@ T['a restart']['shows the tree again with each branch’s base, the label and ag
   local one = commit_only(agent, 'one.txt', 'one', 'One')
   local two = commit_only(agent, 'two.txt', 'two', 'Two')
   report('module', call_for(agent, 'task', { { name = 'feature/a', base = one } }))
-  local from_one = { 'Worktree agent-1 (feature/a)', commit_line(two, 'Two') }
+  local from_one = {
+    'Worktree agent-1 (feature/a)',
+    'Uncommitted — agent-1 (feature/a)',
+    commit_line(two, 'Two'),
+  }
   expect_pane_lines('module', 'commits', from_one)
 
   restart_on(top, SESSION_A, state)
@@ -551,11 +559,13 @@ T['a restart']['shows the tree again with each branch’s base, the label and ag
     'task now',
     '  agent-1',
     ('    feature/a * from %s'):format(one:sub(1, 7)),
+    '      Uncommitted',
     '      ' .. commit_line(two, 'Two'),
     'Uncommitted',
     'Session work',
     'No commits on this session',
     'Worktree agent-1 (feature/a)',
+    'Uncommitted — agent-1 (feature/a)',
     commit_line(two, 'Two'),
   })
 end
@@ -618,6 +628,7 @@ T['a restart']['loads the reports kept before reports were a tree: a worktree wi
 
   expect_pane_lines('module', 'commits', {
     'Worktree agent-1 (feature/a)',
+    'Uncommitted — agent-1 (feature/a)',
     commit_line(two, 'Two'),
     'Branch feature/p (not checked out: commits only)',
     last_commit_line(top, 'feature/p', 'Work p'),
@@ -628,6 +639,7 @@ T['a restart']['loads the reports kept before reports were a tree: a worktree wi
     'old task now',
     '  agent-1',
     ('    feature/a * from %s'):format(one:sub(1, 7)),
+    '      Uncommitted',
     '      ' .. commit_line(two, 'Two'),
     'branch task',
     '  ' .. vim.fs.basename(top),
@@ -637,6 +649,7 @@ T['a restart']['loads the reports kept before reports were a tree: a worktree wi
     'Session work',
     'No commits on this session',
     'Worktree agent-1 (feature/a)',
+    'Uncommitted — agent-1 (feature/a)',
     commit_line(two, 'Two'),
   })
 end
@@ -706,7 +719,7 @@ T['the record']['is not written while the view never changes'] = function()
   local state = fixture.directory('keep-view-idle-state')
   start_with_two_worktrees('keep-view-idle', state)
   child.lua('_G.homes.module.refresh_shown_pane()')
-  wait_for_lines(7)
+  wait_for_lines(9)
 
   eq(vim.uv.fs_stat(view_file(state, SESSION_A)), nil)
 end
@@ -917,7 +930,7 @@ T['a view that is gone']['drops a branch deleted since, untold, and shows the de
   add_worktree(top, 'agent-1', 'feature/a')
   add_branch(top, 'feature/p', 'Work p')
   child.lua('_G.homes.module.refresh_shown_pane()')
-  wait_for_lines(5)
+  wait_for_lines(6)
   pick('module', 2)
   expect_pane_lines(
     'module',
@@ -939,7 +952,7 @@ T['a view that is gone']['drops the reported worktrees that are gone, untold, an
   local top = start_with_two_worktrees('keep-view-gone-member', state)
   report('module', agent_call(worktree_at(top, 'agent-1')))
   report('module', call_for(worktree_at(top, 'agent-2'), 'T', { { name = 'feature/b' } }))
-  wait_for_lines(4)
+  wait_for_lines(6)
   child.stop()
   git_repo.git(top, { 'worktree', 'remove', worktree_at(top, 'agent-1') })
 
@@ -1174,7 +1187,7 @@ T['a restart']['gives way to reported work made before the session was followed,
   add_worktree(top, 'agent-2', 'feature/b')
   add_worktree(top, 'agent-3', 'feature/c')
   child.lua('_G.homes.module.refresh_shown_pane()')
-  wait_for_lines(9)
+  wait_for_lines(12)
   pick('module', 3)
   expect_pane_lines('module', 'commits', bare_worktree('agent-3', 'feature/c'))
   restart_editor()
@@ -1183,11 +1196,11 @@ T['a restart']['gives way to reported work made before the session was followed,
   expect_pane_lines('module', 'commits', DEFAULT_VIEW_WITH_THREE)
   report('module', agent_call(worktree_at(top, 'agent-1')))
   expect_pane_lines('module', 'commits', bare_worktree('agent-1', 'feature/a'))
-  pick('module', 6)
+  pick('module', 7)
   expect_pane_lines('module', 'commits', bare_worktree('agent-2', 'feature/b'))
   git_repo.git(top, { 'worktree', 'remove', worktree_at(top, 'agent-2') })
   local reported_default_view = vim.list_extend(
-    { 'Reported', 'T now', '  agent-1', '    feature/a * from ?' },
+    { 'Reported', 'T now', '  agent-1', '    feature/a * from ?', '      Uncommitted' },
     default_view_with(bare_worktree('agent-1', 'feature/a'), bare_worktree('agent-3', 'feature/c'))
   )
   expect_pane_lines('module', 'commits', reported_default_view)

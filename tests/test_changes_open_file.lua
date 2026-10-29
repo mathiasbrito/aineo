@@ -638,9 +638,10 @@ T['gf']['under a commit of another worktree shows the file as that commit has it
     'Session work',
     'No commits on this session',
     'Worktree agent (agent)',
+    'Uncommitted — agent (agent)',
     git_repo.commit_line(commit, 'The agent’s'),
   })
-  go_to_commits_line(5)
+  go_to_commits_line(6)
   expect_lines(FILES, {
     'Files in: ' .. git_repo.commit_line(commit, 'The agent’s (worktree agent)'),
     '  M notes.txt',
@@ -668,9 +669,10 @@ T['gf']['under a commit of another worktree reads it in that worktree’s reposi
     'Session work',
     'No commits on this session',
     'Worktree agent (agent)',
+    'Uncommitted — agent (agent)',
     git_repo.commit_line(commit, 'Clone'),
   })
-  go_to_commits_line(5)
+  go_to_commits_line(6)
   expect_lines(FILES, {
     'Files in: ' .. git_repo.commit_line(commit, 'Clone (worktree agent)'),
     '  M notes.txt',
@@ -916,6 +918,7 @@ T['gf']['on another worktree’s file opens nothing, not the editor’s file of 
     'Session work',
     'No commits on this session',
     'Worktree agent (agent)',
+    'Uncommitted — agent (agent)',
     'No commits in this worktree',
   })
   go_to_commits_line(4)
@@ -971,6 +974,7 @@ T['gf']['on a line listing no file']['opens nothing and says nothing'] = functio
     'Session work',
     'No commits on this session',
     'Worktree agent (agent)',
+    'Uncommitted — agent (agent)',
     'No commits in this worktree',
   })
   go_to_commits_line(commits_line)

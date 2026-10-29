@@ -120,7 +120,7 @@ end
 
 --- One entry a window lists: a file changed, or a commit.
 ---@class aineo.changes.Entry
----@field key string what tells the entry apart from one read to the next: a change's path, or the key of the filter the entry lists (`aineo.changes.filter`'s `key()`): a commit's id for the editor's own commit, `<top>\0<id>` for a worktree's commit, `<top>\0\0worktree` for its heading, `\0landed\0<id>` for a commit that landed in the working branch, `\0landed` for its heading, `\0branch\0<name>` for a local branch's heading and `\0branch\0<name>\0<id>` for one of its commits
+---@field key string what tells the entry apart from one read to the next: a change's path, or the key of the filter the entry lists (`aineo.changes.filter`'s `key()`): a commit's id for the editor's own commit, `<top>\0<id>` for a worktree's commit, `<top>\0\0worktree` for its heading, `<top>\0\0uncommitted` for its *Uncommitted*, `\0landed\0<id>` for a commit that landed in the working branch, `\0landed` for its heading, `\0branch\0<name>` for a local branch's heading and `\0branch\0<name>\0<id>` for one of its commits
 ---@field change? aineo.git.Change
 ---@field commit? aineo.git.Commit
 ---@field filter? aineo.changes.Filter the filter a commits window line selects, or the filter a file is listed under
@@ -311,7 +311,7 @@ M.NOT_WATCHED =
 ---@field changes? aineo.git.Change[] the files of the filter, as last read
 ---@field failure? aineo.git.Failure why the last read failed, when it did
 ---@field worktree? aineo.changes.WorktreeSection the worktree other than the editor's that the files were read in, for the files of another worktree's filter
----@field saved table<string, true> the paths, relative to the top level, of the files the user saved; marked under *Uncommitted* and *Session work* alone
+---@field saved table<string, true> the paths, relative to the top level, of the files the user saved; marked under the editor's own *Uncommitted* and *Session work* alone
 ---@field unwatched_subdirectories boolean whether a change in a subdirectory goes unseen by the watch
 ---@field now integer the time the ages of commits are told at, in seconds since the epoch
 
@@ -454,6 +454,28 @@ function M.worktrees_unlisted(failure)
   return 'The other worktrees could not be listed: ' .. M.words_of(failure)
 end
 
+--- The commits window's row of `selected`, a filter: its name, whole in the
+--- group of filters, listing the entry of that filter.
+---
+---@param selected aineo.changes.Filter
+---@return aineo.changes.Row
+local function filter_row(selected)
+  local row = whole_line(M.filter_name(selected), colours.FILTER_GROUP)
+  row.entry = { key = filter.key(selected), filter = selected }
+  return row
+end
+
+--- The row of the *Uncommitted* of `section`, a worktree other than the
+--- editor's (`filter_row()`), listing that worktree too.
+---
+---@param section aineo.changes.WorktreeSection
+---@return aineo.changes.Row
+local function worktree_uncommitted_row(section)
+  local row = filter_row(filter.of_worktree_uncommitted(section))
+  row.entry.worktree = section
+  return row
+end
+
 --- The heading row of `section`, a worktree other than the editor's: its
 --- heading (`M.worktree_heading()`), whole in `group`, listing the filter of
 --- the worktree's whole change.
@@ -470,8 +492,9 @@ end
 
 --- The rows of the other worktrees, `others`: the line saying they could
 --- not be listed (`M.worktrees_unlisted()`), a failure, when they could
---- not; then, in their order, each one's heading (`heading_row()`, a note)
---- and its rows (`section_rows()`).
+--- not; then, in their order, each one's heading (`heading_row()`, a note),
+--- its *Uncommitted* (`worktree_uncommitted_row()`) and its rows
+--- (`section_rows()`).
 ---
 ---@param others aineo.changes.OtherWorktrees|nil
 ---@param now integer seconds since the epoch
@@ -483,6 +506,7 @@ local function worktree_rows(others, now)
   end
   for _, section in ipairs(others and others.sections or {}) do
     table.insert(rows, heading_row(section, colours.NOTE_GROUP))
+    table.insert(rows, worktree_uncommitted_row(section))
     vim.list_extend(rows, section_rows(section, now))
   end
   return rows
@@ -512,8 +536,10 @@ local function file_rows(changes, saved, listed_under, worktree)
 end
 
 --- The name of `selected`, a filter, as the pane says it: *Uncommitted* and
---- *Session work*; for what landed `Landed in ` and the working branch's
---- name, quoted as a path is (`M.quoted_path()`); for a commit its line as
+--- *Session work*; for another worktree's *Uncommitted*, `Uncommitted — `
+--- and the worktree's name (`M.worktree_name()`); for what landed `Landed
+--- in ` and the working branch's name, quoted as a path is
+--- (`M.quoted_path()`); for a commit its line as
 --- the commits window shows it (`M.commit_line()`), followed by `(worktree
 --- <folder>)` when the commit is another worktree's, the folder quoted as
 --- its heading quotes it, or `(branch <name>)` when it is a local branch's,
@@ -548,18 +574,10 @@ function M.filter_name(selected, now)
     end
     return name
   end
+  if selected.kind == 'uncommitted' and selected.worktree then
+    return 'Uncommitted — ' .. M.worktree_name(selected.worktree)
+  end
   return selected.kind == 'uncommitted' and 'Uncommitted' or 'Session work'
-end
-
---- The commits window's row of `selected`, a filter: its name, whole in the
---- group of filters, listing the entry of that filter.
----
----@param selected aineo.changes.Filter
----@return aineo.changes.Row
-local function filter_row(selected)
-  local row = whole_line(M.filter_name(selected), colours.FILTER_GROUP)
-  row.entry = { key = filter.key(selected), filter = selected }
-  return row
 end
 
 --- The files window's first row for `listed`, the filter it lists: `Files
@@ -575,10 +593,10 @@ end
 --- The rows below the first line of the files window, for `view`: the
 --- line saying its last read failed, when it did, and `M.NOT_WATCHED` where
 --- subdirectories go unwatched; then a line per file (`file_rows()`),
---- marked as saved under *Uncommitted* and *Session work* alone, or the
---- filter's line for no file (`NO_FILES_OF`). Before any list was read,
---- `M.NOT_WATCHED` where it shows, then `M.READING`; or, once a read has
---- failed, the line saying so alone.
+--- marked as saved under the editor's own *Uncommitted* and *Session work*
+--- alone, or the filter's line for no file (`NO_FILES_OF`). Before any list
+--- was read, `M.NOT_WATCHED` where it shows, then `M.READING`; or, once a
+--- read has failed, the line saying so alone.
 ---
 ---@param view aineo.changes.FilesView
 ---@return aineo.changes.Row[]
@@ -591,7 +609,7 @@ local function listed_file_rows(view)
     return view.failure and { notes[1] } or rows_of(notes, {}, note(M.READING))
   end
   local kind = view.filter and view.filter.kind or 'session_work'
-  local saved = MARKS_SAVES[kind] and view.saved or {}
+  local saved = MARKS_SAVES[kind] and not view.worktree and view.saved or {}
   return rows_of(
     notes,
     file_rows(view.changes, saved, view.filter, view.worktree),
@@ -769,6 +787,51 @@ function M.report_item(line, now)
   return vim.tbl_extend('force', line.picks, { text = '[reported] ' .. tree_text(line, now) })
 end
 
+--- What the Reported section's line under a branch's line says for its
+--- worktree's *Uncommitted*.
+local TREE_UNCOMMITTED = 'Uncommitted'
+
+--- The text of the *Uncommitted* under `line`, the line of a branch its
+--- worktree has checked out: `TREE_UNCOMMITTED`, indented a depth below the
+--- line's.
+---
+---@param line aineo.changes.TreeLine
+---@return string
+local function tree_uncommitted_text(line)
+  return (' '):rep((line.depth + 1) * INDENT_CELLS) .. TREE_UNCOMMITTED
+end
+
+--- The choice of the list `s` offers, and of Enter on its line, for the
+--- *Uncommitted* under `line`, the line of a branch its worktree has checked
+--- out: what `line` picks, its *Uncommitted* chosen, as `[reported] ` and
+--- its text (`tree_uncommitted_text()`).
+---
+---@param line aineo.changes.TreeLine
+---@return aineo.changes.ScopeItem
+local function uncommitted_report_item(line)
+  return vim.tbl_extend(
+    'force',
+    line.picks,
+    { uncommitted = true, text = '[reported] ' .. tree_uncommitted_text(line) }
+  )
+end
+
+--- The choices of the list `s` offers for `line`, a line of the Reported
+--- section, at the time `now`: its own (`M.report_item()`), then, for the
+--- line of a branch its worktree has checked out, its *Uncommitted*'s
+--- (`uncommitted_report_item()`), in the order the section lists them.
+---
+---@param line aineo.changes.TreeLine
+---@param now integer seconds since the epoch
+---@return aineo.changes.ScopeItem[]
+function M.report_items(line, now)
+  local items = { M.report_item(line, now) }
+  if line.checked_out then
+    table.insert(items, uncommitted_report_item(line))
+  end
+  return items
+end
+
 --- How many of a branch's commits the Reported section lists below its
 --- line.
 M.MOST_TREE_COMMITS = 20
@@ -885,10 +948,56 @@ local function tree_row(line, now)
   return { line = text, colours = line_colours, entry = entry }
 end
 
+--- The filter of the *Uncommitted* under `line`, the line of a branch its
+--- worktree has checked out: the editor's own *Uncommitted* on the editor's
+--- own worktree; else that worktree's, as the commits window last listed it
+--- (`aineo.changes.TreeLine`'s `worktree_section`), or as git listed it when
+--- it was reported.
+---
+---@param line aineo.changes.TreeLine
+---@return aineo.changes.Filter
+local function tree_uncommitted_filter(line)
+  if line.picks.own then
+    return filter.UNCOMMITTED
+  end
+  return filter.of_worktree_uncommitted(line.worktree_section or line.node.worktree)
+end
+
+--- The row of the *Uncommitted* under `line`, the line of a branch its
+--- worktree has checked out: its text (`tree_uncommitted_text()`), the word
+--- in the group of filters, listing its filter
+--- (`tree_uncommitted_filter()`) and the choice Enter on it picks
+--- (`uncommitted_report_item()`).
+---
+---@param line aineo.changes.TreeLine
+---@return aineo.changes.Row
+local function tree_uncommitted_row(line)
+  local text = tree_uncommitted_text(line)
+  local listed_under = tree_uncommitted_filter(line)
+  return {
+    line = text,
+    colours = {
+      {
+        first_column = #text - #TREE_UNCOMMITTED,
+        end_column = #text,
+        group = colours.FILTER_GROUP,
+      },
+    },
+    entry = {
+      key = filter.key(listed_under),
+      filter = listed_under,
+      worktree = listed_under.worktree,
+      picks = uncommitted_report_item(line),
+    },
+  }
+end
+
 --- The rows of the Reported section, for `reported`, its lines in their
 --- order (`aineo.changes.reports`' `tree_lines()`): its heading, whole in
---- its group, and a row per line (`tree_row()`), a branch's followed by
---- its commits (`tree_commit_rows()`); none without a line.
+--- its group, and a row per line (`tree_row()`), a branch's followed, when
+--- its worktree has it checked out, by its *Uncommitted*
+--- (`tree_uncommitted_row()`), then by its commits (`tree_commit_rows()`);
+--- none without a line.
 ---
 ---@param reported aineo.changes.TreeLine[]|nil
 ---@param now integer seconds since the epoch
@@ -901,6 +1010,9 @@ local function reported_rows(reported, now)
   for _, line in ipairs(reported) do
     local row = tree_row(line, now)
     table.insert(rows, row)
+    if line.checked_out then
+      table.insert(rows, tree_uncommitted_row(line))
+    end
     if line.branch then
       vim.list_extend(rows, tree_commit_rows(line, now, row.entry))
     end
@@ -1038,8 +1150,9 @@ local COMMITS_ONLY = ' (not checked out: commits only)'
 --- The rows of the members `scope` names, shown alone: each one's heading,
 --- whole in the group of filters — a worktree's (`heading_row()`) or a
 --- branch's, listing the filter of its whole change (`filter_row()`), and
---- saying `COMMITS_ONLY` when it is read from a reported base — then its
---- rows (`section_rows()`, `branch_rows()`).
+--- saying `COMMITS_ONLY` when it is read from a reported base — then, for a
+--- worktree, its *Uncommitted* (`worktree_uncommitted_row()`), and its rows
+--- (`section_rows()`, `branch_rows()`).
 ---
 ---@param scope aineo.changes.ScopeMember[]
 ---@param now integer seconds since the epoch
@@ -1049,6 +1162,7 @@ local function scope_rows(scope, now)
   for _, member in ipairs(scope) do
     if member.worktree then
       table.insert(rows, heading_row(member.worktree, colours.FILTER_GROUP))
+      table.insert(rows, worktree_uncommitted_row(member.worktree))
       vim.list_extend(rows, section_rows(member.worktree, now))
     else
       local heading = filter_row(filter.of_branch(member.branch.name))

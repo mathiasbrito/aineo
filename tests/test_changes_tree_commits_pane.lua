@@ -184,11 +184,13 @@ T['the Reported section']['lists the commits of a checked-out branch below its l
     'T now',
     '  agent-1',
     ('    feature/a * from %s'):format(short(one)),
+    '      Uncommitted',
     tree_commit_line(two, 'Two'),
     'Uncommitted',
     'Session work',
     'No commits on this session',
     'Worktree agent-1 (feature/a)',
+    'Uncommitted — agent-1 (feature/a)',
     git_repo.commit_line(two, 'Two'),
   })
 end
@@ -221,6 +223,7 @@ T['the Reported section']['lists the commits of a branch no worktree has checked
     'T now',
     '  agent-2',
     '    feature/o * from ?',
+    '      Uncommitted',
     ('    feature/b from %s'):format(short(one)),
     tree_commit_line(three, 'Three'),
     tree_commit_line(two, 'Two'),
@@ -249,11 +252,13 @@ T['the Reported section']['lists, after a rebase, the commits of the base the li
     'T now',
     '  agent-1',
     ('    feature/a * from %s'):format(short(moved_on)),
+    '      Uncommitted',
     tree_commit_line(rebased, 'Agent work'),
     'Uncommitted',
     'Session work',
     git_repo.commit_line(moved_on, 'Dev moved on, not the agent'),
     'Worktree agent-1 (feature/a)',
+    'Uncommitted — agent-1 (feature/a)',
     git_repo.commit_line(rebased, 'Agent work'),
   })
 end
@@ -275,6 +280,7 @@ T['the Reported section']['lists, on the editor’s own worktree’s branch, the
     'T now',
     '  ' .. vim.fs.basename(top),
     ('    main * from %s'):format(short(newer)),
+    '      Uncommitted',
     tree_commit_line(later, 'Later'),
     'Uncommitted',
     'Session work',
@@ -293,10 +299,12 @@ T['the Reported section']['lists no commit below a branch with nothing past its 
     'T now',
     '  agent-1',
     ('    feature/a * from %s'):format(short(base)),
+    '      Uncommitted',
     'Uncommitted',
     'Session work',
     'No commits on this session',
     'Worktree agent-1 (feature/a)',
+    'Uncommitted — agent-1 (feature/a)',
     'No commits in this worktree',
   })
 end
@@ -330,6 +338,7 @@ T['the Reported section']['stops a branch’s commits at 20, saying how many mor
     'T now',
     '  agent-1',
     ('    feature/a * from %s'):format(short(base)),
+    '      Uncommitted',
     ('    feature/long from %s'):format(short(base)),
   }
   for number = 22, 3, -1 do
@@ -361,6 +370,7 @@ local function session_with_tree_commits(name)
     'T now',
     '  agent-1',
     ('    feature/a * from %s'):format(short(base)),
+    '      Uncommitted',
     tree_commit_line(two, 'Two'),
     tree_commit_line(one, 'One'),
   })
@@ -429,7 +439,7 @@ T['a commit of the Reported section'] = MiniTest.new_set()
 T['a commit of the Reported section']['has its files listed by the files window once the cursor stays on its line'] = function()
   local one, _, agent = session_with_tree_commits('treepane-follow')
 
-  go_to_commits_line(6)
+  go_to_commits_line(7)
 
   expect_pane_lines('files', {
     files_of_agent_commit(one, 'One'),
@@ -440,7 +450,7 @@ end
 
 T['a commit of the Reported section']['is shown as a diff by Enter, in the worktree that has its branch checked out'] = function()
   local _, two, agent = session_with_tree_commits('treepane-enter')
-  go_to_commits_line(5)
+  go_to_commits_line(6)
 
   child.type_keys('<CR>')
 
@@ -459,7 +469,7 @@ end
 
 T['a commit of the Reported section']['is left for its files by l, and found again on its line by BS'] = function()
   local one, _, agent = session_with_tree_commits('treepane-keys')
-  go_to_commits_line(6)
+  go_to_commits_line(7)
 
   child.type_keys('l')
 
@@ -474,12 +484,12 @@ T['a commit of the Reported section']['is left for its files by l, and found aga
   child.type_keys('<BS>')
 
   eq(child.lua_get('vim.api.nvim_get_current_buf() == _G.pane.commits'), true)
-  eq(child.lua_get('vim.api.nvim_win_get_cursor(0)'), { 6, 0 })
+  eq(child.lua_get('vim.api.nvim_win_get_cursor(0)'), { 7, 0 })
 end
 
 T['a commit of the Reported section']['gives way to Session work once the branch no longer lists it'] = function()
   local one, _, agent = session_with_tree_commits('treepane-gone')
-  go_to_commits_line(6)
+  go_to_commits_line(7)
   expect_pane_lines('files', {
     files_of_agent_commit(one, 'One'),
     against_parent(agent, one, '(main)'),
@@ -510,6 +520,7 @@ T['the Reported section']['lists a branch’s new commit once the pane reads its
     'T now',
     '  agent-1',
     pane_lines('commits')[4],
+    '      Uncommitted',
     tree_commit_line(three, 'Three'),
     tree_commit_line(two, 'Two'),
   })
@@ -549,6 +560,7 @@ T['the Reported section']['draws the tree without the commits until they are rea
     'T now',
     '  agent-1',
     ('    feature/a * from %s'):format(short(base)),
+    '      Uncommitted',
     'Uncommitted',
   })
   git_repo.wait_until('the reading held', function()
@@ -565,6 +577,7 @@ T['the Reported section']['draws the tree without the commits until they are rea
     'T now',
     '  agent-1',
     ('    feature/a * from %s'):format(short(base)),
+    '      Uncommitted',
     tree_commit_line(two, 'Two'),
     'Uncommitted',
   })
@@ -606,10 +619,11 @@ T['a commit of the Reported section']['keeps its files through a read while a br
     'T now',
     '  agent-1',
     ('    feature/a * from %s'):format(short(base)),
+    '      Uncommitted',
     tree_commit_line(two, 'Two'),
     tree_commit_line(one, 'One'),
   })
-  go_to_commits_line(6)
+  go_to_commits_line(7)
   expect_pane_lines('files', {
     files_of_agent_commit(one, 'One'),
     against_parent(agent, one, '(main)'),
@@ -624,6 +638,7 @@ T['a commit of the Reported section']['keeps its files through a read while a br
     'T now',
     '  agent-1',
     ('    feature/a * from %s'):format(short(base)),
+    '      Uncommitted',
     tree_commit_line(three, 'Three'),
     tree_commit_line(two, 'Two'),
     tree_commit_line(one, 'One'),
@@ -647,10 +662,11 @@ T['a commit of the Reported section']['under a worktree’s branch is compared b
     'T now',
     '  agent-1',
     ('    feature/a * from %s'):format(short(base)),
+    '      Uncommitted',
     tree_commit_line(two, 'Three on notes'),
     tree_commit_line(one, 'Two on notes'),
   })
-  go_to_commits_line(6)
+  go_to_commits_line(7)
   expect_pane_lines('files', {
     files_of_agent_commit(one, 'Two on notes'),
     against_parent(agent, one, '(main)'),
@@ -711,11 +727,12 @@ T['a commit of the Reported section']['under a node that has another branch chec
     'U now',
     '  agent-2',
     ('    feature/b * from %s'):format(short(base)),
+    '      Uncommitted',
     ('    feature/a from %s'):format(short(base)),
     tree_commit_line(two, 'Three on notes'),
     tree_commit_line(one, 'Two on notes'),
   })
-  go_to_commits_line(7)
+  go_to_commits_line(8)
   expect_pane_lines('files', {
     files_of_agent_commit(one, 'Two on notes'),
     against_parent(agent, one, '(feature/b, main)'),
@@ -738,7 +755,7 @@ end
 T['a commit of the Reported section']['says in the files window what it compares against: its parent and itself'] = function()
   local one, _, agent = session_with_tree_commits('treepane-against')
 
-  go_to_commits_line(6)
+  go_to_commits_line(7)
 
   expect_pane_lines('files', {
     files_of_agent_commit(one, 'One'),
@@ -775,9 +792,9 @@ T['the Reported section']['keeps the cursor on the line saying more are left out
   child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(_G.pane.commits))')
   child.lua('require("aineo.changes").toggle_focused_view()')
   git_repo.wait_until('the line saying more are left out', function()
-    return pane_lines('commits')[26] == '      … 2 more'
+    return pane_lines('commits')[27] == '      … 2 more'
   end)
-  go_to_commits_line(26)
+  go_to_commits_line(27)
   local tip = git_repo.git(top, { 'rev-parse', 'feature/long' })
   expect_pane_lines('files', {
     'Files in: Branch feature/long',
@@ -794,8 +811,8 @@ T['the Reported section']['keeps the cursor on the line saying more are left out
   git_repo.wait_until('the own commit listed', function()
     return vim.tbl_contains(pane_lines('commits'), git_repo.commit_line(own, 'Own work'))
   end)
-  eq(pane_lines('commits')[26], '      … 2 more')
-  eq(commits_cursor_line(), 26)
+  eq(pane_lines('commits')[27], '      … 2 more')
+  eq(commits_cursor_line(), 27)
 end
 
 T['the Reported section']['keeps the cursor on a commit of a branch listed under two worktrees when the page is written again'] = function()
@@ -817,12 +834,14 @@ T['the Reported section']['keeps the cursor on a commit of a branch listed under
     'U now',
     '  agent-2',
     ('    feature/b * from %s'):format(short(base)),
+    '      Uncommitted',
     ('    feature/a from %s'):format(short(base)),
     tree_commit_line(two, 'Two'),
     tree_commit_line(one, 'One'),
     'T now',
     '  agent-1',
     ('    feature/a * from %s'):format(short(base)),
+    '      Uncommitted',
     tree_commit_line(two, 'Two'),
     tree_commit_line(one, 'One'),
   }
@@ -833,7 +852,7 @@ T['the Reported section']['keeps the cursor on a commit of a branch listed under
   child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(_G.pane.commits))')
   child.lua('require("aineo.changes").toggle_focused_view()')
   expect_pane_starting_with('commits', listed_twice)
-  go_to_commits_line(12)
+  go_to_commits_line(14)
   git_repo.wait_until('the files of One', function()
     return vim.startswith(pane_lines('files')[1], 'Files in: ' .. git_repo.commit_line(one, 'One'))
   end)
@@ -845,7 +864,7 @@ T['the Reported section']['keeps the cursor on a commit of a branch listed under
     return vim.tbl_contains(pane_lines('commits'), git_repo.commit_line(own, 'Own work'))
   end)
   expect_pane_starting_with('commits', listed_twice)
-  eq(commits_cursor_line(), 12)
+  eq(commits_cursor_line(), 14)
 end
 
 T['a commit of the Reported section']['stays selected, its line kept, when the focused view that listed it gives way to the default view'] = function()
@@ -873,6 +892,7 @@ T['a commit of the Reported section']['stays selected, its line kept, when the f
     'T now',
     '  agent-2',
     '    feature/o * from ?',
+    '      Uncommitted',
     ('    feature/b from %s'):format(short(one)),
     tree_commit_line(three, 'Three'),
     tree_commit_line(two, 'Two'),
@@ -894,7 +914,7 @@ T['a commit of the Reported section']['stays selected, its line kept, when the f
   child.lua('require("aineo.changes").toggle_focused_view()')
 
   expect_pane_starting_with('commits', default_view)
-  eq(commits_cursor_line(), 7)
+  eq(commits_cursor_line(), 8)
   expect_pane_lines('files', files_of_two)
 end
 

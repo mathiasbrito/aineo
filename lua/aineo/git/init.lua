@@ -40,6 +40,7 @@ local M = {}
 --- How a watch runs; every field it leaves out is the home's default.
 ---@class aineo.git.WatchOptions: aineo.git.Options
 ---@field system_name? string the platform, as `vim.uv.os_uname().sysname` names it; the editor's own when not given
+---@field working_tree_only? boolean whether the working tree's files alone are watched, not the git directories, for a worktree whose common git directory another watch already sees: the branch is then never read, and only a file of the working tree calls back
 
 --- How a diff is read: as the home runs git, and with as much of each file
 --- around a change as `context` says. A diff raises an error, called with
@@ -475,7 +476,8 @@ end
 --- another worktree's `HEAD`,
 --- so that `references_changed` is true there only for `packed-refs` and a
 --- fetch of this worktree — or nil and why it could not start; it never
---- raises.
+--- raises. With `options.working_tree_only`, only a file of the working
+--- tree calls back.
 ---
 ---@param found aineo.git.Repository as `M.find_repository()` gave it
 ---@param on_change fun(failure: aineo.git.Failure|nil, change: aineo.git.RepositoryChange|nil)
@@ -483,8 +485,11 @@ end
 ---@return aineo.git.Watch|nil watch
 ---@return aineo.git.Failure|nil failure
 function M.watch_repository(found, on_change, options)
-  local system_name = (options or {}).system_name or vim.uv.os_uname().sysname
-  return watch.watch_repository(process.runner(options), found, on_change, system_name)
+  options = options or {}
+  return watch.watch_repository(process.runner(options), found, on_change, {
+    system_name = options.system_name or vim.uv.os_uname().sysname,
+    working_tree_only = options.working_tree_only,
+  })
 end
 
 return M
