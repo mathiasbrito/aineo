@@ -301,6 +301,32 @@ T['Enter']['on a branch reported from a commit older than the session’s base s
   })
 end
 
+T['Enter']['on a branch reported from a commit not in its history shows the commits from the default view’s base'] = function()
+  local top = git_repo.create('own-view-unrelated-base', { ['notes.txt'] = { 'one' } })
+  git_repo.git(top, { 'checkout', '--quiet', '-b', 'side' })
+  local elsewhere = commit_only(top, 'side.txt', 'side', 'Elsewhere')
+  git_repo.git(top, { 'checkout', '--quiet', 'main' })
+  commit_only(top, 'main.txt', 'main', 'On main')
+  child.lua('_G.start_copy(...)', { top })
+  expect_pane_lines('commits', DEFAULT_VIEW)
+  git_repo.git(top, { 'checkout', '--quiet', '-b', 'feature/own' })
+  local on_branch = commit_only(top, 'branch.txt', 'branch', 'On the branch')
+  child.lua('_G.report(...)', {
+    { worktree = top, label = 'own', branches = { { name = 'feature/own', base = elsewhere } } },
+  })
+  git_repo.wait_until('the Reported section listed', function()
+    return pane_lines('commits')[1] == 'Reported'
+  end)
+
+  enter_on_line(3)
+
+  expect_pane_lines('commits', {
+    ('Worktree %s (feature/own) · yours'):format(vim.fs.basename(top)),
+    'Uncommitted',
+    git_repo.commit_line(on_branch, 'On the branch'),
+  })
+end
+
 T['Enter']['on a commit made before the session’s base keeps it chosen through a read'] = function()
   local top = git_repo.create('own-view-older-commit', { ['notes.txt'] = { 'one' } })
   local created_from = git_repo.git(top, { 'rev-parse', 'HEAD' })
