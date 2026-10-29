@@ -1274,8 +1274,10 @@ end
 
 --- Removes the preview `buffer` shows (`clear()`), or, when its edits are
 --- proposals of their own, the one the line `line`, from 1, chooses
---- (`choose()`), leaving the buffer as it reads (`remove_edits()`); nothing
---- when it shows none.
+--- (`choose()`), leaving the buffer as it reads (`remove_edits()`); the
+--- whole preview when an extmark of its edits is gone, as when another
+--- plugin clears every namespace, which leaves its stale head row alone;
+--- nothing when it shows none.
 ---
 ---@param buffer integer
 ---@param line? integer the cursor's line
@@ -1284,7 +1286,7 @@ function M.drop(buffer, line)
   if not preview then
     return
   end
-  if not preview.separate then
+  if not preview.separate or not spans_of(preview) then
     M.clear(buffer)
     return
   end
