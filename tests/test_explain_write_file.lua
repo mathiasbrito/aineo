@@ -876,4 +876,89 @@ T['the preview in view']['is the proposal the diff view is toggled for'] = funct
   eq({ view.topline, view.topfill > 0, child.fn.line('.') }, { 30, true, 30 })
 end
 
+--- The answer that replaces the request lines 4 and 5 hold with code that
+--- needs an import.
+local TWO_LINE_REQUEST = {
+  summary = 'Returns the values sorted.',
+  edits = {
+    {
+      line = 4,
+      last = 5,
+      old = { CODE[4], CODE[5] },
+      new = { '  return sorted(values)', 'end' },
+      why = 'Returns them sorted.',
+    },
+    IMPORTING,
+  },
+}
+
+T['a proposal of two lines'] = MiniTest.new_set()
+
+T['a proposal of two lines']['is moved to at its first line'] = function()
+  start(TWO_LINE_REQUEST)
+  ask_write({ range = { 4, 5 } })
+  wait_for_preview()
+  child.cmd('1')
+
+  eq(jump('next'), 4)
+end
+
+T['a proposal of two lines']['is chosen by the cursor on its second line'] = function()
+  start(TWO_LINE_REQUEST)
+  ask_write({ range = { 4, 5 } })
+  wait_for_preview()
+
+  accept(5)
+
+  eq(
+    buffer_lines(),
+    { CODE[1], CODE[2], CODE[3], '  return sorted(values)', 'end', CODE[6], CODE[7] }
+  )
+end
+
+T['the answer refused']['with an anchor edit that replaces the cursor’s line, though another edit places'] = function()
+  start({ summary = 'Sorts the values.', edits = { replacing(3, { 'replaced' }), IMPORTING } })
+
+  send_request(3, 'Sort the values first.')
+  wait_until_told()
+
+  eq({ told = messages(), marks = preview_marks() }, {
+    told = { 'aineo: the written code was refused: it must keep the cursor’s line as it is' },
+    marks = 0,
+  })
+end
+
+T['writing on a blank line'] = MiniTest.new_set()
+
+T['writing on a blank line']['drops the copy of it the code starts with, beside an edit elsewhere'] = function()
+  start({
+    summary = 'Adds a helper.',
+    edits = {
+      { line = 2, last = 2, old = { '' }, new = { '', 'local helper = 1' }, why = 'Adds it.' },
+      {
+        line = 7,
+        last = 7,
+        old = { CODE[7] },
+        new = { 'M.helper = helper', CODE[7] },
+        why = 'Exports it.',
+      },
+    },
+  })
+  send_request(2, 'Add a helper.')
+  wait_for_preview()
+
+  child.lua("require('aineo.explain').accept_all(vim.api.nvim_get_current_buf(), 'write')")
+
+  eq(buffer_lines(), {
+    CODE[1],
+    'local helper = 1',
+    CODE[3],
+    CODE[4],
+    CODE[5],
+    CODE[6],
+    'M.helper = helper',
+    CODE[7],
+  })
+end
+
 return T
