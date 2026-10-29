@@ -2267,7 +2267,9 @@ head row naming its place among them, counted from the top of the buffer,
 and its keys: `write 1/2 · read-only until \Wa accepts or \Wr rejects · \Wd
 shows the diff · ]w [w move · \WA accepts all · \WR rejects all`; the request
 is named above the proposal at the cursor's line or the request's lines,
-which is the one brought into view. The first `]w` moves the cursor to that
+which is the one brought into view; `\Wd` brings the proposal it shows as a
+diff, or as the overlay again, into view instead. The first `]w` moves the
+cursor to that
 proposal, wherever the cursor is; after it, and for `[w`, `]w` and `[w` move
 the cursor to the first line of the next and the previous proposal, from the
 last to the first and back. `\Wa`, `\Wr` and `\Wd` act on
