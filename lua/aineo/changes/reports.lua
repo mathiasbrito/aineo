@@ -177,13 +177,15 @@ end
 
 --- What a line of the Reported section, or its item in `s`, picks: the
 --- worktrees of one label, by that label, the empty one for those with
---- none; one worktree, by its top level; the editor's own work, which the
---- default view shows; or a local branch, by its name.
+--- none; one worktree, by its top level, the editor's own among them; the
+--- editor's own work, which the default view shows; or a local branch, by
+--- its name.
 ---@class aineo.changes.TreePick
 ---@field group? string the label, `''` for the worktrees with none
 ---@field top? string
 ---@field own? boolean
 ---@field branch? string
+---@field own_worktree? boolean with `top`, whether the worktree is the editor's own, shown alone in the view of its reported checked-out branch
 ---@field uncommitted? boolean whether the worktree's *Uncommitted* is chosen in place of its whole change, or the editor's own in place of *Session work*: the pick of the *Uncommitted* line under a branch a worktree has checked out
 
 --- One line of the Reported section, by its depth: a group's label line
@@ -200,24 +202,48 @@ end
 ---@field commits? aineo.git.Commit[] on a branch's line, the commits from `read_base` to the branch's tip, newest first, which the pane gives once it has read them
 ---@field worktree_section? aineo.changes.WorktreeSection on a branch's line, the worktree other than the editor's that has the branch checked out, whichever worktree the line stands under, as the commits window last listed it, which the pane gives: the commits are read in it
 
---- What the line of `node` picks: its worktree, or the editor's own work
---- when it is the editor's own worktree, `own_top`.
+--- The branch of `nodes` reported in the editor's own worktree, `own_top`,
+--- that the worktree has checked out now: the branch its own view is read
+--- from; nil when no node holds the worktree, it is detached, or the branch
+--- it has checked out is not among those reported of it.
+---
+---@param nodes aineo.changes.ReportedNode[]
+---@param own_top string
+---@return aineo.changes.ReportedBranch|nil
+function M.own_checked_out_branch(nodes, own_top)
+  local own = vim.iter(nodes):find(function(node)
+    return node.worktree.top == own_top
+  end)
+  if not own then
+    return nil
+  end
+  return vim.iter(own.branches):find(function(reported)
+    return reported.name == own.worktree.branch
+  end)
+end
+
+--- What the line of `node` picks: its worktree; for the editor's own,
+--- `own_top`, that worktree alone while the branch it has checked out is
+--- among those reported of it, else the editor's own work.
 ---
 ---@param node aineo.changes.ReportedNode
 ---@param own_top string
 ---@return aineo.changes.TreePick
 local function worktree_pick(node, own_top)
-  if node.worktree.top == own_top then
-    return { own = true }
+  if node.worktree.top ~= own_top then
+    return { top = node.worktree.top }
   end
-  return { top = node.worktree.top }
+  if M.own_checked_out_branch({ node }, own_top) then
+    return { top = own_top, own_worktree = true }
+  end
+  return { own = true }
 end
 
 --- The lines of the Reported section for `nodes`, in its order
 --- (`M.groups()`): each group's label line, then, for each of its
 --- worktrees, its line and a line per branch, in the order reported. A
---- label line picks its group; a worktree's line its worktree, or the
---- editor's own work for `own_top`; a branch's line picks as its worktree's
+--- label line picks its group; a worktree's line its worktree
+--- (`worktree_pick()`); a branch's line picks as its worktree's
 --- does while that worktree has it checked out, its uncommitted changes
 --- with it, else the branch alone.
 ---

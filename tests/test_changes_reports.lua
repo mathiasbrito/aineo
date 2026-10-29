@@ -138,26 +138,94 @@ T['the Reported section']['lists on each line what it chooses, and what Enter pi
   })
 end
 
-T['the Reported section']['chooses the editor’s own work on its own worktree’s lines'] = function()
+T['the Reported section']['chooses the editor’s own worktree’s whole change on its lines, and its own Uncommitted under its branch'] = function()
+  local own_worktree = { top = OWN_TOP, branch = 'main' }
+  local own = { worktree = own_worktree, at = NOW, branches = { { name = 'main', base = BASE } } }
+
+  local page = lines.commits_window(view_with(report_rules.tree_lines({ own }, OWN_TOP)))
+
+  eq({ page.entries[3], page.entries[4], page.entries[5] }, {
+    {
+      key = '/projects/main\0\0worktree',
+      filter = { kind = 'worktree', worktree = own_worktree },
+      worktree = own_worktree,
+      picks = { top = OWN_TOP, own_worktree = true, text = '[reported]   main' },
+    },
+    {
+      key = '/projects/main\0\0worktree',
+      filter = { kind = 'worktree', worktree = own_worktree },
+      worktree = own_worktree,
+      picks = { top = OWN_TOP, own_worktree = true, text = '[reported]     main * from 0123456' },
+    },
+    {
+      key = '\0uncommitted',
+      filter = { kind = 'uncommitted' },
+      picks = {
+        top = OWN_TOP,
+        own_worktree = true,
+        uncommitted = true,
+        text = '[reported]       Uncommitted',
+      },
+    },
+  })
+end
+
+T['the editor’s own worktree shown alone'] = MiniTest.new_set()
+
+--- A commit of the editor's own worktree, past the base it is shown from.
+local OWN_COMMIT =
+  { id = ('d'):rep(40), subject = 'Own work', author = 'Ada', authored_at = NOW - 60 }
+
+--- The editor's own worktree on `main`, as the pane reads it shown alone:
+--- from `BASE`, with `OWN_COMMIT` past it.
+local OWN_SECTION = {
+  top = OWN_TOP,
+  branch = 'main',
+  own = true,
+  base = BASE,
+  listed = { commits = { OWN_COMMIT } },
+}
+
+T['the editor’s own worktree shown alone']['lists its heading marked as yours, its own Uncommitted, then its commits'] = function()
+  local page = lines.commits_window({ scope = { { worktree = OWN_SECTION } }, now = NOW })
+
+  eq(
+    page.text,
+    { 'Worktree main (main) · yours', 'Uncommitted', lines.commit_line(OWN_COMMIT, NOW) }
+  )
+end
+
+T['the editor’s own worktree shown alone']['chooses its whole change on its heading, the editor’s own Uncommitted and commits below'] = function()
+  local page = lines.commits_window({ scope = { { worktree = OWN_SECTION } }, now = NOW })
+
+  eq({ page.entries[1], page.entries[2], page.entries[3] }, {
+    {
+      key = '/projects/main\0\0worktree',
+      filter = { kind = 'worktree', worktree = OWN_SECTION },
+      worktree = OWN_SECTION,
+    },
+    { key = '\0uncommitted', filter = { kind = 'uncommitted' } },
+    {
+      key = OWN_COMMIT.id,
+      commit = OWN_COMMIT,
+      filter = { kind = 'commit', commit = OWN_COMMIT },
+    },
+  })
+end
+
+T['the Reported section']['chooses the editor’s own work on its own worktree’s line while no branch it has checked out is reported'] = function()
   local own = {
     worktree = { top = OWN_TOP, branch = 'main' },
     at = NOW,
-    branches = { { name = 'main', base = BASE } },
+    branches = { { name = 'lonely', base = BASE } },
   }
 
   local page = lines.commits_window(view_with(report_rules.tree_lines({ own }, OWN_TOP)))
 
-  eq({ page.entries[3], page.entries[4] }, {
-    {
-      key = '\0session_work',
-      filter = { kind = 'session_work' },
-      picks = { own = true, text = '[reported]   main' },
-    },
-    {
-      key = '\0session_work',
-      filter = { kind = 'session_work' },
-      picks = { own = true, text = '[reported]     main * from 0123456' },
-    },
+  eq(page.entries[3], {
+    key = '\0session_work',
+    filter = { kind = 'session_work' },
+    picks = { own = true, text = '[reported]   main' },
   })
 end
 

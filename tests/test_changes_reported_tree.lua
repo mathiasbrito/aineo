@@ -324,7 +324,7 @@ T['the lines']['are each group’s label, its worktrees below, each worktree’s
   })
 end
 
-T['the lines']['pick the editor’s own work for its own worktree, and an unlabelled group by its empty label'] = function()
+T['the lines']['pick the editor’s own worktree alone while its checked-out branch is reported, and an unlabelled group by its empty label'] = function()
   local own = { top = OWN_TOP, branch = 'main' }
   local nodes = taken({
     { worktree = own, branches = { branch('main'), branch('lonely') }, at = NOW, by_hook = true },
@@ -334,7 +334,59 @@ T['the lines']['pick the editor’s own work for its own worktree, and an unlabe
     return line.picks
   end, report_rules.tree_lines(nodes, OWN_TOP))
 
-  eq(picks, { { group = '' }, { own = true }, { own = true }, { branch = 'lonely' } })
+  eq(picks, {
+    { group = '' },
+    { top = OWN_TOP, own_worktree = true },
+    { top = OWN_TOP, own_worktree = true },
+    { branch = 'lonely' },
+  })
+end
+
+T['the editor’s own checked-out branch'] = MiniTest.new_set()
+
+T['the editor’s own checked-out branch']['is the branch reported of its worktree that it has checked out'] = function()
+  local nodes = taken({
+    call(AGENT_1, 'T', { branch('feature/a') }, NOW - 60),
+    call(
+      { top = OWN_TOP, branch = 'main' },
+      'own',
+      { branch('lonely'), branch('main', OTHER_BASE) },
+      NOW
+    ),
+  })
+
+  eq(report_rules.own_checked_out_branch(nodes, OWN_TOP), branch('main', OTHER_BASE))
+end
+
+T['the editor’s own checked-out branch']['is none while the branch it has checked out is not reported'] = function()
+  local nodes =
+    taken({ call({ top = OWN_TOP, branch = 'main' }, 'own', { branch('lonely') }, NOW) })
+
+  eq(report_rules.own_checked_out_branch(nodes, OWN_TOP), nil)
+end
+
+T['the editor’s own checked-out branch']['is none while its worktree is detached'] = function()
+  local nodes = taken({ call({ top = OWN_TOP }, 'own', { branch('main') }, NOW) })
+
+  eq(report_rules.own_checked_out_branch(nodes, OWN_TOP), nil)
+end
+
+T['the editor’s own checked-out branch']['is none while its worktree is not reported'] = function()
+  local nodes = taken({ call(AGENT_1, 'T', { branch('feature/a') }, NOW) })
+
+  eq(report_rules.own_checked_out_branch(nodes, OWN_TOP), nil)
+end
+
+T['the lines']['pick the editor’s own work for its own worktree while no branch it has checked out is reported'] = function()
+  local own = { top = OWN_TOP, branch = 'main' }
+  local nodes =
+    taken({ { worktree = own, branches = { branch('lonely') }, at = NOW, by_hook = true } })
+
+  local picks = vim.tbl_map(function(line)
+    return line.picks
+  end, report_rules.tree_lines(nodes, OWN_TOP))
+
+  eq(picks, { { group = '' }, { own = true }, { branch = 'lonely' } })
 end
 
 T['the lines']['of a detached worktree mark no branch checked out, and pick each branch alone'] = function()
