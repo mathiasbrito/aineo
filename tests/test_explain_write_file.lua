@@ -458,6 +458,7 @@ T['rejecting one']['that is the last ends the preview, giving the buffer back'] 
 
   eq(preview_marks(), 0)
   eq(child.bo.modifiable, true)
+  eq(child.fn.maparg('\\Wa', 'n'), '')
   eq(buffer_lines(), CODE)
 end
 
@@ -627,6 +628,7 @@ T['a stale proposal']['is rejected, ending the preview, the text left as it read
   reject(1)
 
   eq(preview_marks(), 0)
+  eq(child.fn.maparg('\\Wa', 'n'), '')
   eq(buffer_lines()[1], '-- ' .. CODE[1])
 end
 
