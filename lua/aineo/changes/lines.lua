@@ -353,13 +353,18 @@ function M.reported_worktree_heading(top, branches)
   return ('Worktree %s (%s)'):format(M.quoted_path(vim.fs.basename(top)), table.concat(names, ', '))
 end
 
---- The heading line of `section`, a worktree other than the editor's: its
---- name (`M.worktree_name()`) after `Worktree`.
+--- What the heading of the editor's own worktree, shown alone, says after
+--- its name.
+local YOURS = ' · yours'
+
+--- The heading line of `section`, a worktree: its name
+--- (`M.worktree_name()`) after `Worktree`, and `YOURS` after it for the
+--- editor's own.
 ---
 ---@param section aineo.changes.WorktreeSection
 ---@return string
 function M.worktree_heading(section)
-  return 'Worktree ' .. M.worktree_name(section)
+  return 'Worktree ' .. M.worktree_name(section) .. (section.own and YOURS or '')
 end
 
 --- The commits window's line for `commit` and the colours of its parts: its
@@ -422,11 +427,12 @@ local function commit_rows(commits, filter_of, now)
   end, commits)
 end
 
---- The rows under the heading of `section`, a worktree other than the
---- editor's: the line saying its last read failed, when it did; then a
---- line per commit it last read (`commit_rows()`), or
---- `M.NO_WORKTREE_COMMITS`, a note, when it has none. Before any list of it
---- was read, the line saying its read failed alone.
+--- The rows under the heading of `section`, a worktree: the line saying its
+--- last read failed, when it did; then a line per commit it last read
+--- (`commit_rows()`), each choosing that commit as listed in the worktree
+--- (`filter.commit_in()`), or `M.NO_WORKTREE_COMMITS`, a note, when it has
+--- none. Before any list of it was read, the line saying its read failed
+--- alone.
 ---
 ---@param section aineo.changes.WorktreeSection
 ---@param now integer seconds since the epoch
@@ -439,7 +445,7 @@ local function section_rows(section, now)
   return rows_of(
     notes,
     commit_rows(section.listed.commits, function(commit)
-      return filter.of_worktree_commit(section, commit)
+      return filter.commit_in(section, commit)
     end, now),
     note(M.NO_WORKTREE_COMMITS)
   )
@@ -465,20 +471,22 @@ local function filter_row(selected)
   return row
 end
 
---- The row of the *Uncommitted* of `section`, a worktree other than the
---- editor's (`filter_row()`), listing that worktree too.
+--- The row of the *Uncommitted* of `section`, a worktree
+--- (`filter.uncommitted_in()`, `filter_row()`), listing that worktree too
+--- when it is not the editor's own.
 ---
 ---@param section aineo.changes.WorktreeSection
 ---@return aineo.changes.Row
 local function worktree_uncommitted_row(section)
-  local row = filter_row(filter.of_worktree_uncommitted(section))
-  row.entry.worktree = section
+  local listed_under = filter.uncommitted_in(section)
+  local row = filter_row(listed_under)
+  row.entry.worktree = listed_under.worktree
   return row
 end
 
---- The heading row of `section`, a worktree other than the editor's: its
---- heading (`M.worktree_heading()`), whole in `group`, listing the filter of
---- the worktree's whole change.
+--- The heading row of `section`, a worktree, the editor's own shown alone
+--- among them: its heading (`M.worktree_heading()`), whole in `group`,
+--- listing the filter of the worktree's whole change.
 ---
 ---@param section aineo.changes.WorktreeSection
 ---@param group string
@@ -914,7 +922,8 @@ end
 
 --- The filter the files window lists for the line `line` of the Reported
 --- section: *Session work* for the editor's own work, a worktree's whole
---- change, or a branch's; nil for a group's line, which picks more than one.
+--- change, the editor's own worktree's among them, or a branch's; nil for a
+--- group's line, which picks more than one.
 ---
 ---@param line aineo.changes.TreeLine
 ---@return aineo.changes.Filter|nil
@@ -950,14 +959,14 @@ end
 
 --- The filter of the *Uncommitted* under `line`, the line of a branch its
 --- worktree has checked out: the editor's own *Uncommitted* on the editor's
---- own worktree; else that worktree's, as the commits window last listed it
---- (`aineo.changes.TreeLine`'s `worktree_section`), or as git listed it when
---- it was reported.
+--- own worktree, whatever its line picks; else that worktree's, as the
+--- commits window last listed it (`aineo.changes.TreeLine`'s
+--- `worktree_section`), or as git listed it when it was reported.
 ---
 ---@param line aineo.changes.TreeLine
 ---@return aineo.changes.Filter
 local function tree_uncommitted_filter(line)
-  if line.picks.own then
+  if line.picks.own or line.picks.own_worktree then
     return filter.UNCOMMITTED
   end
   return filter.of_worktree_uncommitted(line.worktree_section or line.node.worktree)

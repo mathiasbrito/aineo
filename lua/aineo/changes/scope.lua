@@ -27,6 +27,7 @@ M.NONE_TO_SHOW = 'aineo: no other worktree or branch to show alone'
 --- label, or every reported worktree's.
 ---@class aineo.changes.ScopeItem
 ---@field top? string the top level of the worktree it shows alone
+---@field own_worktree? boolean with `top`, whether the worktree is the editor's own, shown alone in the view of its reported checked-out branch
 ---@field branch? string the name of the branch it shows alone
 ---@field own? boolean whether it shows the editor's own work, in the default view
 ---@field group? string the label whose reported work it shows, `''` for the worktrees with none
@@ -420,13 +421,33 @@ end
 ---@class aineo.changes.RestoredView: aineo.changes.View
 ---@field selected? aineo.changes.Filter the whole change of the first thing the focused view shows, which it chooses; nil for the default view
 
+--- The worktree or the branch `pick`, kept, names, as `candidates`, what
+--- git now lists, and `nodes`, the Reported section restored, still allow
+--- it to be shown alone: as `listed_pick()` gives it; the editor's own
+--- worktree, `own_top`, marked as its own, only while the branch it has
+--- checked out is among those reported of it
+--- (`reports.own_checked_out_branch()`); nil otherwise.
+---
+---@param pick aineo.changes.KeptPick
+---@param candidates aineo.changes.BranchCandidates
+---@param nodes aineo.changes.ReportedNode[]
+---@param own_top string
+---@return aineo.changes.ScopeMember|nil
+local function restored_pick(pick, candidates, nodes, own_top)
+  if pick.top ~= own_top then
+    return listed_pick(pick, candidates)
+  end
+  local listed = reports.own_checked_out_branch(nodes, own_top) and listed_pick(pick, candidates)
+  return listed and { worktree = vim.tbl_extend('force', listed.worktree, { own = true }) } or nil
+end
+
 --- The view `kept` keeps, as `candidates`, what git now lists, still allows
 --- it: what git no longer lists of the Reported section is dropped
 --- (`restored_nodes()`), so is a pick of a worktree or a branch it no
---- longer lists, all untold. The editor's own worktree, which `s` never
---- offers and the pane never keeps, is never restored as the pick. The
---- focused view shows only while what it was of — the reported work, or the
---- pick — has anything left to show alone.
+--- longer lists, all untold, and a pick of the editor's own worktree once
+--- the branch it has checked out is not reported of it (`restored_pick()`).
+--- The focused view shows only while what it was of — the reported work, or
+--- the pick — has anything left to show alone.
 ---
 ---@param kept aineo.changes.KeptView
 ---@param candidates aineo.changes.BranchCandidates
@@ -436,7 +457,7 @@ function M.restored_view(kept, candidates, own_top)
   local nodes = restored_nodes(kept, candidates)
   local first_work = reports.work_of(nodes, own_top)[1]
   local reported_first = first_work and listed_pick(first_work, candidates)
-  local picked = kept.scope and kept.scope.top ~= own_top and listed_pick(kept.scope, candidates)
+  local picked = kept.scope and restored_pick(kept.scope, candidates, nodes, own_top)
   local scope
   if picked and picked.worktree then
     scope = M.of(picked.worktree)

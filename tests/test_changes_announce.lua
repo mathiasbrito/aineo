@@ -1075,7 +1075,7 @@ T['the editor’s own worktree']['is listed in the tree, the default view kept, 
   eq(told('module'), {})
 end
 
-T['the editor’s own worktree']['picked by Enter on its line, from a worktree picked, shows the default view'] = function()
+T['the editor’s own worktree']['picked by Enter on its line, from a worktree picked, shows it alone in place of that worktree'] = function()
   local top = start_on_repository('announce-own-back')
   local base = git_repo.git(top, { 'rev-parse', 'HEAD' })
   local agent = add_worktree(top, 'agent-1', 'feature/a')
@@ -1107,10 +1107,16 @@ T['the editor’s own worktree']['picked by Enter on its line, from a worktree p
 
   enter_on_line(3)
 
+  local own_heading = ('Worktree %s (main) · yours'):format(vim.fs.basename(top))
+  expect_pane_lines(
+    'module',
+    'commits',
+    { own_heading, 'Uncommitted', 'No commits in this worktree' }
+  )
   expect_pane_lines(
     'module',
     'files',
-    { 'Files in: Session work', 'No files changed on this session' }
+    { 'Files in: ' .. own_heading, 'No files changed in this worktree' }
   )
 end
 

@@ -59,7 +59,7 @@ M.PARENT = 'parent'
 
 --- Where a base came from.
 ---@class aineo.changes.BaseOrigin
----@field kind 'reported'|'merge_base' what an agent reported; a merge base with `ref` or `commit`
+---@field kind 'reported'|'merge_base'|'session_start' what an agent reported; a merge base with `ref` or `commit`; the session's base
 ---@field ref? string for a merge base, the reference it was taken against
 ---@field commit? string for a merge base, the full id of the commit it was taken against, when no reference names it
 

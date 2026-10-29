@@ -182,6 +182,7 @@ function M.new(label)
   ---@field commits_failure? aineo.git.Failure why the last read of the commits failed, when it did
   ---@field landed? aineo.changes.Landed what landed in the working branch, as last read; nil while unread, and when there is no working branch
   ---@field commits_others aineo.changes.OtherWorktrees what the commits window knows of the other worktrees
+  ---@field own_section? aineo.changes.WorktreeSection what the commits window last read of the editor's own worktree shown alone, from the base of its reported checked-out branch; nil while that branch is not reported (`read_own_section()`)
   ---@field scope? aineo.changes.Scope the other worktree or the local branch the user picked to show alone, kept while the default view is shown too
   ---@field branch? aineo.changes.BranchSection what the commits window last read of the branch the scope names; nil while it has read none, and for any other scope
   ---@field focused boolean whether the commits window shows the focused view — the scope alone, or the reported work — in place of the default view; false while there is neither
@@ -233,13 +234,18 @@ function M.new(label)
   ---@type { files: integer|nil, commits: integer|nil }
   local buffers = {}
 
-  --- `worktree`, a worktree other than the editor's, as the commits window
-  --- last read it: the section of `session.commits_others` with its top
-  --- level, or `worktree` itself when the window lists none.
+  --- `worktree`, a worktree, as the commits window last read it: the
+  --- section of `session.commits_others` with its top level, or the
+  --- editor's own shown alone (`session.own_section`), or `worktree` itself
+  --- when the window lists none.
   ---
   ---@param worktree aineo.changes.WorktreeSection
   ---@return aineo.changes.WorktreeSection
   local function section_as_last_read(worktree)
+    local own = session.own_section
+    if own and own.top == worktree.top then
+      return own
+    end
     for _, section in ipairs(session.commits_others.sections) do
       if section.top == worktree.top then
         return section
@@ -426,11 +432,33 @@ function M.new(label)
     end, reports.work_of(nodes, own_top()))
   end
 
+  --- The editor's own worktree as it is shown alone: as the commits window
+  --- last read it (`session.own_section`), else as git listed it in the
+  --- Reported section, marked as the editor's own, nothing read of it yet.
+  ---
+  ---@return aineo.changes.WorktreeSection
+  local function own_section()
+    local top = own_top()
+    if session.own_section and session.own_section.top == top then
+      return session.own_section
+    end
+    local node = node_at(top)
+    return { top = top, branch = node and node.worktree.branch, own = true }
+  end
+
+  --- Whether `top` is the top level of the editor's own worktree.
+  ---
+  ---@param top string|nil
+  ---@return boolean
+  local function is_own_top(top)
+    return top ~= nil and top == own_top()
+  end
+
   --- What the commits window shows alone while the focused view is the one
   --- shown: the reported work, when it is the focused view
   --- (`reported_members()`); else the worktree or branch of the session's
-  --- scope; nil for the default view, and for reported work that shows
-  --- nothing alone.
+  --- scope, the editor's own worktree included (`own_section()`); nil for
+  --- the default view, and for reported work that shows nothing alone.
   ---
   ---@return aineo.changes.ScopeMember[]|nil
   local function scope_shown()
@@ -443,6 +471,9 @@ function M.new(label)
     end
     if not session.scope then
       return nil
+    end
+    if is_own_top(session.scope.top) then
+      return { { worktree = own_section() } }
     end
     return scope.members_shown(session.scope, session.commits_others, session.branch)
   end
@@ -1010,8 +1041,9 @@ function M.new(label)
   --- which the window shows as still reading, until a read of the commits
   --- window finds its repository (`reselect_in_worktrees()`); its whole
   --- change from its base, read again now (`aineo.changes.worktrees`'
-  --- `read_worktree()`), which fails with `WORKTREE_GONE` when the worktree's
-  --- directory is gone. The listing names the worktree as the read found it.
+  --- `read_worktree()`, or `read_own_worktree()` for the editor's own shown
+  --- alone), which fails with `WORKTREE_GONE` when the worktree's directory
+  --- is gone. The listing names the worktree as the read found it.
   ---
   ---@param selected aineo.changes.Filter a filter with a `worktree`
   ---@param done fun(failure: aineo.git.Failure|nil, listing: aineo.changes.Listing)
@@ -1034,7 +1066,9 @@ function M.new(label)
       end, options)
       return
     end
-    worktrees.read_worktree(
+    local read_whole_change = is_own_top(section.top) and worktrees.read_own_worktree
+      or worktrees.read_worktree
+    read_whole_change(
       {
         found = session.repository,
         before = worktrees.NONE,
@@ -1042,6 +1076,7 @@ function M.new(label)
           git.changed_files(repository, base, listed, options)
         end,
         base_of = reported_base_of_worktree,
+        session_base = session.base,
         working_branch = session.settings.working_branch,
         git = options,
       },
@@ -1209,11 +1244,12 @@ function M.new(label)
   --- user, once, that the worktree is gone (`aineo.changes.scope`) — but
   --- while the reported work is the focused view, which stays, the scope
   --- behind it is cleared untold. A branch's scope is kept by what is read
-  --- of the branch (`take_branch()`).
+  --- of the branch (`take_branch()`), the editor's own worktree's by what is
+  --- read of it (`read_own_section()`).
   ---
   ---@param others aineo.changes.OtherWorktrees
   local function keep_scope_listed_in(others)
-    if not (session.scope and session.scope.top) then
+    if not (session.scope and session.scope.top) or is_own_top(session.scope.top) then
       return
     end
     local still_listed, gone = scope.after_read(session.scope, others)
@@ -1241,13 +1277,15 @@ function M.new(label)
   --- window is written again when its branch changed, for its first line
   --- names it — or read, for its *Uncommitted* chosen before the window had
   --- found its repository, once it has found it or failed to. The scope is
-  --- kept or cleared first (`keep_scope_listed_in()`).
+  --- kept or cleared first (`keep_scope_listed_in()`). A filter of the
+  --- editor's own worktree shown alone is kept by what is read of it
+  --- (`read_own_section()`).
   ---
   ---@param others aineo.changes.OtherWorktrees
   local function reselect_in_worktrees(others)
     keep_scope_listed_in(others)
     local selected = session.selected
-    if not selected.worktree then
+    if not selected.worktree or is_own_top(selected.worktree.top) then
       return
     end
     local section = vim.iter(others.sections):find(function(listed)
@@ -1451,6 +1489,102 @@ function M.new(label)
     )
   end
 
+  --- Ends the view of the editor's own worktree shown alone once the branch
+  --- it has checked out is not among those reported of it (
+  --- `reports.own_checked_out_branch()`): the scope is cleared, and, unless
+  --- the reported work is the focused view, which stays, the default view
+  --- shows and the user is told once (`aineo.changes.scope`); a filter of the
+  --- editor's own worktree's whole change gives way to *Session work*, the
+  --- files window read for it. Does nothing for any other scope.
+  local function end_own_view_unless_reported()
+    local current = session.scope
+    if not (current and is_own_top(current.top)) then
+      return
+    end
+    if reports.own_checked_out_branch(session.nodes, current.top) then
+      return
+    end
+    session.scope = nil
+    local selected = session.selected
+    if selected.kind == 'worktree' and is_own_top(selected.worktree.top) then
+      select_session_work()
+      read_files(true)
+    end
+    if not session.shows_reported and session.focused then
+      session.focused = false
+      vim.notify(scope.gone(current), vim.log.levels.INFO)
+    end
+    show_commits()
+  end
+
+  --- Keeps `section`, what was read of the editor's own worktree shown
+  --- alone, and the scope that shows it with its heading; while it is shown,
+  --- a filter the view no longer lists — a commit gone after a reset or a
+  --- rebase, *Session work* — gives way to its whole change, and the files
+  --- window is read again, as it is when that whole change is chosen.
+  ---
+  ---@param section aineo.changes.WorktreeSection
+  local function take_own_section(section)
+    session.own_section = section
+    if session.scope and is_own_top(session.scope.top) then
+      session.scope = scope.of(section)
+    end
+    local selected = session.selected
+    local shows_own_view = session.focused
+      and not session.shows_reported
+      and session.scope ~= nil
+      and is_own_top(session.scope.top)
+    if shows_own_view and not scope.page_lists(commits_page(), selected) then
+      select_filter(filter.of_worktree(section))
+      read_files(true)
+    elseif selected.kind == 'worktree' and is_own_top(selected.worktree.top) then
+      session.selected = filter.in_worktree(selected, section)
+    end
+  end
+
+  --- Reads the editor's own worktree as it is shown alone
+  --- (`aineo.changes.worktrees`' `read_own_worktree()`), its commits from the
+  --- base of the branch it has checked out as reported, or from the
+  --- session's base, while that branch is among those reported of it; keeps
+  --- it (`take_own_section()`) and calls `done(true)`. Otherwise, or with no
+  --- repository, it lets go of what was read, ends the view
+  --- (`end_own_view_unless_reported()`) and calls `done(false)`.
+  ---
+  ---@param done fun(read: boolean)
+  local function read_own_section(done)
+    local top = own_top()
+    if not (top and reports.own_checked_out_branch(session.nodes, top)) then
+      session.own_section = nil
+      end_own_view_unless_reported()
+      done(false)
+      return
+    end
+    local reading = session
+    worktrees.read_own_worktree(
+      {
+        found = session.repository,
+        before = { sections = { session.own_section } },
+        read_list = function(repository, base, listed)
+          git.commits_since(repository, base, listed, session.settings.git)
+        end,
+        base_of = reported_base_of_worktree,
+        session_base = session.base,
+        working_branch = session.settings.working_branch,
+        git = session.settings.git,
+      },
+      node_at(top).worktree,
+      function(section)
+        if session ~= reading then
+          return
+        end
+        if section then
+          take_own_section(section)
+        end
+        done(section ~= nil)
+      end
+    )
+  end
+
   --- Reads what reports are matched against and matches them; made below,
   --- as it adds what it matches to the Reported section and reads the commits
   --- window again for it.
@@ -1461,20 +1595,26 @@ function M.new(label)
   --- the scope names (`read_branch_scope()`), then the reported
   --- branches (`read_reported_branches()`), then, while a report waits or
   --- the Reported section holds a worktree, what reports are matched
-  --- against (`read_reported()`); calls `done(read)`, whether any of these
-  --- read anything the window shows.
+  --- against (`read_reported()`), then the editor's own worktree shown alone
+  --- (`read_own_section()`); calls `done(read)`, whether any of these read
+  --- anything the window shows.
   ---
   ---@param done fun(read: boolean)
   local function read_scope_and_reported(done)
     read_branch_scope(function(read_pick)
       read_reported_branches(function(read_reported_any)
         read_tree_commits(function(read_tree_commits_any)
+          local function then_own_section(read_any)
+            read_own_section(function(read_own)
+              done(read_any or read_own)
+            end)
+          end
           if #session.waiting == 0 and #session.nodes == 0 then
-            done(read_pick or read_reported_any or read_tree_commits_any)
+            then_own_section(read_pick or read_reported_any or read_tree_commits_any)
             return
           end
           read_reported(function()
-            done(true)
+            then_own_section(true)
           end)
         end)
       end)
@@ -3091,15 +3231,22 @@ function M.new(label)
   --- or its *Uncommitted* for an item that asks for it
   --- (`select_filter()`), which the files window then lists: as the commits
   --- window last listed it, or, for one of the Reported section it has not
-  --- listed yet, as git listed it when it was reported (`node_at()`). Any
-  --- other worktree the commits window no longer lists is told gone, and
-  --- nothing changes.
+  --- listed yet, as git listed it when it was reported (`node_at()`); the
+  --- editor's own while the branch it has checked out is reported
+  --- (`own_section()`), its *Uncommitted* the editor's own. Any other
+  --- worktree the commits window no longer lists, and the editor's own once
+  --- its branch is not reported, is told gone, and nothing changes.
   ---
   ---@param item aineo.changes.ScopeItem
   local function show_worktree_alone(item)
     local reported = node_at(item.top)
-    local section = scope.section_on(session.commits_others, item.top)
-      or (reported and reported.worktree)
+    local section
+    if is_own_top(item.top) then
+      section = reports.own_checked_out_branch(session.nodes, item.top) and own_section()
+    else
+      section = scope.section_on(session.commits_others, item.top)
+        or (reported and reported.worktree)
+    end
     if not section then
       vim.notify(scope.picked_gone(item), vim.log.levels.INFO)
       return
@@ -3107,7 +3254,7 @@ function M.new(label)
     session.scope, session.focused, session.branch = scope.of(section), true, nil
     session.shows_reported = false
     select_filter(
-      item.uncommitted and filter.of_worktree_uncommitted(section) or filter.of_worktree(section)
+      item.uncommitted and filter.uncommitted_in(section) or filter.of_worktree(section)
     )
     show_commits()
     read_files(true)
