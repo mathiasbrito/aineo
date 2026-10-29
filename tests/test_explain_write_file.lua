@@ -489,44 +489,63 @@ end
 
 T['moving'] = MiniTest.new_set()
 
-T['moving']['goes first to the proposal at the cursor’s line asked about, from any line'] = function()
-  show_sorting()
-  child.cmd('7')
+--- The answer that writes `SORTING` below line 3, imports what it needs
+--- and exports it: three proposals, on lines 1, 3 and 7.
+local THREE_PLACES = {
+  summary = 'Sorts the values.',
+  edits = { BELOW_LINE_3, IMPORTING, replacing(7, { 'M.sorted = sorted', CODE[7] }) },
+}
 
-  eq(jump('next'), 3)
+--- Asks for `THREE_PLACES` below line 3 (`send_request()`) and waits until
+--- it shows, the cursor on line 3, the anchor's proposal.
+local function show_three()
+  start(THREE_PLACES)
+  send_request(3, 'Sort the values first.')
+  wait_for_preview()
 end
 
-T['moving']['then goes to the first line of the next proposal, and of the first after the last'] = function()
-  show_sorting()
+T['moving']['goes to the proposal after the one on the cursor’s line, the first after the last'] = function()
+  show_three()
+
+  local lines = { jump('next'), jump('next'), jump('next') }
+
+  eq(lines, { 7, 1, 3 })
+end
+
+T['moving']['goes to the proposal before the one on the cursor’s line, the last before the first'] = function()
+  show_three()
+
+  local lines = { jump('previous'), jump('previous'), jump('previous') }
+
+  eq(lines, { 1, 7, 3 })
+end
+
+T['moving']['goes on from the proposal last moved to when the cursor is on none'] = function()
+  show_three()
   jump('next')
+  child.cmd('5')
 
-  local lines = { jump('next'), jump('next') }
-
-  eq(lines, { 1, 3 })
+  eq(jump('next'), 1)
 end
 
-T['moving']['goes to the first line of the previous proposal, and of the last before the first'] = function()
-  show_sorting()
-  child.cmd('3')
+T['moving']['goes on from the anchor’s proposal when the cursor is on none and none was moved to'] = function()
+  show_three()
+  child.cmd('5')
 
-  local lines = { jump('previous'), jump('previous') }
-
-  eq(lines, { 1, 3 })
+  eq(jump('previous'), 1)
 end
 
-T['moving']['goes to the next proposal from a line between two'] = function()
-  show_sorting()
-  jump('next')
-  child.cmd('2')
+T['moving']['goes to the proposal below the cursor once the anchor’s is decided, none moved to'] = function()
+  show_three()
+  accept(3)
 
-  eq(jump('next'), 3)
+  eq(jump('next'), 8)
 end
 
 T['choosing'] = MiniTest.new_set()
 
 T['choosing']['takes the proposal last moved to when the cursor is on none'] = function()
   show_sorting()
-  jump('next')
   jump('next')
 
   accept(6)
@@ -536,7 +555,6 @@ end
 
 T['choosing']['takes the proposal on the cursor’s line before the one last moved to'] = function()
   show_sorting()
-  jump('next')
   jump('next')
 
   accept(3)

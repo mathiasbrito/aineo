@@ -44,7 +44,6 @@ local CONCEALING = 2
 ---@field separate boolean whether each edit is a proposal of its own, decided apart from the others
 ---@field subject_edit? aineo.explain.ShownEdit the edit its subject is shown above, until it is decided
 ---@field chosen? aineo.explain.ShownEdit the edit last moved to (`jump()`), until it is decided
----@field moved? boolean whether the cursor was moved between its edits (`jump()`)
 ---@field in_view? aineo.explain.ShownEdit the edit whose diff view was toggled last (`toggle_diff()`), brought into view in place of the subject's, until it is decided
 ---@field saved table<integer, aineo.explain.ConcealOptions> the options of each window it set, before it set them
 ---@field set table<integer, aineo.explain.ConcealOptions> the options it set in each window
@@ -1252,13 +1251,40 @@ local function index_toward(spans, line, way)
   return #spans
 end
 
---- Moves the cursor of `window` to the first line of the edit, `way` of
---- its line, of the preview its buffer shows, when the edits of that
---- preview are proposals of their own (`index_toward()`), and has that edit
---- chosen (`chosen`); the first move to the next one goes to the edit its
---- subject is shown above (`subject_edit`), the one asked at the cursor,
---- while it shows. Nothing otherwise, nor when an extmark of its edits is
---- gone.
+--- The index in `preview.edits` of the edit the cursor moves on from: the
+--- one whose lines, `spans`, hold the line `line`, from 1, else the one
+--- last moved to (`chosen`), else the one its subject is shown above
+--- (`subject_edit`), the anchor's; `nil` when none is.
+---
+---@param preview aineo.explain.Preview
+---@param spans { first: integer, last: integer }[]
+---@param line integer
+---@return integer|nil
+local function current_index(preview, spans, line)
+  return chosen_index(preview, spans, line)
+    or chosen_index(preview, spans, nil, preview.subject_edit)
+end
+
+--- The index of the edit `way` of the edit `index` among `count` edits:
+--- the next or the previous, from the last to the first and back.
+---
+---@param index integer
+---@param count integer
+---@param way 'next'|'previous'
+---@return integer
+local function index_beside(index, count, way)
+  if way == 'next' then
+    return index % count + 1
+  end
+  return (index - 2) % count + 1
+end
+
+--- Moves the cursor of `window` to the first line of the edit `way` of the
+--- current one (`current_index()`, `index_beside()`), or, with none, `way`
+--- of its line (`index_toward()`), of the preview its buffer shows, when
+--- the edits of that preview are proposals of their own, and has that edit
+--- chosen (`chosen`). Nothing otherwise, nor when an extmark of its edits
+--- is gone.
 ---
 ---@param window integer
 ---@param way 'next'|'previous'
@@ -1268,12 +1294,9 @@ function M.jump(window, way)
   if not spans then
     return
   end
-  local line = vim.api.nvim_win_get_cursor(window)[1] - 1
-  local index = index_toward(spans, line, way)
-  if way == 'next' and not preview.moved then
-    index = chosen_index(preview, spans, nil, preview.subject_edit) or index
-  end
-  preview.moved = true
+  local line = vim.api.nvim_win_get_cursor(window)[1]
+  local current = current_index(preview, spans, line)
+  local index = current and index_beside(current, #spans, way) or index_toward(spans, line - 1, way)
   preview.chosen = preview.edits[index]
   vim.api.nvim_win_set_cursor(window, { spans[index].first + 1, 0 })
 end

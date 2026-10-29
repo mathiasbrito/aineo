@@ -2268,15 +2268,16 @@ and its keys: `write 1/2 · read-only until \Wa accepts or \Wr rejects · \Wd
 shows the diff · ]w [w move · \WA accepts all · \WR rejects all`; the request
 is named above the proposal at the cursor's line or the request's lines,
 which is the one brought into view; `\Wd` brings the proposal it shows as a
-diff, or as the overlay again, into view instead. The first `]w` moves the
-cursor to that
-proposal, wherever the cursor is; after it, and for `[w`, `]w` and `[w` move
-the cursor to the first line of the next and the previous proposal, from the
-last to the first and back. `\Wa`, `\Wr` and `\Wd` act on
-the proposal whose lines hold the cursor, else on the one `]w` or `[w` moved
-to last, else they tell you `aineo: no written code is chosen: put the cursor
-on its lines, or move to it with ]w or [w`. `\WA` accepts every proposal left
-as one undo step, and `\WR` rejects them all. Each accept is one undo step,
+diff, or as the overlay again, into view instead. `]w` and `[w` move the
+cursor to the first line of the proposal after and before the current one —
+the one whose lines hold the cursor, else the one moved to last, else the
+anchor's — from the last to the first and back; right after `\WW` the cursor
+is on the anchor's proposal, so the first `]w` goes to the one after it.
+`\Wa`, `\Wr` and `\Wd` act on the proposal whose lines hold the cursor, else
+on the one `]w` or `[w` moved to last, else they tell you `aineo: no written
+code is chosen: put the cursor on its lines, or move to it with ]w or [w`.
+`\WA` accepts every proposal left as one undo step, and `\WR` rejects them
+all. Each accept is one undo step,
 and writes no file; accepting one tells you `aineo: code written (u undoes it
 once the rest is decided)` while others are left. Each proposal follows its
 own text as the others are accepted; one whose text changed is stale on its
