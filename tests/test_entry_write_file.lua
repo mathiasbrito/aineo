@@ -268,6 +268,14 @@ T['the keys']['move between the proposals, wrapping'] = function()
   eq({ after_next, after_next_again, child.fn.line('.') }, { 1, 3, 1 })
 end
 
+T['the keys']['accept the proposal on the cursor’s line alone'] = function()
+  show_sorting('\\WW')
+
+  press('\\Wa')
+
+  eq(buffer_lines(), SORTED)
+end
+
 T['the keys']['accept each proposal as one undo step'] = function()
   show_sorting('\\WW')
 
@@ -300,6 +308,32 @@ T['the keys']['reject the proposal under the cursor alone'] = function()
   press('\\Wr', ']w', '\\Wa')
 
   eq(buffer_lines(), vim.list_extend({ IMPORT }, CODE))
+end
+
+T['the keys']['name \\WW as what asks again in the row of a stale proposal'] = function()
+  show_sorting('\\WW')
+  child.o.columns = 200
+
+  child.bo.modifiable = true
+  child.api.nvim_buf_set_text(0, 0, 0, 0, 0, { '-- ' })
+  child.bo.modifiable = false
+  child.cmd('redraw')
+  local rows = {}
+  vim.wait(explained.PATIENCE_MS, function()
+    rows = vim.tbl_map(function(row)
+      return vim.trim(table.concat(row))
+    end, child.get_screenshot().text)
+    return vim.iter(rows):any(function(row)
+      return row:find('asks again', 1, true) ~= nil
+    end)
+  end, 20)
+
+  eq(
+    vim.iter(rows):any(function(row)
+      return row:find('\\Wr rejects · \\WW asks again', 1, true) ~= nil
+    end),
+    true
+  )
 end
 
 return T
