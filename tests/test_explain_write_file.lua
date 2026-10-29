@@ -346,7 +346,7 @@ T['the answer refused']['is told once, and nothing is shown'] = function(edits, 
   eq(preview_marks(), 0)
 end
 
-T['the answer refused']['of more than 20 edits is told once, and nothing is shown'] = function()
+T['the answer']['of more than 20 edits is refused, told once, and nothing is shown'] = function()
   local below_line_1 = {
     line = 1,
     last = 1,
@@ -417,7 +417,7 @@ T['accepting one']['applies the proposal on the cursor’s line alone, the other
   eq(keys_rows(), { keys_row(1, 1) })
 end
 
-T['accepting one']['then the other applies it too, where its text moved to'] = function()
+T['accepting one']['then the other applies it too'] = function()
   show_sorting()
   accept(3)
 
@@ -691,11 +691,11 @@ T['the diff'] = MiniTest.new_set()
 T['the diff']['shows the proposal on the cursor’s line alone as a diff, and back'] = function()
   show_sorting()
 
-  child.lua("require('aineo.explain').toggle_fix_diff(vim.api.nvim_get_current_buf(), 'write', 1)")
+  child.lua("require('aineo.explain').toggle_fix_diff(vim.api.nvim_get_current_buf(), 'write', 3)")
   local diffed = drawn_lines()
-  child.lua("require('aineo.explain').toggle_fix_diff(vim.api.nvim_get_current_buf(), 'write', 1)")
+  child.lua("require('aineo.explain').toggle_fix_diff(vim.api.nvim_get_current_buf(), 'write', 3)")
 
-  eq(diffed, { struck = { 0 }, hidden = { 2 } })
+  eq(diffed, { struck = { 2 }, hidden = { 0 } })
   eq(drawn_lines(), { struck = {}, hidden = { 0, 2 } })
 end
 
