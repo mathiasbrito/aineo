@@ -527,6 +527,51 @@ T['a read']['runs no git for your view while no branch you have checked out is r
   eq(git_runs_of_one_read(), 17)
 end
 
+T['the tree line'] = MiniTest.new_set()
+
+--- The Lua that keeps, in the child's `_G.branch_lines`, every text the
+--- commits window has written on the line of the branch `feature/own`,
+--- each once, in the order first written.
+local RECORD_BRANCH_LINES = [[
+  _G.branch_lines = {}
+  local seen = {}
+  vim.api.nvim_buf_attach(_G.pane.commits, false, {
+    on_lines = function(_, buffer)
+      vim.schedule(function()
+        for _, text in ipairs(vim.api.nvim_buf_get_lines(buffer, 0, -1, true)) do
+          if vim.startswith(text, '    feature/own') and not seen[text] then
+            seen[text] = true
+            table.insert(_G.branch_lines, text)
+          end
+        end
+      end)
+    end,
+  })
+]]
+
+T['the tree line']['of your branch is written from the reported base alone after a report older than the session’s base'] = function()
+  local top = git_repo.create('own-view-line-once', { ['notes.txt'] = { 'one' } })
+  local created_from = git_repo.git(top, { 'rev-parse', 'HEAD' })
+  git_repo.git(top, { 'checkout', '--quiet', '-b', 'feature/own' })
+  local before_session = commit_only(top, 'before.txt', 'before', 'Before the session')
+  child.lua('_G.start_copy(...)', { top })
+  expect_pane_lines('commits', DEFAULT_VIEW)
+  child.lua(RECORD_BRANCH_LINES)
+
+  child.lua('_G.report(...)', {
+    { worktree = top, label = 'own', branches = { { name = 'feature/own', base = created_from } } },
+  })
+
+  local under = under_branch(git_repo.commit_line(before_session, 'Before the session'))
+  git_repo.wait_until('the branch’s commit listed under its line', function()
+    return vim.tbl_contains(pane_lines('commits'), under)
+  end)
+  eq(
+    child.lua_get('_G.branch_lines'),
+    { ('    feature/own * from %s'):format(short(created_from)) }
+  )
+end
+
 --- Presses `s` in the commits window, waits until its picker opens, and
 --- picks the item at `position`.
 ---
