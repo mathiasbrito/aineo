@@ -275,6 +275,69 @@ T['Enter']['on a branch reported with no base shows the commits from the default
   })
 end
 
+T['Enter']['on a branch reported from a commit older than the session’s base shows its commits from that commit'] = function()
+  local top = git_repo.create('own-view-older-base', { ['notes.txt'] = { 'one' } })
+  local created_from = git_repo.git(top, { 'rev-parse', 'HEAD' })
+  git_repo.git(top, { 'checkout', '--quiet', '-b', 'feature/own' })
+  local before_session = commit_only(top, 'before.txt', 'before', 'Before the session')
+  child.lua('_G.start_copy(...)', { top })
+  expect_pane_lines('commits', DEFAULT_VIEW)
+  local in_session = commit_only(top, 'in.txt', 'in', 'In the session')
+  child.lua('_G.report(...)', {
+    { worktree = top, label = 'own', branches = { { name = 'feature/own', base = created_from } } },
+  })
+  git_repo.wait_until('the Reported section listed', function()
+    return pane_lines('commits')[1] == 'Reported'
+  end)
+
+  enter_on_line(3)
+
+  expect_pane_lines('commits', {
+    ('Worktree %s (feature/own) · yours'):format(vim.fs.basename(top)),
+    'Uncommitted',
+    git_repo.commit_line(in_session, 'In the session'),
+    git_repo.commit_line(before_session, 'Before the session'),
+  })
+end
+
+T['Enter']['on a commit made before the session’s base keeps it chosen through a read'] = function()
+  local top = git_repo.create('own-view-older-commit', { ['notes.txt'] = { 'one' } })
+  local created_from = git_repo.git(top, { 'rev-parse', 'HEAD' })
+  git_repo.git(top, { 'checkout', '--quiet', '-b', 'feature/own' })
+  local before_session = commit_only(top, 'before.txt', 'before', 'Before the session')
+  child.lua('_G.start_copy(...)', { top })
+  expect_pane_lines('commits', DEFAULT_VIEW)
+  child.lua('_G.report(...)', {
+    { worktree = top, label = 'own', branches = { { name = 'feature/own', base = created_from } } },
+  })
+  git_repo.wait_until('the Reported section listed', function()
+    return pane_lines('commits')[1] == 'Reported'
+  end)
+  enter_on_line(3)
+  local heading = ('Worktree %s (feature/own) · yours'):format(vim.fs.basename(top))
+  expect_pane_lines(
+    'commits',
+    { heading, 'Uncommitted', git_repo.commit_line(before_session, 'Before the session') }
+  )
+  enter_window_of('commits')
+  child.type_keys('3G')
+  local chosen = 'Files in: ' .. git_repo.commit_line(before_session, 'Before the session')
+  git_repo.wait_until('the commit chosen', function()
+    return pane_lines('files')[1] == chosen
+  end)
+
+  local later = commit_only(top, 'later.txt', 'later', 'Later')
+  child.lua("require('aineo.changes').refresh_shown_pane()")
+  expect_pane_lines('commits', {
+    heading,
+    'Uncommitted',
+    git_repo.commit_line(later, 'Later'),
+    git_repo.commit_line(before_session, 'Before the session'),
+  })
+
+  eq(pane_lines('files')[1], chosen)
+end
+
 --- Presses `s` in the commits window, waits until its picker opens, and
 --- picks the item at `position`.
 ---

@@ -1489,6 +1489,17 @@ function M.new(label)
     )
   end
 
+  --- Whether `selected`, a commit of the editor's own, is among the commits
+  --- the editor's own worktree shown alone last listed
+  --- (`session.own_section`), which may reach behind the session's base.
+  ---
+  ---@param selected aineo.changes.Filter a `commit` filter
+  ---@return boolean
+  local function own_section_lists(selected)
+    local listed = session.own_section and session.own_section.listed
+    return listed ~= nil and lists_commit(selected, listed.commits)
+  end
+
   --- Ends the view of the editor's own worktree shown alone once the branch
   --- it has checked out is not among those reported of it (
   --- `reports.own_checked_out_branch()`): the scope is cleared, and, unless
@@ -1698,8 +1709,10 @@ function M.new(label)
   --- since its own, and shows them (`window_read()`), with what landed in the
   --- working branch read beside them (`read_landed()`). When the editor's own
   --- commit the files window lists is no longer among the commits — after a
-  --- reset, a rebase — *Session work* is selected again, and the files window
-  --- read for it; when it is another worktree's, or that worktree is, see
+  --- reset, a rebase — nor among those the editor's own worktree shown alone
+  --- lists (`own_section_lists()`), *Session work* is selected again, and the
+  --- files window read for it; when it is another worktree's, or that
+  --- worktree is, see
   --- `reselect_in_worktrees()`. The local branch the scope names, when it
   --- names one, and the reported branches, are read after the
   --- worktrees, and the reports matched again (`read_scope_and_reported()`).
@@ -1721,6 +1734,7 @@ function M.new(label)
         and not session.selected.branch
         and not session.selected.graph
         and not lists_commit(session.selected, since.commits)
+        and not own_section_lists(session.selected)
       then
         select_session_work()
         read_files(true)
