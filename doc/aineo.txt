@@ -2209,10 +2209,12 @@ is read-only until `\Wa` accepts it, as one undo step, writing no file, or
 `\Wd` shows it as a diff. The three keys are mapped in the buffer's Normal
 mode while the code shows, never over a key of yours, and removed when it
 goes; the fix's `\Va`, `\Vr` and `\Vd` are not mapped for it. `\W` alone still
-asks for code meanwhile, once 'timeoutlen' has passed with no `a`, `r` or `d`
-after it. The head row names these keys: `read-only until \Wa accepts or \Wr
-rejects · \Wd shows the diff`. Shown as a diff from the buffer's first line,
-as code always is in a file of one line, the head row and the why rows are
+asks for code, once 'timeoutlen' has passed with no second `W`
+(|aineo-write-file|), nor, while the code shows, `a`, `r` or `d`, after it;
+followed by any other key, it asks at once. The head row names these keys:
+`read-only until \Wa accepts or \Wr rejects · \Wd shows the diff`. Shown as
+a diff from the buffer's first line, as code always is in a file of one line,
+the head row and the why rows are
 drawn once, below the old lines and before the new ones, rather than above
 line 1, which a window shows only once scrolled up past it; a fix's too. The
 stale mark and the 'conceallevel' are the fix's, in its own words: its head
@@ -2240,6 +2242,58 @@ drops what was kept. The keys are |<Plug>(aineo-write)| and
 |<Plug>(aineo-write-diff)|; with |aineo-config-prefix| `false` none is mapped
 and the head row names these.
 
+                                                            *aineo-write-file*
+`\WW` writes code as `\W` does, in Normal and in Visual mode, with the same
+request, the same model, effort, tools and time limit, but the code may also
+change other places of the file: an import at the top, a variable or a
+constant outside the function, a helper function, a changed signature. The
+float is titled `Write code that may change the whole file`. What is sent
+says so, after the rules of the edit at the cursor's line or of the request's
+lines: each further edit goes where the file's own conventions put it, never a
+local import inside a function or a branch when the file imports at the top;
+no two edits share a line; there are at most 20; no other file is edited.
+
+aineo places every edit as it places a fix's, byte for byte, and refuses the
+whole answer, telling you why, once, and showing nothing, when none of its
+edits is the edit of the cursor's line or of the request's lines, placed as
+`\W` places it (`aineo: the written code was refused: it has no edit that
+inserts after the cursor's line`, or the like), when two edits share a line,
+when an edit names lines the file does not have or old lines that stand
+nowhere, or when it holds more than 20 edits. The order of the edits in the
+answer does not matter.
+
+Each edit shows as a proposal of its own, as written code does, with its own
+head row naming its place among them, counted from the top of the buffer,
+and its keys: `write 1/2 · read-only until \Wa accepts or \Wr rejects · \Wd
+shows the diff · ]w [w move · \WA accepts all · \WR rejects all`; the request
+is named above the proposal at the cursor's line or the request's lines,
+which is the one brought into view; `\Wd` brings the proposal it shows as a
+diff, or as the overlay again, into view instead. `]w` and `[w` move the
+cursor to the first line of the proposal after and before the current one —
+the one whose lines hold the cursor, else the one moved to last, else the
+anchor's — from the last to the first and back; right after `\WW` the cursor
+is on the anchor's proposal, so the first `]w` goes to the one after it.
+`\Wa`, `\Wr` and `\Wd` act on the proposal whose lines hold the cursor, else
+on the one `]w` or `[w` moved to last, else they tell you `aineo: no written
+code is chosen: put the cursor on its lines, or move to it with ]w or [w`.
+`\WA` accepts every proposal left as one undo step, and `\WR` rejects them
+all. Each accept is one undo step,
+and writes no file; accepting one tells you `aineo: code written (u undoes it
+once the rest is decided)` while others are left. Each proposal follows its
+own text as the others are accepted; one whose text changed is stale on its
+own, its head row saying `write 1/1 · the lines under the written code
+changed · \Wr rejects · \WW asks again`, and is never accepted: `\Wa` tells
+you so, and `\WA` accepts the others and leaves it shown until `\Wr`. The
+buffer is read-only while any proposal shows, and the last one decided gives
+it back; `\vc` removes them all. The code kept for `\WW` is kept apart from
+`\W`'s, so neither shows the other's. The keys are
+|<Plug>(aineo-write-file)| and, while its proposals show,
+|<Plug>(aineo-write-accept-all)|, |<Plug>(aineo-write-reject-all)|,
+|<Plug>(aineo-write-next)| and |<Plug>(aineo-write-previous)|, mapped in the
+buffer's Normal mode, never over a key of yours, and removed with the last
+proposal; with |aineo-config-prefix| `false` none is mapped. `:Aineo write`
+has no word for it.
+
                                                          *aineo-explain-clean*
 `\vc` returns the current buffer to how it behaved when you opened it, at
 once: it stops every request that runs for it, so that no answer of theirs is
@@ -2249,7 +2303,7 @@ nothing; removes every explanation and issue, with their marks, and the fix
 explanations; gives every window back the 'conceallevel' and
 'concealcursor' a fix set, and the buffer its 'modifiable'; takes back the
 keys aineo mapped for the buffer (`]v`, `[v`, `\Va`, `\Vr`, `\Vd`, `\Wa`,
-`\Wr`, `\Wd`) and the
+`\Wr`, `\Wd`, `\WA`, `\WR`, `]w`, `[w`) and the
 badges; and drops the answers, the fixes and the code kept for it, so that
 the next request asks anew. Its text and its undo history stay as they are,
 and your own keys and options too; the text you last sent in a steering
@@ -3635,6 +3689,12 @@ you turn the prefix off, or when a prefix key is yours: >lua
 			Does what `<Plug>(aineo-write)` does, the Claude Code
 			reading the project when that helps.
 
+                                                    *<Plug>(aineo-write-file)*
+<Plug>(aineo-write-file)
+			Does what `<Plug>(aineo-write-deep)` does, the code
+			allowed to change other places of the file too, each
+			change a proposal of its own (|aineo-write-file|).
+
                                                     *<Plug>(aineo-fix-accept)*
 <Plug>(aineo-fix-accept)
 			In Normal mode, accepts the fix the current buffer
@@ -3663,6 +3723,32 @@ you turn the prefix off, or when a prefix key is yours: >lua
 <Plug>(aineo-write-diff)
 			In Normal mode, shows the written code the current
 			buffer shows as a diff, or as the overlay again.
+
+			For code of |aineo-write-file|, these three act on the
+			proposal whose lines hold the cursor, else on the one
+			moved to last.
+
+                                              *<Plug>(aineo-write-accept-all)*
+<Plug>(aineo-write-accept-all)
+			In Normal mode, accepts every proposal left of the
+			written code the current buffer shows, as one undo
+			step, writing no file (|aineo-write-file|).
+
+                                              *<Plug>(aineo-write-reject-all)*
+<Plug>(aineo-write-reject-all)
+			In Normal mode, rejects every proposal left of the
+			written code the current buffer shows.
+
+                                                    *<Plug>(aineo-write-next)*
+<Plug>(aineo-write-next)
+			In Normal mode, moves the cursor to the first line of
+			the next proposal of the written code the current
+			buffer shows, from the last to the first.
+
+                                                *<Plug>(aineo-write-previous)*
+<Plug>(aineo-write-previous)
+			In Normal mode, moves the cursor to the first line of
+			the previous proposal, from the first to the last.
 
                                                   *<Plug>(aineo-explain-mark)*
 <Plug>(aineo-explain-mark)
@@ -3779,6 +3865,8 @@ which has none, and those of a fix shown, whose keys are local to its buffer
 \w		|<Plug>(aineo-write)|
                                                                     *aineo-\W*
 \W		|<Plug>(aineo-write-deep)|
+                                                                   *aineo-\WW*
+\WW		|<Plug>(aineo-write-file)|
                                                                    *aineo-\vc*
 \vc		|<Plug>(aineo-explain-clean)|
                                                                   *aineo-v_\s*
@@ -3801,6 +3889,8 @@ which has none, and those of a fix shown, whose keys are local to its buffer
 \w		|<Plug>(aineo-write)| in Visual mode (|aineo-write|)
                                                                   *aineo-v_\W*
 \W		|<Plug>(aineo-write-deep)| in Visual mode
+                                                                 *aineo-v_\WW*
+\WW		|<Plug>(aineo-write-file)| in Visual mode
 
 Visual mode here is Visual mode alone: in Select mode, `\s` is text you
 type.

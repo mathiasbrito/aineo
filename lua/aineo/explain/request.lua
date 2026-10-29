@@ -308,6 +308,7 @@ end
 ---@field last integer the last line of the request, or the line the code goes after
 ---@field request? string the request the user typed, the code going after the line `first`, or in its place when it is blank; absent when the lines `first` to `last` hold the request, which the code replaces
 ---@field blank? boolean whether the line `first`, which the code for the request typed goes to, is blank: the code then replaces it
+---@field whole_file? boolean whether the code may also edit other places of the file, each a further edit (`WHOLE_FILE_RULES`)
 ---@field lines string[] every line of the buffer, as it stands
 
 --- What a prompt for code written in place of the lines that hold its
@@ -366,27 +367,61 @@ local WRITE_IN_BLANK_RULES = 'Answer in summary what the code does in one senten
   .. ' and why says what the code does.'
   .. ' When the request cannot be fulfilled in this file, answer no edits and say why in the summary.'
 
+--- What a prompt for code that may edit the whole file says after the
+--- rules of the edit asked for: which other edits the code may need, where
+--- they go and how each is answered, which `aineo.explain.write` holds the
+--- answer to.
+local WHOLE_FILE_RULES = 'The code may also need edits elsewhere in this file:'
+  .. ' an import at the top, a variable or constant at module scope, a helper function,'
+  .. ' a changed signature.'
+  .. ' Give each as a further edit after that first one,'
+  .. ' placed where the file’s own conventions put it:'
+  .. ' never a local import inside a function or a branch when the file imports at the top.'
+  .. ' Each further edit gives in line and last the first and last lines it replaces,'
+  .. ' and repeats in old exactly those lines of the numbered text below,'
+  .. ' verbatim with their indentation and without their numbers;'
+  .. ' new holds the lines that replace them, and, to add lines, starts with the line they go after.'
+  .. ' No two edits share a line, and there are at most 20 edits.'
+  .. ' Edit no other file.'
+
+--- `parts`, the head, request and rules of a prompt for `code`, followed
+--- by `WHOLE_FILE_RULES` when the code may edit the whole file, then by
+--- every line of the buffer, numbered (`numbered()`), each after an empty
+--- line.
+---
+---@param code aineo.explain.WriteCode
+---@param parts string[]
+---@return string[]
+local function with_whole_file_rules(code, parts)
+  if code.whole_file then
+    vim.list_extend(parts, { '', WHOLE_FILE_RULES })
+  end
+  return vim.list_extend(parts, { '', table.concat(numbered(code.lines), '\n') })
+end
+
 --- The prompt Claude Code reads to write code for `code.request`, the
 --- request typed: after the line `code.first`, or in its place when
 --- `code.blank`: the file, its language — `unknown` when the buffer has no
 --- `'filetype'` — and that line, the request as typed, how to answer
---- (`WRITE_BELOW_RULES`, `WRITE_IN_BLANK_RULES`), then every line of the
---- buffer, numbered (`numbered()`).
+--- (`WRITE_BELOW_RULES`, `WRITE_IN_BLANK_RULES`), what else the code may
+--- edit when it may edit the whole file, then every line of the buffer,
+--- numbered (`with_whole_file_rules()`).
 ---
 ---@param code aineo.explain.WriteCode
 ---@return string
 local function write_typed_prompt(code)
   local head = code.blank and WRITE_IN_BLANK_HEAD or WRITE_BELOW_HEAD
   local rules = code.blank and WRITE_IN_BLANK_RULES or WRITE_BELOW_RULES
-  return table.concat({
-    head:format(code.path, code.language ~= '' and code.language or 'unknown', code.first),
-    '',
-    code.request,
-    '',
-    rules:format(code.first, code.first),
-    '',
-    table.concat(numbered(code.lines), '\n'),
-  }, '\n')
+  return table.concat(
+    with_whole_file_rules(code, {
+      head:format(code.path, code.language ~= '' and code.language or 'unknown', code.first),
+      '',
+      code.request,
+      '',
+      rules:format(code.first, code.first),
+    }),
+    '\n'
+  )
 end
 
 --- The prompt Claude Code reads to write code for `code`: for the request
@@ -395,7 +430,8 @@ end
 --- the request that the lines `code.first` to `code.last` hold: the file,
 --- its language — `unknown` when the buffer has no `'filetype'` — and those
 --- lines, which the code replaces, how to answer (`WRITE_IN_PLACE_RULES`),
---- then every line of the buffer, numbered (`numbered()`).
+--- what else the code may edit when it may edit the whole file, then every
+--- line of the buffer, numbered (`with_whole_file_rules()`).
 ---
 ---@param code aineo.explain.WriteCode
 ---@return string
@@ -403,18 +439,19 @@ function M.write_prompt(code)
   if code.request then
     return write_typed_prompt(code)
   end
-  return table.concat({
-    WRITE_IN_PLACE_HEAD:format(
-      code.path,
-      code.language ~= '' and code.language or 'unknown',
-      code.first,
-      code.last
-    ),
-    '',
-    WRITE_IN_PLACE_RULES:format(code.first, code.last, code.first),
-    '',
-    table.concat(numbered(code.lines), '\n'),
-  }, '\n')
+  return table.concat(
+    with_whole_file_rules(code, {
+      WRITE_IN_PLACE_HEAD:format(
+        code.path,
+        code.language ~= '' and code.language or 'unknown',
+        code.first,
+        code.last
+      ),
+      '',
+      WRITE_IN_PLACE_RULES:format(code.first, code.last, code.first),
+    }),
+    '\n'
+  )
 end
 
 return M

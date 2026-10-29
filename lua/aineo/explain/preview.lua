@@ -24,6 +24,8 @@ local CONCEALING = 2
 ---@field old string[]
 ---@field new string[]
 ---@field why string
+---@field stale? boolean whether its old lines no longer stand in the buffer, as when it was last drawn, for an edit that is a proposal of its own
+---@field diff? boolean whether it shows as the diff view, for an edit that is a proposal of its own
 
 --- The options of a window that hide a preview's old lines, as they were.
 ---@class aineo.explain.ConcealOptions
@@ -39,6 +41,10 @@ local CONCEALING = 2
 ---@field mapped table<string, boolean> the actions it mapped a key for in its buffer
 ---@field diff boolean whether it shows as the diff view
 ---@field edits aineo.explain.ShownEdit[] in the order of their lines
+---@field separate boolean whether each edit is a proposal of its own, decided apart from the others
+---@field subject_edit? aineo.explain.ShownEdit the edit its subject is shown above, until it is decided
+---@field chosen? aineo.explain.ShownEdit the edit last moved to (`jump()`), until it is decided
+---@field in_view? aineo.explain.ShownEdit the edit whose diff view was toggled last (`toggle_diff()`), brought into view in place of the subject's, until it is decided
 ---@field saved table<integer, aineo.explain.ConcealOptions> the options of each window it set, before it set them
 ---@field set table<integer, aineo.explain.ConcealOptions> the options it set in each window
 ---@field modifiable boolean the buffer's 'modifiable' before it, which it turns off while shown
@@ -51,11 +57,16 @@ local CONCEALING = 2
 ---@field redraw_pending? boolean whether a drawing again is scheduled (`redraw_lost()`)
 
 --- The keys a preview maps in its buffer, each a left-hand side as
---- `vim.keymap.set()` takes it.
+--- `vim.keymap.set()` takes it; those of a preview whose edits are
+--- proposals of their own (`separate`) are mapped for it alone.
 ---@class aineo.explain.FixKeys
 ---@field accept string
 ---@field reject string
 ---@field diff string
+---@field accept_all? string
+---@field reject_all? string
+---@field next? string
+---@field previous? string
 
 --- The preview each buffer shows.
 ---@type table<integer, aineo.explain.Preview>
@@ -119,23 +130,23 @@ end
 --- being the user's or none being given.
 ---
 ---@param preview aineo.explain.Preview
----@param action 'accept'|'reject'|'diff'
+---@param action aineo.explain.Action
 ---@return string
 local function named_key(preview, action)
   return preview.mapped[action] and preview.keys[action] or preview.kind.plugs[action]
 end
 
---- What the head row of `preview` says: that its buffer is read-only until
---- it is accepted or rejected, while its 'modifiable' is off, and what
---- accepts it, rejects it and shows its diff (`named_key()`). A stale
---- preview's says instead what its kind says when the code under it
---- changed (`aineo.explain.kinds`' `changed`), what rejects it and what
---- asks again.
+--- What a head row of `preview` says of the decision: that its buffer is
+--- read-only until it is accepted or rejected, while its 'modifiable' is
+--- off, and what accepts it, rejects it and shows its diff (`named_key()`);
+--- for what is `stale`, what its kind says when the code under it changed
+--- (`aineo.explain.kinds`' `changed`), what rejects it and what asks again.
 ---
 ---@param preview aineo.explain.Preview
+---@param stale boolean
 ---@return string
-local function head_text(preview)
-  if preview.stale then
+local function decision_text(preview, stale)
+  if stale then
     return ('%s · %s rejects · %s asks again'):format(
       preview.kind.changed,
       named_key(preview, 'reject'),
@@ -147,6 +158,38 @@ local function head_text(preview)
     or 'read-only until %s accepts or %s rejects'
   ):format(named_key(preview, 'accept'), named_key(preview, 'reject'))
   return ('%s · %s shows the diff'):format(keys, named_key(preview, 'diff'))
+end
+
+--- What the head row of `preview` says (`decision_text()`); for a preview
+--- whose edits are proposals of their own, what the head row of its edit
+--- `index` says: its kind's label and its place among them (`write 2/3`),
+--- the decision, then, but for a stale edit, what moves to the next and the
+--- previous one and what accepts and rejects them all.
+---
+---@param preview aineo.explain.Preview
+---@param index integer
+---@return string
+local function head_text(preview, index)
+  if not preview.separate then
+    return decision_text(preview, preview.stale)
+  end
+  local edit = preview.edits[index]
+  local text = ('%s %d/%d · %s'):format(
+    preview.kind.label,
+    index,
+    #preview.edits,
+    decision_text(preview, edit.stale == true)
+  )
+  if edit.stale then
+    return text
+  end
+  return ('%s · %s %s move · %s accepts all · %s rejects all'):format(
+    text,
+    named_key(preview, 'next'),
+    named_key(preview, 'previous'),
+    named_key(preview, 'accept_all'),
+    named_key(preview, 'reject_all')
+  )
 end
 
 --- `texts`, each wrapped at the text width of `geometry`, as rows of a band
@@ -191,6 +234,15 @@ local function spans_of(preview)
   return spans
 end
 
+--- The lines of `buffer` that `span` spans, from 0.
+---
+---@param buffer integer
+---@param span { first: integer, last: integer }
+---@return string[]
+local function lines_of(buffer, span)
+  return vim.api.nvim_buf_get_lines(buffer, span.first, span.last + 1, false)
+end
+
 --- Whether the edits of `preview` still stand at `spans`, the lines each
 --- spans now (`spans_of()`): every edit's old lines are, byte for byte and
 --- in number, the lines it spans, and the edits stand in the order they
@@ -201,8 +253,7 @@ end
 ---@return boolean
 local function stands(preview, spans)
   for index, span in ipairs(spans) do
-    local lines = vim.api.nvim_buf_get_lines(preview.buffer, span.first, span.last + 1, false)
-    if not vim.deep_equal(lines, preview.edits[index].old) then
+    if not vim.deep_equal(lines_of(preview.buffer, span), preview.edits[index].old) then
       return false
     end
     if index > 1 and span.first <= spans[index - 1].last then
@@ -233,21 +284,23 @@ local function is_stale(preview, spans)
   return not (spans and stands(preview, spans))
 end
 
---- The head row of `preview` (`head_text()`) as a band labelled `fix`, in a
---- window of `geometry` (`band_rows()`).
+--- The head row of `preview`, or of its edit `index` (`head_text()`), as a
+--- band labelled with its kind's label, in a window of `geometry`
+--- (`band_rows()`).
 ---
 ---@param preview aineo.explain.Preview
+---@param index integer
 ---@param geometry aineo.explain.Geometry
 ---@return table[][]
-local function head_rows(preview, geometry)
-  return band_rows({ head_text(preview) }, geometry, preview.kind.label, FIX_STYLE)
+local function head_rows(preview, index, geometry)
+  return band_rows({ head_text(preview, index) }, geometry, preview.kind.label, FIX_STYLE)
 end
 
 --- The virtual lines drawn before the new lines of the edit `index` of
 --- `preview` in a window of `geometry` (`band_rows()`): for the first edit,
---- the head (`head_text()`) labelled `fix`; then the edit's fix explanation
---- (`aineo.explain.kinds`' `FIX_WHY`), the summary first, then the edit's
---- why, labelled `why`.
+--- or for each when its edits are proposals of their own, the head
+--- (`head_rows()`); then the edit's fix explanation (`aineo.explain.kinds`'
+--- `FIX_WHY`), the summary first, then the edit's why, labelled `why`.
 ---
 ---@param preview aineo.explain.Preview
 ---@param index integer
@@ -255,8 +308,8 @@ end
 ---@return table[][]
 local function lead_rows(preview, index, geometry)
   local rows = {}
-  if index == 1 then
-    rows = head_rows(preview, geometry)
+  if index == 1 or preview.separate then
+    rows = head_rows(preview, index, geometry)
   end
   local why = { preview.summary, preview.edits[index].why }
   return vim.list_extend(rows, band_rows(why, geometry, kinds.FIX_WHY.label, WHY_STYLE))
@@ -281,13 +334,16 @@ end
 ---@class aineo.explain.Places
 ---@field order string[] the keys of the places, in the order first added
 ---@field rows table<string, { row: integer, above: boolean, rows: table[][] }>
+---@field lead? string the key of the place whose first rows are brought into view; the place first added when absent
 
---- Adds `rows` to what is drawn below line `row`, from 0, or above it.
+--- Adds `rows` to what is drawn below line `row`, from 0, or above it, and
+--- returns the key of that place.
 ---
 ---@param places aineo.explain.Places
 ---@param row integer
 ---@param above boolean
 ---@param rows table[][]
+---@return string
 local function add_rows(places, row, above, rows)
   local key = row .. (above and 'above' or 'below')
   if not places.rows[key] then
@@ -295,6 +351,7 @@ local function add_rows(places, row, above, rows)
     table.insert(places.order, key)
   end
   vim.list_extend(places.rows[key].rows, rows)
+  return key
 end
 
 --- The column the extmarks that draw a preview's rows are set at: after
@@ -329,8 +386,9 @@ local FIRST_ROW = 0
 ---@param places aineo.explain.Places
 ---@param row integer
 ---@param rows table[][]
+---@return string key the key of the place
 local function add_rows_above_or_first(places, row, rows)
-  add_rows(places, row, row ~= FIRST_ROW, rows)
+  return add_rows(places, row, row ~= FIRST_ROW, rows)
 end
 
 --- Adds to `places` the edit `index` of `preview`, spanning the lines of
@@ -341,12 +399,14 @@ end
 --- in a stale preview whose old lines were deleted. An edit that starts on
 --- the buffer's first line (`FIRST_ROW`) has its head and explanation
 --- below its old lines instead, before its new lines, where they are seen.
+--- Returns the key of the place its head and explanation are drawn at.
 ---
 ---@param preview aineo.explain.Preview
 ---@param index integer
 ---@param span { first: integer, last: integer }
 ---@param geometry aineo.explain.Geometry
 ---@param places aineo.explain.Places
+---@return string
 local function add_diff(preview, index, span, geometry, places)
   vim.api.nvim_buf_set_extmark(preview.buffer, DRAWN, span.first, 0, {
     end_row = span.last + 1,
@@ -357,24 +417,26 @@ local function add_diff(preview, index, span, geometry, places)
   local lead = lead_rows(preview, index, geometry)
   local new = new_rows(preview.edits[index], geometry)
   if span.last < span.first then
-    add_rows_above_or_first(places, span.first, vim.list_extend(lead, new))
+    return add_rows_above_or_first(places, span.first, vim.list_extend(lead, new))
   elseif span.first == FIRST_ROW then
-    add_rows(places, span.last, false, vim.list_extend(lead, new))
-  else
-    add_rows(places, span.first, true, lead)
-    add_rows(places, span.last, false, new)
+    return add_rows(places, span.last, false, vim.list_extend(lead, new))
   end
+  local key = add_rows(places, span.first, true, lead)
+  add_rows(places, span.last, false, new)
+  return key
 end
 
---- The edits of `preview` grouped in blocks of edits that touch, one
---- ending on the line before the next starts, each block the indexes of its
---- edits and the lines it spans, from 0.
+--- The edits `indexes` of a preview grouped in blocks of edits that touch,
+--- one ending on the line before the next starts, each block the indexes of
+--- its edits and the lines it spans, from 0.
 ---
 ---@param spans { first: integer, last: integer }[] the lines of each edit, in order
+---@param indexes integer[] the edits to group, in order
 ---@return { indexes: integer[], first: integer, last: integer }[]
-local function blocks_of(spans)
+local function blocks_of(spans, indexes)
   local blocks = {}
-  for index, span in ipairs(spans) do
+  for _, index in ipairs(indexes) do
+    local span = spans[index]
     local block = blocks[#blocks]
     if block and span.first == block.last + 1 then
       table.insert(block.indexes, index)
@@ -388,30 +450,32 @@ end
 
 --- Adds to `places` the edits of `block` as the overlay shows them: their
 --- old lines hidden, which hides what is shown above them, the issue a
---- fix fixes among it, and their rows — first, for the first edit, the
---- preview's subject in its look, labelled as the look is (the issue's
+--- fix fixes among it, and their rows — first, for the edit its subject is
+--- shown above (`subject_edit`), the preview's subject in its look, labelled as the look is (the issue's
 --- text, labelled `issue`, or the request code is written for); then each
 --- edit's head and explanation (`lead_rows()`), then its new lines — below
 --- the line before the block, else above the line after it. A block that spans the whole buffer has no
 --- line to hang them on and shows as the diff view does (`add_diff()`).
+--- Returns the key of the place the rows of its first edit are drawn at.
 ---
 ---@param preview aineo.explain.Preview
 ---@param block { indexes: integer[], first: integer, last: integer }
 ---@param spans { first: integer, last: integer }[]
 ---@param geometry aineo.explain.Geometry
 ---@param places aineo.explain.Places
+---@return string
 local function add_overlay(preview, block, spans, geometry, places)
   local buffer = preview.buffer
   local line_count = vim.api.nvim_buf_line_count(buffer)
   if block.first == 0 and block.last == line_count - 1 then
-    for _, index in ipairs(block.indexes) do
-      add_diff(preview, index, spans[index], geometry, places)
-    end
-    return
+    local keys = vim.tbl_map(function(index)
+      return add_diff(preview, index, spans[index], geometry, places)
+    end, block.indexes)
+    return keys[1]
   end
   local rows = {}
   for _, index in ipairs(block.indexes) do
-    if index == 1 then
+    if preview.edits[index] == preview.subject_edit then
       local subject = preview.subject
       vim.list_extend(
         rows,
@@ -427,35 +491,72 @@ local function add_overlay(preview, block, spans, geometry, places)
     conceal_lines = '',
   })
   if block.first > 0 then
-    add_rows(places, block.first - 1, false, rows)
-  else
-    add_rows(places, block.last + 1, true, rows)
+    return add_rows(places, block.first - 1, false, rows)
   end
+  return add_rows(places, block.last + 1, true, rows)
 end
 
 --- The line, from 1, whose filler lines, the virtual lines Neovim draws
---- above it, start with the first rows of `places` (the place first
---- added): the line a place above a line hangs on, or the line after the
---- one a place below a line hangs on; `nil` when that is past the last of
---- the buffer's `line_count` lines.
+--- above it, start with the first rows of `places` (its `lead`, else the
+--- place first added): the line a place above a line hangs on, or the line
+--- after the one a place below a line hangs on; `nil` when that is past the
+--- last of the buffer's `line_count` lines.
 ---
 ---@param places aineo.explain.Places
 ---@param line_count integer
 ---@return integer|nil
 local function lead_line_of(places, line_count)
-  local place = places.rows[places.order[1]]
+  local place = places.rows[places.lead or places.order[1]]
   local line = place.row + (place.above and 1 or 2)
   return line <= line_count and line or nil
+end
+
+--- Adds to `places` the edits of `preview`, proposals of their own, each
+--- spanning the lines of `spans`, marking each stale when its old lines no
+--- longer stand there, and not when they stand again: a stale one, or one
+--- shown as the diff view (`diff`), as the diff view does (`add_diff()`),
+--- the others as the overlay does, in blocks of those that touch
+--- (`add_overlay()`). The place of the edit whose diff view was toggled
+--- last (`in_view`), else of the edit its subject is shown above
+--- (`subject_edit`), the edit asked at the cursor, is the lead of `places`,
+--- the one brought into view.
+---
+---@param preview aineo.explain.Preview
+---@param spans { first: integer, last: integer }[]
+---@param geometry aineo.explain.Geometry
+---@param places aineo.explain.Places
+local function add_proposals(preview, spans, geometry, places)
+  local overlaid = {}
+  local in_view = preview.in_view or preview.subject_edit
+  for index, span in ipairs(spans) do
+    local edit = preview.edits[index]
+    edit.stale = not vim.deep_equal(lines_of(preview.buffer, span), edit.old)
+    if edit.stale or edit.diff then
+      local key = add_diff(preview, index, span, geometry, places)
+      places.lead = edit == in_view and key or places.lead
+    else
+      table.insert(overlaid, index)
+    end
+  end
+  for _, block in ipairs(blocks_of(spans, overlaid)) do
+    local key = add_overlay(preview, block, spans, geometry, places)
+    local holds_the_one_in_view = vim.iter(block.indexes):any(function(index)
+      return preview.edits[index] == in_view
+    end)
+    places.lead = holds_the_one_in_view and key or places.lead
+  end
 end
 
 --- Draws `preview` as it shows now, marking it stale when its edits no
 --- longer stand (`stands()`), and not when they stand again: the overlay,
 --- its edits' old lines hidden and their rows in their place
 --- (`add_overlay()`), or the diff view (`add_diff()`), which a stale preview
---- always shows, so that the code as it reads now is seen. When an extmark
---- of its edits is gone, it is stale and only its head row is drawn, above
---- the line its first edit last started on, or below it when that is the
---- buffer's first line (`add_rows_above_or_first()`).
+--- always shows, so that the code as it reads now is seen; each edit as a
+--- proposal of its own, stale or not, when they are (`add_proposals()`).
+--- When an extmark of its edits is gone, it is stale, every edit with it,
+--- and only its head row is drawn, above the line its first edit last
+--- started on, or below it when that is the buffer's first line
+--- (`add_rows_above_or_first()`).
 ---
 ---@param preview aineo.explain.Preview
 local function render(preview)
@@ -466,8 +567,14 @@ local function render(preview)
   preview.stale = is_stale(preview, spans)
   local places = { order = {}, rows = {} }
   if not spans then
+    for _, edit in ipairs(preview.edits) do
+      edit.stale = true
+    end
     local row = math.min(preview.first_row, vim.api.nvim_buf_line_count(buffer) - 1)
-    add_rows_above_or_first(places, row, head_rows(preview, geometry))
+    add_rows_above_or_first(places, row, head_rows(preview, 1, geometry))
+  elseif preview.separate then
+    preview.first_row = spans[1].first
+    add_proposals(preview, spans, geometry, places)
   elseif preview.diff or preview.stale then
     preview.first_row = spans[1].first
     for index, span in ipairs(spans) do
@@ -475,7 +582,7 @@ local function render(preview)
     end
   else
     preview.first_row = spans[1].first
-    for _, block in ipairs(blocks_of(spans)) do
+    for _, block in ipairs(blocks_of(spans, vim.fn.range(1, #spans))) do
       add_overlay(preview, block, spans, geometry, places)
     end
   end
@@ -799,20 +906,37 @@ vim.api.nvim_create_autocmd('BufWipeout', {
 --- The `desc` of the keys a preview maps, which tells them from the user's.
 local KEYS_DESCRIPTION = 'aineo: a key of the proposal shown'
 
+--- What a key of a preview does to it, or to the edit chosen when its
+--- edits are proposals of their own.
+---@alias aineo.explain.Action 'accept'|'reject'|'diff'|'accept_all'|'reject_all'|'next'|'previous'
+
+--- The actions of a preview's keys.
+---@type aineo.explain.Action[]
+local ACTIONS = { 'accept', 'reject', 'diff' }
+
+--- The actions of the keys of a preview whose edits are proposals of their
+--- own: `ACTIONS`, then those that act on them all and move between them.
+---@type aineo.explain.Action[]
+local SEPARATE_ACTIONS =
+  { 'accept', 'reject', 'diff', 'accept_all', 'reject_all', 'next', 'previous' }
+
 --- Each key of `preview` (`aineo.explain.FixKeys`) with its action and the
 --- `<Plug>` mapping of its kind it is mapped to (`aineo.explain.kinds`'
---- `plugs`).
+--- `plugs`): those of `ACTIONS`, or of `SEPARATE_ACTIONS` for a preview
+--- whose edits are proposals of their own, each that `preview.keys` gives.
 ---
 ---@param preview aineo.explain.Preview
 ---@return { action: string, key: string, plug: string }[]
 local function key_mappings(preview)
   local found = {}
-  for _, action in ipairs({ 'accept', 'reject', 'diff' }) do
-    table.insert(found, {
-      action = action,
-      key = preview.keys[action],
-      plug = preview.kind.plugs[action],
-    })
+  for _, action in ipairs(preview.separate and SEPARATE_ACTIONS or ACTIONS) do
+    if preview.keys[action] then
+      table.insert(found, {
+        action = action,
+        key = preview.keys[action],
+        plug = preview.kind.plugs[action],
+      })
+    end
   end
   return found
 end
@@ -938,19 +1062,287 @@ local function apply_edit(buffer, edit, span)
   vim.api.nvim_buf_set_lines(buffer, span.first, span.last + 1, true, edit.new)
 end
 
---- Applies the preview `buffer` shows, which must be shown
---- (`is_shown()`): when its edits still stand (`standing_spans()`),
---- applies each (`apply_edit()`), the edit lowest in the buffer first, as
---- one undo step, 'modifiable' on while it does, writes
---- nothing and removes the preview (`clear()`), which gives the buffer its
---- 'modifiable' back; else leaves the buffer as it is, draws the preview
---- again (`render()`), marked stale, and tells the user, once. Returns
---- whether it applied the edits.
+--- The index in `preview.edits` of the edit chosen: the one whose lines,
+--- `spans`, hold the line `line`, from 1, when it is given; else `edit`,
+--- the one last moved to (`chosen`) when absent; `nil` when none is.
+---
+---@param preview aineo.explain.Preview
+---@param spans { first: integer, last: integer }[]
+---@param line? integer
+---@param edit? aineo.explain.ShownEdit
+---@return integer|nil
+local function chosen_index(preview, spans, line, edit)
+  for index, span in ipairs(spans) do
+    if line and line - 1 >= span.first and line - 1 <= span.last then
+      return index
+    end
+  end
+  local wanted = edit or preview.chosen
+  for index, shown in ipairs(preview.edits) do
+    if shown == wanted then
+      return index
+    end
+  end
+end
+
+--- The index of the edit of `preview` the line `line` chooses
+--- (`chosen_index()`), with the lines each edit spans now (`spans_of()`);
+--- `nil` when none is chosen, and the user is told, once, how to choose
+--- one, or when an extmark of its edits is gone, and the preview is drawn
+--- again (`render()`), stale, and the user told so.
+---
+---@param preview aineo.explain.Preview
+---@param line? integer
+---@return integer|nil index
+---@return { first: integer, last: integer }[]? spans
+local function choose(preview, line)
+  local spans = spans_of(preview)
+  if not spans then
+    render(preview)
+    vim.notify(('aineo: %s; ask again'):format(preview.kind.changed), vim.log.levels.WARN)
+    return nil
+  end
+  local index = chosen_index(preview, spans, line)
+  if not index then
+    vim.notify(
+      ('aineo: no %s is chosen: put the cursor on its lines, or move to it with %s or %s'):format(
+        preview.kind.shown,
+        named_key(preview, 'next'),
+        named_key(preview, 'previous')
+      ),
+      vim.log.levels.INFO
+    )
+  end
+  return index, spans
+end
+
+--- Removes the edits of `indexes` from `preview`, decided: their extmarks
+--- go, and, when they were the last, the preview (`clear()`); else the
+--- preview is drawn again without them (`render()`).
+---
+---@param preview aineo.explain.Preview
+---@param indexes integer[]
+local function remove_edits(preview, indexes)
+  local decided = {}
+  for _, index in ipairs(indexes) do
+    decided[preview.edits[index]] = true
+  end
+  for _, edit in ipairs(vim.tbl_keys(decided)) do
+    vim.api.nvim_buf_del_extmark(preview.buffer, RANGES, edit.mark)
+  end
+  preview.edits = vim.tbl_filter(function(edit)
+    return not decided[edit]
+  end, preview.edits)
+  if decided[preview.chosen] then
+    preview.chosen = nil
+  end
+  if decided[preview.subject_edit] then
+    preview.subject_edit = nil
+  end
+  if decided[preview.in_view] then
+    preview.in_view = nil
+  end
+  if #preview.edits == 0 then
+    M.clear(preview.buffer)
+  else
+    render(preview)
+  end
+end
+
+--- Applies the edits `indexes` of `preview`, spanning the lines of `spans`
+--- (`apply_edit()`), the edit lowest in the buffer first, as one undo step,
+--- 'modifiable' on while it does, writes nothing and removes them
+--- (`remove_edits()`).
+---
+---@param preview aineo.explain.Preview
+---@param indexes integer[]
+---@param spans { first: integer, last: integer }[]
+local function apply_edits(preview, indexes, spans)
+  local lowest_first = vim.list_slice(indexes)
+  table.sort(lowest_first, function(a, b)
+    return spans[a].first > spans[b].first
+  end)
+  vim.bo[preview.buffer].modifiable = true
+  for _, index in ipairs(lowest_first) do
+    apply_edit(preview.buffer, preview.edits[index], spans[index])
+  end
+  vim.bo[preview.buffer].modifiable = false
+  remove_edits(preview, indexes)
+end
+
+--- Applies the edit of `preview` the line `line` chooses (`choose()`), when
+--- it still stands, as one undo step, and removes it (`apply_edits()`);
+--- else leaves the buffer as it is, draws the preview again, and tells the
+--- user, once, that it is stale. Returns whether it applied it.
+---
+---@param preview aineo.explain.Preview
+---@param line? integer
+---@return boolean
+local function apply_chosen(preview, line)
+  local index, spans = choose(preview, line)
+  if not index then
+    return false
+  end
+  local edit = preview.edits[index]
+  local span = spans[index]
+  if not vim.deep_equal(lines_of(preview.buffer, span), edit.old) then
+    render(preview)
+    vim.notify(('aineo: %s; ask again'):format(preview.kind.changed), vim.log.levels.WARN)
+    return false
+  end
+  apply_edits(preview, { index }, spans)
+  return true
+end
+
+--- Applies every edit of the preview `buffer` shows, which must be shown
+--- (`is_shown()`): as `apply()` does, for a preview whose edits are not
+--- proposals of their own; else each that still stands, as one undo step,
+--- removing them (`apply_edits()`), and leaving the stale ones shown. When
+--- none stands, or an extmark of its edits is gone, the buffer is left as
+--- it is, the preview drawn again (`render()`), and the user told, once,
+--- that it is stale. Returns whether it applied an edit.
 ---
 ---@param buffer integer
 ---@return boolean
-function M.apply(buffer)
+function M.apply_all(buffer)
   local preview = previews[buffer]
+  if not preview.separate then
+    return M.apply(buffer)
+  end
+  local spans = spans_of(preview)
+  local standing = {}
+  for index, span in ipairs(spans or {}) do
+    if vim.deep_equal(lines_of(buffer, span), preview.edits[index].old) then
+      table.insert(standing, index)
+    end
+  end
+  if #standing == 0 then
+    render(preview)
+    vim.notify(('aineo: %s; ask again'):format(preview.kind.changed), vim.log.levels.WARN)
+    return false
+  end
+  apply_edits(preview, standing, spans)
+  return true
+end
+
+--- The index in `spans`, the lines of the edits of a preview in the order
+--- of their lines, of the edit `way` of the line `line`, from 0: the first
+--- that starts after it, or the last that starts before it, wrapping
+--- around to the first or the last.
+---
+---@param spans { first: integer, last: integer }[]
+---@param line integer
+---@param way 'next'|'previous'
+---@return integer
+local function index_toward(spans, line, way)
+  if way == 'next' then
+    for index, span in ipairs(spans) do
+      if span.first > line then
+        return index
+      end
+    end
+    return 1
+  end
+  for index = #spans, 1, -1 do
+    if spans[index].first < line then
+      return index
+    end
+  end
+  return #spans
+end
+
+--- The index in `preview.edits` of the edit the cursor moves on from: the
+--- one whose lines, `spans`, hold the line `line`, from 1, else the one
+--- last moved to (`chosen`), else the one its subject is shown above
+--- (`subject_edit`), the anchor's; `nil` when none is.
+---
+---@param preview aineo.explain.Preview
+---@param spans { first: integer, last: integer }[]
+---@param line integer
+---@return integer|nil
+local function current_index(preview, spans, line)
+  return chosen_index(preview, spans, line)
+    or chosen_index(preview, spans, nil, preview.subject_edit)
+end
+
+--- The index of the edit `way` of the edit `index` among `count` edits:
+--- the next or the previous, from the last to the first and back.
+---
+---@param index integer
+---@param count integer
+---@param way 'next'|'previous'
+---@return integer
+local function index_beside(index, count, way)
+  if way == 'next' then
+    return index % count + 1
+  end
+  return (index - 2) % count + 1
+end
+
+--- Moves the cursor of `window` to the first line of the edit `way` of the
+--- current one (`current_index()`, `index_beside()`), or, with none, `way`
+--- of its line (`index_toward()`), of the preview its buffer shows, when
+--- the edits of that preview are proposals of their own, and has that edit
+--- chosen (`chosen`). Nothing otherwise, nor when an extmark of its edits
+--- is gone.
+---
+---@param window integer
+---@param way 'next'|'previous'
+function M.jump(window, way)
+  local preview = previews[vim.api.nvim_win_get_buf(window)]
+  local spans = preview and preview.separate and spans_of(preview)
+  if not spans then
+    return
+  end
+  local line = vim.api.nvim_win_get_cursor(window)[1]
+  local current = current_index(preview, spans, line)
+  local index = current and index_beside(current, #spans, way) or index_toward(spans, line - 1, way)
+  preview.chosen = preview.edits[index]
+  vim.api.nvim_win_set_cursor(window, { spans[index].first + 1, 0 })
+end
+
+--- Removes the preview `buffer` shows (`clear()`), or, when its edits are
+--- proposals of their own, the one the line `line`, from 1, chooses
+--- (`choose()`), leaving the buffer as it reads (`remove_edits()`); the
+--- whole preview when an extmark of its edits is gone, as when another
+--- plugin clears every namespace, which leaves its stale head row alone;
+--- nothing when it shows none.
+---
+---@param buffer integer
+---@param line? integer the cursor's line
+function M.drop(buffer, line)
+  local preview = previews[buffer]
+  if not preview then
+    return
+  end
+  if not preview.separate or not spans_of(preview) then
+    M.clear(buffer)
+    return
+  end
+  local index = choose(preview, line)
+  if index then
+    remove_edits(preview, { index })
+  end
+end
+
+--- Applies the preview `buffer` shows, which must be shown (`is_shown()`),
+--- or, when its edits are proposals of their own, the one the line `line`,
+--- from 1, chooses (`apply_chosen()`). Every edit of any other preview is
+--- applied when they still stand (`standing_spans()`), each
+--- (`apply_edit()`), the edit lowest in the buffer first, as one undo step,
+--- 'modifiable' on while they are, nothing written and the preview removed
+--- (`clear()`), which gives the buffer its 'modifiable' back; else the
+--- buffer is left as it is, the preview drawn again (`render()`), marked
+--- stale, and the user told, once. Returns whether it applied an edit.
+---
+---@param buffer integer
+---@param line? integer the cursor's line
+---@return boolean
+function M.apply(buffer, line)
+  local preview = previews[buffer]
+  if preview.separate then
+    return apply_chosen(preview, line)
+  end
   local spans = standing_spans(preview)
   if not spans then
     render(preview)
@@ -1013,17 +1405,33 @@ end
 --- Shows the preview `buffer` shows as the diff view, its old lines struck
 --- through above its new lines, or as the overlay again, brought into
 --- view in a window that does not show its first row
---- (`bring_into_view()`); nothing when `buffer` shows none. A stale preview (`is_stale()`), always shown as the
---- diff view, is left so, and the user is told, once, what rejects it and
---- what asks again.
+--- (`bring_into_view()`); nothing when `buffer` shows none. When its edits
+--- are proposals of their own, only the one the line `line`, from 1,
+--- chooses (`choose()`) is shown so, or as the overlay again, and it is
+--- the one brought into view (`in_view`). A stale
+--- preview (`is_stale()`), or a stale proposal, always shown as the diff
+--- view, is left so, and the user is told, once, what rejects it and what
+--- asks again.
 ---
 ---@param buffer integer
-function M.toggle_diff(buffer)
+---@param line? integer the cursor's line
+function M.toggle_diff(buffer, line)
   local preview = previews[buffer]
   if not preview then
     return
   end
-  if is_stale(preview, spans_of(preview)) then
+  local toggled = preview
+  local stale = is_stale(preview, spans_of(preview))
+  if preview.separate then
+    local index = choose(preview, line)
+    if not index then
+      return
+    end
+    toggled = preview.edits[index]
+    stale = toggled.stale
+    preview.in_view = toggled
+  end
+  if stale then
     vim.notify(
       ('aineo: %s: %s rejects, %s asks again'):format(
         preview.kind.stale,
@@ -1034,7 +1442,7 @@ function M.toggle_diff(buffer)
     )
     return
   end
-  preview.diff = not preview.diff
+  toggled.diff = not toggled.diff
   render(preview)
   bring_into_view(preview)
 end
@@ -1048,6 +1456,8 @@ end
 ---@field ask_key string what asks the fix or the code again, as the user is told it
 ---@field kind aineo.explain.Kind what it is: `kinds.FIX` or `kinds.WRITE`, which name it in its head row and its messages
 ---@field subject aineo.explain.Subject what it is proposed for: the issue a fix fixes, in the issue look, or the request code is written for
+---@field separate? boolean whether each edit is a proposal of its own, decided apart from the others
+---@field subject_index? integer the index in `edits` of the edit the subject is shown above; the first when absent
 
 --- Shows the edits of `order` in `buffer` as a preview: the buffer is not
 --- changed, and cannot be while it is shown, its 'modifiable' off; each
@@ -1072,6 +1482,7 @@ function M.show(buffer, order)
     ask_key = order.ask_key,
     subject = order.subject,
     kind = order.kind,
+    separate = order.separate == true,
     stale = false,
     first_row = order.edits[1].first - 1,
   }
@@ -1086,6 +1497,7 @@ function M.show(buffer, order)
       why = edit.why,
     })
   end
+  preview.subject_edit = preview.edits[order.subject_index or 1]
   previews[buffer] = preview
   watch_drawings(true)
   vim.bo[buffer].modifiable = false

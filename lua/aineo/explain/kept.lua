@@ -17,11 +17,13 @@ local M = {}
 ---@field edits aineo.explain.PlacedEdit[]
 ---@field steered boolean
 
---- Code kept: its summary and its one edit, placed in the lines it was
---- asked for.
+--- Code kept: its summary and its edits, placed in the lines it was asked
+--- for: one, or, for code that may edit the whole file, the edit of the
+--- lines asked about and those elsewhere.
 ---@class aineo.explain.KeptCode
 ---@field summary string
 ---@field edits aineo.explain.PlacedEdit[]
+---@field subject? integer the index in `edits` of the edit of the lines asked about; the first when absent
 
 --- The kept answers, by the buffer they are for and their key (`key()`).
 ---@type table<integer, table<string, aineo.explain.Kept>>
@@ -74,12 +76,13 @@ end
 ---@field last integer the last line of the request, or the line the code goes below or in place of
 ---@field request string the request's text
 ---@field place aineo.explain.WritePlace where the code goes
+---@field whole_file boolean whether the code may also edit other places of the file
 ---@field model string
 ---@field effort? string
 
 --- The key code written for a request is kept under: the request, its
---- lines, where the code goes (below them or in their place), and the
---- model and effort it is asked with.
+--- lines, where the code goes (below them or in their place), whether it
+--- may edit the whole file, and the model and effort it is asked with.
 ---
 ---@param asking aineo.explain.WriteKeyed
 ---@return string
@@ -90,6 +93,7 @@ function M.write_key(asking)
       asking.last,
       asking.request,
       asking.place,
+      asking.whole_file,
       asking.model,
       asking.effort or vim.NIL,
     })

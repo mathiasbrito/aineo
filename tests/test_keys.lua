@@ -185,8 +185,11 @@ T['the sheet']['lists the keys of each section in the order of the ruling'] = Mi
     { 'Explain', { 'v', 'V', 'VV' } },
     { 'Issues', { 'vi', 'VI', 'VVI', 'vm', '(send)', ']v', '[v' } },
     { 'Fix', { 'Vf', 'VVf' } },
-    { 'Write', { 'w', 'W' } },
-    { 'While a proposal shows', { 'Va', 'Vr', 'Vd', 'Wa', 'Wr', 'Wd' } },
+    { 'Write', { 'w', 'W', 'WW' } },
+    {
+      'While a proposal shows',
+      { 'Va', 'Vr', 'Vd', 'Wa', 'Wr', 'Wd', 'WA', 'WR', ']w', '[w' },
+    },
     { 'In the steering float', { '<CR>', 'q', 'R' } },
     { 'Clean', { 'vc' } },
   },

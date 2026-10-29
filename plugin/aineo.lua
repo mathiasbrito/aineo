@@ -438,11 +438,13 @@ end
 --- What writing code asks for, by the words of its `<Plug>` mappings after
 --- `aineo-`, in Normal mode, for a request typed in a float, the code below
 --- the cursor's line, and in Visual mode, for the request the selected lines
---- hold: from the file alone or reading the project (`aineo.entry`'s
---- `write()` and `write_selection()`).
+--- hold: from the file alone or reading the project, and, reading the
+--- project, code that may edit the whole file (`aineo.entry`'s `write()`
+--- and `write_selection()`).
 local WRITE_ORDERS = {
   write = { deep = false },
   ['write-deep'] = { deep = true },
+  ['write-file'] = { deep = true, whole_file = true },
 }
 
 for words, order in pairs(WRITE_ORDERS) do
@@ -486,6 +488,32 @@ for _, kind in ipairs({ 'fix', 'write' }) do
       end)
     end, { desc = ('aineo: %s %s'):format(kind, words) })
   end
+end
+
+--- The `<Plug>` mappings of written code whose edits are proposals of their
+--- own, which the keys of its buffer map to while it shows, by the words
+--- after `aineo-write-`: accept and reject every proposal left
+--- (`aineo.entry`'s `accept_all_written()` and `reject_all_written()`), and
+--- move to the next and the previous one (`jump_to_written()`).
+local WRITTEN_CODE_ACTIONS = {
+  ['accept-all'] = function()
+    require('aineo.entry').accept_all_written()
+  end,
+  ['reject-all'] = function()
+    require('aineo.entry').reject_all_written()
+  end,
+  next = function()
+    require('aineo.entry').jump_to_written('next')
+  end,
+  previous = function()
+    require('aineo.entry').jump_to_written('previous')
+  end,
+}
+
+for words, action in pairs(WRITTEN_CODE_ACTIONS) do
+  vim.keymap.set('n', ('<Plug>(aineo-write-%s)'):format(words), function()
+    run(action)
+  end, { desc = 'aineo: write ' .. words })
 end
 
 --- The `<Plug>` mappings that jump to the next and the previous explanation
