@@ -45,6 +45,7 @@ local CONCEALING = 2
 ---@field subject_edit? aineo.explain.ShownEdit the edit its subject is shown above, until it is decided
 ---@field chosen? aineo.explain.ShownEdit the edit last moved to (`jump()`), until it is decided
 ---@field moved? boolean whether the cursor was moved between its edits (`jump()`)
+---@field in_view? aineo.explain.ShownEdit the edit whose diff view was toggled last (`toggle_diff()`), brought into view in place of the subject's, until it is decided
 ---@field saved table<integer, aineo.explain.ConcealOptions> the options of each window it set, before it set them
 ---@field set table<integer, aineo.explain.ConcealOptions> the options it set in each window
 ---@field modifiable boolean the buffer's 'modifiable' before it, which it turns off while shown
@@ -516,7 +517,8 @@ end
 --- longer stand there, and not when they stand again: a stale one, or one
 --- shown as the diff view (`diff`), as the diff view does (`add_diff()`),
 --- the others as the overlay does, in blocks of those that touch
---- (`add_overlay()`). The place of the edit its subject is shown above
+--- (`add_overlay()`). The place of the edit whose diff view was toggled
+--- last (`in_view`), else of the edit its subject is shown above
 --- (`subject_edit`), the edit asked at the cursor, is the lead of `places`,
 --- the one brought into view.
 ---
@@ -526,22 +528,23 @@ end
 ---@param places aineo.explain.Places
 local function add_proposals(preview, spans, geometry, places)
   local overlaid = {}
+  local in_view = preview.in_view or preview.subject_edit
   for index, span in ipairs(spans) do
     local edit = preview.edits[index]
     edit.stale = not vim.deep_equal(lines_of(preview.buffer, span), edit.old)
     if edit.stale or edit.diff then
       local key = add_diff(preview, index, span, geometry, places)
-      places.lead = edit == preview.subject_edit and key or places.lead
+      places.lead = edit == in_view and key or places.lead
     else
       table.insert(overlaid, index)
     end
   end
   for _, block in ipairs(blocks_of(spans, overlaid)) do
     local key = add_overlay(preview, block, spans, geometry, places)
-    local holds_the_subject = vim.iter(block.indexes):any(function(index)
-      return preview.edits[index] == preview.subject_edit
+    local holds_the_one_in_view = vim.iter(block.indexes):any(function(index)
+      return preview.edits[index] == in_view
     end)
-    places.lead = holds_the_subject and key or places.lead
+    places.lead = holds_the_one_in_view and key or places.lead
   end
 end
 
@@ -1137,6 +1140,9 @@ local function remove_edits(preview, indexes)
   if decided[preview.subject_edit] then
     preview.subject_edit = nil
   end
+  if decided[preview.in_view] then
+    preview.in_view = nil
+  end
   if #preview.edits == 0 then
     M.clear(preview.buffer)
   else
@@ -1378,7 +1384,8 @@ end
 --- view in a window that does not show its first row
 --- (`bring_into_view()`); nothing when `buffer` shows none. When its edits
 --- are proposals of their own, only the one the line `line`, from 1,
---- chooses (`choose()`) is shown so, or as the overlay again. A stale
+--- chooses (`choose()`) is shown so, or as the overlay again, and it is
+--- the one brought into view (`in_view`). A stale
 --- preview (`is_stale()`), or a stale proposal, always shown as the diff
 --- view, is left so, and the user is told, once, what rejects it and what
 --- asks again.
@@ -1399,6 +1406,7 @@ function M.toggle_diff(buffer, line)
     end
     toggled = preview.edits[index]
     stale = toggled.stale
+    preview.in_view = toggled
   end
   if stale then
     vim.notify(

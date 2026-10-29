@@ -841,4 +841,39 @@ T['a stale proposal']['whose marks another plugin cleared is rejected, all, as i
   )
 end
 
+--- A file of `count` lines, each `x = ` and its number.
+---
+---@param count integer
+---@return string[]
+local function numbered_lines(count)
+  local lines = {}
+  for line = 1, count do
+    lines[line] = 'x = ' .. line
+  end
+  return lines
+end
+
+T['the preview in view']['is the proposal the diff view is toggled for'] = function()
+  local lines = numbered_lines(63)
+  local anchor =
+    { line = 50, last = 50, old = { lines[50] }, new = { lines[50], 'y = 1' }, why = 'Adds y.' }
+  local other = {
+    line = 30,
+    last = 30,
+    old = { lines[30] },
+    new = { 'local y', lines[30] },
+    why = 'Declares y.',
+  }
+  start({ summary = 'Adds y.', edits = { anchor, other } }, lines)
+  send_request(50, 'Add y.')
+  wait_for_preview()
+  child.cmd('30')
+  child.cmd('normal! zt')
+
+  child.lua("require('aineo.explain').toggle_fix_diff(vim.api.nvim_get_current_buf(), 'write', 30)")
+
+  local view = child.fn.winsaveview()
+  eq({ view.topline, view.topfill > 0, child.fn.line('.') }, { 30, true, 30 })
+end
+
 return T
