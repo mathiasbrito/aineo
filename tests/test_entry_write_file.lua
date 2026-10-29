@@ -106,6 +106,20 @@ local function allows_the_whole_file(stdin)
   return stdin:find('The code may also need edits elsewhere in this file:', 1, true) ~= nil
 end
 
+--- The title of the float the child is in, its chunks joined; empty when
+--- it is in none.
+---
+---@return string
+local function float_title()
+  return child.lua([[
+    local title = ''
+    for _, chunk in ipairs(vim.api.nvim_win_get_config(0).title or {}) do
+      title = title .. chunk[1]
+    end
+    return title
+  ]])
+end
+
 T['\\WW'] = MiniTest.new_set()
 
 T['\\WW']['asks as \\W does, with write.deep_model and write.deep_effort and the read-only tools'] = function()
@@ -135,10 +149,7 @@ T['\\WW']['opens a float that says what it does'] = function()
 
   press('\\WW')
 
-  eq(
-    child.lua_get('vim.api.nvim_win_get_config(0).title[1][1]'),
-    ' Write code that may change the whole file: <CR> sends · q or <Esc> cancels '
-  )
+  eq(float_title(), ' Write code that may change the whole file: <CR> sends · q or <Esc> cancels ')
 end
 
 T['\\WW']['in Visual mode asks at once for the selected lines, allowing edits elsewhere'] = function()
@@ -169,10 +180,7 @@ T['\\W']['alone still asks for code once the time for a second W is over'] = fun
     return child.lua_get('vim.api.nvim_win_get_config(0).relative') ~= ''
   end, 20)
 
-  eq(
-    child.lua_get('vim.api.nvim_win_get_config(0).title[1][1]'),
-    ' Write code, reading the project: <CR> sends · q or <Esc> cancels '
-  )
+  eq(float_title(), ' Write code, reading the project: <CR> sends · q or <Esc> cancels ')
 end
 
 T['\\W']['asks for code that does not allow edits elsewhere'] = function()
