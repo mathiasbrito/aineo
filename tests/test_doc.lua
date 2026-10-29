@@ -164,6 +164,7 @@ local TAGS = {
   'aineo-explain-deep',
   'aineo-explain-fix',
   'aineo-write',
+  'aineo-write-file',
   'hl-AineoExplain',
   'hl-AineoExplainGutter',
   'hl-AineoExplainGutterFill',

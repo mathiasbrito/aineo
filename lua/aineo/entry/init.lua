@@ -53,5 +53,8 @@ M.reject_fix = explaining.reject_fix
 M.toggle_fix_diff = explaining.toggle_fix_diff
 M.write = explaining.write
 M.write_selection = explaining.write_selection
+M.accept_all_written = explaining.accept_all_written
+M.reject_all_written = explaining.reject_all_written
+M.jump_to_written = explaining.jump_to_written
 
 return M

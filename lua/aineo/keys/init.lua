@@ -336,6 +336,16 @@ local ROWS = vim.list_extend(
       )
     ),
     in_section(
+      'write',
+      global_in_visual_too(
+        'explain',
+        'WW',
+        'write-file',
+        nil,
+        'write code that may change the whole file'
+      )
+    ),
+    in_section(
       'clean',
       global(
         'explain',
@@ -379,6 +389,32 @@ local ROWS = vim.list_extend(
         'write-diff',
         'show the written code as a diff, or as an overlay'
       )
+    ),
+    in_section(
+      'fix_shown',
+      in_buffer_after_the_prefix(
+        'explain',
+        'WA',
+        'write-accept-all',
+        'accept all the written code left'
+      )
+    ),
+    in_section(
+      'fix_shown',
+      in_buffer_after_the_prefix(
+        'explain',
+        'WR',
+        'write-reject-all',
+        'reject all the written code left'
+      )
+    ),
+    in_section(
+      'fix_shown',
+      in_buffer('explain', ']w', 'write-next', 'jump to the next written code')
+    ),
+    in_section(
+      'fix_shown',
+      in_buffer('explain', '[w', 'write-previous', 'jump to the previous one')
     ),
     in_section('steer', in_buffer('explain', '<CR>', nil, 'send the prompt')),
     in_section('steer', in_buffer('explain', 'q', nil, 'cancel, as <Esc> does')),
