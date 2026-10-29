@@ -494,7 +494,8 @@ function M.new(label)
 
   --- The base the work of `line`, a branch's line of the Reported section,
   --- is read from where its line picks it: on the editor's own worktree,
-  --- while it has that branch checked out, the session's base, which the
+  --- while it has that branch checked out, the one its view was last read
+  --- from (`session.own_section`), else the session's base, which the
   --- default view reads; on another worktree that has it checked out, that
   --- worktree's, as the commits window last listed it; else the branch's
   --- own, as the commits window last read it alone; nil while it has read
@@ -504,7 +505,8 @@ function M.new(label)
   ---@return string|nil
   local function read_base_of(line)
     if line.checked_out and line.node.worktree.top == own_top() then
-      return session.base
+      local own = session.own_section
+      return own and own.top == own_top() and own.listed and own.base or session.base
     end
     if line.checked_out then
       local section = scope.section_on(session.commits_others, line.node.worktree.top)
@@ -1607,26 +1609,28 @@ function M.new(label)
   --- branches (`read_reported_branches()`), then, while a report waits or
   --- the Reported section holds a worktree, what reports are matched
   --- against (`read_reported()`), then the editor's own worktree shown alone
-  --- (`read_own_section()`); calls `done(read)`, whether any of these read
-  --- anything the window shows.
+  --- (`read_own_section()`), then the commits of the Reported section's
+  --- branches (`read_tree_commits()`), the editor's own branch's from the
+  --- base its view was just read from; calls `done(read)`, whether any of
+  --- these read anything the window shows.
   ---
   ---@param done fun(read: boolean)
   local function read_scope_and_reported(done)
     read_branch_scope(function(read_pick)
       read_reported_branches(function(read_reported_any)
-        read_tree_commits(function(read_tree_commits_any)
-          local function then_own_section(read_any)
-            read_own_section(function(read_own)
-              done(read_any or read_own)
+        local function then_own_section_and_tree(read_any)
+          read_own_section(function(read_own)
+            read_tree_commits(function(read_tree_commits_any)
+              done(read_any or read_own or read_tree_commits_any)
             end)
-          end
-          if #session.waiting == 0 and #session.nodes == 0 then
-            then_own_section(read_pick or read_reported_any or read_tree_commits_any)
-            return
-          end
-          read_reported(function()
-            then_own_section(true)
           end)
+        end
+        if #session.waiting == 0 and #session.nodes == 0 then
+          then_own_section_and_tree(read_pick or read_reported_any)
+          return
+        end
+        read_reported(function()
+          then_own_section_and_tree(true)
         end)
       end)
     end)

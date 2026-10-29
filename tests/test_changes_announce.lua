@@ -1120,7 +1120,7 @@ T['the editor’s own worktree']['picked by Enter on its line, from a worktree p
   )
 end
 
-T['the editor’s own worktree']['shows on its checked-out branch’s line the base the default view reads'] = function()
+T['the editor’s own worktree']['shows on its checked-out branch’s line the base its view reads, and the commits from it'] = function()
   local top = git_repo.create('announce-own-base', { ['notes.txt'] = { 'one' } })
   local older = git_repo.git(top, { 'rev-parse', 'HEAD' })
   local newer = commit_only(top, 'next.txt', 'next', 'Newer')
@@ -1133,8 +1133,9 @@ T['the editor’s own worktree']['shows on its checked-out branch’s line the b
     'Reported',
     'own now',
     '  ' .. vim.fs.basename(top),
-    ('    main * from %s'):format(short(newer)),
+    ('    main * from %s'):format(short(older)),
     '      Uncommitted',
+    '      ' .. commit_line(newer, 'Newer'),
     'Uncommitted',
     'Session work',
     'No commits on this session',
