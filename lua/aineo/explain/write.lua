@@ -489,6 +489,23 @@ end
 --- Claude Code works from the file alone.
 local PLAIN_TITLE = 'Write code'
 
+--- What the float in which the user types a request says it does, when
+--- the code may edit the whole file.
+local WHOLE_FILE_TITLE = 'Write code that may change the whole file'
+
+--- What the float in which the user types the request `writing` asks says
+--- it does: `WHOLE_FILE_TITLE`, the title of a request that reads the
+--- project, or `PLAIN_TITLE`.
+---
+---@param writing aineo.explain.WriteRequest
+---@return string
+local function title_of(writing)
+  if writing.whole_file then
+    return WHOLE_FILE_TITLE
+  end
+  return writing.tools and kinds.WRITE.deep.title or PLAIN_TITLE
+end
+
 --- Asks a Claude Code of its own, run in `folder`, the project's folder, to
 --- write code for the request that the lines of `writing.range` hold, or
 --- shows the code kept for it (`ask_for()`); tells the user, once, and asks
@@ -508,7 +525,7 @@ function M.propose(writing, folder)
   if not writing.range then
     local anchor = mark_anchor(writing.buffer, writing.line)
     steer.open({
-      title = writing.tools and kinds.WRITE.deep.title or PLAIN_TITLE,
+      title = title_of(writing),
       steered_buffer = writing.buffer,
       on_send = function(text)
         ask_typed(writing, folder, anchor, text)

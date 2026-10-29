@@ -1,5 +1,5 @@
 --- What `\v`, `\V`, `\vi`, `\VI`, `\VV`, `\VVI`, `\Vf`, `\VVf`, `\w`, `\W`,
---- their `<Plug>` mappings, the keys of a fix shown, `:Aineo explain` and
+--- `\WW`, their `<Plug>` mappings, the keys of a proposal shown, `:Aineo explain` and
 --- `:Aineo write` do: hand the current buffer, a file's, to the explain home
 --- (`aineo.explain`), with the Claude Code command and the settings of the
 --- configuration.
@@ -102,18 +102,38 @@ end
 --- How code is asked for.
 ---@class aineo.entry.WriteOrder
 ---@field deep boolean whether Claude Code may read the project, with `write.deep_model`, `write.deep_effort` and `write.deep_timeout_ms`; else `write.model` and `write.timeout_ms`, from the file alone
+---@field whole_file? boolean whether the code may also edit other places of the file, each a proposal of its own, for a deep order
 ---@field range? integer[] the first and last lines that hold the request, from 1; the request is typed in a float, the code going below the cursor's line, or in its place when it is blank, when absent
 
---- What `\w`, `\W`, their `<Plug>` mappings and `:Aineo write` do: ask the
---- explain home to write code in the current buffer, a file's
+--- What asks for code as `order` says: the key after the prefix, and its
+--- `<Plug>` mapping.
+---
+---@param order aineo.entry.WriteOrder
+---@return { suffix: string, plug: string }
+local function ask_key_of(order)
+  if order.whole_file then
+    return { suffix = 'WW', plug = '<Plug>(aineo-write-file)' }
+  end
+  if order.deep then
+    return { suffix = 'W', plug = '<Plug>(aineo-write-deep)' }
+  end
+  return { suffix = 'w', plug = '<Plug>(aineo-write)' }
+end
+
+--- What `\w`, `\W`, `\WW`, their `<Plug>` mappings and `:Aineo write` do:
+--- ask the explain home to write code in the current buffer, a file's
 --- (`aineo.explain`'s `propose_write()`), for the request the lines of
 --- `order.range` hold, or for one typed in a float, the code going below
---- the cursor's line, or in its place when it is blank; with `claude.cmd` and `write.model`, from the file
---- alone, or, for a deep order, `write.deep_model` at `write.deep_effort`
---- with the read-only tools. While the code shows, the prefix followed by
---- `Wa`, `Wr` and `Wd` accept it, reject it and show its diff, unless the
---- prefix is `false`; what asks again is told as the prefix followed by `w`
---- or `W`, or as their `<Plug>` mapping.
+--- the cursor's line, or in its place when it is blank; with `claude.cmd`
+--- and `write.model`, from the file alone, or, for a deep order,
+--- `write.deep_model` at `write.deep_effort` with the read-only tools, the
+--- code allowed to edit the whole file for an order that says so. While the
+--- code shows, the prefix followed by `Wa`, `Wr` and `Wd` accept it, reject
+--- it and show its diff, and, for code that may edit the whole file, `WA`
+--- and `WR` accept and reject every proposal of it, and `]w` and `[w` move
+--- between them, unless the prefix is `false`; what asks again is told as
+--- the prefix followed by `w`, `W` or `WW` (`ask_key_of()`), or as their
+--- `<Plug>` mapping.
 ---
 --- Raises an error when the current buffer holds no file, and the
 --- configuration's or the explain home's errors.
@@ -127,62 +147,102 @@ function M.write(order)
   local config = resolved_config()
   local settings = config.write
   local prefix = config.prefix
-  local plug = order.deep and '<Plug>(aineo-write-deep)' or '<Plug>(aineo-write)'
+  local ask = ask_key_of(order)
   require('aineo.explain').propose_write({
     buffer = buffer,
     window = vim.api.nvim_get_current_win(),
     line = vim.fn.line('.'),
     range = order.range,
     tools = order.deep,
+    whole_file = order.whole_file,
     command = config.claude.cmd,
     model = order.deep and settings.deep_model or settings.model,
     effort = order.deep and settings.deep_effort or nil,
     timeout_ms = order.deep and settings.deep_timeout_ms or settings.timeout_ms,
-    keys = prefix and { accept = prefix .. 'Wa', reject = prefix .. 'Wr', diff = prefix .. 'Wd' }
-      or nil,
-    ask_key = prefix and prefix .. (order.deep and 'W' or 'w') or plug,
+    keys = prefix and {
+      accept = prefix .. 'Wa',
+      reject = prefix .. 'Wr',
+      diff = prefix .. 'Wd',
+      accept_all = prefix .. 'WA',
+      reject_all = prefix .. 'WR',
+      next = ']w',
+      previous = '[w',
+    } or nil,
+    ask_key = prefix and prefix .. ask.suffix or ask.plug,
   })
 end
 
---- What `\w` and `\W` do in Visual mode: leave Visual mode, then write code
---- for the request the lines the selection spans hold, as `write()` does
---- with `order`'s depth.
+--- What `\w`, `\W` and `\WW` do in Visual mode: leave Visual mode, then
+--- write code for the request the lines the selection spans hold, as
+--- `write()` does with `order`'s depth and scope.
 ---
 ---@param order aineo.entry.WriteOrder
 function M.write_selection(order)
   local first, last = vim.fn.line('v'), vim.fn.line('.')
   vim.cmd.normal({ args = { vim.keycode('<Esc>') }, bang = true })
-  M.write({ deep = order.deep, range = { math.min(first, last), math.max(first, last) } })
+  M.write({
+    deep = order.deep,
+    whole_file = order.whole_file,
+    range = { math.min(first, last), math.max(first, last) },
+  })
 end
 
 --- What `<Plug>(aineo-fix-accept)` and `<Plug>(aineo-write-accept)` do:
 --- accept the fix, or the written code, the current buffer shows, as
---- `kind` says (`aineo.explain`'s `accept_fix()`); a proposal of the other
---- kind is left as it is.
+--- `kind` says (`aineo.explain`'s `accept_fix()`), the proposal on the
+--- cursor's line of written code whose edits are proposals of their own;
+--- a proposal of the other kind is left as it is.
 ---
 ---@param kind 'fix'|'write'
 function M.accept_fix(kind)
-  require('aineo.explain').accept_fix(vim.api.nvim_get_current_buf(), kind)
+  require('aineo.explain').accept_fix(vim.api.nvim_get_current_buf(), kind, vim.fn.line('.'))
 end
 
 --- What `<Plug>(aineo-fix-reject)` and `<Plug>(aineo-write-reject)` do:
 --- reject the fix, or the written code, the current buffer shows, as `kind`
---- says (`aineo.explain`'s `reject_fix()`); a proposal of the other kind is
---- left as it is.
+--- says (`aineo.explain`'s `reject_fix()`), the proposal on the cursor's
+--- line of written code whose edits are proposals of their own; a proposal
+--- of the other kind is left as it is.
 ---
 ---@param kind 'fix'|'write'
 function M.reject_fix(kind)
-  require('aineo.explain').reject_fix(vim.api.nvim_get_current_buf(), kind)
+  require('aineo.explain').reject_fix(vim.api.nvim_get_current_buf(), kind, vim.fn.line('.'))
 end
 
 --- What `<Plug>(aineo-fix-diff)` and `<Plug>(aineo-write-diff)` do: show
 --- the fix, or the written code, the current buffer shows as the diff view,
 --- or as the overlay again, as `kind` says (`aineo.explain`'s
---- `toggle_fix_diff()`); a proposal of the other kind is left as it is.
+--- `toggle_fix_diff()`), the proposal on the cursor's line of written code
+--- whose edits are proposals of their own; a proposal of the other kind is
+--- left as it is.
 ---
 ---@param kind 'fix'|'write'
 function M.toggle_fix_diff(kind)
-  require('aineo.explain').toggle_fix_diff(vim.api.nvim_get_current_buf(), kind)
+  require('aineo.explain').toggle_fix_diff(vim.api.nvim_get_current_buf(), kind, vim.fn.line('.'))
+end
+
+--- What `<Plug>(aineo-write-accept-all)` does: accept every proposal left
+--- of the written code the current buffer shows, as one undo step
+--- (`aineo.explain`'s `accept_all()`); a fix is left as it is.
+function M.accept_all_written()
+  require('aineo.explain').accept_all(vim.api.nvim_get_current_buf(), 'write')
+end
+
+--- What `<Plug>(aineo-write-reject-all)` does: reject every proposal left
+--- of the written code the current buffer shows (`aineo.explain`'s
+--- `reject_all()`); a fix is left as it is.
+function M.reject_all_written()
+  require('aineo.explain').reject_all(vim.api.nvim_get_current_buf(), 'write')
+end
+
+--- What `<Plug>(aineo-write-next)` and `<Plug>(aineo-write-previous)` do:
+--- move the cursor to the first line of the proposal `way` of it, of the
+--- written code the current buffer shows, wrapping around
+--- (`aineo.explain`'s `jump_to_proposal()`).
+---
+---@param way 'next'|'previous'
+function M.jump_to_written(way)
+  require('aineo.explain').jump_to_proposal(vim.api.nvim_get_current_win(), way)
 end
 
 --- What `\v`, `\V`, `\vi`, `\VI`, `\VV` and `\VVI` do in Visual mode: leave

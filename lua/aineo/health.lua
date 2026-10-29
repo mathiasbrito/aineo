@@ -1006,7 +1006,7 @@ local function check_explain(resolved_config)
   )
 end
 
---- Reports how `\w` and `\W` ask for code with `resolved_config`'s `write`
+--- Reports how `\w`, `\W` and `\WW` ask for code with `resolved_config`'s `write`
 --- settings, what the Claude Code they start may use, and how the code is
 --- decided. Nothing while the configuration is wrong.
 ---
@@ -1029,6 +1029,9 @@ local function check_write(resolved_config)
       settings.deep_effort,
       settings.deep_timeout_ms / 1000
     )
+  )
+  vim.health.info(
+    '\\WW asks as \\W does, with its model, effort and tools, for code that may also change other places of the file, as an import at the top or a variable outside the function: each change shows as a proposal of its own, ]w and [w move between them, \\Wa, \\Wr and \\Wd act on the one under the cursor, \\WA accepts all those left as one undo step and \\WR rejects them: :help |aineo-write-file|'
   )
   vim.health.info(
     'the code shows over the file as a fix does, which it changes only when you accept it: the buffer is read-only until \\Wa accepts it as one undo step and writes no file, or \\Wr rejects it; \\Wd shows it as a diff; a fix and written code replace each other, and the same request on unchanged code shows the code kept from before'
