@@ -88,13 +88,42 @@ Each the literal edit, applied to a pristine copy, run on its covering file, res
 
 ## Decisions
 
-- **D134 / A659**, as ruled. Read as the help reads every reported base: the reported base only while it is behind `HEAD` and descends from the session's base (`read_effective_base()`), so the view never lists commits made before the session's base.
+- **D134 / A659**, as ruled. ~~Read as the help reads every reported base: the reported base only while it is behind `HEAD` and descends from the session's base (`read_effective_base()`)~~ — superseded by A660 (1): for this view, the reported base whenever it is in `HEAD`'s history.
 - The tree's own worktree and branch lines, resting under the cursor, now choose the own view's whole change rather than Session work, as any worktree's line chooses its whole change: the choice then has a line in both views at `\g`.
-- The branch line's `from` still shows the session's base (A659 (3), the default view unchanged); the help no longer says Enter on it shows that base.
+- ~~The branch line's `from` still shows the session's base (A659 (3), the default view unchanged)~~ — superseded by A660 (2): it shows the view's base.
+
+## A660 — the orchestrator's rulings on the two readings
+
+The first reading above, the shared guard, would have hidden the user's own case, so A660 overrules it. The second reading stood in part: the tree line kept the session's base, and A660 (2) now ties it to the view. The rest of what this note records as decided is accepted (A660 (3)).
+
+- **A660 (1), the view's base** — `57e887f7`. For the view of your own worktree alone, the reported base is used whenever it is an ancestor of `HEAD` (`worktrees.read_reported_in_head()`). The session's base is used when it is not in `HEAD`'s history or git cannot place it. `read_section()` is now given that choice beside its own-base reader (`BaseReads`); the other worktrees keep `read_effective_base()`.
+  - Red: `Enter | on a branch reported from a commit older than the session’s base shows its commits from that commit`, `different values at key 4, left = nil, right = "… Before the session"`.
+  - A second red, from the gap this opened: a commit the view lists from behind the session's base is not among the session's commits, so the commits read gave it back to Session work. `Enter | on a commit made before the session’s base keeps it chosen through a read`, `left = "Files in: Session work"`. Fixed by `own_section_lists()`.
+- **A660 (2), the tree line** — `837a79ef`. The line of your own checked-out branch shows, and lists its commits from, the base its view was last read from (`read_base_of()`). The commits window reads the view before the tree's commits, so both move in one read.
+  - Red: the announce case, renamed `shows on its checked-out branch’s line the base its view reads, and the commits from it`, `left = "    main * from b218b15", right = "    main * from 8f998b3"`.
+  - The tree-commits pane case that pinned the session's base on that line was rewritten the same way.
+  - The help's sentence names the view's base.
+- **A pin for the base outside the history** — `1d46284d`. MA3 survived the own-view file, so one case was added after the code: `on a branch reported from a commit not in its history shows the commits from the default view’s base`. It was never seen red on its own; MA3 fails it.
+
+### Mutants (A660)
+
+Run the same way as the table above, on the committed tree; every kill is an assertion.
+
+| Id | Edit | File run | Killed by |
+|---|---|---|---|
+| MA1 (A660's own) | `read_own_worktree()`: `choose = M.read_reported_in_head,` → `choose = M.read_effective_base,`, the shared guard used for the view | own_view | 2 (older base; commit kept chosen) |
+| MA2 | the commits read's `take_own`: `and not own_section_lists(session.selected)` dropped | own_view | 1 (commit kept chosen) |
+| MA3 | `read_reported_in_head()`: `if failure or not reported_in_tip then` → `if failure then` | own_view | survived, 0 of 13; after `1d46284d`, 1 (base outside the history) |
+| MB1 | `read_base_of()`: the own line's `return own and … own.base or session.base` → `return session.base` | tree_commits_pane | 1 |
+| MB1b | the same edit | announce | 1 |
+
+### Runs after A660
+
+Each was run on the final code, with `Fails (0)`: `test_changes_own_view` (14 cases), `test_changes_announce`, `test_changes_tree_commits_pane`, `test_changes_worktree_uncommitted`, `test_changes_keep_view`, `test_changes_tree_commit_lines`, `test_changes_worktrees`, `test_changes_base_origin` and `test_doc`. `make lint` is clean. The whole suite was not run again, as A660 asks.
 
 ## Open threads
 
-- The branch line's `from` and the commits under it in the Reported tree are read from the session's base while the view reads from the reported base; the two can differ (the orchestrator's call whether the tree should follow the view).
+- ~~The branch line's `from` and its commits read from the session's base while the view reads from the reported base~~ — closed by A660 (2).
 - A report that takes your branch away ends the view at the pane's next read, not at the report while the pane is hidden.
 - The words that end it are a scope's: "… · yours is gone; the changes pane shows the default view", though the worktree is not gone.
 
