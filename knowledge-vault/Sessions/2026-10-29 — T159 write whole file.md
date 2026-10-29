@@ -60,6 +60,43 @@ The first build refused an answer whose first edit was not the anchor's (my read
   - M1 is gone with the check it mutated; MA1 and MA3 take its place.
 - **Files run**: `test_explain_write_file`, `test_entry_write_file`, `test_explain_write` and `test_doc` green; `make lint` clean.
 
+## A664 (the review of PR #391, the fix round)
+
+The review (attack and test integrity) found four things and a record; A664 rules each. One unit per point, red first, each committed with a review recorded before it.
+
+1. **`\Wr` on a preview whose marks are gone** (finding 1). Another plugin clearing every namespace left a `\WW` preview with its stale head row, `\Wr rejects`, and `\Wr` chose nothing.
+   - Fix: `M.drop()` now clears the whole preview then, the reviewer's measured guard.
+   - Red: F1, adopted as *a stale proposal / whose marks another plugin cleared is rejected, all, as its row says*: 1 drawn mark left, the buffer read-only.
+   - Mutant P1 (`if not preview.separate or not spans_of(preview) then` → `if not preview.separate then`): killed by an assertion.
+2. **`\Wd` brings its proposal into view** (finding 2). The preview keeps the proposal toggled last (`in_view`), and `add_proposals()` takes the lead place from it, else from the anchor's; `remove_edits()` forgets it once it is decided. The reviewer's measured fix; the help says so.
+   - Red: F2, adopted as *the preview in view / is the proposal the diff view is toggled for*: `topfill` 0.
+   - Mutants:
+     - MG16 (`places.lead = edit == in_view and key or places.lead` in the diff branch deleted) survived F2: with one proposal in the diff view, its place is the first drawn, which the lead falls back to anyway. A second case, *is the proposal toggled last, though another above it shows as a diff*, kills it by an assertion.
+     - P2 (`preview.in_view = toggled` deleted): killed by both cases.
+3. **K1–K4 adopted** (finding 3): *a proposal of two lines / is moved to at its first line* (K1), *… is chosen by the cursor on its second line* (K2), *the answer refused / with an anchor edit that replaces the cursor's line, though another edit places* (K3), *writing on a blank line / drops the copy of it the code starts with, beside an edit elsewhere* (K4).
+   - They arrived green, as the reviewer measured them.
+   - K1 starts on line 1 rather than 7, so it reads the same under point 4.
+   - MG1, MG2, MG4 and MG6, the reviewer's edits, are killed by an assertion.
+4. **`]w`/`[w` from the current proposal** (finding 4, A663 amended). `jump()` moves to the proposal after or before the current one (`current_index()`: the cursor's, else the one last moved to, else the anchor's; `index_beside()` wraps). With none of these, as once the anchor's is decided, it moves to the next proposal below or above the cursor's line, as before. The `moved` flag of A663 is gone, and the help paragraph is rewritten.
+   - Red, on three proposals (lines 1, 3, 7):
+     - *moving / goes to the proposal after the one on the cursor's line …*: `{ 3, 7, 1 }` for `{ 7, 1, 3 }`, the first `]w` staying on the anchor's;
+     - *… goes on from the proposal last moved to when the cursor is on none*: `7` for `1`;
+     - *… goes on from the anchor's proposal when the cursor is on none and none was moved to*: `3` for `1`;
+     - *choosing / takes the proposal last moved to …*: no import;
+     - the entry's *the keys / move between the proposals, wrapping*: `{ 3, 1, 3 }` for `{ 1, 3, 1 }`.
+   - Arrived green: *… goes to the proposal before the one on the cursor's line …*, since `[w` already read the cursor's line (killed by P4c); and a case for the fallback, *… goes to the proposal below the cursor once the anchor's is decided, none moved to* (killed by P4f).
+   - Mutants, each killed by an assertion:
+     - P4a, the first `]w` staying on the anchor's proposal: `local index = current and (way == 'next' and not preview.chosen and current or index_beside(current, #spans, way))`; P4ae is the same edit on the entry's case;
+     - P4b, no wrap after the last: `return math.min(index + 1, count)`;
+     - P4c, no wrap before the first: `return math.max(index - 1, 1)`;
+     - P4d, the anchor's fallback removed: `or nil`;
+     - P4e, the last moved to ignored for the anchor's: `chosen_index(preview, spans, line, preview.subject_edit)`;
+     - P4f, the fallback below the cursor returning the first: `return 1`;
+     - M9 and M10 re-run on the choosing cases.
+5. **The M21 row** (finding 5) now says where M21 is killed; measured again (see *Mutants*).
+
+Files run: `test_explain_write_file`, `test_entry_write_file`, `test_explain_write` and `test_doc` green; `make lint` clean. No whole suite in the fix round, as the orchestrator asked.
+
 ## Seen red
 
 Each red was read before the code that turns it green was written. `tests/test_explain_write_file.lua`:
@@ -128,7 +165,7 @@ Each row is the literal edit, run against a copy of its test file narrowed to th
 | M18 | `toggle_diff()`: `toggled = preview.edits[index]` → `preview.edits[1]` | the diff | survived the first run (the case toggled the first proposal); killed once it toggles the second |
 | M19 | `kept.lua`: `asking.whole_file,` removed from the key | the code kept | killed |
 | M20 | `add_proposals()`: `places.lead = places.lead` | the preview in view | killed |
-| M21 | keys table: `\WW`'s suffix `'WW'` → `'W'` | `\W` / alone … | survived: `\W` still opens `\W`'s float, the case's subject; M21b is its killer |
+| M21 | keys table: `\WW`'s suffix `'WW'` → `'W'` | `\W` / alone …; then the files that exercise it | survives its narrowed group, `\W` alone (`\W` still opens `\W`'s float, the case's subject; M21b is that case's killer); killed by assertions in `tests/test_entry_write_file.lua` (10 cases), `tests/test_keys.lua` (1: `{ w, W, W }` for `{ w, W, WW }`) and `tests/test_plugin.lua` (1), measured on the fix round's tree, as the review of PR #391 measured it (A664 (5)) |
 | M21b | keys table: `\W`'s suffix `'W'` → `'Wx'` | `\W` / alone … | crashed first (a missing title indexed); killed once the case reads the title through a helper |
 | M22 | entry: `next = ']w',` removed | the keys / are mapped … | killed |
 | M23 | entry: `accept_fix()` without `vim.fn.line('.')` | the keys / accept the proposal on the cursor's line alone | crashed first (E21 on `u` in the undo case); killed by the case added |
@@ -152,7 +189,7 @@ Each row is the literal edit, run against a copy of its test file narrowed to th
 ## Open threads
 
 - The prompt still asks for the further edits "after that first one"; since A663 an answer in another order is shown all the same.
-- With proposals far apart, the window is brought to the anchor's proposal only; `]w`/`[w` reach the others.
+- At draw time the window is brought to the anchor's proposal only; `\Wd` brings the one it toggles (A664 (2)), and `]w`/`[w` reach the others.
 - An undo of an earlier accept is not possible until the last proposal is decided (the buffer is read-only, A632).
 
 ## Commits
