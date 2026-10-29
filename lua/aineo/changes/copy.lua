@@ -545,18 +545,17 @@ function M.new(label)
   --- The base the work of `line`, a branch's line of the Reported section,
   --- is read from where its line picks it: on the editor's own worktree,
   --- while it has that branch checked out, the one its view was last read
-  --- from (`session.own_section`), else the session's base, which the
-  --- default view reads; on another worktree that has it checked out, that
-  --- worktree's, as the commits window last listed it; else the branch's
-  --- own, as the commits window last read it alone; nil while it has read
-  --- neither.
+  --- from (`own_view.read()`); on another worktree that has it checked out,
+  --- that worktree's, as the commits window last listed it; else the
+  --- branch's own, as the commits window last read it alone; nil while it
+  --- has read none, so that the line shows the reported base until then.
   ---
   ---@param line aineo.changes.TreeLine
   ---@return string|nil
   local function read_base_of(line)
     if own_view.is_branch_line(line) then
       local own = own_view.read()
-      return own and own.base or session.base
+      return own and own.base
     end
     if line.checked_out then
       local section = scope.section_on(session.commits_others, line.node.worktree.top)
