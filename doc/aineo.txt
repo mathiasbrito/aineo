@@ -1620,8 +1620,9 @@ newest of them was reported, as a commit's age is told
 gives its folder's name. A branch's line, indented four cells, gives the
 branch's name, a `*` when its worktree has it checked out now, `from` and
 the abbreviated id of the base its work is read from (above) — on your
-own worktree's checked-out branch, the base the default view reads — or
-`from ?` for a report made before reports gave one.
+own worktree's checked-out branch, the base its view reads, the line's
+commits read from it too (|aineo-changes-own-branch-view|) — or `from ?`
+for a report made before reports gave one.
 Below the line of a branch its worktree has checked out now, the one with
 the `*`, indented six cells and before its commits, is `Uncommitted`, in
 |hl-AineoChangesFilter|: that worktree's Uncommitted, the files that

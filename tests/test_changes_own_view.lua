@@ -165,7 +165,8 @@ end
 --- branch `feature/own` and commits `On the branch` on it, and reports that
 --- branch in the editor's own worktree, made from `Before the branch` — or
 --- from no base, `from ?`, with `without_base`. Waits for the default view
---- to list the Reported section, the branch's commits under it.
+--- to list the Reported section, the branch's commits since the base its
+--- view reads under it.
 ---
 ---@param name string
 ---@param without_base? boolean
@@ -190,12 +191,12 @@ local function start_on_own_branch(name, without_base, state)
     },
   })
   local folder = vim.fs.basename(top)
-  local base_shown = without_base and '?' or short(session_base)
+  local base_shown = without_base and '?' or short(reported_base)
   local commits = {
     git_repo.commit_line(on_branch, 'On the branch'),
     git_repo.commit_line(reported_base, 'Before the branch'),
   }
-  local under = without_base and {} or vim.tbl_map(under_branch, commits)
+  local under = without_base and {} or { under_branch(commits[1]) }
   expect_pane_lines(
     'commits',
     vim.list_extend(
