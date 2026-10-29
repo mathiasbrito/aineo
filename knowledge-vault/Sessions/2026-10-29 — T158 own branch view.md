@@ -61,7 +61,7 @@ Each the literal edit, applied to a pristine copy, run on its covering file, res
 
 | Id | Edit | File run | Killed by |
 |---|---|---|---|
-| M1 (A659's first) | `read_own_worktree()`: `read_section(read, …` → `read_section(vim.tbl_extend('force', read, { base_of = function() return nil end }), …` — the view's base the session's | own_view | 10 assertions |
+| M1 (A659's first) | `read_own_worktree()`: `read_section(read, …` → `read_section(vim.tbl_extend('force', read, { base_of = function() return nil end }), …` — the view's base the session's; measured on `d4e9eced`, whose code this literal matches. A661 (5): it no longer matches after A660; see the M1 row under *Mutants (A661)* for the literal of the final code. | own_view | 10 assertions on `d4e9eced` |
 | M2a (A659's second, the old behaviour) | `show_item()`: an `own_worktree` item shows `show_own_work()` | own_view | 11 assertions |
 | M2b | `toggle_focused_view()`: `has_focused_view` false for your own worktree's scope | own_view | 1 (`\g`) |
 | M3 | `worktree_pick()`: `if M.own_checked_out_branch(…) then` → `if true then` | reported_tree | 1 |
@@ -120,6 +120,41 @@ Run the same way as the table above, on the committed tree; every kill is an ass
 ### Runs after A660
 
 Each was run on the final code, with `Fails (0)`: `test_changes_own_view` (14 cases), `test_changes_announce`, `test_changes_tree_commits_pane`, `test_changes_worktree_uncommitted`, `test_changes_keep_view`, `test_changes_tree_commit_lines`, `test_changes_worktrees`, `test_changes_base_origin` and `test_doc`. `make lint` is clean. The whole suite was not run again, as A660 asks.
+
+## A661 — the fix round after the review of PR #389
+
+The review (attack and test integrity, at `96759f42`) confirmed three faults and two unpinned behaviours; A661 rules on each. Every red below is the reviewer's probe, adopted as a case in `test_changes_own_view.lua`.
+
+- **A661 (1), a kept choice — `a3fe32e0`.** The commits read kept a commit by the own view's list in the default view too, and by the list of the previous read. A commit a reset removed then stayed chosen, against dev's rule. `own_view.lists()` now counts that list only while the view shows.
+  - Red PX (adopted with its settling waits and its watch gate): `left = "Files in: … On the branch", right = "Files in: Session work"`.
+  - Red P5: `left = "Files in: … Before the session"`.
+- **A661 (2), the git work — `d1222a71`.** The own read runs in the session's repository with `HEAD` as its tip (`worktrees.read_section_in()`), with no repository search. The tree line of your checked-out branch lists the view's commits, so that range is not logged again.
+  - Red: one read of the default view, your branch reported, ran 18 git processes; now 13 (`Left: 18, Right: 13`).
+  - A second case pins 17 for a read while the branch you have checked out is not reported, the same as with no own section.
+  - The predicates went into one table, `own_view`, because `M.new()` hit LuaJIT's 200-local limit.
+- **A661 (3), the tree line once — `0f0a9767`.** Until the view has been read, the line's base is left unread, so the line shows the reported base.
+  - Red P8: `{ "… from <session base>", "… from <reported base>" }` against the reported one alone.
+- **A661 (4), two pins — `52eaae64`.** P9: a failed read keeps the view's commit under the failure line. P10: the `Against:` line names the reported base. Both pass on the code they follow; MR5 and MR7 fail them.
+- **A661 (5)** — the M1 row above is corrected; M1 was re-run at the final code's literal.
+
+### Mutants (A661)
+
+Run one at a time, as above, on `52eaae64`, against `test_changes_own_view.lua` (21 cases); every kill is an assertion.
+
+| Id | Edit | Killed by |
+|---|---|---|
+| M1 (A659's first, at the final code) | `read_own_worktree()`: `choose = M.read_reported_in_head,` → `choose = function(_, _, _, own, _, done) done(nil, own, false) end,`, the view's base always the session's | 17 |
+| MR5 | `read_own_section()`: `before = { sections = { session.own_section } },` → `before = worktrees.NONE,` | 1 (P9) |
+| MR7 | `read_reported_in_head()`: `done(nil, reported, true)` → `done(nil, reported, false)` | 1 (P10) |
+| MG (A661 (2)'s, the own read at every read) | `read_own_section()`: `if not (top and reports.own_checked_out_branch(session.nodes, top)) then` → `if not (top and node_at(top)) then` | 2 (the 17-run count; the view ending at a checkout) |
+| MP1 | `own_view.lists()`: `return own_view.shown()` and `and own ~= nil` → `return own ~= nil` | 2 (PX, P5) |
+| MP2a | `read_own_worktree()`: `read_section_in(read, worktree, read.found, HEAD, {` → `read_section(read, worktree, {`, the repository searched again | 1 (the 13-run count) |
+| MP2b | `read_tree_commits()`: `return not own_view.is_branch_line(line)` → `return true`, the range logged again | 1 (the 13-run count) |
+| MP3 | `read_base_of()`: `return own and own.base` → `return own and own.base or session.base` | 1 (P8) |
+
+### Runs after A661
+
+On `52eaae64`, each with `Fails (0)`: `test_changes_own_view` (21 cases), `test_changes_announce`, `test_changes_tree_commits_pane`, `test_changes_worktree_uncommitted`, `test_changes_keep_view`, `test_changes_worktrees`, `test_changes_base_origin`, `test_changes_filter` (dev's rule for a commit a reset removes) and `test_doc`. `make lint` is clean. The whole suite was not run again, as A661 asks.
 
 ## Open threads
 
