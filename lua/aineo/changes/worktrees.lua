@@ -277,22 +277,18 @@ end
 ---@field own aineo.changes.ReadOwnBase
 ---@field choose aineo.changes.ChooseBase
 
---- Reads `worktree`'s list (`read.read_list`) from its base — the one
---- `bases.own` reads, or, when `read.base_of` gives a reported one, the one
---- `bases.choose` chooses — and calls `done(section)`; when
---- the list cannot be read, the section says why and keeps what the window
---- last listed for the worktree (`unread_section()`), if anything — unless
---- the worktree's directory is gone by then, removed while it was read,
---- when it calls `done(nil)`, as it does when git finds the directory in
---- another repository than that worktree (`is_listed_worktree()`).
+--- The function that gives `done` what a step of the read of `worktree`
+--- answered, for `section`: a failure is kept in the section, which keeps
+--- what the window last listed, and given to `done(section)` — unless the
+--- worktree's directory is gone by then, when it calls `done(nil)`;
+--- anything else goes on to `proceed()`.
 ---
----@param read aineo.changes.WorktreeRead
 ---@param worktree aineo.git.Worktree
----@param bases aineo.changes.BaseReads
+---@param section aineo.changes.WorktreeSection
 ---@param done fun(section: aineo.changes.WorktreeSection|nil)
-local function read_section(read, worktree, bases, done)
-  local section = unread_section(read, worktree)
-  local function or_failed(proceed)
+---@return fun(proceed: fun(...)): fun(failure: aineo.git.Failure|nil, ...)
+local function failing_into(worktree, section, done)
+  return function(proceed)
     return function(failure, ...)
       if not failure then
         proceed(...)
@@ -304,6 +300,60 @@ local function read_section(read, worktree, bases, done)
       end
     end
   end
+end
+
+--- Reads `worktree`'s list (`read.read_list`) in `repository`, its
+--- repository, from its base — the one `bases.own` reads, or, when
+--- `read.base_of` gives a reported one, the one `bases.choose` chooses
+--- against `tip`, the commit or the name of its `HEAD` — and calls
+--- `done(section)`; when the list cannot be read, the section says why and
+--- keeps what the window last listed for the worktree (`unread_section()`),
+--- if anything — unless the worktree's directory is gone by then, removed
+--- while it was read, when it calls `done(nil)`.
+---
+---@param read aineo.changes.WorktreeRead
+---@param worktree aineo.git.Worktree
+---@param repository aineo.git.Repository
+---@param tip string|nil
+---@param bases aineo.changes.BaseReads
+---@param done fun(section: aineo.changes.WorktreeSection|nil)
+local function read_section_in(read, worktree, repository, tip, bases, done)
+  local section = unread_section(read, worktree)
+  local or_failed = failing_into(worktree, section, done)
+  local reported = read.base_of and read.base_of(worktree)
+  bases.own(
+    repository,
+    or_failed(function(own, own_origin)
+      local function read_from(base, is_reported)
+        local origin = base and (is_reported and M.REPORTED_ORIGIN or own_origin) or nil
+        read.read_list(
+          repository,
+          base,
+          or_failed(function(listed)
+            section.repository, section.base, section.listed = repository, base, listed
+            section.base_origin = origin
+            done(section)
+          end)
+        )
+      end
+      bases.choose(read, repository.top, reported, own, tip, or_failed(read_from))
+    end)
+  )
+end
+
+--- Finds the repository of `worktree`, as git now finds it from its top
+--- level, and reads the worktree's list in it (`read_section_in()`), its
+--- `HEAD` as found the tip; calls `done(section)`, or `done(nil)` when the
+--- worktree's directory is gone or git finds it in another repository than
+--- that worktree (`is_listed_worktree()`). A failure to find it is told as
+--- `read_section_in()` tells one.
+---
+---@param read aineo.changes.WorktreeRead
+---@param worktree aineo.git.Worktree
+---@param bases aineo.changes.BaseReads
+---@param done fun(section: aineo.changes.WorktreeSection|nil)
+local function read_section(read, worktree, bases, done)
+  local or_failed = failing_into(worktree, unread_section(read, worktree), done)
   git.find_repository(
     worktree.top,
     or_failed(function(repository)
@@ -311,25 +361,7 @@ local function read_section(read, worktree, bases, done)
         done(nil)
         return
       end
-      local reported = read.base_of and read.base_of(worktree)
-      bases.own(
-        repository,
-        or_failed(function(own, own_origin)
-          local function read_from(base, is_reported)
-            local origin = base and (is_reported and M.REPORTED_ORIGIN or own_origin) or nil
-            read.read_list(
-              repository,
-              base,
-              or_failed(function(listed)
-                section.repository, section.base, section.listed = repository, base, listed
-                section.base_origin = origin
-                done(section)
-              end)
-            )
-          end
-          bases.choose(read, repository.top, reported, own, repository.head, or_failed(read_from))
-        end)
-      )
+      read_section_in(read, worktree, repository, repository.head, bases, done)
     end),
     read.git
   )
@@ -407,8 +439,14 @@ function M.read_reported_in_head(read, top, reported, own, tip, done)
   end)
 end
 
+--- What git reads as the commit the editor's own worktree's `HEAD` names
+--- at the time it runs, which the session's repository, found once, does
+--- not keep up to date.
+local HEAD = 'HEAD'
+
 --- Reads the list of `worktree`, the editor's own, shown alone
---- (`read.read_list`), as another worktree's is read (`read_section()`),
+--- (`read.read_list`), as another worktree's is read (`read_section_in()`),
+--- in the session's repository, `read.found`, with no search of its own,
 --- but from the reported base whenever it is in `HEAD`'s history
 --- (`M.read_reported_in_head()`), else from the session's base,
 --- `read.session_base`; calls `done(section)`, the section marked as the
@@ -419,7 +457,7 @@ end
 ---@param worktree aineo.git.Worktree
 ---@param done fun(section: aineo.changes.WorktreeSection|nil)
 function M.read_own_worktree(read, worktree, done)
-  read_section(read, worktree, {
+  read_section_in(read, worktree, read.found, HEAD, {
     own = function(_, base_read)
       base_read(nil, read.session_base, read.session_base and M.SESSION_ORIGIN or nil)
     end,
