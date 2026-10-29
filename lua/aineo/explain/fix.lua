@@ -406,17 +406,26 @@ local function shows_another_kind(buffer, kind)
   return true
 end
 
+--- What the user is told once written code is accepted, by whether
+--- proposals of it are left to decide.
+local WRITTEN = {
+  [false] = 'aineo: code written (u undoes it)',
+  [true] = 'aineo: code written (u undoes it once the rest is decided)',
+}
+
 --- Accepts the fix or the code written for a request that `buffer` shows
---- (`aineo.explain.preview`'s `apply()`): its edits are applied as one undo
---- step, the file is not written, and the issue a fix fixes is no longer
---- shown; the user is told, once, that the fix was applied or the code
---- written. Tells the user when `buffer` shows neither, and changes nothing
---- when it shows a proposal of another kind than `kind` names
---- (`shows_another_kind()`).
+--- (`aineo.explain.preview`'s `apply()`), or, for code whose edits are
+--- proposals of their own, the one the cursor's line `line` chooses: what
+--- is accepted is applied as one undo step, the file is not written, and
+--- the issue a fix fixes is no longer shown; the user is told, once, that
+--- the fix was applied or the code written (`WRITTEN`). Tells the user
+--- when `buffer` shows neither, and changes nothing when it shows a
+--- proposal of another kind than `kind` names (`shows_another_kind()`).
 ---
 ---@param buffer integer
 ---@param kind? 'fix'|'write' the kind of proposal to accept; any when absent
-function M.accept(buffer, kind)
+---@param line? integer the cursor's line, from 1
+function M.accept(buffer, kind, line)
   if not preview.is_shown(buffer) then
     vim.notify('aineo: no proposal is shown in this buffer', vim.log.levels.INFO)
     return
@@ -425,33 +434,76 @@ function M.accept(buffer, kind)
     return
   end
   local issue = fixed_issues[buffer]
-  if preview.apply(buffer) then
+  if preview.apply(buffer, line) then
     marks.remove_issue(buffer, issue)
     fixed_issues[buffer] = nil
     vim.notify(
-      issue and 'aineo: fix applied (u undoes it)' or 'aineo: code written (u undoes it)',
+      issue and 'aineo: fix applied (u undoes it)' or WRITTEN[preview.is_shown(buffer)],
       vim.log.levels.INFO
     )
   end
 end
 
---- Shows the fix or the code written that `buffer` shows as the diff view,
---- or as the overlay again (`aineo.explain.preview`'s `toggle_diff()`),
---- unless it is a proposal of another kind than `kind` names
---- (`shows_another_kind()`).
+--- Accepts every proposal of the code written for a request that `buffer`
+--- shows (`aineo.explain.preview`'s `apply_all()`): all that still stand
+--- are applied as one undo step, the file is not written, and the user is
+--- told, once, that the code was written (`WRITTEN`). Tells the user when
+--- `buffer` shows no proposal, and changes nothing when it shows a
+--- proposal of another kind than `kind` names (`shows_another_kind()`).
 ---
 ---@param buffer integer
----@param kind? 'fix'|'write' the kind of proposal to toggle; any when absent
-function M.toggle_diff(buffer, kind)
+---@param kind 'write'
+function M.accept_all(buffer, kind)
+  if not preview.is_shown(buffer) then
+    vim.notify('aineo: no proposal is shown in this buffer', vim.log.levels.INFO)
+    return
+  end
   if shows_another_kind(buffer, kind) then
     return
   end
-  preview.toggle_diff(buffer)
+  if preview.apply_all(buffer) then
+    vim.notify(WRITTEN[preview.is_shown(buffer)], vim.log.levels.INFO)
+  end
 end
 
---- Rejects the fix or the code written that `buffer` shows: its preview
+--- Shows the fix or the code written that `buffer` shows as the diff view,
+--- or as the overlay again (`aineo.explain.preview`'s `toggle_diff()`),
+--- only the one the cursor's line `line` chooses for code whose edits are
+--- proposals of their own, unless it is a proposal of another kind than
+--- `kind` names (`shows_another_kind()`).
+---
+---@param buffer integer
+---@param kind? 'fix'|'write' the kind of proposal to toggle; any when absent
+---@param line? integer the cursor's line, from 1
+function M.toggle_diff(buffer, kind, line)
+  if shows_another_kind(buffer, kind) then
+    return
+  end
+  preview.toggle_diff(buffer, line)
+end
+
+--- Rejects the fix or the code written that `buffer` shows, or, for code
+--- whose edits are proposals of their own, the one the cursor's line
+--- `line` chooses (`aineo.explain.preview`'s `drop()`): what is rejected
 --- goes, and nothing changes; unless it is a proposal of another kind than
 --- `kind` names (`shows_another_kind()`).
+---
+---@param buffer integer
+---@param kind? 'fix'|'write' the kind of proposal to reject; any when absent
+---@param line? integer the cursor's line, from 1
+function M.reject_chosen(buffer, kind, line)
+  if shows_another_kind(buffer, kind) then
+    return
+  end
+  preview.drop(buffer, line)
+  if not preview.is_shown(buffer) then
+    fixed_issues[buffer] = nil
+  end
+end
+
+--- Rejects the fix or the code written that `buffer` shows, every proposal
+--- of it: its preview goes, and nothing changes; unless it is a proposal of
+--- another kind than `kind` names (`shows_another_kind()`).
 ---
 ---@param buffer integer
 ---@param kind? 'fix'|'write' the kind of proposal to reject; any when absent

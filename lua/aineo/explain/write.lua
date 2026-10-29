@@ -21,6 +21,7 @@ local M = {}
 ---@field line integer the cursor's line, from 1, which the code goes below, or in place of when it is blank, followed while the request is typed
 ---@field range? integer[] the first and last lines that hold the request, from 1
 ---@field tools boolean whether Claude Code may read the project with read-only tools
+---@field whole_file? boolean whether the code may also edit other places of the file, each shown as a proposal of its own
 ---@field command string[] the words that run Claude Code, `claude.cmd`
 ---@field model string
 ---@field effort? string the effort Claude Code works at, as `--effort` takes it; its own default when absent
@@ -90,18 +91,29 @@ local OUT_OF_PLACE = {
   in_request_lines = 'it must replace the lines of the request alone',
 }
 
+--- What the user is told code that may edit the whole file, written for
+--- each place (`aineo.explain.WritePlace`), must start with when its first
+--- edit is not an edit of the lines asked about.
+local FIRST_OUT_OF_PLACE = {
+  below_line = 'its first edit must insert after the cursor’s line',
+  in_blank_line = 'its first edit must replace the cursor’s blank line',
+  in_request_lines = 'its first edit must replace the lines of the request',
+}
+
 --- Why the code of `edits`, placed in the text sent, cannot be shown for
 --- `ask`, or `nil`: it must be one edit of exactly the lines `ask.first` to
---- `ask.last` (`OUT_OF_PLACE`), and, for code that goes below a line, its
---- new lines must start with that line, as it reads.
+--- `ask.last` (`out_of_place`, by the place, as the user is told it), and,
+--- for code that goes below a line, its new lines must start with that
+--- line, as it reads.
 ---
 ---@param edits aineo.explain.PlacedEdit[]
 ---@param ask aineo.explain.WriteAsk
+---@param out_of_place table<aineo.explain.WritePlace, string> `OUT_OF_PLACE` or `FIRST_OUT_OF_PLACE`
 ---@return string|nil
-local function fault_of(edits, ask)
+local function fault_of(edits, ask, out_of_place)
   local edit = edits[1]
   if #edits ~= 1 or edit.first ~= ask.first or edit.last ~= ask.last then
-    return OUT_OF_PLACE[ask.place]
+    return out_of_place[ask.place]
   end
   if ask.place == 'below_line' and edit.new[1] ~= edit.old[1] then
     return 'it must keep the cursor’s line as it is'
@@ -132,20 +144,94 @@ local function blank_line_mismatch(edits, asked)
   end
 end
 
---- `edits`, the one edit of the code written for `ask` (`fault_of()`), with
---- the copy of the blank line it replaces that its new lines start with, if
---- any, dropped, for code that goes in place of a blank line, so that the
---- code replaces it and leaves no blank line; any other edits as they are.
+--- `edit`, the edit of the lines asked about of the code written for `ask`
+--- (`fault_of()`), with the copy of the blank line it replaces that its new
+--- lines start with, if any, dropped, for code that goes in place of a
+--- blank line, so that the code replaces it and leaves no blank line; as it
+--- is otherwise.
+---
+---@param edit aineo.explain.PlacedEdit
+---@param ask aineo.explain.WriteAsk
+---@return aineo.explain.PlacedEdit
+local function in_its_place(edit, ask)
+  if ask.place ~= 'in_blank_line' or edit.new[1] ~= edit.old[1] then
+    return edit
+  end
+  return vim.tbl_extend('force', edit, { new = vim.list_slice(edit.new, 2) })
+end
+
+--- Why `answered`, the code answered for `asked`, cannot be shown, or
+--- `nil`, with its edits placed in the lines sent (`aineo.explain.placement`)
+--- and the edit of the lines asked about in its place (`in_its_place()`):
+--- it must be one edit of those lines alone (`fault_of()`), refused too for
+--- an old line that is not the blank line asked about
+--- (`blank_line_mismatch()`) or by the placement, with the reason.
+---
+---@param asked aineo.explain.WriteAsked
+---@param answered aineo.explain.Fix
+---@return string|nil fault
+---@return aineo.explain.KeptCode? code
+local function placed_at_the_line_asked(asked, answered)
+  local edits, refusal = placement.place(asked.lines, answered.edits)
+  local fault = blank_line_mismatch(answered.edits, asked)
+    or refusal
+    or fault_of(edits, asked.ask, OUT_OF_PLACE)
+  if fault then
+    return fault
+  end
+  return nil, { summary = answered.summary, edits = { in_its_place(edits[1], asked.ask) } }
+end
+
+--- The most edits code that may edit the whole file is shown with.
+local MOST_EDITS = 20
+
+--- The index, in `edits`, placed in the order of their lines, of the edit
+--- that starts on the line `first`. Raises an error when none does, which
+--- `placed_in_the_whole_file()` rules out before it asks.
 ---
 ---@param edits aineo.explain.PlacedEdit[]
----@param ask aineo.explain.WriteAsk
----@return aineo.explain.PlacedEdit[]
-local function in_its_place(edits, ask)
-  local edit = edits[1]
-  if ask.place ~= 'in_blank_line' or edit.new[1] ~= edit.old[1] then
-    return edits
+---@param first integer
+---@return integer
+local function index_starting_at(edits, first)
+  for index, edit in ipairs(edits) do
+    if edit.first == first then
+      return index
+    end
   end
-  return { vim.tbl_extend('force', edit, { new = vim.list_slice(edit.new, 2) }) }
+  error(('no edit starts on line %d'):format(first))
+end
+
+--- Why `answered`, code that may edit the whole file answered for `asked`,
+--- cannot be shown, or `nil`, with its edits placed in the lines sent
+--- (`aineo.explain.placement`), the edit of the lines asked about in its
+--- place (`in_its_place()`) and its index (`subject`): its first edit must
+--- be that edit (`fault_of()`, `blank_line_mismatch()`), it may hold at
+--- most `MOST_EDITS` edits, and the placement must take them all, which
+--- refuses edits that share a line, with the reason.
+---
+---@param asked aineo.explain.WriteAsked
+---@param answered aineo.explain.Fix
+---@return string|nil fault
+---@return aineo.explain.KeptCode? code
+local function placed_in_the_whole_file(asked, answered)
+  if #answered.edits > MOST_EDITS then
+    return ('it holds more than %d edits'):format(MOST_EDITS)
+  end
+  local first = { answered.edits[1] }
+  local first_placed, first_refusal = placement.place(asked.lines, first)
+  local fault = blank_line_mismatch(first, asked)
+    or first_refusal
+    or fault_of(first_placed, asked.ask, FIRST_OUT_OF_PLACE)
+  if fault then
+    return fault
+  end
+  local edits, refusal = placement.place(asked.lines, answered.edits)
+  if not edits then
+    return refusal
+  end
+  local subject = index_starting_at(edits, asked.ask.first)
+  edits[subject] = in_its_place(edits[subject], asked.ask)
+  return nil, { summary = answered.summary, edits = edits, subject = subject }
 end
 
 --- What the code written for `ask`, as `writing` asks it, is kept under
@@ -160,13 +246,16 @@ local function kept_key(writing, ask)
     last = ask.last,
     request = ask.request,
     place = ask.place,
+    whole_file = writing.whole_file == true,
     model = writing.model,
     effort = writing.effort,
   })
 end
 
 --- Shows `code`, written for `ask`, in `writing.buffer` as a preview
---- (`aineo.explain.preview`), the request named at its top (`shortened()`).
+--- (`aineo.explain.preview`), the request named at the top of the edit of
+--- the lines asked about (`shortened()`); each edit a proposal of its own
+--- for code that may edit the whole file.
 ---
 ---@param writing aineo.explain.WriteRequest
 ---@param ask aineo.explain.WriteAsk
@@ -176,6 +265,8 @@ local function show(writing, ask, code)
     window = writing.window,
     summary = code.summary,
     edits = code.edits,
+    separate = writing.whole_file,
+    subject_index = code.subject,
     keys = writing.keys,
     ask_key = writing.ask_key,
     subject = { text = shortened(ask.request), look = kinds.WRITE },
@@ -184,14 +275,13 @@ local function show(writing, ask, code)
 end
 
 --- Shows (`show()`) the code the run `ended` answered for `asked`, placed in
---- the lines sent (`aineo.explain.placement`, `in_its_place()`), and keeps
---- it for those lines (`aineo.explain.kept`), or tells the user, once, why
---- nothing is shown: the buffer changed while the code was asked, which any
---- move of its `b:changedtick` says; the run failed or answered no code
---- (`code_of()`); the answer has no edits, when its summary is told; or the
---- code was refused, for an old line that is not the blank line asked about
---- (`blank_line_mismatch()`), by the placement or for its lines
---- (`fault_of()`), with the reason.
+--- the lines sent, and keeps it for those lines (`aineo.explain.kept`), or
+--- tells the user, once, why nothing is shown: the buffer changed while the
+--- code was asked, which any move of its `b:changedtick` says; the run
+--- failed or answered no code (`code_of()`); the answer has no edits, when
+--- its summary is told; or the code was refused, with the reason
+--- (`placed_at_the_line_asked()`, or `placed_in_the_whole_file()` for code
+--- that may edit the whole file).
 ---
 ---@param asked aineo.explain.WriteAsked
 ---@param ended vim.SystemCompleted
@@ -213,13 +303,12 @@ local function show_answer(asked, ended)
     vim.notify('aineo: no code written: ' .. answered.summary, vim.log.levels.INFO)
     return
   end
-  local edits, refusal = placement.place(asked.lines, answered.edits)
-  local fault = blank_line_mismatch(answered.edits, asked) or refusal or fault_of(edits, asked.ask)
+  local placed = writing.whole_file and placed_in_the_whole_file or placed_at_the_line_asked
+  local fault, code = placed(asked, answered)
   if fault then
     vim.notify('aineo: the written code was refused: ' .. fault, vim.log.levels.WARN)
     return
   end
-  local code = { summary = answered.summary, edits = in_its_place(edits, asked.ask) }
   kept.keep(writing.buffer, kept_key(writing, asked.ask), asked.lines, code)
   show(writing, asked.ask, code)
 end
@@ -252,6 +341,7 @@ local function start(writing, ask, folder)
     last = ask.last,
     request = ask.place ~= 'in_request_lines' and ask.request or nil,
     blank = ask.place == 'in_blank_line',
+    whole_file = writing.whole_file,
     lines = asked.lines,
   })
   local run = runs.begin({

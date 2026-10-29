@@ -53,7 +53,7 @@ local M = {}
 ---@field changed? string what the preview of a proposal of this kind says when the code under it changed
 ---@field stale? string what the preview of a proposal of this kind says of itself once stale
 ---@field shown? string what the user is told a proposal of this kind is, when keys of another kind are pressed
----@field plugs? aineo.explain.FixKeys the `<Plug>` mappings that accept, reject and show the diff of a proposal of this kind, which its preview maps its keys to
+---@field plugs? aineo.explain.FixKeys the `<Plug>` mappings that accept, reject and show the diff of a proposal of this kind, which its preview maps its keys to; for written code, also those that accept and reject every proposal left and move to the next and the previous one
 
 ---@type aineo.explain.Kind
 M.EXPLANATIONS = {
@@ -159,6 +159,10 @@ M.WRITE = {
     accept = '<Plug>(aineo-write-accept)',
     reject = '<Plug>(aineo-write-reject)',
     diff = '<Plug>(aineo-write-diff)',
+    accept_all = '<Plug>(aineo-write-accept-all)',
+    reject_all = '<Plug>(aineo-write-reject-all)',
+    next = '<Plug>(aineo-write-next)',
+    previous = '<Plug>(aineo-write-previous)',
   },
   deep = {
     label = 'write',
