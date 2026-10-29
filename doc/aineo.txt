@@ -1620,9 +1620,9 @@ newest of them was reported, as a commit's age is told
 gives its folder's name. A branch's line, indented four cells, gives the
 branch's name, a `*` when its worktree has it checked out now, `from` and
 the abbreviated id of the base its work is read from (above) — on your
-own worktree's checked-out branch, the base the default view reads, which
-Enter on that line shows — or `from ?` for a report made before reports
-gave one.
+own worktree's checked-out branch, the base its view reads, the line's
+commits read from it too (|aineo-changes-own-branch-view|) — or `from ?`
+for a report made before reports gave one.
 Below the line of a branch its worktree has checked out now, the one with
 the `*`, indented six cells and before its commits, is `Uncommitted`, in
 |hl-AineoChangesFilter|: that worktree's Uncommitted, the files that
@@ -1631,8 +1631,7 @@ watched in it as its own section's Uncommitted line is (above); under your
 own worktree's branch, your own Uncommitted, the same list as the
 default view's. A branch not checked out has none, and the line moves with
 the checkout at each read of the section. Enter on it shows that worktree
-alone, its Uncommitted chosen; on your own worktree's, it keeps the
-default view, your Uncommitted chosen.
+alone, its Uncommitted chosen, your own worktree included (below).
 Below a branch's line, indented six cells, are its commits from that base,
 the one its line shows, to the branch's tip, newest first, each as any
 commit line of the window: its abbreviated id, its author and age, and its
@@ -1667,9 +1666,31 @@ does, the explorer following (|aineo-explorer|):
                         its commits from its base to its tip, its heading
                         saying `(not checked out: commits only)`
     an `Uncommitted`    that worktree alone, its Uncommitted chosen
-Your own worktree's line, and that of the branch it has checked out, show
-the default view, Session work chosen; its `Uncommitted`, the default view
-with your Uncommitted chosen. The heading shows in
+                                              *aineo-changes-own-branch-view*
+Your own worktree's line, that of the branch it has checked out and that
+branch's `Uncommitted` show your own worktree alone while that branch is
+among those reported of it, as another worktree shown alone shows: its
+heading, `Worktree <folder> (<branch>) · yours`, whole in
+|hl-AineoChangesFilter|, then `Uncommitted`, your own Uncommitted, the
+same list as the default view's, then your commits from the base reported
+for that branch to `HEAD`, newest first, or "No commits in this worktree".
+The base reported is used whenever it is in `HEAD`'s history, even older
+than the base the default view reads, as the commit the branch was made
+from is; else, as for a branch whose line shows `from ?`, the base the
+default view reads. The heading's files are your whole change from that
+base, the uncommitted ones included; the files window lists them while the
+cursor rests on the heading, and on your worktree's line or its branch's
+in the Reported section. `\g` switches between this view and the default
+view, as for any worktree shown alone, and the view is kept on disk as a
+worktree picked is (|aineo-changes-view-kept|). It ends as a worktree
+picked ends when it is gone, aineo saying once "aineo: Worktree <folder>
+(<branch>) · yours is gone; the changes pane shows the default view", once
+your worktree has another branch checked out or that branch is no longer
+reported, at the next read of the pane; picking something else, following
+another session and closing the tab end it too. While your worktree has
+no branch checked out that is reported of it, its line shows the default
+view, Session work chosen.
+The Reported section's heading shows in
 |hl-AineoChangesReportedHeading|, a label in |hl-AineoChangesReportedLabel|,
 its age in |hl-AineoChangesReportedAge|, a worktree's folder in
 |hl-AineoChangesReportedWorktree|, a branch's name in

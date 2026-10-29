@@ -331,7 +331,10 @@ Every part takes its colour from your colour scheme, through the
   its base, plus the worktree's uncommitted changes when that branch is
   checked out there; under a checked-out branch, an `Uncommitted` line
   shows that worktree alone with its uncommitted work chosen; the explorer
-  follows. Every other worktree, reported or
+  follows. A branch reported in your own worktree, while you have it checked
+  out, gets the same view, `Worktree <folder> (<branch>) · yours`: its
+  commits since the reported base and your uncommitted changes, `\g`
+  switching between it and the default view. Every other worktree, reported or
   found by git, has its own `Uncommitted — <folder> (<branch>)` line first
   under its heading: the files the agent changed and has not committed yet,
   staged, unstaged and untracked, each with its diff from that worktree's

@@ -263,7 +263,7 @@ T['the Reported section']['lists, after a rebase, the commits of the base the li
   })
 end
 
-T['the Reported section']['lists, on the editor’s own worktree’s branch, the commits since the base the default view reads'] = function()
+T['the Reported section']['lists, on the editor’s own worktree’s branch, the commits since the base its view reads'] = function()
   local top, older = git_repo.create('treepane-own', { ['notes.txt'] = { 'one' } })
   local newer = commit_only(top, 'next.txt', 'next', 'Newer')
   child.lua('_G.start_home(...)', { top })
@@ -279,9 +279,10 @@ T['the Reported section']['lists, on the editor’s own worktree’s branch, the
     'Reported',
     'T now',
     '  ' .. vim.fs.basename(top),
-    ('    main * from %s'):format(short(newer)),
+    ('    main * from %s'):format(short(older)),
     '      Uncommitted',
     tree_commit_line(later, 'Later'),
+    tree_commit_line(newer, 'Newer'),
     'Uncommitted',
     'Session work',
     git_repo.commit_line(later, 'Later'),
