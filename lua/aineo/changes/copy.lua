@@ -1491,15 +1491,27 @@ function M.new(label)
     )
   end
 
+  --- Whether the commits window shows the editor's own worktree alone: the
+  --- focused view, of the scope, and the scope the editor's own worktree's.
+  ---
+  ---@return boolean
+  local function shows_own_view()
+    return session.focused
+      and not session.shows_reported
+      and session.scope ~= nil
+      and is_own_top(session.scope.top)
+  end
+
   --- Whether `selected`, a commit of the editor's own, is among the commits
-  --- the editor's own worktree shown alone last listed
-  --- (`session.own_section`), which may reach behind the session's base.
+  --- the editor's own worktree last listed (`session.own_section`), which
+  --- may reach behind the session's base, while that worktree is shown alone
+  --- (`shows_own_view()`): the default view lists only the session's own.
   ---
   ---@param selected aineo.changes.Filter a `commit` filter
   ---@return boolean
   local function own_section_lists(selected)
     local listed = session.own_section and session.own_section.listed
-    return listed ~= nil and lists_commit(selected, listed.commits)
+    return shows_own_view() and listed ~= nil and lists_commit(selected, listed.commits)
   end
 
   --- Ends the view of the editor's own worktree shown alone once the branch
@@ -1543,11 +1555,7 @@ function M.new(label)
       session.scope = scope.of(section)
     end
     local selected = session.selected
-    local shows_own_view = session.focused
-      and not session.shows_reported
-      and session.scope ~= nil
-      and is_own_top(session.scope.top)
-    if shows_own_view and not scope.page_lists(commits_page(), selected) then
+    if shows_own_view() and not scope.page_lists(commits_page(), selected) then
       select_filter(filter.of_worktree(section))
       read_files(true)
     elseif selected.kind == 'worktree' and is_own_top(selected.worktree.top) then

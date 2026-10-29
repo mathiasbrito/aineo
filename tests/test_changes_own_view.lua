@@ -365,6 +365,112 @@ T['Enter']['on a commit made before the session’s base keeps it chosen through
   eq(pane_lines('files')[1], chosen)
 end
 
+T['the default view'] = MiniTest.new_set()
+
+--- The Lua that holds back, in the child, every call of the repository's
+--- watch while `_G.watch_on` is false, so that a case decides which reads
+--- follow a change.
+local WATCH_GATE = [[
+  local git = require('aineo.git')
+  local watch_repository = git.watch_repository
+  _G.watch_on = true
+  git.watch_repository = function(found, on_change, options)
+    return watch_repository(found, function(...)
+      if _G.watch_on then
+        on_change(...)
+      end
+    end, options)
+  end
+]]
+
+--- The line of the commits window below `Session work` that reads
+--- `wanted`; nil when none does.
+---
+---@param wanted string
+---@return integer|nil
+local function line_below_session_work(wanted)
+  local listed = pane_lines('commits')
+  local session_work = vim.fn.index(listed, 'Session work') + 1
+  local position = vim.fn.index(vim.list_slice(listed, session_work + 1), wanted) + 1
+  return session_work > 0 and position > 0 and session_work + position or nil
+end
+
+--- How long a case lets the reads a change started end before it takes
+--- the next step, where no line of the pane tells that they have.
+local SETTLE_MS = 1000
+
+T['the default view']['gives a commit a reset removed way to Session work, your branch reported'] = function()
+  child.lua(WATCH_GATE)
+  local top = git_repo.create('own-view-reset', { ['notes.txt'] = { 'one' } })
+  child.lua('_G.start_copy(...)', { top })
+  expect_pane_lines('commits', DEFAULT_VIEW)
+  local reported_base = commit_only(top, 'before.txt', 'before', 'Before the branch')
+  git_repo.git(top, { 'checkout', '--quiet', '-b', 'feature/own' })
+  local on_branch = commit_only(top, 'branch.txt', 'branch', 'On the branch')
+  local third = commit_only(top, 'third.txt', 'third', 'Third')
+  child.lua('_G.report(...)', {
+    {
+      worktree = top,
+      label = 'own',
+      branches = { { name = 'feature/own', base = reported_base } },
+    },
+  })
+  child.lua("require('aineo.changes').refresh_shown_pane()")
+  local third_line = git_repo.commit_line(third, 'Third')
+  git_repo.wait_until('Third listed below Session work', function()
+    return pane_lines('commits')[1] == 'Reported' and line_below_session_work(third_line) ~= nil
+  end)
+  vim.wait(SETTLE_MS)
+  enter_window_of('commits')
+  child.type_keys(line_below_session_work(third_line) .. 'G')
+  git_repo.wait_until('Third chosen', function()
+    return pane_lines('files')[1] == 'Files in: ' .. third_line
+  end)
+  vim.wait(SETTLE_MS)
+  child.lua('_G.watch_on = false')
+
+  git_repo.git(top, { 'reset', '--quiet', '--hard', 'HEAD~1' })
+  child.lua("require('aineo.changes').refresh_shown_pane()")
+
+  git_repo.wait_until('the reset read', function()
+    return line_below_session_work(third_line) == nil
+      and line_below_session_work(git_repo.commit_line(on_branch, 'On the branch')) ~= nil
+  end)
+  expect_pane_lines('files', { 'Files in: Session work', '  A before.txt', '  A branch.txt' })
+end
+
+T['the default view']['gives a commit chosen in your view from before the session’s base way to Session work'] = function()
+  local top = git_repo.create('own-view-older-commit-back', { ['notes.txt'] = { 'one' } })
+  local created_from = git_repo.git(top, { 'rev-parse', 'HEAD' })
+  git_repo.git(top, { 'checkout', '--quiet', '-b', 'feature/own' })
+  local before_session = commit_only(top, 'before.txt', 'before', 'Before the session')
+  child.lua('_G.start_copy(...)', { top })
+  expect_pane_lines('commits', DEFAULT_VIEW)
+  child.lua('_G.report(...)', {
+    { worktree = top, label = 'own', branches = { { name = 'feature/own', base = created_from } } },
+  })
+  git_repo.wait_until('the Reported section listed', function()
+    return pane_lines('commits')[1] == 'Reported'
+  end)
+  enter_on_line(3)
+  expect_pane_lines('commits', {
+    ('Worktree %s (feature/own) · yours'):format(vim.fs.basename(top)),
+    'Uncommitted',
+    git_repo.commit_line(before_session, 'Before the session'),
+  })
+  enter_window_of('commits')
+  child.type_keys('3G')
+  git_repo.wait_until('the commit chosen', function()
+    return pane_lines('files')[1]
+      == 'Files in: ' .. git_repo.commit_line(before_session, 'Before the session')
+  end)
+
+  enter_window_of('commits')
+  child.lua("require('aineo.changes').toggle_focused_view()")
+
+  expect_pane_lines('files', { 'Files in: Session work', 'No files changed on this session' })
+end
+
 --- Presses `s` in the commits window, waits until its picker opens, and
 --- picks the item at `position`.
 ---
