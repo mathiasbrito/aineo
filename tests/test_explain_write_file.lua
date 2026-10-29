@@ -826,4 +826,19 @@ T['the preview in view']['is the proposal at the cursor’s line, when it is the
   eq({ view.topline, view.topfill > 0, child.fn.line('.') }, { 50, true, 50 })
 end
 
+T['a stale proposal']['whose marks another plugin cleared is rejected, all, as its row says'] = function()
+  show_sorting()
+  child.lua('vim.api.nvim_buf_clear_namespace(0, -1, 0, -1)')
+  vim.wait(explained.PATIENCE_MS, function()
+    return #keys_rows() > 0
+  end, 20)
+
+  reject(3)
+
+  eq(
+    { marks = preview_marks(), modifiable = child.bo.modifiable, lines = buffer_lines() },
+    { marks = 0, modifiable = true, lines = CODE }
+  )
+end
+
 return T
