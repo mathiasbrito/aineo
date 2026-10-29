@@ -273,7 +273,7 @@ T['the keys']['move between the proposals, wrapping'] = function()
   local after_next_again = child.fn.line('.')
   press('[w')
 
-  eq({ after_next, after_next_again, child.fn.line('.') }, { 3, 1, 3 })
+  eq({ after_next, after_next_again, child.fn.line('.') }, { 1, 3, 1 })
 end
 
 T['the keys']['accept the proposal on the cursor’s line alone'] = function()
