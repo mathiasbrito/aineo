@@ -316,8 +316,7 @@ end
 
 T['the answer refused'] = MiniTest.new_set({
   parametrize = {
-    { { IMPORTING }, 'its first edit must insert after the cursor’s line' },
-    { { IMPORTING, BELOW_LINE_3 }, 'its first edit must insert after the cursor’s line' },
+    { { IMPORTING }, 'it has no edit that inserts after the cursor’s line' },
     {
       { BELOW_LINE_3, replacing(4, { '  return #values' }), replacing(4, { '  return nil' }) },
       'two edits overlap',
@@ -439,6 +438,18 @@ local function reject(line)
   )
 end
 
+T['the answer']['is shown whatever the order of its edits, numbered from the top of the buffer'] = function()
+  start({ summary = 'Sorts the values.', edits = { IMPORTING, BELOW_LINE_3 } })
+  send_request(3, 'Sort the values first.')
+  wait_for_preview()
+
+  local rows = keys_rows()
+  accept(3)
+
+  eq(rows, { keys_row(1, 2), keys_row(2, 2) })
+  eq(buffer_lines(), SORTED)
+end
+
 T['rejecting one'] = MiniTest.new_set()
 
 T['rejecting one']['leaves the buffer as it is and the other proposal shown'] = function()
@@ -478,9 +489,16 @@ end
 
 T['moving'] = MiniTest.new_set()
 
-T['moving']['goes to the first line of the next proposal, and of the first after the last'] = function()
+T['moving']['goes first to the proposal at the cursor’s line asked about, from any line'] = function()
   show_sorting()
-  child.cmd('3')
+  child.cmd('7')
+
+  eq(jump('next'), 3)
+end
+
+T['moving']['then goes to the first line of the next proposal, and of the first after the last'] = function()
+  show_sorting()
+  jump('next')
 
   local lines = { jump('next'), jump('next') }
 
@@ -498,6 +516,7 @@ end
 
 T['moving']['goes to the next proposal from a line between two'] = function()
   show_sorting()
+  jump('next')
   child.cmd('2')
 
   eq(jump('next'), 3)
@@ -507,7 +526,7 @@ T['choosing'] = MiniTest.new_set()
 
 T['choosing']['takes the proposal last moved to when the cursor is on none'] = function()
   show_sorting()
-  child.cmd('3')
+  jump('next')
   jump('next')
 
   accept(6)
@@ -517,7 +536,7 @@ end
 
 T['choosing']['takes the proposal on the cursor’s line before the one last moved to'] = function()
   show_sorting()
-  child.cmd('3')
+  jump('next')
   jump('next')
 
   accept(3)
