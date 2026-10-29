@@ -471,6 +471,62 @@ T['the default view']['gives a commit chosen in your view from before the sessio
   expect_pane_lines('files', { 'Files in: Session work', 'No files changed on this session' })
 end
 
+T['a read'] = MiniTest.new_set()
+
+--- The Lua that keeps, in the child's `_G.git_runs`, every process the
+--- home starts from then on.
+local COUNT_GIT_RUNS = [[
+  _G.git_runs = 0
+  local system = vim.system
+  vim.system = function(...)
+    _G.git_runs = _G.git_runs + 1
+    return system(...)
+  end
+]]
+
+--- How many processes one read of the shown pane starts, its watch held
+--- back (`WATCH_GATE`), counted once none has started for a while.
+---
+---@return integer
+local function git_runs_of_one_read()
+  vim.wait(SETTLE_MS)
+  child.lua('_G.watch_on = false')
+  child.lua(COUNT_GIT_RUNS)
+  child.lua("require('aineo.changes').refresh_shown_pane()")
+  local counted, still_since = -1, vim.uv.now()
+  vim.wait(git_repo.PATIENCE_MS, function()
+    local runs = child.lua_get('_G.git_runs')
+    if runs ~= counted then
+      counted, still_since = runs, vim.uv.now()
+    end
+    return runs > 0 and vim.uv.now() - still_since > SETTLE_MS
+  end, 50)
+  return counted
+end
+
+T['a read']['of the default view, your branch reported, runs git once for each list'] = function()
+  child.lua(WATCH_GATE)
+  start_on_own_branch('own-view-git-runs')
+
+  eq(git_runs_of_one_read(), 13)
+end
+
+T['a read']['runs no git for your view while no branch you have checked out is reported'] = function()
+  child.lua(WATCH_GATE)
+  local top = git_repo.create('own-view-git-runs-lonely', { ['notes.txt'] = { 'one' } })
+  child.lua('_G.start_copy(...)', { top })
+  expect_pane_lines('commits', DEFAULT_VIEW)
+  git_repo.git(top, { 'branch', 'lonely' })
+  child.lua('_G.report(...)', {
+    { worktree = top, label = 'own', branches = { { name = 'lonely' } } },
+  })
+  git_repo.wait_until('the Reported section listed', function()
+    return pane_lines('commits')[1] == 'Reported'
+  end)
+
+  eq(git_runs_of_one_read(), 17)
+end
+
 --- Presses `s` in the commits window, waits until its picker opens, and
 --- picks the item at `position`.
 ---
