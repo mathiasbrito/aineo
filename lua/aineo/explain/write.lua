@@ -92,28 +92,26 @@ local OUT_OF_PLACE = {
 }
 
 --- What the user is told code that may edit the whole file, written for
---- each place (`aineo.explain.WritePlace`), must start with when its first
---- edit is not an edit of the lines asked about.
-local FIRST_OUT_OF_PLACE = {
-  below_line = 'its first edit must insert after the cursor’s line',
-  in_blank_line = 'its first edit must replace the cursor’s blank line',
-  in_request_lines = 'its first edit must replace the lines of the request',
+--- each place (`aineo.explain.WritePlace`), lacks when none of its edits is
+--- an edit of the lines asked about alone.
+local ANCHOR_MISSING = {
+  below_line = 'it has no edit that inserts after the cursor’s line',
+  in_blank_line = 'it has no edit that replaces the cursor’s blank line',
+  in_request_lines = 'it has no edit that replaces the lines of the request',
 }
 
 --- Why the code of `edits`, placed in the text sent, cannot be shown for
 --- `ask`, or `nil`: it must be one edit of exactly the lines `ask.first` to
---- `ask.last` (`out_of_place`, by the place, as the user is told it), and,
---- for code that goes below a line, its new lines must start with that
---- line, as it reads.
+--- `ask.last` (`OUT_OF_PLACE`), and, for code that goes below a line, its
+--- new lines must start with that line, as it reads.
 ---
 ---@param edits aineo.explain.PlacedEdit[]
 ---@param ask aineo.explain.WriteAsk
----@param out_of_place table<aineo.explain.WritePlace, string> `OUT_OF_PLACE` or `FIRST_OUT_OF_PLACE`
 ---@return string|nil
-local function fault_of(edits, ask, out_of_place)
+local function fault_of(edits, ask)
   local edit = edits[1]
   if #edits ~= 1 or edit.first ~= ask.first or edit.last ~= ask.last then
-    return out_of_place[ask.place]
+    return OUT_OF_PLACE[ask.place]
   end
   if ask.place == 'below_line' and edit.new[1] ~= edit.old[1] then
     return 'it must keep the cursor’s line as it is'
@@ -173,9 +171,7 @@ end
 ---@return aineo.explain.KeptCode? code
 local function placed_at_the_line_asked(asked, answered)
   local edits, refusal = placement.place(asked.lines, answered.edits)
-  local fault = blank_line_mismatch(answered.edits, asked)
-    or refusal
-    or fault_of(edits, asked.ask, OUT_OF_PLACE)
+  local fault = blank_line_mismatch(answered.edits, asked) or refusal or fault_of(edits, asked.ask)
   if fault then
     return fault
   end
@@ -186,28 +182,30 @@ end
 local MOST_EDITS = 20
 
 --- The index, in `edits`, placed in the order of their lines, of the edit
---- that starts on the line `first`. Raises an error when none does, which
---- `placed_in_the_whole_file()` rules out before it asks.
+--- of exactly the lines `ask.first` to `ask.last`, the lines asked about;
+--- `nil` when none is.
 ---
 ---@param edits aineo.explain.PlacedEdit[]
----@param first integer
----@return integer
-local function index_starting_at(edits, first)
+---@param ask aineo.explain.WriteAsk
+---@return integer|nil
+local function index_of_the_anchor(edits, ask)
   for index, edit in ipairs(edits) do
-    if edit.first == first then
+    if edit.first == ask.first and edit.last == ask.last then
       return index
     end
   end
-  error(('no edit starts on line %d'):format(first))
 end
 
 --- Why `answered`, code that may edit the whole file answered for `asked`,
 --- cannot be shown, or `nil`, with its edits placed in the lines sent
---- (`aineo.explain.placement`), the edit of the lines asked about in its
---- place (`in_its_place()`) and its index (`subject`): its first edit must
---- be that edit (`fault_of()`, `blank_line_mismatch()`), it may hold at
---- most `MOST_EDITS` edits, and the placement must take them all, which
---- refuses edits that share a line, with the reason.
+--- (`aineo.explain.placement`), in the order of their lines, the edit of
+--- the lines asked about in its place (`in_its_place()`) and its index
+--- (`subject`): it may hold at most `MOST_EDITS` edits, the placement must
+--- take them all, which refuses edits that share a line, and one of them,
+--- wherever it stands in the answer, must be the edit of the lines asked
+--- about alone (`index_of_the_anchor()`, `ANCHOR_MISSING`), checked as
+--- code at the line asked alone is (`fault_of()`,
+--- `blank_line_mismatch()`); with the reason.
 ---
 ---@param asked aineo.explain.WriteAsked
 ---@param answered aineo.explain.Fix
@@ -217,19 +215,19 @@ local function placed_in_the_whole_file(asked, answered)
   if #answered.edits > MOST_EDITS then
     return ('it holds more than %d edits'):format(MOST_EDITS)
   end
-  local first = { answered.edits[1] }
-  local first_placed, first_refusal = placement.place(asked.lines, first)
-  local fault = blank_line_mismatch(first, asked)
-    or first_refusal
-    or fault_of(first_placed, asked.ask, FIRST_OUT_OF_PLACE)
+  local edits, refusal = placement.place(asked.lines, answered.edits)
+  local fault = blank_line_mismatch(answered.edits, asked) or refusal
   if fault then
     return fault
   end
-  local edits, refusal = placement.place(asked.lines, answered.edits)
-  if not edits then
-    return refusal
+  local subject = index_of_the_anchor(edits, asked.ask)
+  if not subject then
+    return ANCHOR_MISSING[asked.ask.place]
   end
-  local subject = index_starting_at(edits, asked.ask.first)
+  fault = fault_of({ edits[subject] }, asked.ask)
+  if fault then
+    return fault
+  end
   edits[subject] = in_its_place(edits[subject], asked.ask)
   return nil, { summary = answered.summary, edits = edits, subject = subject }
 end

@@ -16,12 +16,12 @@ T159: `\WW` writes code as `\W` does, but the code may also change other places 
 
 ## Task lines
 
-- [X] T159 `\WW`, written code that may edit the whole file (D136, A662): the prompt's file-wide paragraph after the anchor's rules; the answer placed with the fix's placement, the anchor's edit first, at most 20, overlaps refused; each edit a proposal of its own (own keys row `write i/n`, stale and diffed on its own, chosen by the cursor's line else the last `]w`/`[w` move); accept one, accept-all as one undo step leaving the stale, reject one, reject-all, `\vc`; the proposal at the cursor brought into view; kept answers apart from `\W`'s; `<Plug>(aineo-write-file|accept-all|reject-all|next|previous)`; the keys table, health, help (*aineo-write-file*), README. Left open: see *Open threads*.
+- [X] T159 `\WW`, written code that may edit the whole file (D136, A662, A663): the prompt's file-wide paragraph after the anchor's rules; the answer placed with the fix's placement, the anchor's edit present wherever it stands (A663), at most 20, overlaps refused; the first `]w` to the anchor's proposal (A663); each edit a proposal of its own (own keys row `write i/n`, stale and diffed on its own, chosen by the cursor's line else the last `]w`/`[w` move); accept one, accept-all as one undo step leaving the stale, reject one, reject-all, `\vc`; the proposal at the cursor brought into view; kept answers apart from `\W`'s; `<Plug>(aineo-write-file|accept-all|reject-all|next|previous)`; the keys table, health, help (*aineo-write-file*), README. Left open: see *Open threads*.
 
 ## What was done, and why
 
 1. **The prompt** (`request.lua`): a request that may edit the whole file adds `WHOLE_FILE_RULES` after the rules of the anchor's edit — for a typed request below a line, on a blank line, and for the request's lines alike. `\W`'s prompt is byte for byte as before.
-2. **The answer** (`write.lua`, `placed_in_the_whole_file()`): more than 20 edits are refused first; the first edit alone must pass `\W`'s own checks (one edit of exactly the anchor's lines, the cursor's line kept, the blank-line rule) with its own words (`its first edit must …`); then every edit goes through the fix's `placement.place()`, which already refuses overlaps, lines the file lacks and old lines that stand nowhere or in several places. The anchor's edit keeps the blank-line rule's dropped leading copy (`in_its_place()`). `\W`'s path is `placed_at_the_line_asked()`, the old checks in one function.
+2. **The answer** (`write.lua`, `placed_in_the_whole_file()`): more than 20 edits are refused first; every edit goes through the fix's `placement.place()`, which already refuses overlaps, lines the file lacks and old lines that stand nowhere or in several places; then one of the placed edits, wherever it stands in the answer (A663), must be the edit of exactly the anchor's lines (`index_of_the_anchor()`, else `it has no edit that inserts after the cursor's line` or the like), and it passes `\W`'s own checks (the cursor's line kept, the blank-line rule). The proposals are numbered in the buffer's order. The anchor's edit keeps the blank-line rule's dropped leading copy (`in_its_place()`). `\W`'s path is `placed_at_the_line_asked()`, the old checks in one function.
 3. **Separate proposals** (`preview.lua`): a preview shown with `separate` draws a head row for each edit — `write 2/3 · read-only until \Wa accepts or \Wr rejects · \Wd shows the diff · ]w [w move · \WA accepts all · \WR rejects all` — marks each edit stale on its own (`add_proposals()`), shows a stale or diffed edit as a diff and the others as the overlay, in blocks of those that touch. `choose()` takes the edit whose lines hold the cursor's line, else the one `jump()` moved to last, else tells the user how to choose. `apply_chosen()`, `drop()`, `apply_all()` (every standing edit, lowest first, as one undo step) and `remove_edits()` (the last decided clears the preview, giving the buffer its 'modifiable' back). The request is named above the anchor's proposal (`subject_edit`), and that proposal is the one brought into view (`places.lead`), so D132 holds for `\WW` with the import far above. Every non-separate path is as it was.
 4. **The keys**: `\WW` in the keys table's Write section; `\WA`, `\WR`, `]w`, `[w` in "While a proposal shows"; `<Plug>(aineo-write-file)` in Normal and Visual mode with `\W`'s settings; `<Plug>(aineo-write-accept-all|reject-all|next|previous)`; the accept, reject and diff `<Plug>`s hand the cursor's line to the explain home. The buffer maps the four new keys only for separate proposals, never over a user's own.
 5. **Kept answers**: the kept key holds the scope, so `\W` and `\WW` never show each other's (A662 (4)).
@@ -35,6 +35,30 @@ T159: `\WW` writes code as `\W` does, but the code may also change other places 
 - **With `prefix = false`** none of the keys is mapped, `]w`/`[w` included, as for `\Wa`/`\Wr`/`\Wd`; the `<Plug>`s are there.
 - **`:Aineo write`** gets no word for `\WW`: A662 names none.
 - **The float** is titled `Write code that may change the whole file`.
+
+## A663 (A662 (2) clarified, before review)
+
+The first build refused an answer whose first edit was not the anchor's (my reading of A662 (2)'s "comes first", recorded as an open thread). A663 rules that the order never matters: the anchor's edit is the one placed at the anchor wherever it stands, the proposals are numbered top to bottom, and the first `]w` and the view go to the anchor's proposal.
+
+- **Red first**, `tests/test_explain_write_file.lua`:
+  - *the answer / is shown whatever the order of its edits, numbered from the top of the buffer* (the import listed before the anchor's edit): no keys row, the answer refused.
+  - *the answer refused* (anchorless): `its first edit must …` for `it has no edit that inserts after the cursor's line`.
+  - *moving / goes first to the proposal at the cursor's line asked about, from any line*: `1` for `3`.
+  - *moving / then goes to the first line of the next proposal …*: `{ 3, 1 }` for `{ 1, 3 }`.
+  - *choosing / takes the proposal last moved to …*: no import.
+- **Red first**, `tests/test_entry_write_file.lua`: *the keys / move between the proposals, wrapping*: `{ 1, 3, 1 }` for `{ 3, 1, 3 }`.
+- **The code**:
+  - `placed_in_the_whole_file()` places all the edits first, then finds the anchor's (`index_of_the_anchor()`, `ANCHOR_MISSING`). `FIRST_OUT_OF_PLACE` and `index_starting_at()` are gone, and `fault_of()` has its one table again.
+  - `preview.jump()`: the first move to the next proposal goes to `subject_edit`, the anchor's, while it shows (`moved`). `[w` is not changed, as A663 names `]w` alone.
+  - The help says the order does not matter, the numbering is from the top, and where the first `]w` goes.
+- **Mutants**, on the final tree, each killed by an assertion:
+  - MA1, the order checked again: `if answered.edits[1].line ~= asked.ask.first then return 'its first edit must insert after the cursor’s line' end` before the placement.
+  - MA2/MA2e: `if way == 'next' and not preview.moved then` → `if false then`.
+  - MA3: `if not subject then return ANCHOR_MISSING[…] end` → `subject = 1`.
+  - M9 again (its line is now `if shown == wanted then` → `if false then`).
+  - Run again because their code or cases changed: M2, M4a, M4b, M4e, M6, M10, M27, M28, M29, M30, M33.
+  - M1 is gone with the check it mutated; MA1 and MA3 take its place.
+- **Files run**: `test_explain_write_file`, `test_entry_write_file`, `test_explain_write` and `test_doc` green; `make lint` clean.
 
 ## Seen red
 
@@ -127,7 +151,7 @@ Each row is the literal edit, run against a copy of its test file narrowed to th
 
 ## Open threads
 
-- The first edit must be the anchor's as Claude Code answers it: an answer that puts the import first is refused whole (A662 (2)), though its edits would place. The refusal says so; the prompt says "after that first one".
+- The prompt still asks for the further edits "after that first one"; since A663 an answer in another order is shown all the same.
 - With proposals far apart, the window is brought to the anchor's proposal only; `]w`/`[w` reach the others.
 - An undo of an earlier accept is not possible until the last proposal is decided (the buffer is read-only, A632).
 

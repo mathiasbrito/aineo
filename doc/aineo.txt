@@ -2254,19 +2254,23 @@ local import inside a function or a branch when the file imports at the top;
 no two edits share a line; there are at most 20; no other file is edited.
 
 aineo places every edit as it places a fix's, byte for byte, and refuses the
-whole answer, telling you why, once, and showing nothing, when its first edit
-is not the edit of the cursor's line or of the request's lines, placed as
-`\W` places it, when two edits share a line, when an edit names lines the
-file does not have or old lines that stand nowhere, or when it holds more
-than 20 edits.
+whole answer, telling you why, once, and showing nothing, when none of its
+edits is the edit of the cursor's line or of the request's lines, placed as
+`\W` places it (`aineo: the written code was refused: it has no edit that
+inserts after the cursor's line`, or the like), when two edits share a line,
+when an edit names lines the file does not have or old lines that stand
+nowhere, or when it holds more than 20 edits. The order of the edits in the
+answer does not matter.
 
 Each edit shows as a proposal of its own, as written code does, with its own
-head row naming its place among them and its keys: `write 1/2 · read-only
-until \Wa accepts or \Wr rejects · \Wd shows the diff · ]w [w move · \WA
-accepts all · \WR rejects all`; the request is named above the proposal at
-the cursor's line or the request's lines, which is the one brought into view.
-`]w` and `[w` move the cursor to the first line of the next and the previous
-proposal, from the last to the first and back. `\Wa`, `\Wr` and `\Wd` act on
+head row naming its place among them, counted from the top of the buffer,
+and its keys: `write 1/2 · read-only until \Wa accepts or \Wr rejects · \Wd
+shows the diff · ]w [w move · \WA accepts all · \WR rejects all`; the request
+is named above the proposal at the cursor's line or the request's lines,
+which is the one brought into view. The first `]w` moves the cursor to that
+proposal, wherever the cursor is; after it, and for `[w`, `]w` and `[w` move
+the cursor to the first line of the next and the previous proposal, from the
+last to the first and back. `\Wa`, `\Wr` and `\Wd` act on
 the proposal whose lines hold the cursor, else on the one `]w` or `[w` moved
 to last, else they tell you `aineo: no written code is chosen: put the cursor
 on its lines, or move to it with ]w or [w`. `\WA` accepts every proposal left
