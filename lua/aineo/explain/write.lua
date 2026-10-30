@@ -29,6 +29,7 @@ local M = {}
 ---@field keys? aineo.explain.FixKeys the keys the preview maps; none when absent
 ---@field ask_key string what asks for code again, as the user is told it
 ---@field brief? string[] what else Claude Code is shown, each a part of the prompt of its own
+---@field title? string what the float that asks for the request says it does; as for `\w`, `\W` or `\WW` when absent
 
 --- Where code written for a request goes: below the line asked about
 --- (`below_line`) or in its place when it is blank (`in_blank_line`), for a
@@ -544,12 +545,15 @@ local PLAIN_TITLE = 'Write code'
 local WHOLE_FILE_TITLE = 'Write code that may change the whole file'
 
 --- What the float in which the user types the request `writing` asks says
---- it does: `WHOLE_FILE_TITLE`, the title of a request that reads the
---- project, or `PLAIN_TITLE`.
+--- it does: `writing.title` when given, else `WHOLE_FILE_TITLE`, the title
+--- of a request that reads the project, or `PLAIN_TITLE`.
 ---
 ---@param writing aineo.explain.WriteRequest
 ---@return string
 local function title_of(writing)
+  if writing.title then
+    return writing.title
+  end
   if writing.whole_file then
     return WHOLE_FILE_TITLE
   end

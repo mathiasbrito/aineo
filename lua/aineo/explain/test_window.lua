@@ -318,4 +318,31 @@ function M.correct_file(window)
   end)
 end
 
+--- The window that shows the source at `path`, whose test the user asks
+--- code for in `window`: a window of the tab page that shows it already;
+--- else the window of the source above `window` when it is a test window,
+--- made to show it; else a new window above `window`. The source not on
+--- disk shows as an empty buffer of its name, which nothing writes.
+---
+---@param window integer
+---@param path string
+---@return integer source_window
+function M.show_source(window, path)
+  local buffer = buffer_of(path)
+  local showing = vim
+    .iter(vim.api.nvim_tabpage_list_wins(vim.api.nvim_win_get_tabpage(window)))
+    :find(function(shown_in)
+      return vim.api.nvim_win_get_buf(shown_in) == buffer
+    end)
+  if showing then
+    return showing
+  end
+  local source_window = source_window_of(window)
+  if source_window and source_window ~= window then
+    vim.api.nvim_win_set_buf(source_window, buffer)
+    return source_window
+  end
+  return vim.api.nvim_open_win(buffer, false, { split = 'above', win = window })
+end
+
 return M
