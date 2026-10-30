@@ -54,19 +54,20 @@ local RECORD = vim.fs.joinpath(
 
 --- Starts the child with `CODE`, asks for code below line 3 of it with
 --- the request typed, the fake `claude` answering `answer`, the code
---- allowed to edit the whole file when `whole_file` says so, and waits
---- for the proposal.
+--- allowed to edit the whole file when `whole_file` says so, Claude Code
+--- shown `brief` too when given, and waits for the proposal.
 ---
 ---@param answer table
 ---@param whole_file boolean
-local function propose(answer, whole_file)
+---@param brief? string[] what else the request shows Claude Code
+local function propose(answer, whole_file, brief)
   explained.start(child, 'explain-refine', CODE, { claude = { cmd = explained.FAKE_CLAUDE } })
   child.o.columns = 200
   explained.answer_with(child, answer)
   child.cmd('3')
   child.lua(
     [[
-    local command, keys, whole_file = ...
+    local command, keys, whole_file, brief = ...
     require('aineo.explain').propose_write({
       buffer = vim.api.nvim_get_current_buf(),
       window = vim.api.nvim_get_current_win(),
@@ -78,9 +79,10 @@ local function propose(answer, whole_file)
       timeout_ms = 180000,
       keys = keys,
       ask_key = '\\w',
+      brief = brief,
     })
   ]],
-    { explained.FAKE_CLAUDE, tested.KEYS, whole_file }
+    { explained.FAKE_CLAUDE, tested.KEYS, whole_file, brief }
   )
   child.api.nvim_buf_set_lines(0, 0, -1, false, { 'Sort the values.' })
   tested.press(child, '<CR>')
@@ -202,6 +204,38 @@ T['refining']['after one proposal is accepted, replaces only those left'] = func
   eq(prompt_of(2):find('Lines 4 to 4, replacing:', 1, true) ~= nil, true)
   eq(drawn:find('sorted(values)', 1, true), nil)
   eq(child.api.nvim_buf_get_lines(0, 0, 1, false), { "local sorted = require('sorted')" })
+end
+
+T['refining']['keeps what else the first request showed Claude Code'] = function()
+  propose(SORTED, false, { 'The source the tests test reads: nothing.' })
+
+  refine('Sort in place.', SORTED_IN_PLACE)
+
+  eq(prompt_of(2):find('The source the tests test reads: nothing.', 1, true) ~= nil, true)
+end
+
+T['refining']['is stopped, and told, when a proposal is decided meanwhile'] = function()
+  propose(
+    { summary = 'Sorts.', edits = { below_line_3('  values = sorted(values)'), IMPORTING } },
+    true
+  )
+  child.lua('vim.env.AINEO_FAKE_CLAUDE_PRINT_MS = "3000"')
+  refine('Sort in place.', SORTED_IN_PLACE)
+
+  child.lua([[require('aineo.explain').reject_fix(vim.api.nvim_get_current_buf(), 'write', 1)]])
+
+  eq(
+    child.lua_get([[#vim.api.nvim_buf_get_extmarks(0,
+    vim.api.nvim_create_namespace('aineo_explain_write'), 0, -1, {})]]),
+    0
+  )
+  eq(
+    vim.tbl_contains(
+      tested.told(child),
+      'aineo: the refinement was stopped: a proposal was decided'
+    ),
+    true
+  )
 end
 
 T['refining']['tells the user when no written code is shown'] = function()

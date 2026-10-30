@@ -6,8 +6,8 @@
 local M = {}
 
 --- The ends of the names of treesitter nodes that define something, such
---- as `function_definition` or `class_declaration`.
-local DEFINING_ENDS = { '_definition$', '_declaration$', '_item$' }
+--- as `function_definition`, `class_declaration` or C's `struct_specifier`.
+local DEFINING_ENDS = { '_definition$', '_declaration$', '_item$', '_specifier$' }
 
 --- Words in the name of a node that defines a function or a method.
 local FUNCTION_WORDS = { 'function', 'method', 'constructor' }
@@ -114,16 +114,32 @@ local STATEMENTS = {
   ['return'] = true,
   ['else'] = true,
   catch = true,
+  raise = true,
+  await = true,
+  yield = true,
+  assert = true,
+  throw = true,
 }
 
---- Whether `text`, a line, starts a definition: its first word past any
---- modifier is a defining word, or it reads as a C-like signature, a type
---- and a name and its parameters, opening a body or not, that starts with
---- no statement's word.
+--- The patterns of the lines that start a definition in Python, which
+--- starts one with these words alone.
+local PYTHON_DEFINITIONS = { '^%s*def%s', '^%s*async%s+def%s', '^%s*class[%s:(]' }
+
+--- Whether `text`, a line of a file in `language`, its `'filetype'`,
+--- starts a definition: in Python, a line of `PYTHON_DEFINITIONS`; else
+--- when its first word past any modifier is a defining word, or when it
+--- reads as a C-like signature, a type and a name and its parameters,
+--- opening a body or not, that starts with no statement's word.
 ---
 ---@param text string
+---@param language string
 ---@return boolean
-local function starts_a_definition(text)
+local function starts_a_definition(text, language)
+  if language == 'python' then
+    return vim.iter(PYTHON_DEFINITIONS):any(function(pattern)
+      return text:find(pattern) ~= nil
+    end)
+  end
   for word in text:gmatch('[%a_]+') do
     if DEFINING_WORDS[word] then
       return true
@@ -156,20 +172,22 @@ local function is_blank(text)
 end
 
 --- The line, from 1, of the definition that holds the line `line` of
---- `lines`: the line itself when it starts one (`starts_a_definition()`),
---- else the nearest above it that does and is indented less than every
---- line between, `line` included; `nil` when none is.
+--- `lines`, a file in `language`: the line itself when it starts one
+--- (`starts_a_definition()`), else the nearest above it that does and is
+--- indented less than every line between, `line` included; `nil` when
+--- none is.
 ---
 ---@param lines string[]
 ---@param line integer
+---@param language string the file's `'filetype'`
 ---@return integer|nil
-local function definition_above(lines, line)
+local function definition_above(lines, line, language)
   local ceiling = is_blank(lines[line]) and math.huge or indent_of(lines[line])
   for index = line, 1, -1 do
     local text = lines[index]
     if not is_blank(text) then
       local indent = indent_of(text)
-      if starts_a_definition(text) and (index == line or indent < ceiling) then
+      if starts_a_definition(text, language) and (index == line or indent < ceiling) then
         return index
       end
       ceiling = math.min(ceiling, indent)
@@ -215,7 +233,7 @@ end
 ---@return integer[]|nil
 local function from_the_indentation(buffer, line)
   local lines = vim.api.nvim_buf_get_lines(buffer, 0, -1, false)
-  local first = definition_above(lines, line)
+  local first = definition_above(lines, line, vim.bo[buffer].filetype)
   if not first then
     return nil
   end
