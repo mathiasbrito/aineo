@@ -95,11 +95,52 @@ end
 --- characters.
 local LONGEST_TEXT = 64
 
+--- The characters free text may not hold, as UTF-8 patterns: the C0
+--- controls (NUL and the line breaks among them) and DEL; the C1 controls
+--- (NEL among them); the zero-width characters U+200B–U+200F, the line and
+--- paragraph separators U+2028 and U+2029 and the bidirectional embeddings
+--- U+202A–U+202E; the bidirectional isolates U+2066–U+2069; and U+FEFF.
+local CONTROLS = {
+  '[%c\127]',
+  '\194[\128-\159]',
+  '\226\128[\139-\143\168-\174]',
+  '\226\129[\166-\169]',
+  '\239\187\191',
+}
+
+--- Whether `value` is valid UTF-8: each lead byte followed by as many
+--- continuation bytes as it announces, no overlong two-byte form.
+---
+---@param value string
+---@return boolean
+local function is_utf8(value)
+  local at = 1
+  while at <= #value do
+    local byte = value:byte(at)
+    local length = byte < 0x80 and 1
+      or (byte >= 0xC2 and byte < 0xE0) and 2
+      or (byte >= 0xE0 and byte < 0xF0) and 3
+      or (byte >= 0xF0 and byte < 0xF5) and 4
+      or nil
+    if not length then
+      return false
+    end
+    for next_at = at + 1, at + length - 1 do
+      local continuation = value:byte(next_at)
+      if not continuation or continuation < 0x80 or continuation > 0xBF then
+        return false
+      end
+    end
+    at = at + length
+  end
+  return true
+end
+
 --- Why `value`, the free text an agent gives as a rule's `kind` or a
---- `framework`, is refused: no string, longer than 64 characters, or
---- holding a control character, a line break among them; nil when it is
+--- `framework`, is refused: no string, holding a character `CONTROLS`
+--- names, not valid UTF-8, or longer than 64 characters; nil when it is
 --- accepted. It reaches the user's window bar and the prompts of written
---- tests.
+--- tests. It never raises.
 ---
 ---@param value any
 ---@return string?
@@ -107,11 +148,16 @@ function M.text_problem(value)
   if type(value) ~= 'string' then
     return 'expected a string'
   end
+  for _, control in ipairs(CONTROLS) do
+    if value:find(control) then
+      return 'holds a control character'
+    end
+  end
+  if not is_utf8(value) then
+    return 'not valid UTF-8'
+  end
   if vim.fn.strchars(value) > LONGEST_TEXT then
     return ('longer than %d characters'):format(LONGEST_TEXT)
-  end
-  if value:find('[%c\127]') or value:find('\194[\128-\159]') then
-    return 'holds a control character'
   end
   return nil
 end

@@ -321,11 +321,12 @@ local function placeholder_problem(template)
 end
 
 --- Why `template` is refused, in words, or nil when it is accepted: it is
---- empty, longer than 256 characters, could reach out of the repository or
---- into its `.git` folder — an absolute path, a `..`, `.` or `.git`
---- segment, a `~` — uses another separator than `/`, has an empty segment
---- or a trailing `/`, a brace of no placeholder, two placeholders side by
---- side, an empty placeholder or an unknown modifier, or a `{unit}` that
+--- empty, longer than 256 characters, holds a control character, could
+--- reach out of the repository or into its `.git` folder — an absolute
+--- path, a `..`, `.` or `.git` segment (any letter case), a `~` — uses
+--- another separator than `/`, has an empty segment or a trailing `/`, a
+--- brace of no placeholder, two placeholders side by side, one given
+--- twice, an empty placeholder or an unknown modifier, or a `{unit}` that
 --- does not begin it.
 ---
 ---@param template string

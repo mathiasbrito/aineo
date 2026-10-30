@@ -1,6 +1,7 @@
---- The text by which a test file of each language names the source it
---- tests — an import, an include — searched for when no template pairs
---- the source with a test file.
+--- How a test file of each language imports the sources it tests — an
+--- import, an include — read both ways: the test files that import a
+--- source, when no template pairs it with one, and the sources a test file
+--- imports, when no rule gives it a source.
 
 local M = {}
 
@@ -19,14 +20,31 @@ local SCRIPT_FAMILY = {
   cts = true,
 }
 
+--- The extensions of the Go sources.
+local GO_FAMILY = { go = true }
+
 --- The headers a C or C++ source may be included by.
-local HEADER_EXTENSIONS = { 'h', 'hpp', 'hh' }
+local HEADER_EXTENSIONS = { h = true, hpp = true, hh = true }
+
+--- `path` without its extension, and the extension; the path whole and nil
+--- when its file name has none.
+---
+---@param path string
+---@return string without
+---@return string? extension
+local function split_extension(path)
+  local without, extension = path:match('^(.*[^/])%.([^./]+)$')
+  if not without then
+    return path, nil
+  end
+  return without, extension
+end
 
 --- The fixed strings to search for the test files that may import `path`,
 --- a source relative to the root of its unit, by language: the stem for
 --- Python, Java, JavaScript and TypeScript, the end of a Go import path
 --- (`<package folder>"`), the stem's headers for C and C++; none for
---- another language. Each line found is then read by `imports()`.
+--- another language. Each file found is then read by `imports()`.
 ---
 ---@param path string
 ---@return string[]
@@ -43,123 +61,9 @@ function M.patterns(path)
     return folder ~= '.' and { vim.fs.basename(folder) .. '"' } or {}
   end
   if C_FAMILY[extension] then
-    return vim.tbl_map(function(header)
-      return stem .. '.' .. header
-    end, HEADER_EXTENSIONS)
+    return { stem .. '.h', stem .. '.hpp', stem .. '.hh' }
   end
   return {}
-end
-
---- The names `line` imports in a Python `import a, b as c` or `from m
---- import x, y as z`: the module of `from`, if any, and each name listed.
----
----@param line string
----@return string? from
----@return string[] names
-local function python_import(line)
-  local from, listed = line:match('^%s*from%s+([%w_%.]+)%s+import%s+(.+)$')
-  listed = listed or line:match('^%s*import%s+(.+)$')
-  if not listed then
-    return nil, {}
-  end
-  local names = {}
-  for item in listed:gsub('[()]', ''):gmatch('[^,]+') do
-    local name = vim.trim(item):match('^([%w_%.]+)')
-    if name then
-      table.insert(names, name)
-    end
-  end
-  return from, names
-end
-
---- Whether `line` of a Python test imports the module `module` (`a.b.mod`):
---- `import a.b.mod`, `from a.b.mod import …`, or `from a.b import mod`.
----
----@param module string
----@param line string
----@return boolean
-local function python_imports_module(module, line)
-  local from, names = python_import(line)
-  if from == module then
-    return true
-  end
-  local package, stem = module:match('^(.*)%.([^.]+)$')
-  for _, name in ipairs(names) do
-    if (not from and name == module) or (from and from == package and name == stem) then
-      return true
-    end
-  end
-  return false
-end
-
---- The specifiers `line` of a JavaScript or TypeScript test imports or
---- requires.
----
----@param line string
----@return string[]
-local function script_specifiers(line)
-  local found = {}
-  for _, pattern in ipairs({
-    'from%s*[\'"]([^\'"]+)[\'"]',
-    'require%(%s*[\'"]([^\'"]+)[\'"]',
-    'import%s*%(?%s*[\'"]([^\'"]+)[\'"]',
-  }) do
-    for specifier in line:gmatch(pattern) do
-      table.insert(found, specifier)
-    end
-  end
-  return found
-end
-
---- Whether `line`, a line of a test file, imports `path`, a source relative
---- to the root of its unit, as its language reads an import: Python `import
---- a.b.mod`, `from a.b.mod import`, `from a.b import mod` (`src/` dropped
---- from the module); Go an import path whose last folder is the source's
---- folder; Java `import p.Foo;` or the class's name as a whole word; C and
---- C++ an `#include` of the stem's header, `name.h` or `…/name.h` (`.h`,
---- `.hpp`, `.hh`); JavaScript and TypeScript an import or `require` whose
---- last segment is the stem, with or without an extension.
----
----@param path string
----@param line string
----@return boolean
-function M.imports(path, line)
-  local stem, extension = vim.fs.basename(path):match('^(.+)%.([^.]+)$')
-  if not stem then
-    return false
-  end
-  if extension == 'py' then
-    local module = path:gsub('^src/', ''):gsub('%.py$', ''):gsub('/', '.')
-    return python_imports_module(module, line)
-  end
-  if extension == 'go' then
-    local folder = vim.fs.basename(vim.fs.dirname(path))
-    for import in line:gmatch('"([^"]+)"') do
-      if vim.fs.basename(import) == folder then
-        return true
-      end
-    end
-    return false
-  end
-  if extension == 'java' then
-    return line:find('%f[%w_]' .. vim.pesc(stem) .. '%f[^%w_]') ~= nil
-  end
-  if C_FAMILY[extension] then
-    local included = line:match('^%s*#%s*include%s*["<]([^">]+)[">]')
-    return included ~= nil
-      and vim.iter(HEADER_EXTENSIONS):any(function(header)
-        local name = stem .. '.' .. header
-        return included == name or vim.endswith(included, '/' .. name)
-      end)
-  end
-  if SCRIPT_FAMILY[extension] then
-    return vim.iter(script_specifiers(line)):any(function(specifier)
-      local last = vim.fs.basename(specifier)
-      local without = last:match('^(.+)%.([^.]+)$')
-      return last == stem or (without == stem and SCRIPT_FAMILY[last:match('%.([^.]+)$')] == true)
-    end)
-  end
-  return false
 end
 
 --- The extensions a source of the same language as a file of `extension`
@@ -179,45 +83,69 @@ function M.family(extension)
 end
 
 --- A source a test file imports, as the test file names it: a path the
---- source's path ends with, a stem, a folder, or a path without its
---- extension; with the extensions it may have, for the last three.
+--- source's path ends with, a folder, a path without its extension, or an
+--- include, written and resolved; with the extensions it may have.
 ---@class aineo.test_layout.Imported
 ---@field ends_with? string a path relative to some folder, its extension included
----@field stem? string the source's file name without its extension
 ---@field folder? string the name of the source's folder
 ---@field without_extension? string the source's path from the repository's root, without its extension
+---@field included? string the path a quoted `#include` names, without its extension
+---@field resolved? string that path from the test's folder, without its extension
 ---@field extensions? table<string, true>
 
---- The extensions of the Go sources.
-local GO_FAMILY = { go = true }
-
---- The sources a Python test file's `import` and `from … import` lines
---- name, by dotted module; a relative import names none.
+--- The modules a Python test imports: `import a.b, c` names `a/b.py` and
+--- `c.py`; `from m import x, y` names `m.py`, `m/x.py` and `m/y.py`; a
+--- relative import names none.
 ---
 ---@param text string
 ---@return aineo.test_layout.Imported[]
 local function python_imports(text)
   local found = {}
-  for line in vim.gsplit(text, '\n', { plain = true }) do
-    local module = line:match('^%s*from%s+([%w_%.]+)%s+import')
-      or line:match('^%s*import%s+([%w_%.]+)')
-    if module and not vim.startswith(module, '.') then
+  local function add(module)
+    if module ~= '' and not vim.startswith(module, '.') then
       table.insert(found, { ends_with = module:gsub('%.', '/') .. '.py' })
+    end
+  end
+  for line in vim.gsplit(text, '\n', { plain = true }) do
+    local from, listed = line:match('^%s*from%s+([%w_%.]+)%s+import%s+(.+)$')
+    listed = listed or line:match('^%s*import%s+(.+)$')
+    if from and not vim.startswith(from, '.') then
+      add(from)
+    end
+    for item in (listed or ''):gsub('[()]', ''):gmatch('[^,]+') do
+      local name = vim.trim(item):match('^([%w_%.]+)')
+      if name and from and not vim.startswith(from, '.') then
+        add(from .. '.' .. name)
+      elseif name and not from then
+        add(name)
+      end
     end
   end
   return found
 end
 
---- The packages a Go test file imports, each by the last folder of its
---- import path.
+--- The packages a Go test imports — on an `import "…"` line, or a line of
+--- an `import ( … )` block — each by the last folder of its import path. A
+--- quoted string anywhere else names none.
 ---
 ---@param text string
 ---@return aineo.test_layout.Imported[]
 local function go_imports(text)
   local found = {}
+  local in_block = false
   for line in vim.gsplit(text, '\n', { plain = true }) do
-    local path = line:match('^%s*import%s+[%w_%.]*%s*"([^"]+)"')
-      or line:match('^%s*[%w_%.]*%s*"([^"]+)"%s*$')
+    local path
+    if in_block then
+      if line:match('^%s*%)') then
+        in_block = false
+      else
+        path = line:match('^%s*[%w_%.]*%s*"([^"]+)"')
+      end
+    elseif line:match('^%s*import%s*%(') then
+      in_block = true
+    else
+      path = line:match('^%s*import%s+[%w_%.]*%s*"([^"]+)"')
+    end
     if path then
       table.insert(found, { folder = vim.fs.basename(path), extensions = GO_FAMILY })
     end
@@ -225,7 +153,7 @@ local function go_imports(text)
   return found
 end
 
---- The classes a Java test file imports, each by its path; a static import
+--- The classes a Java test imports, each by its path; a static import
 --- names none.
 ---
 ---@param text string
@@ -241,23 +169,33 @@ local function java_imports(text)
   return found
 end
 
---- The headers a C or C++ test file includes in quotes, each by its stem,
---- with the sources and headers of that stem.
+--- The headers a C or C++ test at `test` includes in quotes, each as
+--- written and resolved from the test's folder, without its extension; an
+--- include in angle brackets names none.
 ---
+---@param test string
 ---@param text string
 ---@return aineo.test_layout.Imported[]
-local function c_includes(text)
+local function c_includes(test, text)
   local found = {}
-  for header in text:gmatch('#%s*include%s*"([^"]+)"') do
-    local stem = vim.fs.basename(header):match('^(.+)%.[^.]+$') or vim.fs.basename(header)
-    table.insert(found, { stem = stem, extensions = C_FAMILY })
+  for line in vim.gsplit(text, '\n', { plain = true }) do
+    local header = line:match('^%s*#%s*include%s*"([^"]+)"')
+    local included, extension = split_extension(header or '')
+    if header and HEADER_EXTENSIONS[extension] then
+      table.insert(found, {
+        included = included,
+        resolved = vim.fs.normalize(vim.fs.joinpath(vim.fs.dirname(test), included)),
+        extensions = C_FAMILY,
+      })
+    end
   end
   return found
 end
 
---- The modules a JavaScript or TypeScript test file at `test` imports or
---- requires by a relative path, each resolved from the test's folder,
---- without its extension.
+--- The modules a JavaScript or TypeScript test at `test` imports or
+--- requires by a relative path (`./`, `../`), each resolved from the test's
+--- folder, without its extension; a bare specifier, a package or a
+--- built-in, names none.
 ---
 ---@param test string
 ---@param text string
@@ -265,32 +203,32 @@ end
 local function script_imports(test, text)
   local found = {}
   local function add(specifier)
-    if vim.startswith(specifier, '.') then
+    if vim.startswith(specifier, './') or vim.startswith(specifier, '../') then
       local path = vim.fs.normalize(vim.fs.joinpath(vim.fs.dirname(test), specifier))
-      local extension = path:match('%.([^./]+)$')
-      if extension and SCRIPT_FAMILY[extension] then
-        path = path:sub(1, -#extension - 2)
-      end
-      table.insert(found, { without_extension = path, extensions = SCRIPT_FAMILY })
+      local without, extension = split_extension(path)
+      table.insert(found, {
+        without_extension = SCRIPT_FAMILY[extension or ''] and without or path,
+        extensions = SCRIPT_FAMILY,
+      })
     end
   end
-  for specifier in text:gmatch('from%s*[\'"]([^\'"]+)[\'"]') do
-    add(specifier)
-  end
-  for specifier in text:gmatch('require%(%s*[\'"]([^\'"]+)[\'"]') do
-    add(specifier)
-  end
-  for specifier in text:gmatch('import%s*[\'"]([^\'"]+)[\'"]') do
-    add(specifier)
+  for _, pattern in ipairs({
+    'from%s*[\'"]([^\'"]+)[\'"]',
+    'require%(%s*[\'"]([^\'"]+)[\'"]',
+    'import%s*%(?%s*[\'"]([^\'"]+)[\'"]',
+  }) do
+    for specifier in text:gmatch(pattern) do
+      add(specifier)
+    end
   end
   return found
 end
 
 --- The sources `text`, the text of the test file at `test` (relative to
---- the repository's root), imports, as its language reads them: Python's
---- modules, Go's packages, Java's classes, the headers C and C++ include in
---- quotes, the relative imports of JavaScript and TypeScript; none for
---- another language. The reverse of `patterns()`.
+--- the repository's root), imports, as its language writes an import:
+--- Python's modules, Go's packages, Java's classes, the headers C and C++
+--- include in quotes, the relative imports of JavaScript and TypeScript;
+--- none for another language.
 ---
 ---@param test string
 ---@param text string
@@ -307,7 +245,7 @@ function M.imported(test, text)
     return java_imports(text)
   end
   if C_FAMILY[extension] then
-    return c_includes(text)
+    return c_includes(test, text)
   end
   if SCRIPT_FAMILY[extension] then
     return script_imports(test, text)
@@ -316,26 +254,50 @@ function M.imported(test, text)
 end
 
 --- Whether `path`, a file relative to the repository's root, is the source
---- `imported` names.
+--- `imported` names: its path ends with the path named; or it is of the
+--- extensions named and is in the folder named, is the path named without
+--- its extension or that folder's `index`, or is the header included,
+--- resolved from the test's folder or ending the source's path.
 ---
 ---@param path string
 ---@param imported aineo.test_layout.Imported
 ---@return boolean
 function M.is_imported(path, imported)
-  local stem, extension = vim.fs.basename(path):match('^(.+)%.([^.]+)$')
   if imported.ends_with then
     return path == imported.ends_with or vim.endswith(path, '/' .. imported.ends_with)
   end
+  local without, extension = split_extension(path)
   if not (extension and imported.extensions[extension]) then
     return false
-  end
-  if imported.stem then
-    return stem == imported.stem
   end
   if imported.folder then
     return vim.fs.basename(vim.fs.dirname(path)) == imported.folder
   end
-  return path:sub(1, -#extension - 2) == imported.without_extension
+  if imported.included then
+    return without == imported.resolved
+      or without == imported.included
+      or vim.endswith(without, '/' .. imported.included)
+  end
+  return without == imported.without_extension or without == imported.without_extension .. '/index'
+end
+
+--- Whether the test file at `test`, of text `text`, imports `source`, both
+--- relative to the repository's root (`imported()`, `is_imported()`); a
+--- Java test also when it names the source's class as a whole word, as a
+--- test of the same package does without an import.
+---
+---@param source string
+---@param test string
+---@param text string
+---@return boolean
+function M.imports(source, test, text)
+  local stem, extension = vim.fs.basename(source):match('^(.+)%.([^.]+)$')
+  if extension == 'java' and text:find('%f[%w_]' .. vim.pesc(stem) .. '%f[^%w_]') then
+    return true
+  end
+  return vim.iter(M.imported(test, text)):any(function(imported)
+    return M.is_imported(source, imported)
+  end)
 end
 
 return M

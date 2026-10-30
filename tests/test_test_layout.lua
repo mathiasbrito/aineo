@@ -387,6 +387,42 @@ T['declare()']['refuses the rules, keeping none, naming the field at fault'] = M
       'rules[1].framework: holds a control character',
     },
     {
+      { { source = '{name}.py', test = 'x', kind = 'unit\0e2e' } },
+      'rules[1].kind: holds a control character',
+    },
+    {
+      { { source = '{name}.py', test = 'x', kind = 'unit\194\133e2e' } },
+      'rules[1].kind: holds a control character',
+    },
+    {
+      { { source = '{name}.py', test = 'x', kind = 'unit\226\128\168e2e' } },
+      'rules[1].kind: holds a control character',
+    },
+    {
+      { { source = '{name}.py', test = 'x', kind = 'unit\226\128\169e2e' } },
+      'rules[1].kind: holds a control character',
+    },
+    {
+      { { source = '{name}.py', test = 'x', kind = 'unit\226\128\174e2e' } },
+      'rules[1].kind: holds a control character',
+    },
+    {
+      { { source = '{name}.py', test = 'x', kind = 'unit\226\129\166e2e' } },
+      'rules[1].kind: holds a control character',
+    },
+    {
+      { { source = '{name}.py', test = 'x', kind = 'unit\226\128\139e2e' } },
+      'rules[1].kind: holds a control character',
+    },
+    {
+      { { source = '{name}.py', test = 'x', kind = 'unit\239\187\191e2e' } },
+      'rules[1].kind: holds a control character',
+    },
+    {
+      { { source = '{name}.py', test = 'x', framework = 'py\255test' } },
+      'rules[1].framework: not valid UTF-8',
+    },
+    {
       { { preset = 'python.pytest.flat', kind = ('u'):rep(65) } },
       'rules[1].kind: longer than 64 characters',
     },
@@ -498,6 +534,33 @@ T['declare()']['takes a worktree of a repository the editor has open from anothe
   )
 
   eq(answer.is_error, false)
+end
+
+T['reading'] = MiniTest.new_set()
+
+T['reading']['leaves a file over 1 MiB unread'] = function()
+  local top = repository_holding({
+    ['src/a.js'] = {},
+    ['package.json'] = { ('x'):rep(1024 * 1024), '"jest"' },
+  })
+
+  local line = test_layout.describe(vim.fs.joinpath(top, 'src/a.js'))
+
+  eq(line, 'js.jest.colocated, from the default')
+end
+
+T['reading']['leaves a link to a pipe unread'] = function()
+  local top = repository_holding({ ['src/a.js'] = {} })
+  vim.system({ 'mkfifo', vim.fs.joinpath(top, 'pipe') }):wait()
+  assert(
+    vim.uv.fs_symlink(vim.fs.joinpath(top, 'pipe'), vim.fs.joinpath(top, 'package.json')),
+    'cannot link'
+  )
+  test_layout.forget(top)
+
+  local line = test_layout.describe(vim.fs.joinpath(top, 'src/a.js'))
+
+  eq(line, 'js.jest.colocated, from the default')
 end
 
 T['C++'] = MiniTest.new_set()
@@ -652,10 +715,15 @@ T['a kept rule aineo cannot read']['costs each call little, whatever an older ai
   local started = vim.uv.hrtime()
 
   test_layout.test_for(source)
+  local found = milliseconds_since(started)
+  started = vim.uv.hrtime()
   test_layout.is_test(source)
+  local told = milliseconds_since(started)
+  started = vim.uv.hrtime()
   test_layout.describe(source)
+  local described = milliseconds_since(started)
 
-  eq((vim.uv.hrtime() - started) / 1e6 < 100, true)
+  eq({ found < 100, told < 100, described < 100 }, { true, true, true })
 end
 
 T['a kept rule aineo cannot read']['is named among the rules in force, too costly to match'] = function()
@@ -748,6 +816,56 @@ T['the text fallback']['leaves a test that names another module alike'] = MiniTe
   parametrize = {
     {
       {
+        ['go.mod'] = { 'module example.com/m' },
+        ['util/strings.go'] = {},
+        ['server/server.go'] = {},
+        ['server/server_test.go'] = { 'func TestX(t *testing.T) {', '\tt.Run("util", nil)', '}' },
+      },
+      'util/strings.go',
+      'util/strings_test.go',
+    },
+    {
+      {
+        ['package.json'] = { '{}' },
+        ['src/util.ts'] = {},
+        ['src/other.ts'] = {},
+        ['src/other.test.ts'] = { "import { format } from 'util';" },
+      },
+      'src/util.ts',
+      'src/util.test.ts',
+    },
+    {
+      {
+        ['package.json'] = { '{}' },
+        ['src/a/types.ts'] = {},
+        ['src/b/types.ts'] = {},
+        ['src/b/types.test.ts'] = { "import { t } from './types';" },
+      },
+      'src/a/types.ts',
+      'src/a/types.test.ts',
+    },
+    {
+      {
+        ['project.yml'] = {},
+        ['src/time.c'] = {},
+        ['src/list.c'] = {},
+        ['test/test_list.c'] = { '#include <time.h>' },
+      },
+      'src/time.c',
+      'test/test_time.c',
+    },
+    {
+      {
+        ['conftest.py'] = {},
+        ['app.py'] = {},
+        ['main.py'] = {},
+        ['tests/test_main.py'] = { 'from main import app' },
+      },
+      'app.py',
+      'tests/test_app.py',
+    },
+    {
+      {
         ['conftest.py'] = {},
         ['app.py'] = {},
         ['models.py'] = {},
@@ -824,6 +942,97 @@ T['a place']['exists when the file is on disk, though git ignores it'] = functio
   local place = test_layout.test_for(vim.fs.joinpath(top, 'lib/extra.py'))
 
   eq(read_place(top, place, { 'exists' }), { 'checks/test_extra.py', true })
+end
+
+T['a place']['is refused when the test file itself is a link out, dangling or not'] =
+  MiniTest.new_set({ parametrize = { { 'planted.py' }, { 'existing.py' } } })
+
+T['a place']['is refused when the test file itself is a link out, dangling or not']['target'] = function(
+  target
+)
+  local top = repository_of('go')
+  write_file(top, 'lib/extra.py')
+  local outside = git_repo.directory('test-layout-outside-file')
+  write_file(outside, 'existing.py')
+  vim.fn.mkdir(vim.fs.joinpath(top, 'checks'), 'p')
+  local link = vim.fs.joinpath(top, 'checks/test_extra.py')
+  assert(vim.uv.fs_symlink(vim.fs.joinpath(outside, target), link), 'cannot link')
+  keep_agent_rules(top, { { source = '{path}/{name}.py', test = 'checks/test_{name}.py' } })
+
+  local place, problem = test_layout.test_for(vim.fs.joinpath(top, 'lib/extra.py'))
+
+  eq({ place, problem }, { nil, link .. ' is outside the repository' })
+end
+
+T['a place']['leaves out a candidate whose folder became a link out since it was read'] = function()
+  local top = repository_of('go')
+  write_file(top, 'lib/extra.py')
+  write_file(top, 'checks/test_extra.py')
+  write_file(top, 'other/test_extra.py')
+  keep_agent_rules(top, {
+    { source = '{path}/{name}.py', test = { 'checks/test_{name}.py', 'other/test_{name}.py' } },
+  })
+  local source = vim.fs.joinpath(top, 'lib/extra.py')
+  test_layout.test_for(source)
+  local outside = git_repo.directory('test-layout-outside-other')
+  write_file(outside, 'test_extra.py')
+  vim.fn.delete(vim.fs.joinpath(top, 'other'), 'rf')
+  assert(vim.uv.fs_symlink(outside, vim.fs.joinpath(top, 'other')), 'cannot link other')
+
+  local place = test_layout.test_for(source)
+
+  eq(field_of(place, 'candidates'), { vim.fs.joinpath(top, 'checks/test_extra.py') })
+end
+
+T['a place']['follows a test file that links inside the repository'] = function()
+  local top = repository_of('go')
+  write_file(top, 'lib/extra.py')
+  write_file(top, 'shared/test_extra.py')
+  vim.fn.mkdir(vim.fs.joinpath(top, 'checks'), 'p')
+  assert(
+    vim.uv.fs_symlink(
+      vim.fs.joinpath(top, 'shared/test_extra.py'),
+      vim.fs.joinpath(top, 'checks/test_extra.py')
+    ),
+    'cannot link'
+  )
+  keep_agent_rules(top, { { source = '{path}/{name}.py', test = 'checks/test_{name}.py' } })
+
+  local place = test_layout.test_for(vim.fs.joinpath(top, 'lib/extra.py'))
+
+  eq(read_place(top, place, { 'exists' }), { 'checks/test_extra.py', true })
+end
+
+T['a place']['is refused when a binding makes a .git folder, in any case'] = MiniTest.new_set({
+  parametrize = { { '.git.py' }, { '.GIT.py' } },
+})
+
+T['a place']['is refused when a binding makes a .git folder, in any case']['source'] = function(
+  source
+)
+  local top = repository_of('go')
+  write_file(top, source)
+  keep_agent_rules(top, { { source = '{name}.py', test = '{name}/config' } })
+
+  local place, problem = test_layout.test_for(vim.fs.joinpath(top, source))
+
+  eq(
+    { place, problem },
+    { nil, vim.fs.joinpath(top, source:sub(1, -4) .. '/config') .. ' is outside the repository' }
+  )
+end
+
+T['a place']['is given in a repository whose own folders hold a .git segment'] = function()
+  local top = git_repo.create_unborn('test-layout-dotgit', '.git/inner/repo')
+  write_file(top, 'conftest.py')
+  write_file(top, 'lib/util.py')
+  write_file(top, 'tests/test_util.py')
+  top = assert(vim.uv.fs_realpath(top))
+  keep_agent_rules(top, {})
+
+  local place = test_layout.test_for(vim.fs.joinpath(top, 'lib/util.py'))
+
+  eq(read_place(top, place, { 'exists' }), { 'tests/test_util.py', true })
 end
 
 T['a place']['is refused when a link in its folders leads out of the repository'] = function()
