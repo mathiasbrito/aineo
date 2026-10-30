@@ -4555,11 +4555,18 @@ between, none when a `/` follows it; `{ext}` the extension; `{unit}`, only
 at the start, the unit root itself; any other `{word}` one folder.
 `{path|_}` joins the folders with `_` and `{word|-_}` turns `-` into `_`;
 nothing is re-cased. A template is refused when it is empty, longer than
-256 characters, absolute, holds a `..` segment, a `~`, a backslash or an
-empty segment, a brace of no placeholder or an unknown modifier, or when
-`test` names a placeholder `source` lacks; a repository keeps at most 32
+256 characters, absolute, holds a `..`, `.` or `.git` segment, a `~`, a
+backslash, an empty segment or a trailing `/`, a brace of no placeholder,
+two placeholders side by side or an unknown modifier, or when `test` names
+a placeholder `source` lacks; a placeholder never stands for a `.` or `..`
+folder. A discovery glob is refused when it holds more than two `**` or is
+no glob aineo can read; `kind` and `framework` when longer than 64
+characters or holding a control character. A repository keeps at most 32
 rules. A refusal names the field, `rules[2].test: a .. segment` say, and
-keeps nothing. So does a worktree that is no git checkout. The reply
+keeps nothing. So does a worktree that is no git checkout, or no checkout
+of a repository the editor has open (that of the folder it started in or
+of its working folder). aineo runs `git` with `core.fsmonitor` off, so no
+command a repository's configuration names runs for it. The reply
 lists the rules kept, and for each how many of the repository's sources it
 pairs with an existing test, and how many of those tests another rule
 pairs with a different source; a rule that pairs none while presets pair
@@ -4582,15 +4589,23 @@ Go `go.testing.colocated`, `go.testing.folder-integration`; Java
 
 Which rules hold for a file, in this order: your corrections; the
 agent's rules; the presets of the file's language whose marker files the
-repository holds (`pytest.ini`, `go.mod`, `angular.json`…), the one that
-pairs the most sources with tests first; the language's default — the
+repository holds (`pytest.ini`, `go.mod`, `angular.json`, a `*.test.cpp`
+file…), the one that pairs the most sources with tests first; then the
+language's default, even when it pairs more — the
 `src/` mirror for Python when the repository has a `src/` folder, else the
 flat `tests/` folder, Jest's `<name>.test.<ext>` beside the source, Go's
 `_test.go`, Maven's mirror, Ceedling, and `tests/<name>_test.cpp` for C++.
 The test file of a source is the existing one the first rules name,
-shortest path first; when no template names one, a test file whose text
-names the source as its language imports it; else the file the creating
-rule gives, which does not exist yet. The source of a test file is the one
+shortest path first; when no template names one, a test file with a line
+that imports the source as its language writes an import (Python `import
+a.b.mod`, `from a.b.mod import`, `from a.b import mod`; Go an import path
+ending in the source's folder; Java `import p.Foo;` or `Foo` as a whole
+word; C and C++ an `#include` of `name.h`, `.hpp` or `.hh`; JavaScript
+and TypeScript an import or `require` ending in the stem); else the file
+the creating rule gives. Whether the file exists is the file system's
+answer, so a test file git ignores counts. A path that would lead out of
+the repository, through a link to a folder outside it, say, or into its
+`.git` folder, is refused. The source of a test file is the one
 a rule whose test template keeps every placeholder of its source gives;
 when no such rule does, the existing files of the test's language whose
 name is the `{name}` its test template binds (`test_utils.py` gives
@@ -6802,7 +6817,8 @@ Test layout ~
   The rules in force for the tests of the git worktree of the current
   folder, in the order they are tried, each with who stated it: you, the
   agent, the repository or the default (|aineo-test-layout|); or why none
-  is, when the folder is in no git worktree.
+  is, when the folder is in no git worktree. A warning for each rule the
+  agent stated that aineo now refuses and skips, with why.
 
 Office ~
   That 'termguicolors' is on and 'ambiwidth' is not `double`, an error for

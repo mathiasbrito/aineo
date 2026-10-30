@@ -7,11 +7,11 @@ local eq = MiniTest.expect.equality
 local ROOT = '/repo'
 
 --- A view of a repository at `ROOT` holding `files`, whose text search
---- finds `text_matches` for any pattern and records the patterns it was
---- asked in `asked`, when given.
+--- finds the lines `text_matches` for any pattern and records the patterns
+--- it was asked in `asked`, when given.
 ---
 ---@param files string[]
----@param text_matches? string[]
+---@param text_matches? { path: string, text: string }[]
 ---@param asked? string[][]
 ---@return aineo.test_layout.View
 local function view_of(files, text_matches, asked)
@@ -221,11 +221,10 @@ end
 
 T['test_for()']['falls back on the test files that name the source module when no template pairs'] = function()
   local asked = {}
-  local view = view_of(
-    { 'pkg/parser.py', 'tests/test_parsing.py', 'pkg/other.py' },
-    { 'tests/test_parsing.py', 'pkg/other.py' },
-    asked
-  )
+  local view = view_of({ 'pkg/parser.py', 'tests/test_parsing.py', 'pkg/other.py' }, {
+    { path = 'tests/test_parsing.py', text = 'from pkg import parser' },
+    { path = 'pkg/other.py', text = 'import pkg.parser' },
+  }, asked)
 
   local place = finding.test_for({ FLAT }, view, 'pkg/parser.py')
 
@@ -235,19 +234,19 @@ T['test_for()']['falls back on the test files that name the source module when n
     { '/repo/tests/test_parsing.py' },
     'repository',
     'names the source',
-    { { 'pkg.parser' } },
+    { { 'parser' } },
   })
 end
 
 T['test_for()']['asks the text search for the module as each language imports it'] =
   MiniTest.new_set({
     parametrize = {
-      { 'src/pkg/parser.py', { 'pkg.parser' } },
-      { 'internal/store/db.go', { '/store"' } },
+      { 'src/pkg/parser.py', { 'parser' } },
+      { 'internal/store/db.go', { 'store"' } },
       { 'src/main/java/com/acme/Parser.java', { 'Parser' } },
-      { 'src/list.c', { 'list.h"', 'list.hpp"' } },
-      { 'lib/list.cpp', { 'list.h"', 'list.hpp"' } },
-      { 'src/app/foo.component.ts', { "/foo.component'", '/foo.component"' } },
+      { 'src/list.c', { 'list.h', 'list.hpp', 'list.hh' } },
+      { 'lib/list.cpp', { 'list.h', 'list.hpp', 'list.hh' } },
+      { 'src/app/foo.component.ts', { 'foo.component' } },
     },
   })
 
@@ -301,6 +300,21 @@ T['test_for()']['gives no companions when the sibling’s folder lacks them'] = 
   local place = finding.test_for({ PACKAGES }, view, 'pkg/a/core.py')
 
   eq(place.companions, {})
+end
+
+T['test_for()']['gives no companion at the unit root or above it'] = function()
+  local view = view_of({
+    'pkg/pyproject.toml',
+    'pkg/a/core.py',
+    'pkg/other/__init__.py',
+    'pkg/other/test_x.py',
+  })
+
+  local place = finding.test_for({ PACKAGES }, view, 'pkg/a/core.py')
+
+  eq(fields_of(place, { 'companions' }), {
+    { '/repo/pkg/tests/a/__init__.py', '/repo/pkg/tests/__init__.py' },
+  })
 end
 
 T['source_for()'] = MiniTest.new_set()

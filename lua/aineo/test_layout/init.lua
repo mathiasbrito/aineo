@@ -151,17 +151,59 @@ local function locate(path)
   }
 end
 
+--- Whether `path`, an absolute path, stays inside the worktree at `root`:
+--- the deepest of its folders that exists, as the file system resolves it
+--- (links followed), is `root` or inside it, and no segment of it is
+--- `.git`.
+---
+---@param root string
+---@param path string
+---@return boolean
+local function stays_inside(root, path)
+  local real_root = vim.uv.fs_realpath(root) or root
+  local folder = existing_folder(path)
+  local inside = folder ~= nil and (folder == real_root or vim.startswith(folder, real_root .. '/'))
+  return inside and not vim.tbl_contains(vim.split(path, '/', { plain = true }), '.git')
+end
+
+--- `place`, as finding gave it for a file of the worktree at `root`,
+--- checked against the file system: nil and why when its path leads out of
+--- the worktree (`stays_inside()`); else with the candidates that lead out
+--- left out and `exists` the file system's answer, not git's listing, so
+--- that a file git ignores still exists. Nil and `problem` with no place.
+---
+---@param root string
+---@param place? aineo.test_layout.Place
+---@param problem? string
+---@return aineo.test_layout.Place?
+---@return string? problem
+local function checked(root, place, problem)
+  if not place then
+    return nil, problem
+  end
+  if not stays_inside(root, place.path) then
+    return nil, place.path .. ' is outside the repository'
+  end
+  place.candidates = vim.tbl_filter(function(candidate)
+    return stays_inside(root, candidate)
+  end, place.candidates)
+  place.exists = vim.uv.fs_stat(place.path) ~= nil
+  return place
+end
+
 --- Where the test file of the source at `source_path` is, or nil and why
---- not — the source is in no git worktree, no rule matches it, or it is a
---- test file itself.
+--- not — the source is in no git worktree, no rule matches it, it is a
+--- test file itself, or the path a rule gives leads out of the repository
+--- (`checked()`).
 ---
 --- The place's `path` is the best existing test file, or, when none
---- exists, the file the creating rule gives; `candidates` every existing
---- one, best first: those the rules' templates name, in the order of the
---- rules, then shortest path first, else the test files whose text names
---- the source's module. `sibling`, for a new test file only, is the
---- existing test file nearest to it, and `companions` the files to create
---- with it — Python's `__init__.py`, when the sibling's folder has one.
+--- exists, the file the creating rule gives; `exists` says whether a file
+--- is there on disk. `candidates` is every existing one, best first: those
+--- the rules' templates name, in the order of the rules, then shortest
+--- path first, else the test files whose text names the source's module.
+--- `sibling`, for a new test file only, is the existing test file nearest
+--- to it, and `companions` the files to create with it — Python's
+--- `__init__.py`, when the sibling's folder has one.
 ---
 ---@param source_path string
 ---@return aineo.test_layout.Place?
@@ -171,7 +213,7 @@ function M.test_for(source_path)
   if not located then
     return nil, problem
   end
-  return finding.test_for(located.rules, located.view, located.relative)
+  return checked(located.view.root, finding.test_for(located.rules, located.view, located.relative))
 end
 
 --- Where the source of the test file at `test_path` is, or nil and why not
@@ -189,7 +231,10 @@ function M.source_for(test_path)
   if not located then
     return nil, problem
   end
-  return finding.source_for(located.rules, located.view, located.relative)
+  return checked(
+    located.view.root,
+    finding.source_for(located.rules, located.view, located.relative)
+  )
 end
 
 --- Whether the file at `path` is a test file: a discovery glob or a test
@@ -328,20 +373,35 @@ end
 --- after when it pairs nothing while they pair some (A669). The agent's
 --- rules then come after the user's corrections and before the presets.
 ---
---- Refuses, keeping nothing, a worktree that is no git checkout, and rules
---- `aineo.test_layout.rules`'s `statements_problem()` refuses — an unknown
---- preset, a template a guard refuses, more than 32 rules — naming the
---- field at fault.
+--- Refuses, keeping nothing, a worktree that is no git checkout, or no
+--- checkout of a repository the editor has open — none of `open_folders`,
+--- the folders of the editor's tabs, shares its git common folder — and
+--- rules `aineo.test_layout.rules`'s `statements_problem()` refuses — an
+--- unknown preset, a template a guard refuses, more than 32 rules — and a
+--- framework `text_problem()` refuses, naming the field at fault.
 ---
 --- Raises an error naming the file when the layout cannot be written.
 ---
 ---@param declaration aineo.test_layout.Declaration
+---@param open_folders string[]
 ---@return { text: string, is_error: boolean }
-function M.declare(declaration)
+function M.declare(declaration, open_folders)
   local folder = vim.uv.fs_realpath(declaration.worktree)
   local root = folder and repository.worktree_of(folder)
   if not root then
     return refused(('worktree: %s is not a git checkout'):format(declaration.worktree))
+  end
+  local common = repository.common_folder_of(root)
+  local opened = vim.iter(open_folders):any(function(open)
+    local real = vim.uv.fs_realpath(open)
+    return real ~= nil and repository.common_folder_of(real) == common
+  end)
+  if not opened then
+    return refused(
+      ('worktree: %s is no checkout of a repository the editor has open'):format(
+        declaration.worktree
+      )
+    )
   end
   local framework_problem = declaration.framework ~= nil
     and rules.text_problem(declaration.framework)

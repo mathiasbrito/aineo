@@ -30,7 +30,7 @@ local M = {}
 ---@field root string the absolute path of the worktree's folder
 ---@field files string[] the tracked files and the untracked ones not ignored
 ---@field has table<string, true> the same files, as a set
----@field grep fun(patterns: string[]): string[] the files holding any of the fixed strings `patterns`
+---@field grep fun(patterns: string[]): { path: string, text: string }[] the lines holding any of the fixed strings `patterns`, each with its file
 ---@field read fun(relative: string): string? the text of a file, nil when it cannot be read
 ---@field ranked? table<string, table> the presets ranked for each extension, kept with the view (`aineo.test_layout.trust`)
 
@@ -150,13 +150,18 @@ local function translate(view, rule, from, to, path)
 end
 
 --- Whether `rule`'s source template matches `path`, read from the folder
---- of its unit.
+--- of its unit; never a file whose extension is not among the rule's
+--- extensions, when it has some — a preset's, or a correction's family.
 ---
 ---@param view aineo.test_layout.View
 ---@param rule aineo.test_layout.Rule
 ---@param path string
 ---@return boolean
 local function matches_source(view, rule, path)
+  local extension = path:match('%.([^./]+)$') or ''
+  if rule.extensions and not vim.tbl_contains(rule.extensions, extension) then
+    return false
+  end
   return template.match(from_unit(rule, rule.source), path, { unit = M.unit_of(view, path) }) ~= nil
 end
 
@@ -283,11 +288,11 @@ local function template_matches(view, matching, source)
   return found
 end
 
---- The test files, by `rules`, whose text names `source` as its language
---- imports it (`aineo.test_layout.modules`), found by one text search,
---- shortest path first; each named by a rule of the repository's that
---- carries the framework of `creating`, the rule that creates a test file
---- of `source`.
+--- The test files, by `rules`, that import `source` as its language reads
+--- an import: the lines one text search finds for its fixed strings, each
+--- read by `modules.imports()`; shortest path first, each once, named by a
+--- rule of the repository's that carries the framework of `creating`, the
+--- rule that creates a test file of `source`.
 ---
 ---@param rules aineo.test_layout.Rule[]
 ---@param view aineo.test_layout.View
@@ -295,7 +300,8 @@ end
 ---@param creating aineo.test_layout.Rule
 ---@return aineo.test_layout.Match[]
 local function text_matches(rules, view, source, creating)
-  local patterns = modules.patterns(within_unit(M.unit_of(view, source), source))
+  local in_unit = within_unit(M.unit_of(view, source), source)
+  local patterns = modules.patterns(in_unit)
   if #patterns == 0 then
     return {}
   end
@@ -304,9 +310,15 @@ local function text_matches(rules, view, source, creating)
     description = 'names the source',
     framework = creating.framework,
   }
-  local found = {}
-  for _, path in ipairs(view.grep(patterns)) do
-    if path ~= source and M.is_test(rules, view, path) then
+  local found, seen = {}, {}
+  for _, hit in ipairs(view.grep(patterns)) do
+    local path = hit.path
+    local taken = not seen[path]
+      and path ~= source
+      and modules.imports(in_unit, hit.text)
+      and M.is_test(rules, view, path)
+    if taken then
+      seen[path] = true
       table.insert(found, { path = path, rule = naming, position = 1 })
     end
   end
