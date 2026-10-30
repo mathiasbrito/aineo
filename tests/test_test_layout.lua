@@ -10,7 +10,8 @@ local TREES = vim.fs.joinpath(vim.fn.getcwd(), 'tests', 'fixtures', 'test_layout
 
 --- A fresh git repository holding a copy of the fixture tree of
 --- `language`, its files untracked; its folder as the file system resolves
---- it.
+--- it. What the home keeps of an earlier case's copy, at the same folder,
+--- is dropped.
 ---
 ---@param language string
 ---@return string top
@@ -24,6 +25,7 @@ local function repository_of(language)
       assert(vim.uv.fs_copyfile(vim.fs.joinpath(tree, name), copy))
     end
   end
+  test_layout.forget(top)
   return assert(vim.uv.fs_realpath(top))
 end
 
@@ -76,15 +78,15 @@ local T = MiniTest.new_set({
 
 --- Each preset, the language of its fixture tree, a source of the tree
 --- and its existing test file, a source with no test yet and the test file
---- the preset creates for it, and a test file and its source, nil when
---- the preset's templates are one-way.
+--- the preset creates for it, and a test file and its source, found by
+--- the stem its test template binds when the preset is one-way.
 local PRESETS = {
   -- stylua: ignore start
   { 'python.pytest.src-mirror', 'python', 'src/shop/cart.py', 'tests/shop/test_cart.py', 'src/shop/pricing/tax.py', 'tests/pricing/test_tax.py', 'tests/shop/test_cart.py', 'src/shop/cart.py' },
-  { 'python.pytest.flat', 'python', 'lib/utils.py', 'tests/test_utils.py', 'lib/extra.py', 'tests/test_extra.py', 'tests/test_utils.py', nil },
+  { 'python.pytest.flat', 'python', 'lib/utils.py', 'tests/test_utils.py', 'lib/extra.py', 'tests/test_extra.py', 'tests/test_utils.py', 'lib/utils.py' },
   { 'python.pytest.inline-package', 'python', 'app/models/user.py', 'app/models/tests/test_user.py', 'app/models/role.py', 'app/models/tests/test_role.py', 'app/models/tests/test_user.py', 'app/models/user.py' },
   { 'python.pytest.suffix', 'python', 'tools/fmt.py', 'tools/fmt_test.py', 'tools/new.py', 'tools/new_test.py', 'tools/fmt_test.py', 'tools/fmt.py' },
-  { 'python.unittest.default', 'python', 'legacy/core.py', 'tests/test_core.py', 'legacy/io.py', 'tests/test_io.py', 'tests/test_core.py', nil },
+  { 'python.unittest.default', 'python', 'legacy/core.py', 'tests/test_core.py', 'legacy/io.py', 'tests/test_io.py', 'tests/test_core.py', 'legacy/core.py' },
   { 'python.django.app', 'python', 'blog/views.py', 'blog/tests/test_views.py', 'blog/forms.py', 'blog/tests/test_forms.py', 'blog/tests/test_views.py', 'blog/views.py' },
   { 'js.jest.colocated', 'javascript', 'src/cart.ts', 'src/cart.test.ts', 'src/new.ts', 'src/new.test.ts', 'src/cart.test.ts', 'src/cart.ts' },
   { 'js.jest.dunder-tests', 'javascript', 'lib/a/b.js', 'lib/a/__tests__/b.js', 'lib/a/c.js', 'lib/a/__tests__/c.js', 'lib/a/__tests__/b.js', 'lib/a/b.js' },
@@ -100,9 +102,9 @@ local PRESETS = {
   { 'java.junit.maven-it', 'java', 'src/main/java/com/acme/Cart.java', 'src/test/java/com/acme/CartIT.java', 'src/main/java/com/acme/Price.java', 'src/test/java/com/acme/PriceIT.java', 'src/test/java/com/acme/CartIT.java', 'src/main/java/com/acme/Cart.java' },
   { 'java.junit.gradle-mirror', 'java', 'src/main/java/com/acme/Order.java', 'src/test/java/com/acme/OrderTests.java', 'src/main/java/com/acme/Price.java', 'src/test/java/com/acme/PriceTest.java', 'src/test/java/com/acme/OrderTests.java', 'src/main/java/com/acme/Order.java' },
   { 'c.ceedling.unity', 'c', 'src/list.c', 'test/test_list.c', 'src/map.c', 'test/test_map.c', 'test/test_list.c', 'src/list.c' },
-  { 'c.convention.tests-prefix', 'c', 'lib/queue.c', 'tests/test_queue.c', 'lib/stack.c', 'tests/test_stack.c', 'tests/test_queue.c', nil },
+  { 'c.convention.tests-prefix', 'c', 'lib/queue.c', 'tests/test_queue.c', 'lib/stack.c', 'tests/test_stack.c', 'tests/test_queue.c', 'lib/queue.c' },
   { 'cpp.pitchfork.merged', 'cpp', 'src/vec.cpp', 'src/vec.test.cpp', 'src/mat.cpp', 'src/mat.test.cpp', 'src/vec.test.cpp', 'src/vec.cpp' },
-  { 'cpp.convention.tests-suffix', 'cpp', 'core/io.cc', 'tests/io_test.cc', 'core/fs.cc', 'tests/fs_test.cc', 'tests/io_test.cc', nil },
+  { 'cpp.convention.tests-suffix', 'cpp', 'core/io.cc', 'tests/io_test.cc', 'core/fs.cc', 'tests/fs_test.cc', 'tests/io_test.cc', 'core/io.cc' },
   { 'cpp.convention.colocated-suffix', 'cpp', 'util/str.cpp', 'util/str_test.cpp', 'util/num.cpp', 'util/num_test.cpp', 'util/str_test.cpp', 'util/str.cpp' },
   -- stylua: ignore end
 }
@@ -147,10 +149,10 @@ end
 
 T['source_for()'] = MiniTest.new_set()
 
-T['source_for()']['finds the source of a test file by each preset, none when one-way'] =
+T['source_for()']['finds the source of a test file by each preset, by the stem when one-way'] =
   MiniTest.new_set({ parametrize = PRESETS })
 
-T['source_for()']['finds the source of a test file by each preset, none when one-way']['preset'] = function(
+T['source_for()']['finds the source of a test file by each preset, by the stem when one-way']['preset'] = function(
   preset,
   language,
   _,
@@ -379,6 +381,60 @@ T['correct()']['holds in every worktree of the repository'] = function()
 
   local place = test_layout.test_for(vim.fs.joinpath(other, 'src/shop/cart.py'))
   eq(read_place(other, place, { 'origin' }), { 'checks/cart_check.py', 'user' })
+end
+
+T['forget()'] = MiniTest.new_set()
+
+--- Writes an empty file at `path` under `top`.
+---
+---@param top string
+---@param path string
+local function write_file(top, path)
+  assert(vim.fn.writefile({}, vim.fs.joinpath(top, path)) == 0, 'cannot write ' .. path)
+end
+
+T['forget()']['the files read are kept a while, until forget() drops them'] = function()
+  local top = repository_of('python')
+  keep_agent_rules(top, { { preset = 'python.pytest.flat' } })
+  local source = vim.fs.joinpath(top, 'lib/extra.py')
+  test_layout.test_for(source)
+  write_file(top, 'tests/test_extra.py')
+
+  local kept = test_layout.test_for(source)
+  test_layout.forget(top)
+  local read_again = test_layout.test_for(source)
+
+  eq({ kept.exists, read_again.exists }, { false, true })
+end
+
+T['forget()']['is done by correct() and declare()'] = MiniTest.new_set({
+  parametrize = {
+    {
+      function(top)
+        test_layout.correct(
+          vim.fs.joinpath(top, 'lib/utils.py'),
+          vim.fs.joinpath(top, 'tests/test_utils.py')
+        )
+      end,
+    },
+    {
+      function(top)
+        test_layout.declare({ worktree = top, rules = { { preset = 'python.pytest.flat' } } })
+      end,
+    },
+  },
+})
+
+T['forget()']['is done by correct() and declare()']['given'] = function(change)
+  local top = repository_of('python')
+  keep_agent_rules(top, { { preset = 'python.pytest.flat' } })
+  local source = vim.fs.joinpath(top, 'lib/extra.py')
+  test_layout.test_for(source)
+  write_file(top, 'tests/test_extra.py')
+
+  change(top)
+
+  eq(test_layout.test_for(source).exists, true)
 end
 
 T['describe()'] = MiniTest.new_set()
