@@ -13,6 +13,7 @@ local kept = require('aineo.explain.kept')
 local look = require('aineo.explain.look')
 local marks = require('aineo.explain.marks')
 local message = require('aineo.explain.message')
+local new_files = require('aineo.explain.new_files')
 local preview = require('aineo.explain.preview')
 local request = require('aineo.explain.request')
 local runs = require('aineo.explain.runs')
@@ -270,6 +271,7 @@ vim.api.nvim_create_autocmd('BufWipeout', {
     runs.stop_all_of(event.buf)
     kept.forget(event.buf)
     marks.forget(event.buf)
+    new_files.forget(event.buf)
   end,
 })
 
@@ -618,6 +620,17 @@ end
 ---@param order aineo.explain.TestOrder
 function M.write_tests(order)
   test_writing.write_tests(order)
+end
+
+--- Writes the code that makes a test of `order.buffer`, a test file's,
+--- pass, in its source (`aineo.explain.test_writing`'s
+--- `write_implementation()`).
+---
+--- Raises an error naming `claude.cmd` when its command cannot be run.
+---
+---@param order aineo.explain.TestOrder
+function M.write_implementation(order)
+  test_writing.write_implementation(order)
 end
 
 return M

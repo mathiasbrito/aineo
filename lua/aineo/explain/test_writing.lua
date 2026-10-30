@@ -9,6 +9,7 @@ local checklist = require('aineo.explain.checklist')
 local context = require('aineo.explain.context')
 local folders = require('aineo.explain.folders')
 local kinds = require('aineo.explain.kinds')
+local new_files = require('aineo.explain.new_files')
 local request = require('aineo.explain.request')
 local test_window = require('aineo.explain.test_window')
 local write = require('aineo.explain.write')
@@ -41,6 +42,17 @@ local function shown_file(path, folder)
       and vim.api.nvim_buf_get_lines(buffer, 0, -1, false)
     or vim.fn.readfile(path)
   return { path = vim.fs.relpath(folder, path) or path, lines = lines }
+end
+
+--- Has the file of `buffer` written with `companions` when code is first
+--- accepted in it, when it is not on disk (`aineo.explain.new_files`).
+---
+---@param buffer integer
+---@param companions? string[]
+local function write_when_accepted(buffer, companions)
+  if not vim.uv.fs_stat(vim.api.nvim_buf_get_name(buffer)) then
+    new_files.expect(buffer, companions or {})
+  end
 end
 
 --- The language of `buffer`, as a prompt names it: its `'filetype'`, else
@@ -138,7 +150,9 @@ end
 --- Asks for the code of the tests `chosen`, for the lines `range` of the
 --- source `order.buffer`, in the test file `tests` shows, wherever it
 --- belongs there, with any import, fixture or helper they need, each edit
---- a proposal of its own (`aineo.explain.write`'s `ask()`), from `folder`.
+--- a proposal of its own (`aineo.explain.write`'s `ask()`), from `folder`;
+--- a test file not on disk is written once code is first accepted in it
+--- (`write_when_accepted()`).
 ---
 ---@param order aineo.explain.TestOrder
 ---@param tests aineo.explain.ShownTests
@@ -147,6 +161,7 @@ end
 ---@param folder string
 local function write_chosen(order, tests, range, chosen, folder)
   local test_buffer = vim.api.nvim_win_get_buf(tests.window)
+  write_when_accepted(test_buffer, tests.place.companions)
   write.ask({
     buffer = test_buffer,
     window = tests.window,
@@ -259,15 +274,167 @@ local function write_tests_for_source(order)
   end)
 end
 
---- What `\WT` does in `order.buffer`, a file's: in a source, lists the
---- tests worth writing for the code around the cursor
---- (`write_tests_for_source()`).
+--- What the request for a test in the test file at `path` is shown of it
+--- and of its source, which `layout` places: that it is a test file, its
+--- framework when known, that the code is the test asked for alone, and
+--- the source as it reads when it exists.
+---
+---@param path string
+---@param layout aineo.explain.TestLayout
+---@param folder string
+---@return string
+local function test_file_brief(path, layout, folder)
+  local source = layout.source_for(path)
+  local head = ('The file is a test file%s: the code is the test the request asks for,'):format(
+    source and source.framework and ', written for ' .. source.framework or ''
+  ) .. ' and nothing else.'
+  if not source or not source.exists then
+    return head
+  end
+  local shown = shown_file(source.path, folder)
+  return file_part(('%s The source it tests, %s, reads:'):format(head, shown.path), shown)
+end
+
+--- What a float that asks for the requirement a test is written for says.
+local TEST_TITLE = 'Write a test'
+
+--- What `\WT` does in a test file: writes the test of the requirement the
+--- lines of `order.range` hold, in their place, else of the requirement
+--- typed in a float, below the cursor's line or in its place when it is
+--- blank, as `\WW` writes code, each edit a proposal of its own
+--- (`aineo.explain.write`'s `propose()`), Claude Code shown the source the
+--- test file tests (`test_file_brief()`).
+---
+---@param order aineo.explain.TestOrder
+local function write_test_of_a_requirement(order)
+  local path = vim.api.nvim_buf_get_name(order.buffer)
+  local folder = folders.project_of(path)
+  write.propose({
+    buffer = order.buffer,
+    window = order.window,
+    line = order.line,
+    range = order.range,
+    tools = false,
+    whole_file = true,
+    command = order.command,
+    model = order.model,
+    timeout_ms = order.timeout_ms,
+    keys = order.keys,
+    ask_key = order.ask_key,
+    brief = { test_file_brief(path, order.layout, folder) },
+    title = TEST_TITLE,
+  }, folder)
+end
+
+--- What `\WT` does in `order.buffer`, a file's: in a test file, as the
+--- layout tells, writes the test of a requirement
+--- (`write_test_of_a_requirement()`); in a source, lists the tests worth
+--- writing for the code around the cursor (`write_tests_for_source()`).
 ---
 --- Raises an error naming `claude.cmd` when its command cannot be run.
 ---
 ---@param order aineo.explain.TestOrder
 function M.write_tests(order)
+  if order.layout.is_test(vim.api.nvim_buf_get_name(order.buffer)) then
+    write_test_of_a_requirement(order)
+    return
+  end
   write_tests_for_source(order)
+end
+
+--- What the request for the code that makes the test of the lines
+--- `range` of `test_buffer` pass, into the source at `source_path`, asks,
+--- as the request heads its prompt: the test file and the source from
+--- `folder`, the source's language, then the test.
+---
+---@param test_buffer integer
+---@param range integer[]
+---@param source_buffer integer
+---@param folder string
+---@return string
+local function implementation_request(test_buffer, range, source_buffer, folder)
+  local test_path = vim.api.nvim_buf_get_name(test_buffer)
+  local source_path = vim.api.nvim_buf_get_name(source_buffer)
+  local lines = {
+    ('Write the code that makes this test of the test file %s pass, into the file %s (language: %s):'):format(
+      vim.fs.relpath(folder, test_path) or test_path,
+      vim.fs.relpath(folder, source_path) or source_path,
+      language_of(source_buffer)
+    ),
+    '',
+  }
+  return table.concat(
+    vim.list_extend(lines, vim.api.nvim_buf_get_lines(test_buffer, range[1] - 1, range[2], false)),
+    '\n'
+  )
+end
+
+--- What `\WI` does in a test file, `order.buffer`: asks for the code that
+--- makes the test pass that the lines of `order.range` hold, else the test
+--- around the cursor's line (`aineo.explain.context`'s `around()`), in its
+--- source, which the layout places, shown in the window above
+--- (`aineo.explain.test_window`'s `show_source()`), wherever it belongs
+--- there, each edit a proposal of its own (`aineo.explain.write`'s
+--- `ask()`), Claude Code shown the whole test file; a source not on disk
+--- is written once code is first accepted in it (`write_when_accepted()`).
+--- Tells the user, once,
+--- when the layout knows no source of the test file.
+---
+---@param order aineo.explain.TestOrder
+local function write_implementation_of_a_test(order)
+  local test_path = vim.api.nvim_buf_get_name(order.buffer)
+  local folder = folders.project_of(test_path)
+  local place, problem = order.layout.source_for(test_path)
+  if not place then
+    vim.notify(
+      ('aineo: no source is known for %s: %s'):format(
+        vim.fs.relpath(folder, test_path) or test_path,
+        problem
+      ),
+      vim.log.levels.WARN
+    )
+    return
+  end
+  local range = order.range or context.around(order.buffer, order.line)
+  local source_window = test_window.show_source(order.window, place.path)
+  local source_buffer = vim.api.nvim_win_get_buf(source_window)
+  write_when_accepted(source_buffer, place.companions)
+  local test_file = shown_file(test_path, folder)
+  write.ask({
+    buffer = source_buffer,
+    window = source_window,
+    line = 1,
+    tools = false,
+    whole_file = true,
+    command = order.command,
+    model = order.model,
+    timeout_ms = order.timeout_ms,
+    keys = order.keys,
+    ask_key = order.ask_key,
+    brief = { file_part(('The test file %s reads:'):format(test_file.path), test_file) },
+  }, {
+    first = 1,
+    last = 1,
+    request = implementation_request(order.buffer, range, source_buffer, folder),
+    title = 'code for the test of lines ' .. range[1] .. ' to ' .. range[2],
+    place = 'anywhere',
+  }, folder)
+end
+
+--- What `\WI` does in `order.buffer`, a file's: in a test file, as the
+--- layout tells, writes the code that makes a test pass
+--- (`write_implementation_of_a_test()`); in any other file tells the user,
+--- once, that it works from a test.
+---
+--- Raises an error naming `claude.cmd` when its command cannot be run.
+---
+---@param order aineo.explain.TestOrder
+function M.write_implementation(order)
+  if not order.layout.is_test(vim.api.nvim_buf_get_name(order.buffer)) then
+    vim.notify('aineo: code is written from a test: ask for it in a test file', vim.log.levels.INFO)
+    return
+  end
+  write_implementation_of_a_test(order)
 end
 
 return M

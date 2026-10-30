@@ -41,16 +41,41 @@ local SHAPES = {
   '    pass',
 }
 
+--- The test of a source not written yet.
+local NEW_SPEC = {
+  "local new = require('new')",
+  '',
+  "it('greets', function()",
+  "  assert.equal('hi', new.greet())",
+  'end)',
+}
+
+--- A source whose test file is not written yet.
+local GREET = { 'local M = {}', "function M.greet() return 'hi' end", 'return M' }
+
 --- The files of the project.
 local FILES = {
+  ['README.md'] = { '# calc' },
+  ['src/greet.lua'] = GREET,
   ['src/calc.lua'] = CALC,
   ['tests/calc_spec.lua'] = CALC_SPEC,
+  ['tests/new_spec.lua'] = NEW_SPEC,
   ['src/shapes.py'] = SHAPES,
 }
 
 --- Where the stand-in layout says the Lua project's files are.
 local LAYOUT = {
   tests = {
+    ['src/greet.lua'] = {
+      path = 'tests/unit/greet_spec.lua',
+      exists = false,
+      candidates = {},
+      origin = 'preset',
+      rule = 'busted spec',
+      framework = 'busted',
+      inline = false,
+      companions = { 'tests/unit/marker.lua' },
+    },
     ['src/shapes.py'] = {
       path = 'tests/test_shapes.py',
       exists = false,
@@ -71,6 +96,15 @@ local LAYOUT = {
     },
   },
   sources = {
+    ['tests/new_spec.lua'] = {
+      path = 'src/new.lua',
+      exists = false,
+      candidates = {},
+      origin = 'preset',
+      rule = 'busted spec',
+      framework = 'busted',
+      inline = false,
+    },
     ['tests/test_shapes.py'] = {
       path = 'src/shapes.py',
       exists = true,
@@ -90,6 +124,21 @@ local LAYOUT = {
     },
   },
 }
+
+--- What the prompt for code that may edit the whole file says after the
+--- rules of the edit at the cursor's line.
+local WHOLE_FILE_RULES = 'The code may also need edits elsewhere in this file:'
+  .. ' an import at the top, a variable or constant at module scope, a helper function,'
+  .. ' a changed signature.'
+  .. ' Give each as a further edit after that first one,'
+  .. ' placed where the file’s own conventions put it:'
+  .. ' never a local import inside a function or a branch when the file imports at the top.'
+  .. ' Each further edit gives in line and last the first and last lines it replaces,'
+  .. ' and repeats in old exactly those lines of the numbered text below,'
+  .. ' verbatim with their indentation and without their numbers;'
+  .. ' new holds the lines that replace them, and, to add lines, starts with the line they go after.'
+  .. ' No two edits share a line, and there are at most 20 edits.'
+  .. ' Edit no other file.'
 
 --- The answer that lists two tests.
 local TWO_TESTS = {
@@ -352,6 +401,269 @@ T['the checklist']['has the tests chosen proposed in the test window, the cursor
   )
   eq(child.api.nvim_buf_get_name(0), folder .. '/tests/calc_spec.lua')
   eq(child.api.nvim_win_get_cursor(0), { 3, 0 })
+end
+
+T['\\WT in a test file'] = MiniTest.new_set()
+
+--- What the prompt of a test written in `tests/calc_spec.lua` says of
+--- the file and its source.
+local TEST_FILE_BRIEF = {
+  'The file is a test file, written for busted: the code is the test the request asks for,'
+    .. ' and nothing else. The source it tests, src/calc.lua, reads:',
+  '',
+  'local M = {}',
+}
+
+--- The lines of the prompt of the first request the child made.
+---
+---@param record string
+---@return string[]
+local function first_prompt(record)
+  return vim.split((tested.requests(record, 1)[1] or { stdin = '' }).stdin, '\n')
+end
+
+--- The lines of `prompt` from the first that starts `TEST_FILE_BRIEF`,
+--- as many as it has; empty when none does.
+---
+---@param prompt string[]
+---@return string[]
+local function brief_in(prompt)
+  local first = vim.fn.index(prompt, TEST_FILE_BRIEF[1]) + 1
+  return vim.list_slice(prompt, first, first + #TEST_FILE_BRIEF - 1)
+end
+
+T['\\WT in a test file']['with Visual lines, writes the test of the requirement they hold, given the source'] = function()
+  local _, record = start('tests/calc_spec.lua')
+  child.api.nvim_buf_set_lines(0, 3, 3, false, { '  -- adding nothing gives 0' })
+
+  tested.order(child, 'write_tests', { range = { 4, 4 } })
+
+  local prompt = first_prompt(record)
+  eq(
+    prompt[1],
+    'Write code in the file tests/calc_spec.lua (language: lua) for the request lines 4 to 4 hold,'
+      .. ' as numbered below: those lines are the request, to be replaced by the code that fulfils it.'
+  )
+  eq(brief_in(prompt), TEST_FILE_BRIEF)
+  eq(vim.tbl_contains(prompt, WHOLE_FILE_RULES), true)
+end
+
+T['\\WT in a test file']['with no selection, asks for the requirement in a float, the test going below the cursor’s line'] = function()
+  local _, record = start('tests/calc_spec.lua')
+  child.cmd('3')
+
+  tested.order(child, 'write_tests')
+  local title = child.lua_get([[vim.api.nvim_win_get_config(0).title[1][1] ]])
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { 'adding nothing gives 0' })
+  tested.press(child, '<CR>')
+
+  local prompt = first_prompt(record)
+  eq(title, ' Write a test: <CR> sends · q or <Esc> cancels ')
+  eq(vim.list_slice(prompt, 1, 3), {
+    'Write code in the file tests/calc_spec.lua (language: lua) for the request below,'
+      .. ' to be inserted after line 3 as numbered below.',
+    '',
+    'adding nothing gives 0',
+  })
+  eq(brief_in(prompt), TEST_FILE_BRIEF)
+end
+
+T['\\WI'] = MiniTest.new_set()
+
+--- The test of `CALC_SPEC` with a test of `calc.sub()` inside its
+--- `describe`, on lines 4 to 6.
+local SUB_SPEC = {
+  "local calc = require('calc')",
+  '',
+  "describe('calc', function()",
+  "  it('subtracts', function()",
+  '    assert.equal(1, calc.sub(3, 2))',
+  '  end)',
+  'end)',
+}
+
+--- The answer that writes `calc.sub()` below `CALC`'s `M.add()`.
+local SUB_WRITTEN = {
+  summary = 'Adds sub.',
+  edits = {
+    {
+      line = 5,
+      last = 5,
+      old = { 'end' },
+      new = { 'end', '', 'function M.sub(a, b)', '  return a - b', 'end' },
+      why = 'Subtracts.',
+    },
+  },
+}
+
+--- The names of the buffers the child's windows show, top to bottom,
+--- floating windows left out.
+---
+---@return string[]
+local function shown_names()
+  return child.lua_get([[vim.tbl_map(function(window)
+    return vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(window))
+  end, vim.tbl_filter(function(window)
+    return vim.api.nvim_win_get_config(window).relative == ''
+  end, vim.api.nvim_tabpage_list_wins(0)))]])
+end
+
+T['\\WI']['asks for the code that makes the test under the cursor pass, in the source above'] = function()
+  local folder, record = start()
+  child.lua(
+    [[require('aineo.explain').toggle_test_window(vim.api.nvim_get_current_win(), _G.layout)]]
+  )
+  child.cmd('wincmd j')
+  child.api.nvim_buf_set_lines(0, 0, -1, false, SUB_SPEC)
+  child.cmd('5')
+  tested.answer_with(child, SUB_WRITTEN)
+
+  tested.order(child, 'write_implementation')
+
+  local prompt = first_prompt(record)
+  eq(vim.list_slice(prompt, 1, 5), {
+    'Write the code that makes this test of the test file tests/calc_spec.lua pass,'
+      .. ' into the file src/calc.lua (language: lua):',
+    '',
+    "  it('subtracts', function()",
+    '    assert.equal(1, calc.sub(3, 2))',
+    '  end)',
+  })
+  eq(
+    tested.wait_until(
+      child,
+      [[#vim.api.nvim_buf_get_extmarks(vim.fn.bufnr('src/calc.lua'),
+      vim.api.nvim_create_namespace('aineo_explain_fix_drawn'), 0, -1, {}) > 0]]
+    ),
+    true
+  )
+  eq(shown_names(), { folder .. '/src/calc.lua', folder .. '/tests/calc_spec.lua' })
+end
+
+T['\\WI']['shows the source in the window above the test window when it shows another file'] = function()
+  local folder = start()
+  child.lua(
+    [[require('aineo.explain').toggle_test_window(vim.api.nvim_get_current_win(), _G.layout)]]
+  )
+  child.cmd('edit ' .. folder .. '/README.md')
+  child.cmd('wincmd j')
+  child.api.nvim_buf_set_lines(0, 0, -1, false, SUB_SPEC)
+  child.cmd('5')
+  tested.answer_with(child, SUB_WRITTEN)
+
+  tested.order(child, 'write_implementation')
+
+  eq(shown_names(), { folder .. '/src/calc.lua', folder .. '/tests/calc_spec.lua' })
+end
+
+T['\\WI']['opens a source not written yet above the test file, unwritten'] = function()
+  local folder, record = start('tests/new_spec.lua')
+  child.cmd('4')
+
+  tested.order(child, 'write_implementation')
+
+  eq(shown_names(), { folder .. '/src/new.lua', folder .. '/tests/new_spec.lua' })
+  eq(vim.uv.fs_stat(folder .. '/src/new.lua'), nil)
+  eq(
+    first_prompt(record)[1],
+    'Write the code that makes this test of the test file tests/new_spec.lua pass,'
+      .. ' into the file src/new.lua (language: lua):'
+  )
+end
+
+T['\\WI']['in a source tells that it works from a test, asking nothing'] = function()
+  start()
+
+  tested.order(child, 'write_implementation')
+
+  eq(tested.told(child), { 'aineo: code is written from a test: ask for it in a test file' })
+  eq(#child.api.nvim_list_wins(), 1)
+end
+
+T['a new file'] = MiniTest.new_set()
+
+--- The test written into an empty test file.
+local GREET_SPEC = { "local greet = require('greet')", "it('greets', function() end)" }
+
+--- The answer that fills an empty file with `GREET_SPEC`.
+local FILLED = {
+  summary = 'Tests greet.',
+  edits = { { line = 1, last = 1, old = { '' }, new = GREET_SPEC, why = 'Tests it.' } },
+}
+
+--- Starts the child in `src/greet.lua`, whose test file is not written
+--- yet, and has the test it lists proposed in that file's buffer, the
+--- cursor there. Returns the project's folder.
+---
+---@return string folder
+local function propose_a_new_test_file()
+  local folder = start('src/greet.lua')
+  tested.answer_with(child, { tests = { { name = 'greets', checks = 'it says hi' } } })
+  tested.order(child, 'write_tests')
+  float_lines()
+  tested.answer_with(child, FILLED)
+  tested.press(child, '<CR>')
+  tested.wait_until(
+    child,
+    [[#vim.api.nvim_buf_get_extmarks(0,
+    vim.api.nvim_create_namespace('aineo_explain_fix_drawn'), 0, -1, {}) > 0 or nil]]
+  )
+  return folder
+end
+
+T['a new file']['is written with its folders and companions when its first proposal is accepted'] = function()
+  local folder = propose_a_new_test_file()
+
+  child.lua(
+    [[require('aineo.explain').accept_fix(vim.api.nvim_get_current_buf(), 'write', vim.fn.line('.'))]]
+  )
+
+  eq(vim.uv.fs_stat(folder .. '/tests/unit/greet_spec.lua') ~= nil, true)
+  eq(vim.fn.readfile(folder .. '/tests/unit/greet_spec.lua'), GREET_SPEC)
+  eq(vim.uv.fs_stat(folder .. '/tests/unit/marker.lua') ~= nil, true)
+  eq(vim.fn.readfile(folder .. '/tests/unit/marker.lua'), {})
+  eq(child.bo.modified, false)
+end
+
+T['a new file']['stays off the disk when every proposal is rejected'] = function()
+  local folder = propose_a_new_test_file()
+
+  child.lua([[require('aineo.explain').reject_all(vim.api.nvim_get_current_buf(), 'write')]])
+
+  eq(
+    child.lua_get([[#vim.api.nvim_buf_get_extmarks(0,
+    vim.api.nvim_create_namespace('aineo_explain_fix_drawn'), 0, -1, {})]]),
+    0
+  )
+  eq(vim.uv.fs_stat(folder .. '/tests/unit'), nil)
+end
+
+T['a new file']['of a source is written when its proposals are all accepted'] = function()
+  local folder = start('tests/new_spec.lua')
+  child.cmd('4')
+  tested.answer_with(child, {
+    summary = 'Greets.',
+    edits = {
+      {
+        line = 1,
+        last = 1,
+        old = { '' },
+        new = { 'local M = {}', "function M.greet() return 'hi' end", 'return M' },
+        why = 'Greets.',
+      },
+    },
+  })
+  tested.order(child, 'write_implementation')
+  tested.wait_until(
+    child,
+    [[#vim.api.nvim_buf_get_extmarks(vim.fn.bufnr('src/new.lua'),
+    vim.api.nvim_create_namespace('aineo_explain_fix_drawn'), 0, -1, {}) > 0 or nil]]
+  )
+
+  child.lua([[require('aineo.explain').accept_all(vim.fn.bufnr('src/new.lua'), 'write')]])
+
+  eq(vim.uv.fs_stat(folder .. '/src/new.lua') ~= nil, true)
+  eq(vim.fn.readfile(folder .. '/src/new.lua'), GREET)
 end
 
 return T
