@@ -184,6 +184,17 @@ T['match()']['fails past its budget of tries, and names the template too costly'
   )
 end
 
+T['match()']['matches nothing more with a template found too costly'] = function()
+  local pattern = '{path}/{a}n{b}n{c}n{d}n{e}n{f}n{g}n{h}n{i}n{j}.zz'
+  local matching = 'pkg/' .. ('n'):rep(19) .. '.zz'
+  local before = template.match(pattern, matching)
+  template.match(pattern, 'pkg/' .. ('n'):rep(120) .. '.py')
+
+  local after = template.match(pattern, matching)
+
+  eq({ before ~= nil, after }, { true, nil })
+end
+
 T['match()']['ends in a bounded time on a path many splits could match'] = function()
   local pattern = '{path}/{a}m{b}m{c}m{d}m{e}m{f}m{g}m{h}.zz'
   local path = 'pkg/' .. ('m'):rep(40) .. '.py'
