@@ -45,6 +45,25 @@ local function relative_path(top, place)
   return place and place.path:sub(#top + 2)
 end
 
+--- What a case reads of `place`: its path relative to `top`, then the
+--- value of each of `fields`, in order; nothing with no place, so that a
+--- missing place fails the case's assertion rather than the case itself.
+---
+---@param top string
+---@param place? aineo.test_layout.Place
+---@param fields string[]
+---@return any[]
+local function read_place(top, place, fields)
+  if not place then
+    return {}
+  end
+  local read = { relative_path(top, place) }
+  for position, field in ipairs(fields) do
+    read[position + 1] = place[field]
+  end
+  return read
+end
+
 local T = MiniTest.new_set({
   hooks = {
     pre_case = function()
@@ -104,7 +123,7 @@ T['test_for()']['finds the existing test file of a source by each preset']['pres
 
   local place = test_layout.test_for(vim.fs.joinpath(top, source))
 
-  eq({ relative_path(top, place), place.exists }, { test, true })
+  eq(read_place(top, place, { 'exists' }), { test, true })
 end
 
 T['test_for()']['gives the test file each preset creates for a source with none'] =
@@ -123,7 +142,7 @@ T['test_for()']['gives the test file each preset creates for a source with none'
 
   local place = test_layout.test_for(vim.fs.joinpath(top, source))
 
-  eq({ relative_path(top, place), place.exists }, { test, false })
+  eq(read_place(top, place, { 'exists' }), { test, false })
 end
 
 T['source_for()'] = MiniTest.new_set()
@@ -160,8 +179,8 @@ T['declare()']['keeps the agent’s rules, which then come before the presets'] 
 
   local place = test_layout.test_for(vim.fs.joinpath(top, 'lib/extra.py'))
   eq(
-    { answer.is_error, relative_path(top, place), place.origin },
-    { false, 'lib/extra_test.py', 'agent' }
+    { answer.is_error, read_place(top, place, { 'origin' }) },
+    { false, { 'lib/extra_test.py', 'agent' } }
   )
 end
 
@@ -324,7 +343,7 @@ T['correct()']['makes the user’s test file the test of the source before any r
 
   local place = test_layout.test_for(vim.fs.joinpath(top, 'src/shop/cart.py'))
   eq(
-    { relative_path(top, place), place.exists, place.origin, place.rule },
+    read_place(top, place, { 'exists', 'origin', 'rule' }),
     { 'checks/cart_check.py', false, 'user', 'your correction' }
   )
 end
@@ -340,7 +359,7 @@ T['correct()']['keeps the preset template the correction fits as the user’s ru
 
   local place = test_layout.test_for(vim.fs.joinpath(top, 'lib/extra.py'))
   eq(
-    { relative_path(top, place), place.origin, place.rule },
+    read_place(top, place, { 'origin', 'rule' }),
     { 'lib/extra_test.py', 'user', 'your rule (python.pytest.suffix)' }
   )
 end
@@ -359,7 +378,7 @@ T['correct()']['holds in every worktree of the repository'] = function()
   )
 
   local place = test_layout.test_for(vim.fs.joinpath(other, 'src/shop/cart.py'))
-  eq({ relative_path(other, place), place.origin }, { 'checks/cart_check.py', 'user' })
+  eq(read_place(other, place, { 'origin' }), { 'checks/cart_check.py', 'user' })
 end
 
 T['describe()'] = MiniTest.new_set()
