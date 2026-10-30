@@ -14,7 +14,8 @@ local M = {}
 --- copy of the place given for the path, `nil` and a problem for any other;
 --- `is_test()` whether `spec.sources` names the path; `correct()` records
 --- each pair it is given in `corrected`, and from then on answers the test
---- file given for that source, existing when it is on disk; `describe()` a
+--- file given for that source, existing when it is on disk, but refuses,
+--- with a problem, a test file in a folder named `outside`; `describe()` a
 --- line naming the rule of the place.
 ---
 ---@param spec tests.FakeTestLayoutSpec
@@ -39,6 +40,9 @@ function M.new(spec)
     return spec.sources[path] ~= nil
   end
   function layout.correct(source, test)
+    if test:find('/outside/', 1, true) then
+      return false, test .. ' is outside the worktree of its source'
+    end
     table.insert(layout.corrected, { source, test })
     spec.tests[source] = vim.tbl_extend('force', spec.tests[source] or {}, {
       path = test,
@@ -47,6 +51,7 @@ function M.new(spec)
       origin = 'user',
       rule = 'the user',
     })
+    return true
   end
   function layout.describe(path)
     local place = spec.tests[path] or spec.sources[path]
