@@ -18,12 +18,13 @@ local M = {}
 --- with a problem, a test file in a folder named `outside`, and keeps one
 --- in a folder named `lost` while placing none for that source from then
 --- on; `describe()` a
---- line naming the rule of the place.
+--- line naming the rule of the place; `forget()` records each repository
+--- root it is given in `forgotten`.
 ---
 ---@param spec tests.FakeTestLayoutSpec
 ---@return table
 function M.new(spec)
-  local layout = { corrected = {} }
+  local layout = { corrected = {}, forgotten = {} }
   function layout.test_for(path)
     local place = spec.tests[path]
     if not place then
@@ -58,6 +59,9 @@ function M.new(spec)
       rule = 'the user',
     })
     return true
+  end
+  function layout.forget(repository_root)
+    table.insert(layout.forgotten, repository_root)
   end
   function layout.describe(path)
     local place = spec.tests[path] or spec.sources[path]

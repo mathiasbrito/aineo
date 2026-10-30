@@ -2309,12 +2309,19 @@ own as `\w` does, with the model `write.model`, the time limit
 test layout says of the files.
 
 In a source, `\WT` first shows the test window when it is hidden
-(|aineo-test-window|), then asks for a list of the tests worth writing for
-the code around the cursor: the selected lines in Visual mode; else the
-function or method that holds the cursor's line, else the class, as the
-buffer's treesitter tree tells when Neovim has a parser for its language,
-or else as its indentation shows, from the nearest line above, indented
-less, that starts a definition; else the cursor's line alone. What is sent
+(|aineo-test-window|) and takes the test file it shows then, the one `\Wn`
+chose included: the list, the tests chosen and the file they are written
+into are that one, whatever the test window shows afterwards; when no
+window shows it any more by the time you choose, you are told and nothing
+is asked. In a file the test layout knows no test file for, `\WT` tells
+you so and asks nothing. It then asks for a list of the tests worth writing
+for the code around the cursor: the selected lines in Visual mode; else the
+function or method that holds the cursor's line, else the class (a C
+`struct`, too), as the buffer's treesitter tree tells when Neovim has a
+parser for its language, or else as its indentation shows (in Python only
+`def`, `async def` and `class` start one), from the nearest line above,
+indented less, that starts a definition; else the cursor's line alone. What
+is sent
 is those lines, the whole source, numbered, where the tests go and their
 framework, and the test file as it reads, or, for a test file not written
 yet, another test file of the project whose header and style to follow.
@@ -2362,7 +2369,10 @@ nothing, as always.
                                                            *aineo-test-window*
 `\Wt` shows the test window of the source in the current window, below it,
 half of the height they shared, or hides it, from the source or from
-itself; `\WT` and `\WI` show it when hidden. Its window bar names the test
+itself; `\WT` in a source shows it when hidden, while `\WI` shows the
+source above the test it is pressed in, not the test window. A resize of
+the editor gives the two windows half of the height each again. Its window
+bar names the test
 file from the project, `new` when it is not on disk, and the rule of the
 test layout that placed it, with its origin. While shown it follows the
 source: another source in the window above shows its test file; a buffer
@@ -2377,8 +2387,12 @@ they tell you `aineo: this works in a test window`.
 a float titled `Refine the written code` in which you type how to change
 it. The request is asked again with the proposals still left and your
 instructions, and its answer replaces them: placed as the first request's
-when none was decided yet, else wherever it belongs in the file. It is
-mapped in the buffer while the code shows, as `\Wa` is. The keys are
+when none was decided yet, else wherever it belongs in the file. A second
+`\Ws` stops the first; accepting or rejecting a proposal while it runs
+stops it too, telling you `aineo: the refinement was stopped: a proposal
+was decided`, so a decided proposal never comes back. It is mapped in the
+buffer while the code shows, as `\Wa` is, and the head row names it
+(`· \Ws refines`). The keys are
 |<Plug>(aineo-write-tests)|, |<Plug>(aineo-write-implementation)|,
 |<Plug>(aineo-test-window)|, |<Plug>(aineo-test-path)|,
 |<Plug>(aineo-test-next)| and |<Plug>(aineo-write-steer)|; `:Aineo` has no
