@@ -12,15 +12,15 @@ local M = {}
 --- What the footer of a checklist says its keys do.
 local FOOTER = ' x or <Space> marks · a marks all · <CR> writes · q cancels '
 
---- The line that lists `test`, marked or not, each line break of its name
---- and of what it checks a space.
+--- The line that lists `test`, marked or not, each line break and each NUL
+--- of its name and of what it checks a space.
 ---
 ---@param test aineo.explain.ListedTest
 ---@param marked boolean
 ---@return string
 local function line_of(test, marked)
   local line = ('[%s] %s — %s'):format(marked and 'x' or ' ', test.name, test.checks)
-  return (line:gsub('\r?\n', ' '))
+  return (line:gsub('\r?\n', ' '):gsub('%z', ' '))
 end
 
 --- The float's configuration for `lines`, the checklist's text, beside the

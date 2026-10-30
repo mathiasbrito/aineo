@@ -116,6 +116,15 @@ local LAYOUT = {
     },
   },
   sources = {
+    ['tests/unit/other_spec.lua'] = {
+      path = 'src/greet.lua',
+      exists = true,
+      candidates = { 'src/greet.lua' },
+      origin = 'preset',
+      rule = 'busted spec',
+      framework = 'busted',
+      inline = false,
+    },
     ['tests/unit/greet_spec.lua'] = {
       path = 'src/greet.lua',
       exists = true,
@@ -456,6 +465,63 @@ end
 T['the checklist']['shows a name of several lines on one'] = function()
   start()
   tested.answer_with(child, { tests = { { name = 'adds\ntwo', checks = 'x' } } })
+  child.cmd('4')
+
+  tested.order(child, 'write_tests')
+
+  eq(float_lines(), { '[ ] adds two — x' })
+end
+
+T['the checklist']['opens: the listing goes on while a proposal of the source is decided'] = function()
+  start()
+  tested.answer_with(child, {
+    summary = 'Doubles.',
+    edits = {
+      { line = 3, last = 3, old = { CALC[3] }, new = { CALC[3], '  a = a * 2' }, why = 'Doubles.' },
+    },
+  })
+  child.lua(
+    [[require('aineo.explain').propose_write({
+      buffer = vim.api.nvim_get_current_buf(),
+      window = vim.api.nvim_get_current_win(),
+      line = 3,
+      range = { 3, 3 },
+      tools = false,
+      command = ...,
+      model = 'haiku',
+      timeout_ms = 180000,
+      ask_key = '\\w',
+    })]],
+    { tested.FAKE_CLAUDE }
+  )
+  tested.wait_until(
+    child,
+    [[#vim.api.nvim_buf_get_extmarks(0,
+    vim.api.nvim_create_namespace('aineo_explain_fix_drawn'), 0, -1, {}) > 0 or nil]]
+  )
+  tested.answer_with(child, TWO_TESTS)
+  child.lua('vim.env.AINEO_FAKE_CLAUDE_PRINT_MS = "1500"')
+  child.cmd('4')
+  tested.order(child, 'write_tests')
+
+  child.lua([[require('aineo.explain').accept_fix(vim.fn.bufnr('src/calc.lua'), 'write', 3)]])
+
+  eq(float_lines(), {
+    '[ ] adds two numbers — 1 + 2 is 3',
+    '[ ] adds a negative number — 1 + -2 is -1',
+  })
+  eq(
+    vim.tbl_contains(
+      tested.told(child),
+      'aineo: the refinement was stopped: a proposal was decided'
+    ),
+    false
+  )
+end
+
+T['the checklist']['shows a NUL in a name as a space'] = function()
+  start()
+  tested.answer_with(child, { tests = { { name = 'adds\0two', checks = 'x' } } })
   child.cmd('4')
 
   tested.order(child, 'write_tests')
@@ -807,11 +873,13 @@ local FILLED = {
 
 --- Starts the child in `src/greet.lua`, whose test file is not written
 --- yet, and has the test it lists proposed in that file's buffer, the
---- cursor there. Returns the project's folder.
+--- cursor there. Returns the project's folder and the record of the fake
+--- `claude`.
 ---
 ---@return string folder
+---@return string record
 local function propose_a_new_test_file()
-  local folder = start('src/greet.lua')
+  local folder, record = start('src/greet.lua')
   tested.answer_with(child, { tests = { { name = 'greets', checks = 'it says hi' } } })
   tested.order(child, 'write_tests')
   float_lines()
@@ -822,7 +890,7 @@ local function propose_a_new_test_file()
     [[#vim.api.nvim_buf_get_extmarks(0,
     vim.api.nvim_create_namespace('aineo_explain_fix_drawn'), 0, -1, {}) > 0 or nil]]
   )
-  return folder
+  return folder, record
 end
 
 T['a new file']['is written with its folders and companions when its first proposal is accepted'] = function()
@@ -922,6 +990,102 @@ T['a new file']['stays off the disk when its one proposal is rejected'] = functi
     0
   )
   eq(vim.uv.fs_stat(folder .. '/tests/unit'), nil)
+end
+
+T['a new file']['that the layout does not give is not written by an accept, and no warning is told'] = function()
+  local folder = start('src/greet.lua')
+  child.cmd('edit ' .. folder .. '/tests/unit/other_spec.lua')
+  tested.answer_with(child, FILLED)
+  tested.order(child, 'write_tests')
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { 'it greets' })
+  tested.press(child, '<CR>')
+  tested.wait_until(
+    child,
+    [[#vim.api.nvim_buf_get_extmarks(0,
+    vim.api.nvim_create_namespace('aineo_explain_fix_drawn'), 0, -1, {}) > 0 or nil]]
+  )
+
+  child.lua([[require('aineo.explain').accept_fix(vim.api.nvim_get_current_buf(), 'write', 1)]])
+
+  eq(vim.uv.fs_stat(folder .. '/tests/unit'), nil)
+  eq(tested.told(child), { 'aineo: code written (u undoes it)' })
+end
+
+T['a new file']['is not told of when code is accepted in a test file on disk'] = function()
+  start('tests/calc_spec.lua')
+  child.api.nvim_buf_set_lines(0, 3, 3, false, { '  -- adding nothing gives 0' })
+  tested.answer_with(child, {
+    summary = 'Tests adding nothing.',
+    edits = {
+      {
+        line = 4,
+        last = 4,
+        old = { '  -- adding nothing gives 0' },
+        new = { "  it('adds nothing', function() end)" },
+        why = 'Tests it.',
+      },
+    },
+  })
+  tested.order(child, 'write_tests', { range = { 4, 4 } })
+  tested.wait_until(
+    child,
+    [[#vim.api.nvim_buf_get_extmarks(0,
+    vim.api.nvim_create_namespace('aineo_explain_fix_drawn'), 0, -1, {}) > 0 or nil]]
+  )
+
+  child.lua([[require('aineo.explain').accept_fix(vim.api.nvim_get_current_buf(), 'write', 4)]])
+
+  eq(tested.told(child), { 'aineo: code written (u undoes it)' })
+end
+
+T['a new file']['from \\WT in a source never writes a test file the layout did not give, and says so'] = function()
+  local folder, record = start()
+  child.lua(
+    [[require('aineo.explain').toggle_test_window(vim.api.nvim_get_current_win(), _G.layout)]]
+  )
+  child.cmd('wincmd j | edit ' .. folder .. '/notes/scratch.lua | wincmd k')
+  tested.answer_with(child, TWO_TESTS)
+  child.cmd('4')
+  tested.order(child, 'write_tests')
+  tested.wait_until(child, [[vim.api.nvim_win_get_config(0).relative ~= '' or nil]])
+  tested.answer_with(child, FILLED)
+  tested.press(child, '<CR>')
+  tested.requests(record, 2)
+  tested.wait_until(
+    child,
+    [[#vim.api.nvim_buf_get_extmarks(0,
+    vim.api.nvim_create_namespace('aineo_explain_fix_drawn'), 0, -1, {}) > 0 or nil]]
+  )
+
+  child.lua([[require('aineo.explain').accept_fix(vim.api.nvim_get_current_buf(), 'write', 1)]])
+
+  eq(vim.uv.fs_stat(folder .. '/notes'), nil)
+  eq(
+    vim.tbl_contains(
+      tested.told(child),
+      'aineo: notes/scratch.lua is not the test file the layout gives src/calc.lua:'
+        .. ' accepting code there does not write it'
+    ),
+    true
+  )
+end
+
+T['a new file']['once written, is listed by \\WT as on disk'] = function()
+  local _, record = propose_a_new_test_file()
+  child.lua(
+    [[require('aineo.explain').accept_fix(vim.api.nvim_get_current_buf(), 'write', vim.fn.line('.'))]]
+  )
+  child.cmd('wincmd k')
+  tested.answer_with(child, TWO_TESTS)
+
+  tested.order(child, 'write_tests')
+
+  eq(
+    tested
+      .requests(record, 3)[3].stdin
+      :find('The test file tests/unit/greet_spec.lua reads:', 1, true) ~= nil,
+    true
+  )
 end
 
 T['a new file']['stays off the disk when every proposal is rejected'] = function()

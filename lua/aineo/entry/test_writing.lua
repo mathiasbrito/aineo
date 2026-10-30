@@ -6,6 +6,7 @@
 
 local M = {}
 
+local registry = require('aineo.entry.registry')
 local resolved_config = require('aineo.entry.settings').resolved
 
 --- The layout of the project's tests the explain home is handed: where a
@@ -14,6 +15,19 @@ local resolved_config = require('aineo.entry.settings').resolved
 ---@return aineo.explain.TestLayout
 local function test_layout()
   return require('aineo.test_layout')
+end
+
+--- Whether the layout of the aineo tab in the tab page `tabpage` is zoomed
+--- (`aineo.layout`'s `is_zoomed()`); `false` for a tab page aineo has no
+--- tab in.
+---
+---@param tabpage integer
+---@return boolean
+local function zoomed(tabpage)
+  local tab = vim.iter(registry.tab_list):find(function(candidate)
+    return candidate.page() == tabpage
+  end)
+  return tab ~= nil and tab.homes.layout.is_zoomed()
 end
 
 --- Whether `buffer` holds a file: it has a name and an empty `'buftype'`,
@@ -65,6 +79,7 @@ local function ask(name, range)
     line = vim.fn.line('.'),
     range = range,
     layout = test_layout(),
+    zoomed = zoomed,
     command = config.claude.cmd,
     model = config.write.model,
     timeout_ms = config.write.timeout_ms,
@@ -122,7 +137,8 @@ end
 
 --- What `\Wt` and `<Plug>(aineo-test-window)` do: show the test window of
 --- the source the current window shows, below it, or hide it
---- (`aineo.explain`'s `toggle_test_window()`).
+--- (`aineo.explain`'s `toggle_test_window()`), a resize leaving it alone
+--- while the layout is zoomed (`zoomed()`).
 ---
 --- Raises an error when the current buffer holds no file.
 function M.toggle_test_window()
@@ -130,7 +146,7 @@ function M.toggle_test_window()
   if not holds_a_file(vim.api.nvim_win_get_buf(window)) then
     error('the test window is shown for the buffer of a file', 0)
   end
-  require('aineo.explain').toggle_test_window(window, test_layout())
+  require('aineo.explain').toggle_test_window(window, test_layout(), zoomed)
 end
 
 --- What `\Wp` and `<Plug>(aineo-test-path)` do: in a test window, ask for

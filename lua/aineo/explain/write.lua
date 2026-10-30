@@ -403,7 +403,8 @@ end
 ---@param writing aineo.explain.WriteRequest
 ---@param ask aineo.explain.WriteAsk
 ---@param folder string
-local function start(writing, ask, folder)
+---@param refines? boolean whether it refines the written code the buffer shows
+local function start(writing, ask, folder, refines)
   local buffer = writing.buffer
   local path = vim.api.nvim_buf_get_name(buffer)
   local asked = {
@@ -433,6 +434,7 @@ local function start(writing, ask, folder)
     line = ask.first,
     timeout_ms = writing.timeout_ms,
     doing = 'writing code',
+    refines = refines,
     arguments = request.arguments(writing.command, {
       model = writing.model,
       tools = writing.tools,
@@ -706,7 +708,7 @@ local function refine_with(buffer, instructions)
   local ask = #left == shown.count and shown.ask or ask_with_some_decided(shown, left)
   local brief = vim.deepcopy(shown.writing.brief or {})
   table.insert(brief, refinement_part(left, instructions))
-  start(vim.tbl_extend('force', shown.writing, { brief = brief }), ask, shown.folder)
+  start(vim.tbl_extend('force', shown.writing, { brief = brief }), ask, shown.folder, true)
 end
 
 --- Opens the float in which the user types how to change the written code

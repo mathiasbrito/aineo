@@ -71,6 +71,7 @@ local zoom = require('aineo.layout.zoom')
 ---@field toggle_claude_numbers fun()
 ---@field toggle_zoom fun()
 ---@field toggle_full_zoom fun()
+---@field is_zoomed fun(): boolean
 ---@field input_buffer fun(): integer|nil
 ---@field right_column_area fun(): aineo.layout.Area|nil
 ---@field let_go? fun() only on a layout `M.new()` made: removes its handlers and wipes its Input
@@ -2390,6 +2391,15 @@ local function make_layout(input_name, group_name)
   --- in none of the right column's windows.
   local NOT_IN_THE_COLUMN =
     'aineo: nothing zoomed — the cursor is in none of the windows aineo shows in the right column (the agent, changes, terminal, run and explorer panes)'
+
+  --- Whether the layout is zoomed now: a window of the right column
+  --- (`M.toggle_zoom()`), or a window over the whole tab page
+  --- (`M.toggle_full_zoom()`).
+  ---
+  ---@return boolean
+  function M.is_zoomed()
+    return state.zoom ~= nil or state.full_zoom ~= nil
+  end
 
   --- Zooms the window of the right column the cursor is in, under whichever
   --- pane is shown: the window takes every row the column's other windows can

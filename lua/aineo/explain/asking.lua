@@ -17,6 +17,7 @@ local M = {}
 ---@field arguments string[] the words that start Claude Code
 ---@field prompt string what Claude Code reads
 ---@field folder string the folder it runs in
+---@field refines? boolean whether it refines the written code its buffer shows, which a decision then stops
 ---@field on_end fun(ended: vim.SystemCompleted) called once it ended, when its buffer is still valid and no other request of its kind replaced it
 
 --- Starts Claude Code for `asking`, in place of the request of its kind
@@ -41,6 +42,7 @@ function M.start(asking)
     window = asking.window,
     line = asking.line,
     timeout_ms = asking.timeout_ms,
+    refines = asking.refines,
     on_timeout = function(timed_out)
       runs.stop(timed_out)
       vim.notify(

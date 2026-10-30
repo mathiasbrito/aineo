@@ -28,7 +28,8 @@ M.KEYS = {
   steer = '\\Ws',
 }
 
---- `place` with its paths, relative to `folder`, made absolute.
+--- `place` with its paths, relative to `folder`, made absolute, and
+--- `folder` as the root of the repository it was read in.
 ---
 ---@param folder string
 ---@param place table
@@ -42,6 +43,7 @@ local function absolute_place(folder, place)
     candidates = vim.tbl_map(absolute, place.candidates or { place.path }),
     sibling = place.sibling and absolute(place.sibling) or nil,
     companions = vim.tbl_map(absolute, place.companions or {}),
+    root = folder,
   })
 end
 
