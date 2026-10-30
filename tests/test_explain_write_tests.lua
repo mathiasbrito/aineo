@@ -625,6 +625,46 @@ T['a new file']['is written with its folders and companions when its first propo
   eq(child.bo.modified, false)
 end
 
+T['a new file']['is not written over a file that appeared at its path, which is told'] = function()
+  local folder = propose_a_new_test_file()
+  vim.fn.mkdir(folder .. '/tests/unit', 'p')
+  vim.fn.writefile({ '-- mine' }, folder .. '/tests/unit/greet_spec.lua')
+
+  child.lua(
+    [[require('aineo.explain').accept_fix(vim.api.nvim_get_current_buf(), 'write', vim.fn.line('.'))]]
+  )
+
+  eq(vim.fn.readfile(folder .. '/tests/unit/greet_spec.lua'), { '-- mine' })
+  eq(vim.uv.fs_stat(folder .. '/tests/unit/marker.lua'), nil)
+  eq(child.bo.modified, true)
+  eq(
+    vim.tbl_contains(
+      tested.told(child),
+      'aineo: tests/unit/greet_spec.lua is on disk now: nothing was written over it'
+    ),
+    true
+  )
+end
+
+T['a new file']['is written only at the path the layout gave'] = function()
+  local folder = propose_a_new_test_file()
+  child.cmd('file ' .. folder .. '/tests/unit/renamed_spec.lua')
+
+  child.lua(
+    [[require('aineo.explain').accept_fix(vim.api.nvim_get_current_buf(), 'write', vim.fn.line('.'))]]
+  )
+
+  eq(vim.uv.fs_stat(folder .. '/tests/unit/renamed_spec.lua'), nil)
+  eq(vim.uv.fs_stat(folder .. '/tests/unit/greet_spec.lua'), nil)
+  eq(
+    vim.tbl_contains(
+      tested.told(child),
+      'aineo: tests/unit/renamed_spec.lua is not where tests/unit/greet_spec.lua was to be written: nothing was written'
+    ),
+    true
+  )
+end
+
 T['a new file']['stays off the disk when every proposal is rejected'] = function()
   local folder = propose_a_new_test_file()
 
