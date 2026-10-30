@@ -349,6 +349,38 @@ function M.assess(view, stored, catalogue)
   return assessments
 end
 
+--- The rules in force for any file of `view`'s repository, each named once
+--- in the order of trust: the user's, the agent's, then for each extension
+--- of the repository's files the presets it shows or defaults to, ranked
+--- (`rules_for()`).
+---
+---@param view aineo.test_layout.View
+---@param stored aineo.test_layout.Stored
+---@param catalogue aineo.test_layout.Catalogue
+---@return { description: string, origin: string }[]
+function M.in_force(view, stored, catalogue)
+  local named, seen = {}, {}
+  local function name(rule)
+    if not seen[rule.description] then
+      seen[rule.description] = true
+      table.insert(named, { description = rule.description, origin = rule.origin })
+    end
+  end
+  vim.iter(user_rules(stored.user, catalogue)):each(name)
+  vim.iter(agent_rules(stored.agent, catalogue)):flatten():each(name)
+  local extensions = {}
+  for _, file in ipairs(view.files) do
+    local extension = file:match('%.([^./]+)$')
+    if extension and not extensions[extension] then
+      extensions[extension] = true
+      for _, ranked in ipairs(ranked_presets(view, catalogue, extension)) do
+        vim.iter(preset_rules(ranked)):each(name)
+      end
+    end
+  end
+  return named
+end
+
 --- The preset template that gives `test` for `source`, both relative to
 --- `view`'s root, as the user's correction states them: the first preset
 --- of `catalogue` for `source`'s extension, its rule and its test
