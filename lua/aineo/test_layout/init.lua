@@ -245,12 +245,14 @@ end
 --- The rules in force for the tests of the git worktree that holds the
 --- folder `directory`, each once, in the order of trust, named with who
 --- stated it as `describe()` names a rule, such as `python.pytest.flat,
---- from the repository`; and the worktree's folder. Nil and why when
---- `directory` is in no git worktree.
+--- from the repository`; the worktree's folder; and the agent's kept rules
+--- aineo skips, each with why (`aineo.test_layout.trust`'s `skipped()`).
+--- Nil and why when `directory` is in no git worktree.
 ---
 ---@param directory string
 ---@return string[]? rules
 ---@return string root_or_problem the worktree's folder, or why there are no rules
+---@return string[]? skipped
 function M.rules_in_force(directory)
   local folder = vim.uv.fs_realpath(directory)
   local root = folder and repository.worktree_of(folder)
@@ -261,7 +263,7 @@ function M.rules_in_force(directory)
   local named = vim.tbl_map(function(rule)
     return named_rule(rule.description, rule.origin)
   end, trust.in_force(view_of(root), stored, presets))
-  return named, root
+  return named, root, trust.skipped(stored, presets)
 end
 
 --- The ids of the presets an agent may name, in the catalogue's order.
@@ -340,6 +342,11 @@ function M.declare(declaration)
   local root = folder and repository.worktree_of(folder)
   if not root then
     return refused(('worktree: %s is not a git checkout'):format(declaration.worktree))
+  end
+  local framework_problem = declaration.framework ~= nil
+    and rules.text_problem(declaration.framework)
+  if framework_problem then
+    return refused('framework: ' .. framework_problem)
   end
   local main = repository.main_worktree_of(root)
   local stored = store.read(state_directory(), main)
