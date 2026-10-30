@@ -104,7 +104,7 @@ end
 ---
 ---@return string
 local function test_window_bar()
-  return child.lua_get([[vim.wo[vim.fn.win_getid(vim.fn.winnr('j'))].winbar]])
+  return child.lua_get([[vim.wo[vim.fn.win_getid(vim.fn.winnr('$'))].winbar]])
 end
 
 T['the test window']['names the test file from the project, its rule and its origin in its bar'] = function()
@@ -124,6 +124,16 @@ T['the test window']['shows a test file not written yet as new, writing nothing'
   eq(test_window_bar(), 'tests/other_spec.lua · new · agent rule 1 (agent)')
   eq(windows()[2].name, folder .. '/tests/other_spec.lua')
   eq(vim.uv.fs_stat(folder .. '/tests/other_spec.lua'), nil)
+end
+
+T['the test window']['no longer says new once its test file is written'] = function()
+  local folder = start()
+  child.cmd('edit ' .. folder .. '/src/other.lua')
+  toggle()
+
+  child.cmd('wincmd j | write')
+
+  eq(test_window_bar(), 'tests/other_spec.lua · agent rule 1 (agent)')
 end
 
 T['the test window']['follows the source: another source above shows its test file'] = function()
@@ -193,6 +203,25 @@ T['in the test window']['editing the path tells the layout the correction and sh
   )
   eq(windows()[2].name, folder .. '/tests/unit/calc_test.lua')
   eq(test_window_bar(), 'tests/unit/calc_test.lua · new · the user (user)')
+end
+
+T['in the test window']['a correction the layout refuses is told, the test file kept'] = function()
+  local folder = start()
+  toggle()
+  child.cmd('wincmd j')
+  child.lua([[
+    vim.ui.input = function(_, on_confirm)
+      on_confirm('/elsewhere/outside/calc_spec.lua')
+    end
+  ]])
+
+  child.lua([[require('aineo.explain').correct_test_file(vim.api.nvim_get_current_win())]])
+
+  eq(tested.told(child), {
+    'aineo: the test file was not corrected: /elsewhere/outside/calc_spec.lua'
+      .. ' is outside the worktree of its source',
+  })
+  eq(windows()[2].name, folder .. '/tests/calc_spec.lua')
 end
 
 return T
