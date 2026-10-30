@@ -19,6 +19,7 @@ local M = {}
 ---@field companions? string[] the file names created beside a new test file's folder when its siblings' folders have them
 ---@field extensions? string[] the extensions of the sources a preset's rule is for
 ---@field from_root? boolean whether the templates are read from the repository's root rather than the unit's
+---@field pinned? boolean whether the rule's test file is the place of its source whether it exists or not: the user's correction
 ---@field origin 'user'|'agent'|'repository'|'preset' who stated the rule
 ---@field description string the rule's name for the user, such as a preset's id
 
@@ -149,6 +150,21 @@ local function test_paths(view, rule, source)
   return vim.tbl_map(function(test)
     return translate(view, rule, rule.source, test, source)
   end, rule.tests)
+end
+
+--- The test files `rule` gives `source`, a path relative to `view`'s
+--- root, in the order of its test templates; none when its source template
+--- does not match `source` or it has no test template.
+---
+---@param view aineo.test_layout.View
+---@param rule aineo.test_layout.Rule
+---@param source string
+---@return string[]
+function M.tests_of(view, rule, source)
+  if not (rule.source and rule.tests and matches_source(view, rule, source)) then
+    return {}
+  end
+  return test_paths(view, rule, source)
 end
 
 --- The compiled form of each discovery glob met so far, by glob.
@@ -339,7 +355,16 @@ local function companions_of(rule, view, path, sibling)
 end
 
 --- Where the test file of `source`, a path relative to `view`'s root, is
---- by `rules`, in order, or nil and why not.
+--- by `rules`, in order, or nil and why not — no rule matches it, or it is
+--- a test file itself (an inline rule aside).
+---
+--- The place is the best existing candidate — those the rules' templates
+--- name, in the order of the rules then shortest path first, else those
+--- whose text names the source (`text_matches()`) — or the file the
+--- creating rule gives (the first marked `create`, else the first that
+--- matches), with its sibling and companions; when the first rule that
+--- matches is pinned, the user's correction, its file is the place whether
+--- it exists or not.
 ---
 ---@param rules aineo.test_layout.Rule[]
 ---@param view aineo.test_layout.View
@@ -366,6 +391,11 @@ function M.test_for(rules, view, source)
     found = text_matches(rules, view, source, creating)
   end
   local best = found[1]
+  if matching[1].pinned then
+    local pinned = test_paths(view, matching[1], source)[1]
+    best = view.has[pinned] and { path = pinned, rule = matching[1] } or nil
+    creating = matching[1]
+  end
   local rule = best and best.rule or creating
   local path = best and best.path or test_paths(view, creating, source)[1]
   local sibling = not best and nearest_test(rules, view, path) or nil

@@ -29,7 +29,8 @@ local function preset_of(catalogue, id)
 end
 
 --- The rules of the user's corrections, `user`: each pair as a rule of its
---- own, read from the repository's root, then each preset template a
+--- own, read from the repository's root and pinned — its test file is its
+--- source's whether it exists or not — then each preset template a
 --- correction fitted, as the user's rule.
 ---
 ---@param user? { pairs: table<string, string>, rules: { preset: string, rule: integer, test: integer }[] }
@@ -43,6 +44,7 @@ local function user_rules(user, catalogue)
     local rule =
       rules.of_statement({ source = source, test = user.pairs[source] }, 'user', 'your correction')
     rule.from_root = true
+    rule.pinned = true
     table.insert(found, rule)
   end
   for _, fitted in ipairs(user and user.rules or {}) do
@@ -234,6 +236,144 @@ function M.rules_for(view, stored, catalogue, path)
     end
   end
   return in_force
+end
+
+--- What the reply to an agent's rules says of one of them.
+---@class aineo.test_layout.Assessment
+---@field description string the rule's description, such as `agent rule 2 (python.pytest.flat)`
+---@field pairs integer how many existing sources it pairs with existing tests
+---@field contradictions integer how many of those tests another rule pairs with a different source
+---@field after string[] the ids of the presets it is kept after, as it pairs nothing while they pair sources
+
+--- The extensions of the files of `view` that a source template of
+--- `rules_of_one` matches.
+---
+---@param rules_of_one aineo.test_layout.Rule[]
+---@param view aineo.test_layout.View
+---@return string[]
+local function matched_extensions(rules_of_one, view)
+  local found = {}
+  for _, file in ipairs(view.files) do
+    local extension = file:match('%.([^./]+)$')
+    if extension and not found[extension] then
+      for _, rule in ipairs(rules_of_one) do
+        if #finding.tests_of(view, rule, file) > 0 then
+          found[extension] = true
+        end
+      end
+    end
+  end
+  local extensions = vim.tbl_keys(found)
+  table.sort(extensions)
+  return extensions
+end
+
+--- The groups of rules that could pair a test of `view` with a source:
+--- the user's, each agent statement's, and every preset the repository
+--- shows or defaults to for the extensions it has; each group with a key.
+---
+---@param view aineo.test_layout.View
+---@param stored aineo.test_layout.Stored
+---@param catalogue aineo.test_layout.Catalogue
+---@param stated aineo.test_layout.Rule[][] the rules of each agent statement
+---@return { key: string, rules: aineo.test_layout.Rule[] }[]
+local function rule_groups(view, stored, catalogue, stated)
+  local groups = { { key = 'user', rules = user_rules(stored.user, catalogue) } }
+  for position, rules_of_one in ipairs(stated) do
+    table.insert(groups, { key = 'agent ' .. position, rules = rules_of_one })
+  end
+  local seen = {}
+  for _, extension in ipairs(matched_extensions(vim.iter(stated):flatten():totable(), view)) do
+    for _, ranked in ipairs(ranked_presets(view, catalogue, extension)) do
+      if not seen[ranked.preset.id] then
+        seen[ranked.preset.id] = true
+        table.insert(groups, { key = ranked.preset.id, rules = preset_rules(ranked) })
+      end
+    end
+  end
+  return groups
+end
+
+--- What the reply to the agent's rules of `stored` says of each, in their
+--- order: how many existing sources it pairs with existing tests; how many
+--- of those tests another rule in force — the user's, another statement's,
+--- a preset's — pairs with a different source; and, for one that pairs
+--- nothing while presets for the files it matches pair some, those
+--- presets, which it is kept after (`rules_for()`).
+---
+---@param view aineo.test_layout.View
+---@param stored aineo.test_layout.Stored
+---@param catalogue aineo.test_layout.Catalogue
+---@return aineo.test_layout.Assessment[]
+function M.assess(view, stored, catalogue)
+  local stated = agent_rules(stored.agent, catalogue)
+  local groups = rule_groups(view, stored, catalogue, stated)
+  local sources_of_test = {}
+  for _, group in ipairs(groups) do
+    for _, rule in ipairs(group.rules) do
+      for _, pair in ipairs(finding.paired_sources(rule, view)) do
+        sources_of_test[pair.test] = sources_of_test[pair.test] or {}
+        table.insert(sources_of_test[pair.test], { key = group.key, source = pair.source })
+      end
+    end
+  end
+  local assessments = {}
+  for position, rules_of_one in ipairs(stated) do
+    local key = 'agent ' .. position
+    local pairs_count, contradictions = 0, 0
+    for _, rule in ipairs(rules_of_one) do
+      for _, pair in ipairs(finding.paired_sources(rule, view)) do
+        pairs_count = pairs_count + 1
+        local contradicted = vim.iter(sources_of_test[pair.test]):any(function(other)
+          return other.key ~= key and other.source ~= pair.source
+        end)
+        contradictions = contradictions + (contradicted and 1 or 0)
+      end
+    end
+    local after = {}
+    for _, extension in ipairs(pairs_count == 0 and matched_extensions(rules_of_one, view) or {}) do
+      for _, ranked in ipairs(ranked_presets(view, catalogue, extension)) do
+        if ranked.pairs > 0 and not vim.tbl_contains(after, ranked.preset.id) then
+          table.insert(after, ranked.preset.id)
+        end
+      end
+    end
+    table.insert(assessments, {
+      description = rules_of_one[1] and rules_of_one[1].description
+        or ('agent rule %d'):format(position),
+      pairs = pairs_count,
+      contradictions = contradictions,
+      after = after,
+    })
+  end
+  return assessments
+end
+
+--- The preset template that gives `test` for `source`, both relative to
+--- `view`'s root, as the user's correction states them: the first preset
+--- of `catalogue` for `source`'s extension, its rule and its test
+--- template, by their positions; nil when none does.
+---
+---@param view aineo.test_layout.View
+---@param catalogue aineo.test_layout.Catalogue
+---@param source string
+---@param test string
+---@return { preset: string, rule: integer, test: integer }?
+function M.fitting_template(view, catalogue, source, test)
+  local extension = source:match('%.([^./]+)$') or ''
+  for _, preset in ipairs(catalogue.presets) do
+    if is_for(preset, extension) then
+      for position, rule in ipairs(rules.of_preset(preset, 'preset')) do
+        local tests = finding.tests_of(view, rule, source)
+        for alternative, path in ipairs(tests) do
+          if path == test then
+            return { preset = preset.id, rule = position, test = alternative }
+          end
+        end
+      end
+    end
+  end
+  return nil
 end
 
 return M
