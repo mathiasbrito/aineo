@@ -24,6 +24,14 @@ M.FIX_SCHEMA = '{"type":"object","properties":{"summary":{"type":"string"},'
   .. '"required":["line","last","old","new","why"],"additionalProperties":false}}},'
   .. '"required":["summary","edits"],"additionalProperties":false}'
 
+--- The JSON Schema the answer of a list of tests must match: an object
+--- holding the list of tests, each its name and what it checks, and
+--- nothing else. Written as text so that its keys keep one order.
+M.TESTS_SCHEMA = '{"type":"object","properties":{"tests":{"type":"array","items":'
+  .. '{"type":"object","properties":{"name":{"type":"string"},"checks":{"type":"string"}},'
+  .. '"required":["name","checks"],"additionalProperties":false}}},'
+  .. '"required":["tests"],"additionalProperties":false}'
+
 --- The read-only tools a request with tools may use, each without asking.
 local READ_ONLY_TOOLS = 'Read,Grep,Glob'
 
@@ -309,6 +317,8 @@ end
 ---@field request? string the request the user typed, the code going after the line `first`, or in its place when it is blank; absent when the lines `first` to `last` hold the request, which the code replaces
 ---@field blank? boolean whether the line `first`, which the code for the request typed goes to, is blank: the code then replaces it
 ---@field whole_file? boolean whether the code may also edit other places of the file, each a further edit (`WHOLE_FILE_RULES`)
+---@field anywhere? boolean whether the code goes wherever it belongs in the file, `request` saying what to write and where (`ANYWHERE_RULES`), with no line asked about
+---@field brief? string[] what else Claude Code is shown, each a part of the prompt of its own, before the lines of the file
 ---@field lines string[] every line of the buffer, as it stands
 
 --- What a prompt for code written in place of the lines that hold its
@@ -384,17 +394,34 @@ local WHOLE_FILE_RULES = 'The code may also need edits elsewhere in this file:'
   .. ' No two edits share a line, and there are at most 20 edits.'
   .. ' Edit no other file.'
 
+--- How code written wherever it belongs in a file is answered, which
+--- `aineo.explain.write` holds the answer to.
+local ANYWHERE_RULES = 'Answer in summary what the code does in one sentence,'
+  .. ' and the edits that write it into this file, each where the file’s own conventions put it,'
+  .. ' with any import, fixture or helper it needs.'
+  .. ' Write only into this file.'
+  .. ' Each edit gives in line and last the first and last lines it replaces,'
+  .. ' and repeats in old exactly those lines of the numbered text below,'
+  .. ' verbatim with their indentation and without their numbers;'
+  .. ' new holds the lines that replace them, and, to add lines, starts with the line they go after;'
+  .. ' an empty file has one empty line 1, which an edit replaces.'
+  .. ' No two edits share a line, and there are at most 20 edits.'
+  .. ' When it cannot be done in this file, answer no edits and say why in the summary.'
+
 --- `parts`, the head, request and rules of a prompt for `code`, followed
---- by `WHOLE_FILE_RULES` when the code may edit the whole file, then by
---- every line of the buffer, numbered (`numbered()`), each after an empty
---- line.
+--- by `WHOLE_FILE_RULES` when code asked at a line may edit the whole file, then by
+--- each part of `code.brief`, then by every line of the buffer, numbered
+--- (`numbered()`), each after an empty line.
 ---
 ---@param code aineo.explain.WriteCode
 ---@param parts string[]
 ---@return string[]
 local function with_whole_file_rules(code, parts)
-  if code.whole_file then
+  if code.whole_file and not code.anywhere then
     vim.list_extend(parts, { '', WHOLE_FILE_RULES })
+  end
+  for _, part in ipairs(code.brief or {}) do
+    vim.list_extend(parts, { '', part })
   end
   return vim.list_extend(parts, { '', table.concat(numbered(code.lines), '\n') })
 end
@@ -424,8 +451,11 @@ local function write_typed_prompt(code)
   )
 end
 
---- The prompt Claude Code reads to write code for `code`: for the request
---- typed, the code going after a line or in place of a blank one
+--- The prompt Claude Code reads to write code for `code`: for code written
+--- wherever it belongs, the request, which says what to write and where,
+--- how to answer (`ANYWHERE_RULES`), what else Claude Code is shown and
+--- every line of the buffer, numbered (`with_whole_file_rules()`); for the
+--- request typed, the code going after a line or in place of a blank one
 --- (`write_typed_prompt()`); else for
 --- the request that the lines `code.first` to `code.last` hold: the file,
 --- its language — `unknown` when the buffer has no `'filetype'` — and those
@@ -436,6 +466,9 @@ end
 ---@param code aineo.explain.WriteCode
 ---@return string
 function M.write_prompt(code)
+  if code.anywhere then
+    return table.concat(with_whole_file_rules(code, { code.request, '', ANYWHERE_RULES }), '\n')
+  end
   if code.request then
     return write_typed_prompt(code)
   end
@@ -452,6 +485,100 @@ function M.write_prompt(code)
     }),
     '\n'
   )
+end
+
+--- A file a prompt shows as it reads.
+---@class aineo.explain.ShownFile
+---@field path string its path from the folder Claude Code runs in
+---@field lines string[]
+
+--- The tests a list of tests is asked for.
+---@class aineo.explain.TestsCode
+---@field path string the source's path from the folder Claude Code runs in
+---@field language string the source buffer's `'filetype'`, empty when it has none
+---@field first integer the first line of the code to test, from 1
+---@field last integer the last line of the code to test
+---@field test_path string the test file's path from the folder Claude Code runs in
+---@field framework? string the test framework the test file is written for
+---@field test_file? aineo.explain.ShownFile the test file, when it exists
+---@field sibling? aineo.explain.ShownFile a test file of the project, shown for a test file that does not exist yet
+---@field lines string[] every line of the source buffer, as it stands
+
+--- What a prompt for a list of tests says first, as a `string.format()`
+--- pattern given the first and last line of the code, the file and its
+--- language.
+local TESTS_HEAD = 'List the tests worth writing for the code that lines %d to %d of the file %s'
+  .. ' (language: %s) hold, as numbered below.'
+
+--- How a list of tests is answered.
+local TESTS_RULES = 'Answer in tests one entry for each test: in name the name the test file would give it,'
+  .. ' and in checks what it checks, on one line. Answer no tests when none is worth writing.'
+
+--- Where the tests of `code` go: the test file, and its framework when it
+--- is known.
+---
+---@param code aineo.explain.TestsCode
+---@return string
+local function test_file_line(code)
+  if code.framework then
+    return ('The tests go in the test file %s, written for %s.'):format(
+      code.test_path,
+      code.framework
+    )
+  end
+  return ('The tests go in the test file %s.'):format(code.test_path)
+end
+
+--- What a prompt about tests shows of the test file of `code`: its lines
+--- as it reads; else, for a test file that does not exist yet, that it
+--- does not, and the lines of another test file of the project, whose
+--- header and style it follows, when there is one.
+---
+---@param code aineo.explain.TestsCode
+---@return string[]
+local function test_file_part(code)
+  if code.test_file then
+    return vim.list_extend(
+      { ('The test file %s reads:'):format(code.test_path), '' },
+      code.test_file.lines
+    )
+  end
+  local missing = ('The test file %s does not exist yet.'):format(code.test_path)
+  if not code.sibling then
+    return { missing }
+  end
+  return vim.list_extend({
+    missing .. (' The test file %s of the project reads, its header and style to follow:'):format(
+      code.sibling.path
+    ),
+    '',
+  }, code.sibling.lines)
+end
+
+--- The prompt Claude Code reads to list the tests worth writing for the
+--- lines `code.first` to `code.last` of a source: the lines, the file and
+--- its language — `unknown` when the buffer has no `'filetype'` — where the
+--- tests go (`test_file_line()`), how to answer (`TESTS_RULES`), the test
+--- file or another of the project (`test_file_part()`), then every line of
+--- the source, numbered.
+---
+---@param code aineo.explain.TestsCode
+---@return string
+function M.tests_prompt(code)
+  local parts = {
+    TESTS_HEAD:format(
+      code.first,
+      code.last,
+      code.path,
+      code.language ~= '' and code.language or 'unknown'
+    ),
+    test_file_line(code),
+    TESTS_RULES,
+    '',
+  }
+  vim.list_extend(parts, test_file_part(code))
+  vim.list_extend(parts, { '' })
+  return table.concat(vim.list_extend(parts, numbered(code.lines)), '\n')
 end
 
 return M

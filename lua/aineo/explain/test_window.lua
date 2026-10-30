@@ -138,20 +138,14 @@ local function close(source_window)
   shown[source_window] = nil
 end
 
---- Hides the test window when `window` is it or the window of its source
---- (`close()`); else shows the test window of the source `window` shows
---- (`open()`), its test file found by `layout`; tells the user, once, when
---- `layout` finds none, and opens nothing then.
+--- Opens the test window of the source `source_window` shows (`open()`),
+--- its test file found by `layout`, and returns what it shows; tells the
+--- user, once, when `layout` finds none, and opens nothing then.
 ---
----@param window integer
+---@param source_window integer
 ---@param layout aineo.explain.TestLayout
-function M.toggle(window, layout)
-  local shown_for = source_window_of(window)
-  if shown_for then
-    close(shown_for)
-    return
-  end
-  local source_window = window
+---@return aineo.explain.ShownTests|nil
+local function open_for(source_window, layout)
   local source = vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(source_window))
   local place, problem = layout.test_for(source)
   if not place then
@@ -162,9 +156,39 @@ function M.toggle(window, layout)
       ),
       vim.log.levels.WARN
     )
-    return
+    return nil
   end
   open(source_window, source, place, layout)
+  return shown[source_window]
+end
+
+--- Hides the test window when `window` is it or the window of its source
+--- (`close()`); else shows the test window of the source `window` shows,
+--- its test file found by `layout` (`open_for()`).
+---
+---@param window integer
+---@param layout aineo.explain.TestLayout
+function M.toggle(window, layout)
+  local shown_for = source_window_of(window)
+  if shown_for then
+    close(shown_for)
+    return
+  end
+  open_for(window, layout)
+end
+
+--- The test window of the source `source_window` shows, and what it
+--- shows, opened when hidden (`open_for()`); `nil` when the layout knows
+--- no test file of the source, the user told so.
+---
+---@param source_window integer
+---@param layout aineo.explain.TestLayout
+---@return aineo.explain.ShownTests|nil
+function M.ensure(source_window, layout)
+  if shown[source_window] and vim.api.nvim_win_is_valid(shown[source_window].window) then
+    return shown[source_window]
+  end
+  return open_for(source_window, layout)
 end
 
 --- Has the test window of `source_window`, when it has one, show the test

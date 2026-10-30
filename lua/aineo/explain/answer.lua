@@ -176,4 +176,31 @@ function M.fix_in(output)
   return { summary = object.summary, edits = object.edits }
 end
 
+--- A test a list of tests names.
+---@class aineo.explain.ListedTest
+---@field name string the name the test file would give it
+---@field checks string what it checks, on one line
+
+--- The tests the result `output` lists, each with a name and what it
+--- checks, both text, the others left out; or `nil` and what is wrong with
+--- it: the error an error result says, or that it holds no list of tests.
+---
+---@param output string what Claude Code printed
+---@return aineo.explain.ListedTest[]|nil tests
+---@return string? problem
+function M.tests_in(output)
+  local failure = M.error_in(output)
+  if failure then
+    return nil, failure
+  end
+  local result = decoded(output)
+  local object = type(result) == 'table' and answered_object(result)
+  if type(object) ~= 'table' or not vim.islist(object.tests) then
+    return nil, 'its answer holds no list of tests'
+  end
+  return vim.tbl_filter(function(test)
+    return type(test) == 'table' and type(test.name) == 'string' and type(test.checks) == 'string'
+  end, object.tests)
+end
+
 return M
