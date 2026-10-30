@@ -157,6 +157,38 @@ T['the keys']['\\Ws while written code shows opens the float that refines it'] =
   eq(float_title(), ' Refine the written code: <CR> sends · q or <Esc> cancels ')
 end
 
+T['the keys']['\\Ws is named in the head row of written code'] = function()
+  start()
+  tested.answer_with(child, {
+    summary = 'Doubles.',
+    edits = {
+      { line = 3, last = 3, old = { CALC[3] }, new = { CALC[3], '  a = a * 2' }, why = 'Doubles.' },
+    },
+  })
+  child.cmd('3')
+  tested.press(child, '\\w')
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { 'Double a first.' })
+  tested.press(child, '<CR>')
+
+  local drawn = tested.wait_until(
+    child,
+    [[(function()
+      local text = {}
+      for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(0,
+        vim.api.nvim_create_namespace('aineo_explain_fix_drawn'), 0, -1, { details = true })) do
+        for _, row in ipairs(mark[4].virt_lines or {}) do
+          for _, chunk in ipairs(row) do
+            table.insert(text, chunk[1])
+          end
+        end
+      end
+      return #text > 0 and table.concat(text) or nil
+    end)()]]
+  )
+
+  eq(drawn:find('\\Wd shows the diff · \\Ws refines', 1, true) ~= nil, true)
+end
+
 T['the keys']['\\Ws refines the test \\WT proposes too'] = function()
   local folder = start()
   child.cmd('edit ' .. folder .. '/tests/calc_spec.lua')
