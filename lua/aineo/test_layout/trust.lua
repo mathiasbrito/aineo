@@ -5,6 +5,7 @@
 local finding = require('aineo.test_layout.finding')
 local modules = require('aineo.test_layout.modules')
 local rules = require('aineo.test_layout.rules')
+local template = require('aineo.test_layout.template')
 
 local M = {}
 
@@ -71,17 +72,27 @@ local function user_rules(user, catalogue)
   return found
 end
 
+--- Why each agent statement checked so far is skipped, by its JSON;
+--- `false` for one that is read.
+---@type table<string, string|false>
+local reasons = {}
+
 --- Why the agent's kept statement `statement` is skipped — what
 --- `rules.statements_problem()` refuses of it now, such as a glob kept by
 --- an older aineo that `vim.glob` cannot read — without the `rules[1].`
---- that problem begins with; nil when it is read.
+--- that problem begins with; nil when it is read. Each statement is checked
+--- once per editor, and its answer kept: the check compiles its globs.
 ---
 ---@param statement aineo.test_layout.Statement
 ---@param catalogue aineo.test_layout.Catalogue
 ---@return string?
 local function skip_reason(statement, catalogue)
-  local problem = rules.statements_problem({ statement }, catalogue)
-  return problem and (problem:gsub('^rules%[1%]%.?', ''))
+  local key = vim.json.encode(statement)
+  if reasons[key] == nil then
+    local problem = rules.statements_problem({ statement }, catalogue)
+    reasons[key] = problem and (problem:gsub('^rules%[1%]%.?', '')) or false
+  end
+  return reasons[key] or nil
 end
 
 --- The rules of the agent's statements, `agent`, in their order, each
@@ -119,6 +130,10 @@ local function agent_rules(agent, catalogue)
   return stated
 end
 
+--- The compiled form of each marker glob met so far, by glob.
+---@type table<string, vim.lpeg.Pattern>
+local marker_globs = {}
+
 --- Whether `view`'s repository holds `marker`: a file a glob names, or a
 --- file a glob names that holds a text.
 ---
@@ -127,7 +142,8 @@ end
 ---@return boolean
 local function holds_marker(view, marker)
   local glob = type(marker) == 'table' and marker.file or marker
-  local pattern = vim.glob.to_lpeg(glob)
+  marker_globs[glob] = marker_globs[glob] or vim.glob.to_lpeg(glob)
+  local pattern = marker_globs[glob]
   for _, file in ipairs(view.files) do
     if pattern:match(file) then
       if type(marker) ~= 'table' then
@@ -435,8 +451,30 @@ function M.in_force(view, stored, catalogue)
   return named
 end
 
---- The agent's kept statements that are skipped, each as `agent rule <n>:
---- <why>` (`skip_reason()`), in their order.
+--- The template of `statement`, a rule of its own, that a match found too
+--- costly (`template.too_costly()`), as written or read from its unit's
+--- folder; nil when none is.
+---
+---@param statement aineo.test_layout.Statement
+---@return string?
+local function costly_template(statement)
+  local costly = {}
+  for _, pattern in ipairs(template.too_costly()) do
+    costly[pattern] = true
+  end
+  local tests = type(statement.test) == 'string' and { statement.test } or statement.test or {}
+  for _, pattern in ipairs(vim.list_extend({ statement.source }, tests)) do
+    if costly[pattern] or costly['{unit}/' .. pattern] then
+      return pattern
+    end
+  end
+  return nil
+end
+
+--- The agent's kept statements aineo does not follow, in their order: each
+--- skipped as `agent rule <n> is skipped: <why>` (`skip_reason()`), and
+--- each whose template a match found too costly as `agent rule <n> is too
+--- costly to match: <template>`.
 ---
 ---@param stored aineo.test_layout.Stored
 ---@param catalogue aineo.test_layout.Catalogue
@@ -445,8 +483,11 @@ function M.skipped(stored, catalogue)
   local named = {}
   for position, statement in ipairs(stored.agent and stored.agent.rules or {}) do
     local reason = skip_reason(statement, catalogue)
+    local costly = not reason and statement.source and costly_template(statement)
     if reason then
-      table.insert(named, ('agent rule %d: %s'):format(position, reason))
+      table.insert(named, ('agent rule %d is skipped: %s'):format(position, reason))
+    elseif costly then
+      table.insert(named, ('agent rule %d is too costly to match: %s'):format(position, costly))
     end
   end
   return named

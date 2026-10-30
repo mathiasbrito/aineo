@@ -339,6 +339,25 @@ T['declare()']['refuses the rules, keeping none, naming the field at fault'] = M
     },
     { { 'python.pytest.flat' }, 'rules[1]: expected an object' },
     {
+      { { source = '{name}.py', test = 'x', discover = { 'tests/{a,b}{c,d}{e,f}{g,h}{i,j}.py' } } },
+      'rules[1].discover[1]: more than four brace groups',
+    },
+    {
+      {
+        {
+          source = '{name}.py',
+          test = 'x',
+          discover = { 'tests/{a,b,c,d,e,f,g,h}.{a,b,c,d,e,f,g,h,i}' },
+        },
+      },
+      'rules[1].discover[1]: more than 64 alternatives',
+    },
+    {
+      { { source = '{a}m{b}m{a}.py', test = 'x' } },
+      'rules[1].source: a placeholder given twice: {a}',
+    },
+    { { { source = '{name}.py', test = '.GIT/config' } }, 'rules[1].test: a .git segment' },
+    {
       { { source = '{name}.py', test = 'x', discover = { 'tests/[' } } },
       'rules[1].discover[1]: not a glob aineo can read',
     },
@@ -607,13 +626,57 @@ T['a kept rule aineo cannot read']['is skipped, and the next rule answers'] = fu
   )
 end
 
+T['a kept rule aineo cannot read']['costs each call little, whatever an older aineo kept'] =
+  MiniTest.new_set({
+    parametrize = {
+      {
+        {
+          source = '{path}/{name}.py',
+          test = 'tests/test_{name}.py',
+          discover = { 'tests/' .. ('{a,aa}'):rep(18) .. '.py' },
+        },
+      },
+      { { source = '{path}/{a}m{b}m{c}m{d}m{e}m{a}m{b}m{c}m{d}m{e}.zz', test = '{path}/t.zz' } },
+      { { source = '{path}/{a}m{b}m{c}m{d}m{e}m{f}m{g}m{h}m{i}m{j}.zz', test = '{path}/t.zz' } },
+    },
+  })
+
+T['a kept rule aineo cannot read']['costs each call little, whatever an older aineo kept']['rule'] = function(
+  rule
+)
+  local top = repository_of('python')
+  write_file(top, 'pkg/' .. ('m'):rep(120) .. '.py')
+  keep_agent_rules(top, { rule })
+  local source = vim.fs.joinpath(top, 'lib/utils.py')
+  test_layout.test_for(source)
+  local started = vim.uv.hrtime()
+
+  test_layout.test_for(source)
+  test_layout.is_test(source)
+  test_layout.describe(source)
+
+  eq((vim.uv.hrtime() - started) / 1e6 < 100, true)
+end
+
+T['a kept rule aineo cannot read']['is named among the rules in force, too costly to match'] = function()
+  local top = repository_of('python')
+  write_file(top, 'pkg/' .. ('m'):rep(120) .. '.py')
+  local costly = '{path}/{a}m{b}m{c}m{d}m{e}m{f}m{g}m{h}m{i}m{j}.zz'
+  keep_agent_rules(top, { { source = costly, test = '{path}/t.zz' } })
+  test_layout.test_for(vim.fs.joinpath(top, 'lib/utils.py'))
+
+  local _, _, skipped = test_layout.rules_in_force(top)
+
+  eq(skipped, { 'agent rule 1 is too costly to match: ' .. costly })
+end
+
 T['a kept rule aineo cannot read']['is named among the rules in force, as skipped'] = function()
   local top = repository_of('python')
   keep_agent_rules(top, UNREADABLE_THEN_SUFFIX)
 
   local _, _, skipped = test_layout.rules_in_force(top)
 
-  eq(skipped, { 'agent rule 1: discover[1]: not a glob aineo can read' })
+  eq(skipped, { 'agent rule 1 is skipped: discover[1]: not a glob aineo can read' })
 end
 
 T['the text fallback'] = MiniTest.new_set()

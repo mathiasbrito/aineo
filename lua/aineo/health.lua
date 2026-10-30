@@ -1060,7 +1060,7 @@ local function check_test_layout()
     )
   )
   for _, rule in ipairs(skipped or {}) do
-    vim.health.warn((rule:gsub('^(agent rule %d+): ', '%1 is skipped: ')))
+    vim.health.warn(rule)
   end
 end
 
