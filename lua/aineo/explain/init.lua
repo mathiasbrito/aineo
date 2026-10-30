@@ -18,6 +18,7 @@ local request = require('aineo.explain.request')
 local runs = require('aineo.explain.runs')
 local steer = require('aineo.explain.steer')
 local test_window = require('aineo.explain.test_window')
+local test_writing = require('aineo.explain.test_writing')
 local write = require('aineo.explain.write')
 
 local M = {}
@@ -607,6 +608,16 @@ end
 ---@param window integer
 function M.correct_test_file(window)
   test_window.correct_file(window)
+end
+
+--- Writes tests for the code `order.buffer` holds, a file's
+--- (`aineo.explain.test_writing`'s `write_tests()`).
+---
+--- Raises an error naming `claude.cmd` when its command cannot be run.
+---
+---@param order aineo.explain.TestOrder
+function M.write_tests(order)
+  test_writing.write_tests(order)
 end
 
 return M

@@ -3,13 +3,13 @@
 --- (`aineo.explain.preview`) the user accepts or rejects, as a fix is.
 
 local answer = require('aineo.explain.answer')
+local asking = require('aineo.explain.asking')
 local fix = require('aineo.explain.fix')
 local kept = require('aineo.explain.kept')
 local kinds = require('aineo.explain.kinds')
 local placement = require('aineo.explain.placement')
 local preview = require('aineo.explain.preview')
 local request = require('aineo.explain.request')
-local runs = require('aineo.explain.runs')
 local steer = require('aineo.explain.steer')
 
 local M = {}
@@ -28,12 +28,14 @@ local M = {}
 ---@field timeout_ms integer how long the request may run
 ---@field keys? aineo.explain.FixKeys the keys the preview maps; none when absent
 ---@field ask_key string what asks for code again, as the user is told it
+---@field brief? string[] what else Claude Code is shown, each a part of the prompt of its own
 
 --- Where code written for a request goes: below the line asked about
 --- (`below_line`) or in its place when it is blank (`in_blank_line`), for a
---- request the user typed, or in place of the lines that hold the request
---- (`in_request_lines`).
----@alias aineo.explain.WritePlace 'below_line'|'in_blank_line'|'in_request_lines'
+--- request the user typed, in place of the lines that hold the request
+--- (`in_request_lines`), or wherever it belongs in the file, as the request
+--- says (`anywhere`).
+---@alias aineo.explain.WritePlace 'below_line'|'in_blank_line'|'in_request_lines'|'anywhere'
 
 --- What the code is asked for: the request, and the lines that hold it,
 --- which the code replaces, or the line the code goes below or in place of.
@@ -42,6 +44,7 @@ local M = {}
 ---@field last integer the last line of the request, or the line asked about
 ---@field request string the request: the text the user typed, or the text of the lines that hold it
 ---@field place aineo.explain.WritePlace where the code goes
+---@field title? string what the code is written for, in a few words, named above it in place of the request
 
 --- What a request for code needs once its Claude Code has ended.
 ---@class aineo.explain.WriteAsked
@@ -232,6 +235,43 @@ local function placed_in_the_whole_file(asked, answered)
   return nil, { summary = answered.summary, edits = edits, subject = subject }
 end
 
+--- Why `answered`, code written wherever it belongs in the file for
+--- `asked`, cannot be shown, or `nil`, with its edits placed in the lines
+--- sent (`aineo.explain.placement`), in the order of their lines, the
+--- first its subject: it may hold at most `MOST_EDITS` edits, and the
+--- placement must take them all, which refuses edits that share a line;
+--- with the reason.
+---
+---@param asked aineo.explain.WriteAsked
+---@param answered aineo.explain.Fix
+---@return string|nil fault
+---@return aineo.explain.KeptCode? code
+local function placed_anywhere(asked, answered)
+  if #answered.edits > MOST_EDITS then
+    return ('it holds more than %d edits'):format(MOST_EDITS)
+  end
+  local edits, refusal = placement.place(asked.lines, answered.edits)
+  if refusal then
+    return refusal
+  end
+  return nil, { summary = answered.summary, edits = edits, subject = 1 }
+end
+
+--- How the code answered for `ask`, as `writing` asks it, is placed in
+--- the lines sent, or refused: wherever it belongs (`placed_anywhere()`),
+--- in the whole file (`placed_in_the_whole_file()`), or at the lines asked
+--- about alone (`placed_at_the_line_asked()`).
+---
+---@param writing aineo.explain.WriteRequest
+---@param ask aineo.explain.WriteAsk
+---@return fun(asked: aineo.explain.WriteAsked, answered: aineo.explain.Fix): string|nil, aineo.explain.KeptCode?
+local function placement_of(writing, ask)
+  if ask.place == 'anywhere' then
+    return placed_anywhere
+  end
+  return writing.whole_file and placed_in_the_whole_file or placed_at_the_line_asked
+end
+
 --- What the code written for `ask`, as `writing` asks it, is kept under
 --- (`aineo.explain.kept`'s `write_key()`).
 ---
@@ -250,15 +290,37 @@ local function kept_key(writing, ask)
   })
 end
 
+--- Moves to `writing.window`, when it still shows `writing.buffer`, its
+--- cursor on the first line of the first of `edits`, so that code written
+--- wherever it belongs is seen where it starts.
+---
+---@param writing aineo.explain.WriteRequest
+---@param edits aineo.explain.PlacedEdit[]
+local function go_to_the_first(writing, edits)
+  local window = writing.window
+  if
+    not vim.api.nvim_win_is_valid(window) or vim.api.nvim_win_get_buf(window) ~= writing.buffer
+  then
+    return
+  end
+  vim.api.nvim_set_current_win(window)
+  vim.api.nvim_win_set_cursor(window, { edits[1].first, 0 })
+end
+
 --- Shows `code`, written for `ask`, in `writing.buffer` as a preview
 --- (`aineo.explain.preview`), the request named at the top of the edit of
---- the lines asked about (`shortened()`); each edit a proposal of its own
---- for code that may edit the whole file.
+--- the lines asked about (`shortened()`), or, for code written wherever
+--- it belongs, what it is written for, the cursor moved to its first edit
+--- first (`go_to_the_first()`); each edit a proposal of its own for code
+--- that may edit the whole file.
 ---
 ---@param writing aineo.explain.WriteRequest
 ---@param ask aineo.explain.WriteAsk
 ---@param code aineo.explain.KeptCode
 local function show(writing, ask, code)
+  if ask.place == 'anywhere' then
+    go_to_the_first(writing, code.edits)
+  end
   preview.show(writing.buffer, {
     window = writing.window,
     summary = code.summary,
@@ -267,7 +329,7 @@ local function show(writing, ask, code)
     subject_index = code.subject,
     keys = writing.keys,
     ask_key = writing.ask_key,
-    subject = { text = shortened(ask.request), look = kinds.WRITE },
+    subject = { text = shortened(ask.title or ask.request), look = kinds.WRITE },
     kind = kinds.WRITE,
   })
 end
@@ -278,8 +340,7 @@ end
 --- code was asked, which any move of its `b:changedtick` says; the run
 --- failed or answered no code (`code_of()`); the answer has no edits, when
 --- its summary is told; or the code was refused, with the reason
---- (`placed_at_the_line_asked()`, or `placed_in_the_whole_file()` for code
---- that may edit the whole file).
+--- (`placement_of()`).
 ---
 ---@param asked aineo.explain.WriteAsked
 ---@param ended vim.SystemCompleted
@@ -301,8 +362,7 @@ local function show_answer(asked, ended)
     vim.notify('aineo: no code written: ' .. answered.summary, vim.log.levels.INFO)
     return
   end
-  local placed = writing.whole_file and placed_in_the_whole_file or placed_at_the_line_asked
-  local fault, code = placed(asked, answered)
+  local fault, code = placement_of(writing, asked.ask)(asked, answered)
   if fault then
     vim.notify('aineo: the written code was refused: ' .. fault, vim.log.levels.WARN)
     return
@@ -313,7 +373,8 @@ end
 
 --- Starts Claude Code for the code `ask` asks for in `writing.buffer`,
 --- from `folder`, the project's folder, showing above the line `ask.first`
---- that it is working until it ends, then the code it answered
+--- that it is working (`aineo.explain.asking`) until it ends, then the
+--- code it answered
 --- (`show_answer()`, unless the buffer is gone by then), or until its
 --- timeout, which stops it and tells the user.
 ---
@@ -340,51 +401,30 @@ local function start(writing, ask, folder)
     request = ask.place ~= 'in_request_lines' and ask.request or nil,
     blank = ask.place == 'in_blank_line',
     whole_file = writing.whole_file,
+    anywhere = ask.place == 'anywhere',
+    brief = writing.brief,
     lines = asked.lines,
   })
-  local run = runs.begin({
+  asking.start({
     kind = kinds.WRITE,
     deep = writing.tools,
     buffer = buffer,
     window = writing.window,
     line = ask.first,
     timeout_ms = writing.timeout_ms,
-    on_timeout = function(timed_out)
-      runs.stop(timed_out)
-      vim.notify(
-        ('aineo: writing code failed: Claude Code did not answer within %g s'):format(
-          writing.timeout_ms / 1000
-        ),
-        vim.log.levels.ERROR
-      )
-    end,
-  })
-  local started, process = pcall(
-    vim.system,
-    request.arguments(writing.command, {
+    doing = 'writing code',
+    arguments = request.arguments(writing.command, {
       model = writing.model,
       tools = writing.tools,
       effort = writing.effort,
       schema = request.FIX_SCHEMA,
     }),
-    { stdin = prompt, cwd = folder, text = true },
-    function(ended)
-      vim.schedule(function()
-        if runs.find(buffer, kinds.WRITE) ~= run then
-          return
-        end
-        runs.forget(run)
-        if vim.api.nvim_buf_is_valid(buffer) then
-          show_answer(asked, ended)
-        end
-      end)
-    end
-  )
-  if not started then
-    runs.forget(run)
-    error('claude.cmd cannot be run: ' .. tostring(process):gsub('^%S+:%d+: ', ''), 0)
-  end
-  run.process = process
+    prompt = prompt,
+    folder = folder,
+    on_end = function(ended)
+      show_answer(asked, ended)
+    end,
+  })
 end
 
 --- What the user is told when the code kept for a request is shown again.
@@ -423,6 +463,18 @@ local function ask_for(writing, ask, folder)
   if not show_kept(writing, ask) then
     start(writing, ask, folder)
   end
+end
+
+--- Shows the code kept for `ask` (`show_kept()`), else asks for it,
+--- running Claude Code in `folder`, the project's folder (`ask_for()`).
+---
+--- Raises an error naming `claude.cmd` when its command cannot be run.
+---
+---@param writing aineo.explain.WriteRequest
+---@param ask aineo.explain.WriteAsk
+---@param folder string
+function M.ask(writing, ask, folder)
+  ask_for(writing, ask, folder)
 end
 
 --- The namespace of the extmarks that follow the lines requests typed in
