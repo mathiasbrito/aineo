@@ -2,21 +2,57 @@
 --- with its missing folders and the files written beside it, when the user
 --- first accepts code in it, and never before.
 
+local folders = require('aineo.explain.folders')
+
 local M = {}
 
---- The files written beside each buffer's file, by buffer, for the buffers
---- whose file is written once code is first accepted in it.
----@type table<integer, string[]>
+--- A file waiting for the first code accepted in its buffer.
+---@class aineo.explain.ExpectedFile
+---@field path string the absolute path the layout of the project's tests gave it
+---@field companions string[] the absolute paths of the files written beside it
+
+--- The files waiting to be written, by buffer.
+---@type table<integer, aineo.explain.ExpectedFile>
 local expected = {}
 
---- Has the file of `buffer`, which is not on disk, written when code is
---- first accepted in it (`write_if_expected()`), with `companions`, the
---- absolute paths of files written beside it, each empty, when missing.
+--- Has the file of `buffer`, at `path`, which the layout of the project's
+--- tests gave and which is not on disk, written when code is first
+--- accepted in it (`write_if_expected()`), with `companions`, the absolute
+--- paths of files written beside it, each empty, when missing.
 ---
 ---@param buffer integer
+---@param path string
 ---@param companions string[]
-function M.expect(buffer, companions)
-  expected[buffer] = companions
+function M.expect(buffer, path, companions)
+  expected[buffer] = { path = path, companions = companions }
+end
+
+--- `path` from the project that holds it, as the user is told it.
+---
+---@param path string
+---@return string
+local function shown_path(path)
+  return vim.fs.relpath(folders.project_of(path), path) or path
+end
+
+--- Why the file `waiting` for `buffer` cannot be written now, or `nil`:
+--- the buffer is no longer named with its path, or something is on disk
+--- at that path, which is never written over.
+---
+---@param buffer integer
+---@param waiting aineo.explain.ExpectedFile
+---@return string|nil
+local function refusal_of(buffer, waiting)
+  local name = vim.api.nvim_buf_get_name(buffer)
+  if name ~= waiting.path then
+    return ('%s is not where %s was to be written: nothing was written'):format(
+      shown_path(name),
+      shown_path(waiting.path)
+    )
+  end
+  if vim.uv.fs_stat(waiting.path) then
+    return ('%s is on disk now: nothing was written over it'):format(shown_path(waiting.path))
+  end
 end
 
 --- Writes `path` empty, with its missing folders, unless it is on disk.
@@ -30,20 +66,27 @@ local function write_empty(path)
   vim.fn.writefile({}, path)
 end
 
---- Writes the file of `buffer` when it was expected (`expect()`) and is
---- still not on disk, with its missing folders and its companions, then
---- forgets it; tells the user, once, what was written, or why it could
---- not be. A buffer not expected, or whose file is on disk by then, is
---- left as it is.
+--- Writes the file of `buffer` when it was expected (`expect()`), at the
+--- path it was given, with its missing folders and its companions, then
+--- forgets it; tells the user, once, what was written, or why nothing was
+--- (`refusal_of()`: the buffer renamed, or something on disk at that path
+--- at that moment), leaving the buffer unwritten then. A buffer not
+--- expected is left as it is.
 ---
 ---@param buffer integer
 function M.write_if_expected(buffer)
-  local companions = expected[buffer]
+  local waiting = expected[buffer]
   expected[buffer] = nil
-  local path = vim.api.nvim_buf_get_name(buffer)
-  if not companions or vim.uv.fs_stat(path) then
+  if not waiting then
     return
   end
+  local refusal = refusal_of(buffer, waiting)
+  if refusal then
+    vim.notify('aineo: ' .. refusal, vim.log.levels.WARN)
+    return
+  end
+  local path = waiting.path
+  local companions = waiting.companions
   local written, problem = pcall(function()
     vim.fn.mkdir(vim.fs.dirname(path), 'p')
     vim.api.nvim_buf_call(buffer, function()
@@ -58,10 +101,7 @@ function M.write_if_expected(buffer)
     )
     return
   end
-  vim.notify(
-    ('aineo: %s written, a new file'):format(vim.fn.fnamemodify(path, ':~:.')),
-    vim.log.levels.INFO
-  )
+  vim.notify(('aineo: %s written, a new file'):format(shown_path(path)), vim.log.levels.INFO)
 end
 
 --- Forgets `buffer`, whose file is then never written by `write_if_expected()`.

@@ -137,10 +137,21 @@ local function named_key(preview, action)
   return preview.mapped[action] and preview.keys[action] or preview.kind.plugs[action]
 end
 
+--- Whether the head row of `preview` names what refines it: a kind that can
+--- be refined, written code, whose request gave the key that refines it,
+--- or gave no keys at all, its `<Plug>` mappings then named.
+---
+---@param preview aineo.explain.Preview
+---@return boolean
+local function names_refining(preview)
+  return preview.kind.plugs.steer ~= nil and (preview.keys == nil or preview.keys.steer ~= nil)
+end
+
 --- What a head row of `preview` says of the decision: that its buffer is
 --- read-only until it is accepted or rejected, while its 'modifiable' is
---- off, and what accepts it, rejects it and shows its diff (`named_key()`);
---- for what is `stale`, what its kind says when the code under it changed
+--- off, and what accepts it, rejects it and shows its diff (`named_key()`),
+--- then what refines it, for written code (`names_refining()`); for what is
+--- `stale`, what its kind says when the code under it changed
 --- (`aineo.explain.kinds`' `changed`), what rejects it and what asks again.
 ---
 ---@param preview aineo.explain.Preview
@@ -158,7 +169,11 @@ local function decision_text(preview, stale)
     vim.bo[preview.buffer].modifiable and '%s accepts · %s rejects'
     or 'read-only until %s accepts or %s rejects'
   ):format(named_key(preview, 'accept'), named_key(preview, 'reject'))
-  return ('%s · %s shows the diff'):format(keys, named_key(preview, 'diff'))
+  local text = ('%s · %s shows the diff'):format(keys, named_key(preview, 'diff'))
+  if not names_refining(preview) then
+    return text
+  end
+  return ('%s · %s refines'):format(text, named_key(preview, 'steer'))
 end
 
 --- What the head row of `preview` says (`decision_text()`); for a preview
