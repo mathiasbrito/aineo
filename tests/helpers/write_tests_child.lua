@@ -177,8 +177,9 @@ function M.order(child, function_name, fields)
   )
 end
 
---- Waits until `predicate`, a Lua expression the child evaluates, is true,
---- or `PATIENCE_MS` is over; returns its last value.
+--- Waits until `predicate`, a Lua expression the child evaluates, is
+--- neither `nil` nor `false`, or `PATIENCE_MS` is over; returns its last
+--- value, `nil` for `nil`.
 ---
 ---@param child table
 ---@param predicate string
@@ -187,6 +188,9 @@ function M.wait_until(child, predicate)
   local value
   vim.wait(M.PATIENCE_MS, function()
     value = child.lua_get(predicate)
+    if value == vim.NIL then
+      value = nil
+    end
     return value
   end, 20)
   return value
