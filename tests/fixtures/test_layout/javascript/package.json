@@ -1,0 +1,4 @@
+{
+  "name": "fixture",
+  "devDependencies": { "jest": "29.7.0" }
+}
