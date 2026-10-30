@@ -138,6 +138,21 @@ local function close(source_window)
   shown[source_window] = nil
 end
 
+--- Tells the user, once, that the layout knows no test file of the source
+--- at `source`, and `problem`, why.
+---
+---@param source string
+---@param problem string
+local function tell_no_test_file(source, problem)
+  vim.notify(
+    ('aineo: no test file is known for %s: %s'):format(
+      vim.fs.relpath(folders.project_of(source), source) or source,
+      problem
+    ),
+    vim.log.levels.WARN
+  )
+end
+
 --- Opens the test window of the source `source_window` shows (`open()`),
 --- its test file found by `layout`, and returns what it shows; tells the
 --- user, once, when `layout` finds none, and opens nothing then.
@@ -149,13 +164,7 @@ local function open_for(source_window, layout)
   local source = vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(source_window))
   local place, problem = layout.test_for(source)
   if not place then
-    vim.notify(
-      ('aineo: no test file is known for %s: %s'):format(
-        vim.fs.relpath(folders.project_of(source), source) or source,
-        problem
-      ),
-      vim.log.levels.WARN
-    )
+    tell_no_test_file(source, problem)
     return nil
   end
   open(source_window, source, place, layout)
@@ -308,9 +317,9 @@ end
 --- the test file the test window of `window` shows — `window` a test
 --- window or the window of its source — for the path of the source's test
 --- file, and, for a path given, tells the layout the correction and shows
---- the test file it then places (`show()`), the file at that path when it
---- places none; a correction the layout refuses is told to the user, once,
---- and changes nothing. Nothing when the user gives none.
+--- the test file it then places (`show()`); a correction the layout
+--- refuses, or after which it places no test file, is told to the user,
+--- once, and changes nothing. Nothing when the user gives none.
 ---
 ---@param window integer
 function M.correct_file(window)
@@ -334,15 +343,12 @@ function M.correct_file(window)
       vim.notify('aineo: the test file was not corrected: ' .. problem, vim.log.levels.WARN)
       return
     end
-    show(tests, tests.source, tests.layout.test_for(tests.source) or {
-      path = path,
-      exists = vim.uv.fs_stat(path) ~= nil,
-      candidates = {},
-      origin = 'user',
-      rule = 'the user',
-      inline = false,
-      companions = {},
-    })
+    local place, missing = tests.layout.test_for(tests.source)
+    if not place then
+      tell_no_test_file(tests.source, missing)
+      return
+    end
+    show(tests, tests.source, place)
   end)
 end
 

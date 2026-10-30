@@ -2212,8 +2212,9 @@ mode while the code shows, never over a key of yours, and removed when it
 goes; the fix's `\Va`, `\Vr` and `\Vd` are not mapped for it. `\W` alone still
 asks for code, once 'timeoutlen' has passed with no second `W`
 (|aineo-write-file|), nor, while the code shows, `a`, `r` or `d`, after it;
-followed by any other key, it asks at once. The head row names these keys:
-`read-only until \Wa accepts or \Wr rejects · \Wd shows the diff`. Shown as
+followed by any other key, it asks at once. The head row names these keys
+and the one that refines the code (|aineo-write-steer|): `read-only until
+\Wa accepts or \Wr rejects · \Wd shows the diff · \Ws refines`. Shown as
 a diff from the buffer's first line, as code always is in a file of one line,
 the head row and the why rows are
 drawn once, below the old lines and before the new ones, rather than above
@@ -2266,7 +2267,8 @@ answer does not matter.
 Each edit shows as a proposal of its own, as written code does, with its own
 head row naming its place among them, counted from the top of the buffer,
 and its keys: `write 1/2 · read-only until \Wa accepts or \Wr rejects · \Wd
-shows the diff · ]w [w move · \WA accepts all · \WR rejects all`; the request
+shows the diff · \Ws refines · ]w [w move · \WA accepts all · \WR rejects
+all`; the request
 is named above the proposal at the cursor's line or the request's lines,
 which is the one brought into view; `\Wd` brings the proposal it shows as a
 diff, or as the overlay again, into view instead. `]w` and `[w` move the
@@ -2350,9 +2352,12 @@ file and the whole source, numbered. In any other file `\WI` tells you
 A test file or a source not on disk shows as an empty buffer of its name,
 which nothing writes until you accept its first proposal, with `\Wa` or
 `\WA`: it is then written, with its missing folders and the files the
-test layout writes beside a new test file, such as Python's `__init__.py`.
-Rejecting every proposal leaves nothing on disk; accepting in a file that
-exists writes nothing, as always.
+test layout writes beside a new test file, such as Python's `__init__.py`,
+at the path the test layout gave and nowhere else. When something is on
+disk at that path by then, or the buffer was given another name, nothing is
+written, you are told, and the buffer stays unwritten. Rejecting every
+proposal leaves nothing on disk; accepting in a file that exists writes
+nothing, as always.
 
                                                            *aineo-test-window*
 `\Wt` shows the test window of the source in the current window, below it,

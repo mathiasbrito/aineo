@@ -224,4 +224,22 @@ T['in the test window']['a correction the layout refuses is told, the test file 
   eq(windows()[2].name, folder .. '/tests/calc_spec.lua')
 end
 
+T['in the test window']['a correction after which the layout places no test file is told'] = function()
+  local folder = start()
+  toggle()
+  child.cmd('wincmd j')
+  child.lua([[
+    vim.ui.input = function(_, on_confirm)
+      on_confirm('tests/lost/calc_spec.lua')
+    end
+  ]])
+
+  child.lua([[require('aineo.explain').correct_test_file(vim.api.nvim_get_current_win())]])
+
+  eq(tested.told(child), {
+    'aineo: no test file is known for src/calc.lua: no rule pairs ' .. folder .. '/src/calc.lua',
+  })
+  eq(windows()[2].name, folder .. '/tests/calc_spec.lua')
+end
+
 return T

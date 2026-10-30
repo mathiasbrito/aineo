@@ -428,7 +428,7 @@ T['the keys']['of written code shown are named in its head row'] = function()
   eq(
     vim.tbl_contains(
       screen_rows(),
-      '┊ read-only until \\Wa accepts or \\Wr rejects · \\Wd shows the diff'
+      '┊ read-only until \\Wa accepts or \\Wr rejects · \\Wd shows the diff · \\Ws refines'
     ),
     true
   )

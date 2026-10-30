@@ -15,7 +15,9 @@ local M = {}
 --- `is_test()` whether `spec.sources` names the path; `correct()` records
 --- each pair it is given in `corrected`, and from then on answers the test
 --- file given for that source, existing when it is on disk, but refuses,
---- with a problem, a test file in a folder named `outside`; `describe()` a
+--- with a problem, a test file in a folder named `outside`, and keeps one
+--- in a folder named `lost` while placing none for that source from then
+--- on; `describe()` a
 --- line naming the rule of the place.
 ---
 ---@param spec tests.FakeTestLayoutSpec
@@ -44,6 +46,10 @@ function M.new(spec)
       return false, test .. ' is outside the worktree of its source'
     end
     table.insert(layout.corrected, { source, test })
+    if test:find('/lost/', 1, true) then
+      spec.tests[source] = nil
+      return true
+    end
     spec.tests[source] = vim.tbl_extend('force', spec.tests[source] or {}, {
       path = test,
       exists = vim.uv.fs_stat(test) ~= nil,

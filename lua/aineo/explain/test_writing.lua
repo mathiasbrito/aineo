@@ -44,14 +44,15 @@ local function shown_file(path, folder)
   return { path = vim.fs.relpath(folder, path) or path, lines = lines }
 end
 
---- Has the file of `buffer` written with `companions` when code is first
---- accepted in it, when it is not on disk (`aineo.explain.new_files`).
+--- Has the file of `buffer` written when code is first accepted in it,
+--- at the path `place` gives, with its companions, when it is not on disk
+--- (`aineo.explain.new_files`).
 ---
 ---@param buffer integer
----@param companions? string[]
-local function write_when_accepted(buffer, companions)
-  if not vim.uv.fs_stat(vim.api.nvim_buf_get_name(buffer)) then
-    new_files.expect(buffer, companions or {})
+---@param place aineo.explain.TestPlace
+local function write_when_accepted(buffer, place)
+  if not vim.uv.fs_stat(place.path) then
+    new_files.expect(buffer, place.path, place.companions or {})
   end
 end
 
@@ -161,7 +162,7 @@ end
 ---@param folder string
 local function write_chosen(order, tests, range, chosen, folder)
   local test_buffer = vim.api.nvim_win_get_buf(tests.window)
-  write_when_accepted(test_buffer, tests.place.companions)
+  write_when_accepted(test_buffer, tests.place)
   write.ask({
     buffer = test_buffer,
     window = tests.window,
@@ -398,7 +399,7 @@ local function write_implementation_of_a_test(order)
   local range = order.range or context.around(order.buffer, order.line)
   local source_window = test_window.show_source(order.window, place.path)
   local source_buffer = vim.api.nvim_win_get_buf(source_window)
-  write_when_accepted(source_buffer, place.companions)
+  write_when_accepted(source_buffer, place)
   local test_file = shown_file(test_path, folder)
   write.ask({
     buffer = source_buffer,
