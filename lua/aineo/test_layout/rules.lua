@@ -1,5 +1,8 @@
 --- The rules of a test layout as they are stated — by the agent, by a
---- preset, by the user's correction — turned into the rules finding uses.
+--- preset, by the user's correction — checked, and turned into the rules
+--- finding uses.
+
+local template = require('aineo.test_layout.template')
 
 local M = {}
 
@@ -29,6 +32,285 @@ local M = {}
 ---@field rules aineo.test_layout.Statement[]
 ---@field companions? string[]
 ---@field convention? boolean whether no documentation states the layout, which is a common convention
+
+--- The most rules a repository keeps.
+M.MOST_RULES = 32
+
+--- The longest discovery glob, in characters.
+local LONGEST_GLOB = 256
+
+--- The fields a statement that names a preset may give.
+local PRESET_FIELDS = { preset = true, kind = true, create = true }
+
+--- The fields a rule of its own may give.
+local RULE_FIELDS = {
+  source = true,
+  test = true,
+  inline = true,
+  folder = true,
+  kind = true,
+  create = true,
+  discover = true,
+  framework = true,
+  companions = true,
+}
+
+--- Whether `value` is a JSON object: a table that is no non-empty list.
+---
+---@param value any
+---@return boolean
+local function is_object(value)
+  return type(value) == 'table' and not (vim.islist(value) and next(value) ~= nil)
+end
+
+--- Whether `value` is a non-empty list of strings.
+---
+---@param value any
+---@return boolean
+local function is_string_list(value)
+  return type(value) == 'table'
+    and vim.islist(value)
+    and #value > 0
+    and vim.iter(value):all(function(item)
+      return type(item) == 'string'
+    end)
+end
+
+--- The first of `statement`'s keys, in sorted order, that `fields` lacks.
+---
+---@param statement table
+---@param fields table<string, true>
+---@return string?
+local function unknown_field(statement, fields)
+  local unknown = vim.tbl_filter(function(key)
+    return not fields[key]
+  end, vim.tbl_keys(statement))
+  table.sort(unknown, function(left, right)
+    return tostring(left) < tostring(right)
+  end)
+  return unknown[1] and tostring(unknown[1])
+end
+
+--- Why the optional fields every statement may give — `kind`, a string,
+--- and `create`, true or false — are refused, naming the field after
+--- `at`; nil when they are accepted.
+---
+---@param statement table
+---@param at string
+---@return string?
+local function common_problem(statement, at)
+  if statement.kind ~= nil and type(statement.kind) ~= 'string' then
+    return at .. '.kind: expected a string'
+  end
+  if statement.create ~= nil and type(statement.create) ~= 'boolean' then
+    return at .. '.create: expected true or false'
+  end
+  return nil
+end
+
+--- Why `statement`, which names a preset, is refused: a preset `catalogue`
+--- does not have, or another field than its kind and `create`.
+---
+---@param statement table
+---@param at string
+---@param catalogue { presets: aineo.test_layout.Preset[] }
+---@return string?
+local function preset_problem(statement, at, catalogue)
+  local known = vim.iter(catalogue.presets):any(function(preset)
+    return preset.id == statement.preset
+  end)
+  if not known then
+    return ('%s.preset: no preset %s'):format(at, tostring(statement.preset))
+  end
+  local unknown = unknown_field(statement, PRESET_FIELDS)
+  if unknown then
+    return ('%s.%s: not a field of a preset rule'):format(at, unknown)
+  end
+  return common_problem(statement, at)
+end
+
+--- Why `test`, the test templates of a rule whose source template is
+--- `source`, are refused: no template and no non-empty list of them, or a
+--- template refused (`aineo.test_layout.template`'s `problem()` and
+--- `pair_problem()`), named by its position in a list.
+---
+---@param test any
+---@param source string
+---@param at string
+---@return string?
+local function tests_problem(test, source, at)
+  local list = type(test) == 'string' and { test } or test
+  if not is_string_list(list) then
+    return at .. '.test: expected a template or a non-empty list of them'
+  end
+  for position, pattern in ipairs(list) do
+    local field = type(test) == 'string' and at .. '.test' or ('%s.test[%d]'):format(at, position)
+    local problem = template.problem(pattern) or template.pair_problem(source, pattern)
+    if problem then
+      return field .. ': ' .. problem
+    end
+  end
+  return nil
+end
+
+--- Why `folder`, a rule's folder of tests, is refused: no folder ending in
+--- `/`, a placeholder, or what `template.problem()` refuses.
+---
+---@param folder any
+---@param at string
+---@return string?
+local function folder_problem(folder, at)
+  if type(folder) ~= 'string' or not vim.endswith(folder, '/') then
+    return at .. '.folder: expected a folder ending in /'
+  end
+  if folder:find('[{}]') then
+    return at .. '.folder: a placeholder'
+  end
+  local problem = template.problem(folder:sub(1, -2))
+  return problem and at .. '.folder: ' .. problem
+end
+
+--- Why the list `value`, a rule's `field`, is refused: no non-empty list
+--- of strings, or an item `item_problem` refuses, named by its position.
+---
+---@param value any
+---@param field string
+---@param expected string what the list holds, in words
+---@param item_problem fun(item: string): string?
+---@return string?
+local function list_problem(value, field, expected, item_problem)
+  if value == nil then
+    return nil
+  end
+  if not is_string_list(value) then
+    return ('%s: expected a list of %s'):format(field, expected)
+  end
+  for position, item in ipairs(value) do
+    local problem = item_problem(item)
+    if problem then
+      return ('%s[%d]: %s'):format(field, position, problem)
+    end
+  end
+  return nil
+end
+
+--- Why `glob`, a discovery glob, is refused: what `template.problem()`
+--- refuses of a path — an absolute one, a `..` segment, a `~` — or more
+--- than 256 characters.
+---
+---@param glob string
+---@return string?
+local function glob_problem(glob)
+  if #glob > LONGEST_GLOB then
+    return ('longer than %d characters'):format(LONGEST_GLOB)
+  end
+  return template.problem((glob:gsub('[{}]', '')))
+end
+
+--- Why `name`, a companion, is refused: it is no plain file name.
+---
+---@param name string
+---@return string?
+local function companion_problem(name)
+  if name == '' or name == '.' or name == '..' or name:find('[/\\~]') then
+    return 'expected a file name'
+  end
+  return nil
+end
+
+--- Why the shape of `statement`, a rule of its own, is refused: not one
+--- and only one of `test`, `inline` and `folder`; or a `source` missing
+--- where a folder rule does not stand without one.
+---
+---@param statement table
+---@param at string
+---@return string?
+local function form_problem(statement, at)
+  local forms = (statement.test ~= nil and 1 or 0)
+    + (statement.inline ~= nil and 1 or 0)
+    + (statement.folder ~= nil and 1 or 0)
+  if forms ~= 1 then
+    return at .. ': give one of test, inline and folder'
+  end
+  if statement.folder == nil and type(statement.source) ~= 'string' then
+    return at .. '.source: expected a template'
+  end
+  return nil
+end
+
+--- Why `statement`, a rule of its own, is refused (A666): its form, its
+--- source and test templates, `inline` other than true, its folder, its
+--- discovery globs, its companions, its kind, `create` and framework, or
+--- any other field.
+---
+---@param statement table
+---@param at string
+---@return string?
+local function rule_problem(statement, at)
+  local problem = form_problem(statement, at)
+  if problem then
+    return problem
+  end
+  if statement.source ~= nil then
+    local source_problem = type(statement.source) ~= 'string' and 'expected a template'
+      or template.problem(statement.source)
+    if source_problem then
+      return at .. '.source: ' .. source_problem
+    end
+  end
+  if statement.test ~= nil then
+    problem = tests_problem(statement.test, statement.source, at)
+  elseif statement.inline ~= nil and statement.inline ~= true then
+    problem = at .. '.inline: expected true'
+  elseif statement.folder ~= nil then
+    problem = folder_problem(statement.folder, at)
+  end
+  problem = problem
+    or list_problem(statement.discover, at .. '.discover', 'globs', glob_problem)
+    or list_problem(statement.companions, at .. '.companions', 'file names', companion_problem)
+    or common_problem(statement, at)
+  if problem then
+    return problem
+  end
+  if statement.framework ~= nil and type(statement.framework) ~= 'string' then
+    return at .. '.framework: expected a string'
+  end
+  local unknown = unknown_field(statement, RULE_FIELDS)
+  return unknown and ('%s.%s: not a field of a rule'):format(at, unknown)
+end
+
+--- Why `statements`, the rules an agent states for a repository, are
+--- refused, naming the field at fault, such as `rules[2].test: a ..
+--- segment`; nil when every one is accepted. A statement is an object that
+--- names a preset of `catalogue`, with its kind or `create` overridden, or
+--- a rule of its own (A666); at most `MOST_RULES` of them.
+---
+---@param statements any
+---@param catalogue { presets: aineo.test_layout.Preset[] }
+---@return string?
+function M.statements_problem(statements, catalogue)
+  if type(statements) ~= 'table' or not vim.islist(statements) then
+    return 'rules: expected a list of rules'
+  end
+  if #statements > M.MOST_RULES then
+    return ('rules: more than %d rules'):format(M.MOST_RULES)
+  end
+  for position, statement in ipairs(statements) do
+    local at = ('rules[%d]'):format(position)
+    local problem
+    if not is_object(statement) then
+      problem = at .. ': expected an object'
+    elseif statement.preset ~= nil then
+      problem = preset_problem(statement, at, catalogue)
+    else
+      problem = rule_problem(statement, at)
+    end
+    if problem then
+      return problem
+    end
+  end
+  return nil
+end
 
 --- The rule `statement`, a rule of its own, states, with `origin` and
 --- `description`; the fields of `defaults` fill those it does not give.
