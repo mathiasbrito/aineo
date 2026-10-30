@@ -100,6 +100,15 @@ T['test_for()']['keeps every existing match as a candidate, in the order of the 
   })
 end
 
+T['test_for()']['lists a file two rules name once, at its best place'] = function()
+  local view = view_of({ 'pkg/parser.py', 'tests/test_parser.py', 'tests/pkg/test_parser.py' })
+  local stated = vim.tbl_extend('force', FLAT, { origin = 'agent', description = 'agent rule 1' })
+
+  local place = finding.test_for({ stated, MIRROR, FLAT }, view, 'pkg/parser.py')
+
+  eq(place.candidates, { '/repo/tests/test_parser.py', '/repo/tests/pkg/test_parser.py' })
+end
+
 T['test_for()']['ranks the matches of one rule shortest path first'] = function()
   local rule = vim.tbl_extend('force', MIRROR, {
     tests = { 'tests/{path}/test_{name}.py', 'tests/test_{name}.py' },
@@ -225,6 +234,9 @@ T['test_for()']['falls back on the test files that name the source module when n
     { path = 'tests/test_parsing.py', text = 'from pkg import parser' },
     { path = 'pkg/other.py', text = 'import pkg.parser' },
   }, asked)
+  view.read = function(file)
+    return file == 'tests/test_parsing.py' and 'import os\nfrom pkg import parser\n' or nil
+  end
 
   local place = finding.test_for({ FLAT }, view, 'pkg/parser.py')
 
@@ -335,6 +347,15 @@ T['source_for()']['finds the existing source a two-way rule names for a test fil
   })
 end
 
+T['source_for()']['lists a source two rules give once'] = function()
+  local view = view_of({ 'pkg/parser.py', 'tests/pkg/test_parser.py' })
+  local again = vim.tbl_extend('force', MIRROR, { description = 'agent rule 2' })
+
+  local place = finding.source_for({ MIRROR, again }, view, 'tests/pkg/test_parser.py')
+
+  eq(fields_of(place, { 'candidates' }), { { '/repo/pkg/parser.py' } })
+end
+
 T['source_for()']['skips a rule whose test template lacks a placeholder of its source'] = function()
   local view = view_of({})
 
@@ -412,6 +433,41 @@ T['source_for()']['then takes the sources the test file imports'] = function()
     fields_of(place, { 'path', 'candidates', 'rule' }),
     { '/repo/lib/flow.py', { '/repo/lib/flow.py', '/repo/src/shop/cart.py' }, 'python.pytest.flat' }
   )
+end
+
+T['source_for()']['takes by the stem only the files of the test’s language'] = function()
+  local view = view_of({ 'a/util.ts', 'lib/util.py', 'tests/test_util.py' })
+
+  local place = finding.source_for({ FLAT }, view, 'tests/test_util.py')
+
+  eq(fields_of(place, { 'candidates' }), { { '/repo/lib/util.py' } })
+end
+
+T['source_for()']['reads no import that is no import'] = MiniTest.new_set({
+  parametrize = {
+    {
+      'tests/flow_check.go',
+      'func TestX(t *testing.T) {\n\tt.Run("store", nil)\n}\n',
+      'internal/store/db.go',
+    },
+    { 'tests/flow_check.c', '#include <list.h>\n', 'src/list.c' },
+    { 'tests/flow.check.ts', "import { a } from 'cart';\n", 'src/cart.ts' },
+    { 'tests/flow.check.ts', "import { a } from './cart';\n", 'src/cart.ts' },
+  },
+})
+
+T['source_for()']['reads no import that is no import']['given'] = function(test, text, source)
+  local rule = {
+    source = 'none/{dir}/{name}.x',
+    tests = { 'tests/{name}' },
+    origin = 'agent',
+    description = 'agent rule 1',
+  }
+  local view = view_reading({ test, source }, test, text)
+
+  local place = finding.source_for({ rule }, view, test)
+
+  eq(place, nil)
 end
 
 T['source_for()']['reads the imports of each language'] = MiniTest.new_set({
