@@ -44,7 +44,7 @@ T['the test layout']['shows the rules in force for the project of the current fo
   children.restart(child)
   child.cmd('cd ' .. vim.fn.fnameescape(top))
   child.lua(
-    'require("aineo.test_layout").declare(...)',
+    'require("aineo.test_layout").declare(..., { vim.fn.getcwd() })',
     { { worktree = top, rules = { { preset = 'go.testing.folder-integration' } } } }
   )
 

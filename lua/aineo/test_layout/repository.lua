@@ -7,14 +7,16 @@ local M = {}
 --- How long one `git` call may take, in milliseconds.
 local GIT_TIMEOUT_MS = 10000
 
---- Runs `git -C <directory> <args…>` and returns its output, or nil when
---- it fails or does not end in time.
+--- Runs `git -C <directory> -c core.fsmonitor=false <args…>` and returns
+--- its output, or nil when it fails or does not end in time. The file
+--- system monitor is off so that no command a repository's own
+--- configuration names runs for aineo.
 ---
 ---@param directory string
 ---@param args string[]
 ---@return string?
 local function git(directory, args)
-  local command = vim.list_extend({ 'git', '-C', directory }, args)
+  local command = vim.list_extend({ 'git', '-C', directory, '-c', 'core.fsmonitor=false' }, args)
   local ran, process = pcall(vim.system, command, { text = true })
   if not ran then
     return nil
@@ -39,6 +41,18 @@ end
 function M.worktree_of(directory)
   local top = git(directory, { 'rev-parse', '--show-toplevel' })
   return top and vim.trim(top) ~= '' and vim.trim(top) or nil
+end
+
+--- The git folder every worktree of the repository holding `directory`
+--- shares (`--git-common-dir`), as the file system resolves it; nil when
+--- `directory` is in no git worktree.
+---
+---@param directory string
+---@return string?
+function M.common_folder_of(directory)
+  local common = git(directory, { 'rev-parse', '--path-format=absolute', '--git-common-dir' })
+  common = common and vim.trim(common)
+  return common and common ~= '' and (vim.uv.fs_realpath(common) or common) or nil
 end
 
 --- The folder of the main worktree of the repository whose worktree is
@@ -76,11 +90,18 @@ function M.view_of(root)
     files = sorted,
     has = has,
     grep = function(patterns)
-      local args = { 'grep', '-l', '-z', '-F', '--untracked' }
+      local args = { 'grep', '-n', '-z', '-F', '--untracked' }
       for _, pattern in ipairs(patterns) do
         vim.list_extend(args, { '-e', pattern })
       end
-      return names_of(git(root, args) or '')
+      local hits = {}
+      for line in vim.gsplit(git(root, args) or '', '\n', { plain = true }) do
+        local path, text = line:match('^([^%z]+)%z[^%z]*%z(.*)$')
+        if path then
+          table.insert(hits, { path = path, text = text })
+        end
+      end
+      return hits
     end,
     read = function(relative)
       local file = io.open(root .. '/' .. relative, 'r')

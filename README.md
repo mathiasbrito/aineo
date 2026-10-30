@@ -609,8 +609,10 @@ project keeps its tests. `report`, `announce_work`, `run_output` and
   `java.junit.maven-mirror`, `c.ceedling.unity`… for Python, JavaScript and
   TypeScript, Go, Java, C and C++) or path templates of its own, such as
   `src/{path}/{name}.py` for the sources and `tests/{path}/test_{name}.py`
-  for their tests. A template that could leave the repository is refused.
-  The reply says how many of the project's sources each rule pairs with an
+  for their tests. A template with a `..`, `.` or `.git` folder in it is
+  refused, and so is a path a rule gives that leads out of the repository,
+  through a link, say; the worktree named must be of a repository the
+  editor has open. The reply says how many of the project's sources each rule pairs with an
   existing test, and how many of those tests another rule pairs with a
   different source. Your own correction of a test file comes first, then
   Claude's rules, then the presets the repository shows (its `pytest.ini`,

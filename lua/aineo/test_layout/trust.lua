@@ -3,6 +3,7 @@
 --- shows, and the language's default.
 
 local finding = require('aineo.test_layout.finding')
+local modules = require('aineo.test_layout.modules')
 local rules = require('aineo.test_layout.rules')
 
 local M = {}
@@ -10,7 +11,7 @@ local M = {}
 --- What the store keeps of a repository's layout.
 ---@class aineo.test_layout.Stored
 ---@field agent? { rules: aineo.test_layout.Statement[], framework?: string } the agent's rules
----@field user? { pairs: table<string, string>, rules: { preset: string, rule: integer, test: integer }[] } the user's corrections: each source's test file, and the preset templates they fit
+---@field user? { pairs: table<string, string>, rules: { preset: string, rule: integer, test: integer, extension?: string }[] } the user's corrections: each source's test file, and the preset templates they fit
 
 --- The presets a rule set is chosen from, and each language's defaults.
 ---@class aineo.test_layout.Catalogue
@@ -31,9 +32,10 @@ end
 --- The rules of the user's corrections, `user`: each pair as a rule of its
 --- own, read from the repository's root and pinned — its test file is its
 --- source's whether it exists or not — then each preset template a
---- correction fitted, as the user's rule.
+--- correction fitted, as the user's rule, for the corrected source's
+--- family of extensions.
 ---
----@param user? { pairs: table<string, string>, rules: { preset: string, rule: integer, test: integer }[] }
+---@param user? { pairs: table<string, string>, rules: { preset: string, rule: integer, test: integer, extension?: string }[] }
 ---@param catalogue aineo.test_layout.Catalogue
 ---@return aineo.test_layout.Rule[]
 local function user_rules(user, catalogue)
@@ -54,7 +56,12 @@ local function user_rules(user, catalogue)
     tests = type(tests) == 'string' and { tests } or tests
     if tests and tests[fitted.test] then
       local first = vim.tbl_extend('force', statement, { test = tests[fitted.test] })
-      local fitted_preset = vim.tbl_extend('force', preset, { rules = { first } })
+      local family = fitted.extension and vim.tbl_keys(modules.family(fitted.extension))
+      local fitted_preset = vim.tbl_extend(
+        'force',
+        preset,
+        { rules = { first }, extensions = family or preset.extensions }
+      )
       vim.list_extend(
         found,
         rules.of_preset(fitted_preset, 'user', ('your rule (%s)'):format(preset.id))
@@ -168,10 +175,10 @@ end
 
 --- The presets of `catalogue` for sources of `extension` that `view`'s
 --- repository shows — one of their markers is present — and the language's
---- defaults, ranked by how many sources each pairs with test files, then a
---- marked preset before a default, then in the catalogue's order. Kept in
---- `view.ranked`, by extension, when the view has that table, and read
---- from it the next time.
+--- defaults: the marked presets before the defaults, each kind ranked by how
+--- many sources each pairs with test files, then in the catalogue's order.
+--- Kept in `view.ranked`, by extension, when the view has that table, and
+--- read from it the next time.
 ---
 ---@param view aineo.test_layout.View
 ---@param catalogue aineo.test_layout.Catalogue
@@ -201,11 +208,11 @@ local function ranked_presets(view, catalogue, extension)
     end
   end
   table.sort(ranked, function(left, right)
-    if left.pairs ~= right.pairs then
-      return left.pairs > right.pairs
-    end
     if left.marked ~= right.marked then
       return left.marked
+    end
+    if left.pairs ~= right.pairs then
+      return left.pairs > right.pairs
     end
     return left.order < right.order
   end)
@@ -228,10 +235,11 @@ end
 --- The rules in force for `path`, a file relative to `view`'s root, from
 --- `stored` and `catalogue`, in the order of trust: the user's
 --- corrections; the agent's rules; the presets for `path`'s extension that
---- the repository shows, ranked by how many sources each pairs with test
---- files; the language's default presets. An agent's rule that pairs no
---- source while a preset pairs some is kept, after the presets that pair
---- some.
+--- the repository shows by their marker files, ranked by how many sources
+--- each pairs with test files; then the language's default presets, even
+--- one that pairs more (A669, A684 (8)). An agent's rule that pairs no
+--- source while a preset pairs some is kept, after the last preset that
+--- pairs some.
 ---
 ---@param view aineo.test_layout.View
 ---@param stored aineo.test_layout.Stored
@@ -241,22 +249,22 @@ end
 function M.rules_for(view, stored, catalogue, path)
   local extension = path:match('%.([^./]+)$') or ''
   local ranked = ranked_presets(view, catalogue, extension)
-  local pairing = vim.tbl_filter(function(preset)
-    return preset.pairs > 0
-  end, ranked)
+  local last_pairing = 0
+  for position, preset in ipairs(ranked) do
+    if preset.pairs > 0 then
+      last_pairing = position
+    end
+  end
   local in_force = user_rules(stored.user, catalogue)
   local demoted = {}
   for _, stated in ipairs(agent_rules(stored.agent, catalogue)) do
-    local is_demoted = #pairing > 0 and paired_count(stated, view) == 0
+    local is_demoted = last_pairing > 0 and paired_count(stated, view) == 0
     vim.list_extend(is_demoted and demoted or in_force, stated)
   end
-  for _, preset in ipairs(pairing) do
+  for position, preset in ipairs(ranked) do
     vim.list_extend(in_force, preset_rules(preset))
-  end
-  vim.list_extend(in_force, demoted)
-  for _, preset in ipairs(ranked) do
-    if preset.pairs == 0 then
-      vim.list_extend(in_force, preset_rules(preset))
+    if position == last_pairing then
+      vim.list_extend(in_force, demoted)
     end
   end
   return in_force
@@ -318,10 +326,20 @@ local function rule_groups(view, stored, catalogue, stated)
   return groups
 end
 
+--- The templates of `rule`, as one string: two rules with the same
+--- templates pair the same files, and never contradict each other.
+---
+---@param rule aineo.test_layout.Rule
+---@return string
+local function templates_of(rule)
+  return table.concat(vim.list_extend({ rule.source or '' }, rule.tests or {}), '\n')
+end
+
 --- What the reply to the agent's rules of `stored` says of each, in their
 --- order: how many existing sources it pairs with existing tests; how many
 --- of those tests another rule in force — the user's, another statement's,
---- a preset's — pairs with a different source; and, for one that pairs
+--- a preset's, none with the same templates — pairs with a different
+--- source; and, for one that pairs
 --- nothing while presets for the files it matches pair some, those
 --- presets, which it is kept after (`rules_for()`). Each rule's pairs are
 --- read once.
@@ -343,7 +361,11 @@ function M.assess(view, stored, catalogue)
     for _, rule in ipairs(group.rules) do
       for _, pair in ipairs(paired(rule)) do
         sources_of_test[pair.test] = sources_of_test[pair.test] or {}
-        table.insert(sources_of_test[pair.test], { key = group.key, source = pair.source })
+        table.insert(sources_of_test[pair.test], {
+          key = group.key,
+          templates = templates_of(rule),
+          source = pair.source,
+        })
       end
     end
   end
@@ -355,7 +377,9 @@ function M.assess(view, stored, catalogue)
       for _, pair in ipairs(paired(rule)) do
         pairs_count = pairs_count + 1
         local contradicted = vim.iter(sources_of_test[pair.test]):any(function(other)
-          return other.key ~= key and other.source ~= pair.source
+          return other.key ~= key
+            and other.templates ~= templates_of(rule)
+            and other.source ~= pair.source
         end)
         contradictions = contradictions + (contradicted and 1 or 0)
       end
@@ -431,13 +455,14 @@ end
 --- The preset template that gives `test` for `source`, both relative to
 --- `view`'s root, as the user's correction states them: the first preset
 --- of `catalogue` for `source`'s extension, its rule and its test
---- template, by their positions; nil when none does.
+--- template, by their positions, and `source`'s extension, whose family
+--- (`modules.family()`) the user's rule keeps to; nil when none does.
 ---
 ---@param view aineo.test_layout.View
 ---@param catalogue aineo.test_layout.Catalogue
 ---@param source string
 ---@param test string
----@return { preset: string, rule: integer, test: integer }?
+---@return { preset: string, rule: integer, test: integer, extension: string }?
 function M.fitting_template(view, catalogue, source, test)
   local extension = source:match('%.([^./]+)$') or ''
   for _, preset in ipairs(catalogue.presets) do
@@ -446,7 +471,12 @@ function M.fitting_template(view, catalogue, source, test)
         local tests = finding.tests_of(view, rule, source)
         for alternative, path in ipairs(tests) do
           if path == test then
-            return { preset = preset.id, rule = position, test = alternative }
+            return {
+              preset = preset.id,
+              rule = position,
+              test = alternative,
+              extension = extension,
+            }
           end
         end
       end
