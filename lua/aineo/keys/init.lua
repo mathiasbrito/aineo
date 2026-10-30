@@ -35,6 +35,7 @@ local GROUPS = {
       { id = 'issues', title = 'Issues' },
       { id = 'fix', title = 'Fix' },
       { id = 'write', title = 'Write' },
+      { id = 'tests', title = 'Tests' },
       { id = 'fix_shown', title = 'While a proposal shows' },
       { id = 'steer', title = 'In the steering float' },
       { id = 'clean', title = 'Clean' },
@@ -346,6 +347,44 @@ local ROWS = vim.list_extend(
       )
     ),
     in_section(
+      'tests',
+      global_in_visual_too(
+        'explain',
+        'WT',
+        'write-tests',
+        nil,
+        'write tests: listed for the code here, or of a requirement in a test file'
+      )
+    ),
+    in_section(
+      'tests',
+      global_in_visual_too(
+        'explain',
+        'WI',
+        'write-implementation',
+        nil,
+        'write the code that makes the test here pass'
+      )
+    ),
+    in_section(
+      'tests',
+      global('explain', 'Wt', 'test-window', nil, 'show or hide the test file below the source')
+    ),
+    in_section(
+      'tests',
+      global(
+        'explain',
+        'Wp',
+        'test-path',
+        nil,
+        'in the test window: correct the path of the test file'
+      )
+    ),
+    in_section(
+      'tests',
+      global('explain', 'Wn', 'test-next', nil, 'in the test window: show the next test file found')
+    ),
+    in_section(
       'clean',
       global(
         'explain',
@@ -415,6 +454,15 @@ local ROWS = vim.list_extend(
     in_section(
       'fix_shown',
       in_buffer('explain', '[w', 'write-previous', 'jump to the previous one')
+    ),
+    in_section(
+      'fix_shown',
+      in_buffer_after_the_prefix(
+        'explain',
+        'Ws',
+        'write-steer',
+        'refine the written code left, with instructions'
+      )
     ),
     in_section('steer', in_buffer('explain', '<CR>', nil, 'send the prompt')),
     in_section('steer', in_buffer('explain', 'q', nil, 'cancel, as <Esc> does')),

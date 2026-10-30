@@ -163,6 +163,7 @@ M.WRITE = {
     reject_all = '<Plug>(aineo-write-reject-all)',
     next = '<Plug>(aineo-write-next)',
     previous = '<Plug>(aineo-write-previous)',
+    steer = '<Plug>(aineo-write-steer)',
   },
   deep = {
     label = 'write',

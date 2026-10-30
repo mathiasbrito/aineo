@@ -171,6 +171,10 @@ resumes it.
 | `\Vf`, `\VVf` | propose a fix for the issue on the cursor's line, shown over the code, the buffer read-only, until you accept it with `\Va` (one undo step, no file written), reject it with `\Vr`, or see it as a diff with `\Vd`; `\VVf` opens the float to edit the prompt first; `\Vf` on unchanged code shows the fix kept from before |
 | `\w`, `\W` | write code for a request: in Normal mode a float asks for it and the code goes below the cursor's line, or in its place when that line is blank; in Visual mode the selected lines are the request, sent at once, and the code replaces them. `\w` asks the cheapest model with the file alone, `\W` a stronger one at a higher effort that may read the project. The code shows as a fix does and has keys of its own: `\Wa` accepts it, `\Wr` rejects it, `\Wd` shows the diff |
 | `\WW` | write code as `\W` does, the code allowed to change other places of the file too (an import at the top, a variable outside the function): each change is a proposal of its own, `]w` and `[w` move between them, `\Wa`, `\Wr` and `\Wd` act on the one under the cursor, `\WA` accepts all those left as one undo step, `\WR` rejects them |
+| `\WT` | in a source: lists the tests worth writing for the code around the cursor (the function or method, else the class, or the selected lines) in a checklist (`x` or `<Space>` marks, `a` marks all, `<CR>` writes, `q` cancels) and writes those chosen into its test file as proposals; in a test file: writes the test of a requirement, the selected lines or one typed in a float |
+| `\WI` | in a test file: writes the code that makes the test under the cursor pass, as proposals in its source, shown in the window above |
+| `\Wt` | shows or hides the test window, the source's test file below it, which follows the source; in it `\Wp` corrects the test file's path and `\Wn` shows the next one found |
+| `\Ws` | while written code shows: type how to change it, and it is asked for again in place of the proposals left |
 | `\vc` | cleans the buffer of everything the `\v`, `\V` and `\w` keys added (answers, marks, a fix or written code, requests that run, kept answers), leaving its text and undo history as they were |
 | `\vm` | marks the issues on the cursor's line (on each selected line in Visual mode), or unmarks them; `\s` then sends the marked issues to Claude |
 | `]v`, `[v` | jump to the next and the previous explanation or issue of the buffer |
@@ -505,6 +509,22 @@ code replace each other, and the same request on unchanged code shows the code
 kept from before. `:Aineo write [deep]`, with a range for the request's lines,
 does the same. The groups are `AineoWrite`, `AineoWriteGutter` and
 `AineoWriteGutterFill`.
+
+`\WT` writes tests and `\WI` the code a test asks for, with `write.model`
+and the file alone, as `\w` does. In a source, `\WT` shows the test window,
+the source's test file below it in the middle column, and lists the tests
+worth writing for the code around the cursor in a checklist; those you choose
+are written into the test file, wherever they belong, imports and helpers
+included, each a proposal of its own decided as `\WW`'s are. In a test file,
+`\WT` writes the test of a requirement, the selected lines or one typed in a
+float, which is test-driven development's first step; `\WI` on that test
+writes the code that makes it pass in its source, shown in the window above.
+Where a source's test file is, `aineo.test_layout` tells; `\Wp` in the test
+window corrects it and `\Wn` shows the next test file found. A test file or a
+source not on disk is written, with its folders, when you accept its first
+proposal, and never if you reject them all. While any written code shows,
+`\Ws` asks how to change it and asks again, its answer in place of the
+proposals left.
 
 An explanation shows as a band tinted from your colour scheme, its text italic
 in the accent of `DiagnosticInfo`, starting at the explained line's indent,
