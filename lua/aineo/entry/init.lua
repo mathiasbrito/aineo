@@ -24,6 +24,7 @@ local office_check = require('aineo.entry.office_check')
 local office_pack_choice = require('aineo.entry.office_pack_choice')
 local places = require('aineo.entry.places')
 local reopening = require('aineo.entry.reopening')
+local test_writing = require('aineo.entry.test_writing')
 
 local M = {}
 
@@ -56,5 +57,13 @@ M.write_selection = explaining.write_selection
 M.accept_all_written = explaining.accept_all_written
 M.reject_all_written = explaining.reject_all_written
 M.jump_to_written = explaining.jump_to_written
+M.write_tests = test_writing.write_tests
+M.write_tests_selection = test_writing.write_tests_selection
+M.write_implementation = test_writing.write_implementation
+M.write_implementation_selection = test_writing.write_implementation_selection
+M.toggle_test_window = test_writing.toggle_test_window
+M.correct_test_file = test_writing.correct_test_file
+M.next_test_file = test_writing.next_test_file
+M.refine_written = test_writing.refine_written
 
 return M

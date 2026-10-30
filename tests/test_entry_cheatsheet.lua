@@ -454,7 +454,7 @@ T['the keys on the sheet']['come with the command that does the same, dimmed'] =
   eq(vim.tbl_contains(dimmed, ':Aineo pane agent'), true)
 end
 
-T['the keys on the sheet']['are in groups, with explaining, fixing and writing one group of seven sections'] = function()
+T['the keys on the sheet']['are in groups, with explaining, fixing and writing one group of eight sections'] = function()
   open_layout('cheatsheet-groups')
   child.o.columns = 140
 
@@ -472,6 +472,7 @@ T['the keys on the sheet']['are in groups, with explaining, fixing and writing o
     '  Issues',
     '  Fix',
     '  Write',
+    '  Tests',
     '  While a proposal shows',
     '  In the steering float',
     '  Clean',
