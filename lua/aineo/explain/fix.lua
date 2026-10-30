@@ -407,6 +407,21 @@ local function shows_another_kind(buffer, kind)
   return true
 end
 
+--- Stops the refinement of the written code `buffer` shows, when one
+--- runs — a request for code while its proposals show — and tells the
+--- user, once: a proposal is being decided, which the refined answer
+--- would no longer match.
+---
+---@param buffer integer
+local function stop_refinement(buffer)
+  local running = runs.find(buffer, kinds.WRITE)
+  if not running or not preview.is_shown(buffer) then
+    return
+  end
+  runs.stop(running)
+  vim.notify('aineo: the refinement was stopped: a proposal was decided', vim.log.levels.INFO)
+end
+
 --- What the user is told once written code is accepted, by whether
 --- proposals of it are left to decide.
 local WRITTEN = {
@@ -436,6 +451,7 @@ function M.accept(buffer, kind, line)
   if shows_another_kind(buffer, kind) then
     return
   end
+  stop_refinement(buffer)
   local issue = fixed_issues[buffer]
   if preview.apply(buffer, line) then
     marks.remove_issue(buffer, issue)
@@ -466,6 +482,7 @@ function M.accept_all(buffer, kind)
   if shows_another_kind(buffer, kind) then
     return
   end
+  stop_refinement(buffer)
   if preview.apply_all(buffer) then
     vim.notify(WRITTEN[preview.is_shown(buffer)], vim.log.levels.INFO)
     new_files.write_if_expected(buffer)
@@ -501,6 +518,7 @@ function M.reject_chosen(buffer, kind, line)
   if shows_another_kind(buffer, kind) then
     return
   end
+  stop_refinement(buffer)
   preview.drop(buffer, line)
   if not preview.is_shown(buffer) then
     fixed_issues[buffer] = nil
@@ -517,6 +535,7 @@ function M.reject(buffer, kind)
   if shows_another_kind(buffer, kind) then
     return
   end
+  stop_refinement(buffer)
   fixed_issues[buffer] = nil
   preview.clear(buffer)
 end

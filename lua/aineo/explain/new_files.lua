@@ -10,6 +10,7 @@ local M = {}
 ---@class aineo.explain.ExpectedFile
 ---@field path string the absolute path the layout of the project's tests gave it
 ---@field companions string[] the absolute paths of the files written beside it
+---@field on_written fun() called once it is written
 
 --- The files waiting to be written, by buffer.
 ---@type table<integer, aineo.explain.ExpectedFile>
@@ -18,13 +19,15 @@ local expected = {}
 --- Has the file of `buffer`, at `path`, which the layout of the project's
 --- tests gave and which is not on disk, written when code is first
 --- accepted in it (`write_if_expected()`), with `companions`, the absolute
---- paths of files written beside it, each empty, when missing.
+--- paths of files written beside it, each empty, when missing; then calls
+--- `on_written`.
 ---
 ---@param buffer integer
 ---@param path string
 ---@param companions string[]
-function M.expect(buffer, path, companions)
-  expected[buffer] = { path = path, companions = companions }
+---@param on_written fun()
+function M.expect(buffer, path, companions, on_written)
+  expected[buffer] = { path = path, companions = companions, on_written = on_written }
 end
 
 --- `path` from the project that holds it, as the user is told it.
@@ -68,7 +71,8 @@ end
 
 --- Writes the file of `buffer` when it was expected (`expect()`), at the
 --- path it was given, with its missing folders and its companions, then
---- forgets it; tells the user, once, what was written, or why nothing was
+--- forgets it and calls its `on_written`; tells the user, once, what was
+--- written, or why nothing was
 --- (`refusal_of()`: the buffer renamed, or something on disk at that path
 --- at that moment), leaving the buffer unwritten then. A buffer not
 --- expected is left as it is.
@@ -102,6 +106,7 @@ function M.write_if_expected(buffer)
     return
   end
   vim.notify(('aineo: %s written, a new file'):format(shown_path(path)), vim.log.levels.INFO)
+  waiting.on_written()
 end
 
 --- Forgets `buffer`, whose file is then never written by `write_if_expected()`.

@@ -27,6 +27,7 @@ local M = {}
 ---@field test_for fun(source: string): aineo.explain.TestPlace|nil, string? the place of the test file of the source at that absolute path, or `nil` and why
 ---@field source_for fun(test: string): aineo.explain.TestPlace|nil, string? the place of the source of the test file at that absolute path, or `nil` and why
 ---@field is_test fun(path: string): boolean whether the file at that absolute path is a test file
+---@field forget fun(repository_root: string) reads the repository at that folder again, as after a file was written there
 ---@field correct fun(source: string, test: string): boolean, string? records that the source's test file is the one at `test`, as the user said; `false` and why when it cannot
 ---@field describe fun(source: string): string the rule that pairs the source at that absolute path with its test file, and its origin, on one line
 
@@ -115,14 +116,15 @@ end
 
 --- The window of the source whose test window is `window`, when it is
 --- one; else `window` itself, when it shows a test window; `nil` when it
---- is neither or its test window was closed.
+--- is neither, or when its test window or its source window was closed,
+--- which forgets the pair.
 ---
 ---@param window integer
 ---@return integer|nil
 local function source_window_of(window)
   for source_window, tests in pairs(shown) do
     if source_window == window or tests.window == window then
-      if vim.api.nvim_win_is_valid(tests.window) then
+      if vim.api.nvim_win_is_valid(tests.window) and vim.api.nvim_win_is_valid(source_window) then
         return source_window
       end
       shown[source_window] = nil
@@ -153,6 +155,21 @@ local function tell_no_test_file(source, problem)
   )
 end
 
+--- The place of the test file of the source at `source`, as `layout`
+--- answers it; `nil` after telling the user, once, that the layout knows
+--- none (`tell_no_test_file()`).
+---
+---@param source string
+---@param layout aineo.explain.TestLayout
+---@return aineo.explain.TestPlace|nil
+function M.test_place(source, layout)
+  local place, problem = layout.test_for(source)
+  if not place then
+    tell_no_test_file(source, problem)
+  end
+  return place
+end
+
 --- Opens the test window of the source `source_window` shows (`open()`),
 --- its test file found by `layout`, and returns what it shows; tells the
 --- user, once, when `layout` finds none, and opens nothing then.
@@ -162,9 +179,8 @@ end
 ---@return aineo.explain.ShownTests|nil
 local function open_for(source_window, layout)
   local source = vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(source_window))
-  local place, problem = layout.test_for(source)
+  local place = M.test_place(source, layout)
   if not place then
-    tell_no_test_file(source, problem)
     return nil
   end
   open(source_window, source, place, layout)
@@ -225,6 +241,9 @@ end
 vim.api.nvim_create_autocmd('BufWinEnter', {
   group = vim.api.nvim_create_augroup('aineo_explain_test_window', {}),
   desc = 'aineo: show in the test window the test file of the source above it',
+  -- Nested, so that a test file loaded here runs its own BufRead and
+  -- FileType autocommands: its filetype, syntax and ftplugin.
+  nested = true,
   callback = function()
     follow(vim.api.nvim_get_current_win())
   end,
@@ -378,5 +397,23 @@ function M.show_source(window, path)
   end
   return vim.api.nvim_open_win(buffer, false, { split = 'above', win = window })
 end
+
+--- Gives each source window and its test window half of the rows they
+--- hold together, as when the test window was opened.
+local function share_heights()
+  for source_window, tests in pairs(shown) do
+    if vim.api.nvim_win_is_valid(source_window) and vim.api.nvim_win_is_valid(tests.window) then
+      local rows = vim.api.nvim_win_get_height(source_window)
+        + vim.api.nvim_win_get_height(tests.window)
+      vim.api.nvim_win_set_height(tests.window, math.floor(rows / 2))
+    end
+  end
+end
+
+vim.api.nvim_create_autocmd('VimResized', {
+  group = 'aineo_explain_test_window',
+  desc = 'aineo: keep a source and its test window at half the height each',
+  callback = share_heights,
+})
 
 return M

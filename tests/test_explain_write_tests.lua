@@ -39,7 +39,17 @@ local SHAPES = {
   '',
   'def unrelated():',
   '    pass',
+  '',
+  'def check(x):',
+  '    if x:',
+  '        raise ValueError(x)',
+  '',
+  'async def go(lock):',
+  '    async with lock: await run(lock)',
 }
+
+--- A C source, which Neovim's bundled parser reads.
+local POINT = { 'struct point {', '  int x;', '  int y;', '};' }
 
 --- The test of a source not written yet.
 local NEW_SPEC = {
@@ -61,6 +71,8 @@ local FILES = {
   ['tests/calc_spec.lua'] = CALC_SPEC,
   ['tests/new_spec.lua'] = NEW_SPEC,
   ['src/shapes.py'] = SHAPES,
+  ['src/point.c'] = POINT,
+  ['tests/integration/calc_spec.lua'] = { "describe('calc together', function()", 'end)' },
 }
 
 --- Where the stand-in layout says the Lua project's files are.
@@ -85,10 +97,18 @@ local LAYOUT = {
       framework = 'pytest',
       inline = false,
     },
+    ['src/point.c'] = {
+      path = 'tests/test_point.c',
+      exists = false,
+      candidates = {},
+      origin = 'preset',
+      rule = 'ceedling',
+      inline = false,
+    },
     ['src/calc.lua'] = {
       path = 'tests/calc_spec.lua',
       exists = true,
-      candidates = { 'tests/calc_spec.lua' },
+      candidates = { 'tests/calc_spec.lua', 'tests/integration/calc_spec.lua' },
       origin = 'preset',
       rule = 'busted spec',
       framework = 'busted',
@@ -96,6 +116,15 @@ local LAYOUT = {
     },
   },
   sources = {
+    ['tests/unit/greet_spec.lua'] = {
+      path = 'src/greet.lua',
+      exists = true,
+      candidates = { 'src/greet.lua' },
+      origin = 'preset',
+      rule = 'busted spec',
+      framework = 'busted',
+      inline = false,
+    },
     ['tests/new_spec.lua'] = {
       path = 'src/new.lua',
       exists = false,
@@ -245,6 +274,139 @@ T['\\WT in a source']['asks about the lines of a Visual selection'] = function()
   )
 end
 
+T['\\WT in a source']['with no parser, does not take a raise in Python for a definition'] = function()
+  eq(
+    shapes_list_head(15),
+    'List the tests worth writing for the code that lines 13 to 15 of the file src/shapes.py'
+      .. ' (language: python) hold, as numbered below.'
+  )
+end
+
+T['\\WT in a source']['with no parser, takes in Python only def and class for a definition'] = function()
+  eq(
+    shapes_list_head(18),
+    'List the tests worth writing for the code that lines 17 to 18 of the file src/shapes.py'
+      .. ' (language: python) hold, as numbered below.'
+  )
+end
+
+T['\\WT in a source']['in C, asks about the struct around a member'] = function()
+  local _, record = start('src/point.c')
+  tested.answer_with(child, TWO_TESTS)
+  child.cmd('2')
+
+  tested.order(child, 'write_tests')
+
+  eq(
+    vim.split(tested.requests(record, 1)[1].stdin, '\n')[1],
+    'List the tests worth writing for the code that lines 1 to 4 of the file src/point.c'
+      .. ' (language: c) hold, as numbered below.'
+  )
+end
+
+T['\\WT in a source']['in a buffer that is no source tells so and asks nothing, the test window shown'] = function()
+  local folder, record = start()
+  child.lua(
+    [[require('aineo.explain').toggle_test_window(vim.api.nvim_get_current_win(), _G.layout)]]
+  )
+  child.cmd('edit ' .. folder .. '/README.md')
+
+  tested.order(child, 'write_tests')
+
+  eq(
+    tested.told(child),
+    { 'aineo: no test file is known for README.md: no rule pairs ' .. folder .. '/README.md' }
+  )
+  eq(vim.uv.fs_stat(record), nil)
+end
+
+T['\\WT in a source']['with the test window shown, uses it and opens no other'] = function()
+  local _, record = start()
+  child.lua(
+    [[require('aineo.explain').toggle_test_window(vim.api.nvim_get_current_win(), _G.layout)]]
+  )
+  tested.answer_with(child, TWO_TESTS)
+  child.cmd('4')
+
+  tested.order(child, 'write_tests')
+  tested.requests(record, 1)
+
+  eq(#child.lua_get([[vim.tbl_filter(function(window)
+    return vim.api.nvim_win_get_config(window).relative == ''
+  end, vim.api.nvim_tabpage_list_wins(0))]]), 2)
+end
+
+T['\\WT in a source']['after \\Wn, lists and writes the tests of the test file shown'] = function()
+  local _, record = start()
+  child.lua(
+    [[require('aineo.explain').toggle_test_window(vim.api.nvim_get_current_win(), _G.layout)]]
+  )
+  child.lua([[require('aineo.explain').next_test_file(vim.api.nvim_get_current_win())]])
+  tested.answer_with(child, TWO_TESTS)
+  child.cmd('4')
+  tested.order(child, 'write_tests')
+  tested.wait_until(child, [[vim.api.nvim_win_get_config(0).relative ~= '' or nil]])
+  tested.answer_with(child, PROPOSED_TEST)
+
+  tested.press(child, '<CR>')
+
+  local requests = tested.requests(record, 2)
+  eq(
+    vim.split(requests[1].stdin, '\n')[2],
+    'The tests go in the test file tests/integration/calc_spec.lua, written for busted.'
+  )
+  eq(
+    vim.split(requests[2].stdin, '\n')[1],
+    'Write these tests into the test file tests/integration/calc_spec.lua (language: lua), written for busted:'
+  )
+  eq(requests[2].stdin:find("1 | describe('calc together', function()", 1, true) ~= nil, true)
+end
+
+T['\\WT in a source']['tells, and asks nothing more, when the test file it listed for is no longer shown'] = function()
+  local folder, record = start()
+  child.lua(
+    [[require('aineo.explain').toggle_test_window(vim.api.nvim_get_current_win(), _G.layout)]]
+  )
+  tested.answer_with(child, TWO_TESTS)
+  child.cmd('4')
+  tested.order(child, 'write_tests')
+  tested.wait_until(child, [[vim.api.nvim_win_get_config(0).relative ~= '' or nil]])
+  child.cmd('wincmd p | edit ' .. folder .. '/src/greet.lua')
+  child.lua([[for _, window in ipairs(vim.api.nvim_list_wins()) do
+    if vim.api.nvim_win_get_config(window).relative ~= '' and vim.bo[vim.api.nvim_win_get_buf(window)].buftype == 'nofile' then
+      vim.api.nvim_set_current_win(window)
+    end
+  end]])
+
+  tested.press(child, '<CR>')
+
+  eq(
+    vim.tbl_contains(
+      tested.told(child),
+      'aineo: the test file tests/calc_spec.lua is no longer shown: nothing is asked'
+    ),
+    true
+  )
+  eq(#tested.requests(record, 1), 1)
+end
+
+T['\\WT in a source']['asked twice, leaves no working line behind'] = function()
+  start()
+  tested.answer_with(child, TWO_TESTS)
+  child.lua('vim.env.AINEO_FAKE_CLAUDE_PRINT_MS = "1500"')
+  child.cmd('4')
+
+  tested.order(child, 'write_tests')
+  tested.order(child, 'write_tests')
+  tested.wait_until(child, [[vim.api.nvim_win_get_config(0).relative ~= '' or nil]])
+
+  eq(
+    child.lua_get([[#vim.api.nvim_buf_get_extmarks(vim.fn.bufnr('src/calc.lua'),
+    vim.api.nvim_create_namespace('aineo_explain_write'), 0, -1, {})]]),
+    0
+  )
+end
+
 T['the checklist'] = MiniTest.new_set()
 
 --- The text of the floating window the child's cursor is in once it is in
@@ -289,6 +451,16 @@ end
 ---@return string[]
 local function second_prompt(record)
   return vim.split((tested.requests(record, 2)[2] or { stdin = '' }).stdin, '\n')
+end
+
+T['the checklist']['shows a name of several lines on one'] = function()
+  start()
+  tested.answer_with(child, { tests = { { name = 'adds\ntwo', checks = 'x' } } })
+  child.cmd('4')
+
+  tested.order(child, 'write_tests')
+
+  eq(float_lines(), { '[ ] adds two — x' })
 end
 
 T['the checklist']['writes only the tests marked with x'] = function()
@@ -556,6 +728,48 @@ T['\\WI']['shows the source in the window above the test window when it shows an
   eq(shown_names(), { folder .. '/src/calc.lua', folder .. '/tests/calc_spec.lua' })
 end
 
+T['\\WI']['in a test file outside the test window uses a window that shows the source'] = function()
+  local folder, record = start()
+  child.cmd('split ' .. folder .. '/tests/calc_spec.lua')
+  child.api.nvim_buf_set_lines(0, 0, -1, false, SUB_SPEC)
+  child.cmd('5')
+  tested.answer_with(child, SUB_WRITTEN)
+
+  tested.order(child, 'write_implementation')
+  tested.requests(record, 1)
+
+  eq(shown_names(), { folder .. '/tests/calc_spec.lua', folder .. '/src/calc.lua' })
+end
+
+T['\\WI']['with the source window closed by hand, opens the source above again'] = function()
+  local folder, record = start()
+  child.lua(
+    [[require('aineo.explain').toggle_test_window(vim.api.nvim_get_current_win(), _G.layout)]]
+  )
+  child.cmd('close')
+  child.api.nvim_buf_set_lines(0, 0, -1, false, SUB_SPEC)
+  child.cmd('5')
+  tested.answer_with(child, SUB_WRITTEN)
+
+  local raised_nothing = child.lua_get(
+    [[pcall(require('aineo.explain').write_implementation, {
+    buffer = vim.api.nvim_get_current_buf(),
+    window = vim.api.nvim_get_current_win(),
+    line = 5,
+    layout = _G.layout,
+    command = ...,
+    model = 'haiku',
+    timeout_ms = 180000,
+    ask_key = '\\WI',
+  })]],
+    { tested.FAKE_CLAUDE }
+  )
+  tested.requests(record, 1)
+
+  eq(raised_nothing, true)
+  eq(shown_names(), { folder .. '/src/calc.lua', folder .. '/tests/calc_spec.lua' })
+end
+
 T['\\WI']['opens a source not written yet above the test file, unwritten'] = function()
   local folder, record = start('tests/new_spec.lua')
   child.cmd('4')
@@ -663,6 +877,51 @@ T['a new file']['is written only at the path the layout gave'] = function()
     ),
     true
   )
+end
+
+T['a new file']['of a test written in it from a requirement is written on the first accept'] = function()
+  local folder = start('src/greet.lua')
+  child.cmd('edit ' .. folder .. '/tests/unit/greet_spec.lua')
+  tested.answer_with(child, FILLED)
+  tested.order(child, 'write_tests')
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { 'it greets' })
+  tested.press(child, '<CR>')
+  tested.wait_until(
+    child,
+    [[#vim.api.nvim_buf_get_extmarks(0,
+    vim.api.nvim_create_namespace('aineo_explain_fix_drawn'), 0, -1, {}) > 0 or nil]]
+  )
+
+  child.lua([[require('aineo.explain').accept_fix(vim.api.nvim_get_current_buf(), 'write', 1)]])
+
+  eq(vim.uv.fs_stat(folder .. '/tests/unit/greet_spec.lua') ~= nil, true)
+  eq(vim.fn.readfile(folder .. '/tests/unit/greet_spec.lua'), GREET_SPEC)
+  eq(vim.uv.fs_stat(folder .. '/tests/unit/marker.lua') ~= nil, true)
+end
+
+T['a new file']['once written, has the layout read its repository again'] = function()
+  local folder = propose_a_new_test_file()
+
+  child.lua(
+    [[require('aineo.explain').accept_fix(vim.api.nvim_get_current_buf(), 'write', vim.fn.line('.'))]]
+  )
+
+  eq(child.lua_get('_G.layout.forgotten'), { folder })
+end
+
+T['a new file']['stays off the disk when its one proposal is rejected'] = function()
+  local folder = propose_a_new_test_file()
+
+  child.lua(
+    [[require('aineo.explain').reject_fix(vim.api.nvim_get_current_buf(), 'write', vim.fn.line('.'))]]
+  )
+
+  eq(
+    child.lua_get([[#vim.api.nvim_buf_get_extmarks(0,
+    vim.api.nvim_create_namespace('aineo_explain_fix_drawn'), 0, -1, {})]]),
+    0
+  )
+  eq(vim.uv.fs_stat(folder .. '/tests/unit'), nil)
 end
 
 T['a new file']['stays off the disk when every proposal is rejected'] = function()
