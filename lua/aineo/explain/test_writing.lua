@@ -46,13 +46,18 @@ end
 
 --- Has the file of `buffer` written when code is first accepted in it,
 --- at the path `place` gives, with its companions, when it is not on disk
---- (`aineo.explain.new_files`).
+--- (`aineo.explain.new_files`); once written, `layout` reads the project's
+--- repository, at `folder`, again.
 ---
 ---@param buffer integer
 ---@param place aineo.explain.TestPlace
-local function write_when_accepted(buffer, place)
+---@param layout aineo.explain.TestLayout
+---@param folder string
+local function write_when_accepted(buffer, place, layout, folder)
   if not vim.uv.fs_stat(place.path) then
-    new_files.expect(buffer, place.path, place.companions or {})
+    new_files.expect(buffer, place.path, place.companions or {}, function()
+      layout.forget(folder)
+    end)
   end
 end
 
@@ -149,23 +154,35 @@ local function names_of(chosen)
 end
 
 --- Asks for the code of the tests `chosen`, for the lines `range` of the
---- source `order.buffer`, in the test file `tests` shows, wherever it
---- belongs there, with any import, fixture or helper they need, each edit
---- a proposal of its own (`aineo.explain.write`'s `ask()`), from `folder`;
---- a test file not on disk is written once code is first accepted in it
---- (`write_when_accepted()`).
+--- source `order.buffer`, in `test_buffer`, the test file `place` names,
+--- wherever it belongs there, with any import, fixture or helper they
+--- need, each edit a proposal of its own (`aineo.explain.write`'s `ask()`),
+--- from `folder`, in a window that shows it; a test file not on disk is
+--- written once code is first accepted in it (`write_when_accepted()`).
+--- Tells the user, once, and asks nothing when no window shows it any
+--- more.
 ---
 ---@param order aineo.explain.TestOrder
----@param tests aineo.explain.ShownTests
+---@param test_buffer integer
+---@param place aineo.explain.TestPlace
 ---@param range integer[]
 ---@param chosen aineo.explain.ListedTest[]
 ---@param folder string
-local function write_chosen(order, tests, range, chosen, folder)
-  local test_buffer = vim.api.nvim_win_get_buf(tests.window)
-  write_when_accepted(test_buffer, tests.place)
+local function write_chosen(order, test_buffer, place, range, chosen, folder)
+  local window = vim.fn.win_findbuf(test_buffer)[1]
+  if not window then
+    vim.notify(
+      ('aineo: the test file %s is no longer shown: nothing is asked'):format(
+        vim.fs.relpath(folder, place.path) or place.path
+      ),
+      vim.log.levels.WARN
+    )
+    return
+  end
+  write_when_accepted(test_buffer, place, order.layout, folder)
   write.ask({
     buffer = test_buffer,
-    window = tests.window,
+    window = window,
     line = 1,
     tools = false,
     whole_file = true,
@@ -174,11 +191,11 @@ local function write_chosen(order, tests, range, chosen, folder)
     timeout_ms = order.timeout_ms,
     keys = order.keys,
     ask_key = order.ask_key,
-    brief = tests_brief(order.buffer, range, tests.place, folder),
+    brief = tests_brief(order.buffer, range, place, folder),
   }, {
     first = 1,
     last = 1,
-    request = tests_request(chosen, tests.place, test_buffer, folder),
+    request = tests_request(chosen, place, test_buffer, folder),
     title = names_of(chosen),
     place = 'anywhere',
   }, folder)
@@ -256,22 +273,49 @@ local function ask_for_a_list(order, range, place, folder, on_choose)
   })
 end
 
---- What `\WT` does in a source: opens its test window when hidden
---- (`aineo.explain.test_window`'s `ensure()`), then asks for the list of
---- tests worth writing for the lines of `order.range`, else for the code
---- around the cursor's line (`aineo.explain.context`'s `around()`), and
---- writes those the user chooses in the test file (`write_chosen()`).
+--- The place of the test file `test_buffer` holds, which the test window
+--- shows for its source, whose test file the layout placed at `place`: a
+--- copy of `place` for that file, which may be another candidate, whether
+--- it is on disk read now, and the files written beside it only for the
+--- file the layout placed.
+---
+---@param place aineo.explain.TestPlace
+---@param test_buffer integer
+---@return aineo.explain.TestPlace
+local function place_shown(place, test_buffer)
+  local path = vim.api.nvim_buf_get_name(test_buffer)
+  return vim.tbl_extend('force', vim.deepcopy(place), {
+    path = path,
+    exists = vim.uv.fs_stat(path) ~= nil,
+    companions = path == place.path and place.companions or {},
+  })
+end
+
+--- What `\WT` does in a source: tells the user, once, and asks nothing
+--- when the layout knows no test file of it (`aineo.explain.test_window`'s
+--- `test_place()`); else opens its test window when hidden (`ensure()`),
+--- takes the test file it shows then (`place_shown()`), asks for the list
+--- of tests worth writing for the lines of `order.range`, else for the
+--- code around the cursor's line (`aineo.explain.context`'s `around()`),
+--- and writes those the user chooses into that test file
+--- (`write_chosen()`), whatever the test window shows meanwhile.
 ---
 ---@param order aineo.explain.TestOrder
 local function write_tests_for_source(order)
+  local source = vim.api.nvim_buf_get_name(order.buffer)
+  if not test_window.test_place(source, order.layout) then
+    return
+  end
   local tests = test_window.ensure(order.window, order.layout)
   if not tests then
     return
   end
+  local test_buffer = vim.api.nvim_win_get_buf(tests.window)
+  local place = place_shown(tests.place, test_buffer)
   local range = order.range or context.around(order.buffer, order.line)
-  local folder = folders.project_of(vim.api.nvim_buf_get_name(order.buffer))
-  ask_for_a_list(order, range, tests.place, folder, function(chosen)
-    write_chosen(order, tests, range, chosen, folder)
+  local folder = folders.project_of(source)
+  ask_for_a_list(order, range, place, folder, function(chosen)
+    write_chosen(order, test_buffer, place, range, chosen, folder)
   end)
 end
 
@@ -304,12 +348,19 @@ local TEST_TITLE = 'Write a test'
 --- typed in a float, below the cursor's line or in its place when it is
 --- blank, as `\WW` writes code, each edit a proposal of its own
 --- (`aineo.explain.write`'s `propose()`), Claude Code shown the source the
---- test file tests (`test_file_brief()`).
+--- test file tests (`test_file_brief()`); a test file not on disk, at the
+--- path the layout gives its source, is written once code is first
+--- accepted in it (`write_when_accepted()`).
 ---
 ---@param order aineo.explain.TestOrder
 local function write_test_of_a_requirement(order)
   local path = vim.api.nvim_buf_get_name(order.buffer)
   local folder = folders.project_of(path)
+  local source = order.layout.source_for(path)
+  local place = source and order.layout.test_for(source.path)
+  if place and place.path == path then
+    write_when_accepted(order.buffer, place, order.layout, folder)
+  end
   write.propose({
     buffer = order.buffer,
     window = order.window,
@@ -399,7 +450,7 @@ local function write_implementation_of_a_test(order)
   local range = order.range or context.around(order.buffer, order.line)
   local source_window = test_window.show_source(order.window, place.path)
   local source_buffer = vim.api.nvim_win_get_buf(source_window)
-  write_when_accepted(source_buffer, place)
+  write_when_accepted(source_buffer, place, order.layout, folder)
   local test_file = shown_file(test_path, folder)
   write.ask({
     buffer = source_buffer,

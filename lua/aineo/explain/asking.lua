@@ -19,9 +19,10 @@ local M = {}
 ---@field folder string the folder it runs in
 ---@field on_end fun(ended: vim.SystemCompleted) called once it ended, when its buffer is still valid and no other request of its kind replaced it
 
---- Starts Claude Code for `asking`, showing above `asking.line` that it is
---- working until it ends, then calls `asking.on_end`, or until its
---- timeout, which stops it and tells the user what failed.
+--- Starts Claude Code for `asking`, in place of the request of its kind
+--- that runs for its buffer, which it stops, showing above `asking.line`
+--- that it is working until it ends, then calls `asking.on_end`, or until
+--- its timeout, which stops it and tells the user what failed.
 ---
 --- Raises an error naming `claude.cmd` when its command cannot be run, and
 --- leaves no request running then.
@@ -29,6 +30,10 @@ local M = {}
 ---@param asking aineo.explain.Asking
 function M.start(asking)
   local buffer = asking.buffer
+  local running = runs.find(buffer, asking.kind)
+  if running then
+    runs.stop(running)
+  end
   local run = runs.begin({
     kind = asking.kind,
     deep = asking.deep,

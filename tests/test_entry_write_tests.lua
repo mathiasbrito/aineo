@@ -120,6 +120,28 @@ T['the keys']['\\WT in Visual mode writes the test of the selected requirement i
   )
 end
 
+T['the keys']['\\WI in Visual mode asks for the code of the selected test'] = function()
+  local folder, record = start()
+  child.cmd('edit ' .. folder .. '/tests/calc_spec.lua')
+  child.api.nvim_buf_set_lines(0, 0, -1, false, {
+    "local calc = require('calc')",
+    '',
+    "describe('calc', function()",
+    "  it('subtracts', function()",
+    '    assert.equal(1, calc.sub(3, 2))',
+    '  end)',
+    'end)',
+  })
+  child.cmd('5')
+
+  tested.press(child, 'V', '\\WI')
+
+  eq(vim.list_slice(vim.split(tested.requests(record, 1)[1].stdin, '\n'), 3, 4), {
+    '    assert.equal(1, calc.sub(3, 2))',
+    '',
+  })
+end
+
 T['the keys']['\\WI in a source tells that it works from a test'] = function()
   start()
 

@@ -11,6 +11,9 @@ local T = MiniTest.new_set({ hooks = { post_once = child.stop } })
 local FILES = {
   ['src/calc.lua'] = { 'local M = {}', 'return M' },
   ['src/other.lua'] = { 'return {}' },
+  ['src/sum.lua'] = { 'return {}' },
+  ['src/pct.lua'] = { 'return {}' },
+  ['tests/sum_spec.lua'] = { "describe('sum', function() end)" },
   ['tests/calc_spec.lua'] = { "describe('calc', function() end)" },
   ['tests/integration/calc_spec.lua'] = { "describe('calc together', function() end)" },
   ['README.md'] = { '# calc' },
@@ -38,6 +41,28 @@ local LAYOUT = {
   },
   sources = {},
 }
+
+--- The places of the sources of the cases that need more than `LAYOUT`.
+local MORE_PLACES = {
+  ['src/sum.lua'] = {
+    path = 'tests/sum_spec.lua',
+    exists = true,
+    candidates = { 'tests/sum_spec.lua' },
+    origin = 'preset',
+    rule = 'busted spec',
+    inline = false,
+  },
+  ['src/pct.lua'] = {
+    path = 'tests/100%_spec.lua',
+    exists = false,
+    candidates = {},
+    origin = 'preset',
+    rule = 'busted spec',
+    inline = false,
+  },
+}
+
+LAYOUT.tests = vim.tbl_extend('error', LAYOUT.tests, MORE_PLACES)
 
 --- Starts the child with `src/calc.lua` open.
 ---
@@ -240,6 +265,74 @@ T['in the test window']['a correction after which the layout places no test file
     'aineo: no test file is known for src/calc.lua: no rule pairs ' .. folder .. '/src/calc.lua',
   })
   eq(windows()[2].name, folder .. '/tests/calc_spec.lua')
+end
+
+T['the test window']['gives a test file it loads as it follows its filetype'] = function()
+  local folder = start()
+  toggle()
+
+  child.cmd('edit ' .. folder .. '/src/sum.lua')
+
+  eq(windows()[2].name, folder .. '/tests/sum_spec.lua')
+  eq(child.lua_get([[vim.bo[vim.fn.winbufnr(vim.fn.winnr('$'))].filetype]]), 'lua')
+end
+
+T['the test window']['shows a % of its path in its bar'] = function()
+  local folder = start()
+  child.cmd('edit ' .. folder .. '/src/pct.lua')
+
+  local raised_nothing = child.lua_get(
+    [[pcall(require('aineo.explain').toggle_test_window, vim.api.nvim_get_current_win(), _G.layout)]]
+  )
+
+  eq(raised_nothing, true)
+  eq(test_window_bar(), 'tests/100%%_spec.lua · new · busted spec (preset)')
+end
+
+T['the test window']['keeps half the height on a resize'] = function()
+  start()
+  toggle()
+
+  child.o.lines = 30
+
+  local shown = windows()
+  eq(math.abs(shown[1].height - shown[2].height) <= 1, true)
+end
+
+T['with its source window closed'] = MiniTest.new_set()
+
+--- Shows the test window, moves to it, and closes the source window above
+--- it by hand.
+local function close_the_source_window()
+  toggle()
+  child.cmd('wincmd j')
+  child.cmd('wincmd k | close')
+end
+
+T['with its source window closed']['\\Wt there tells, raising nothing'] = function()
+  start()
+  close_the_source_window()
+
+  local raised_nothing = child.lua_get(
+    [[pcall(require('aineo.explain').toggle_test_window, vim.api.nvim_get_current_win(), _G.layout)]]
+  )
+
+  eq(raised_nothing, true)
+  eq(#windows(), 1)
+  eq(#tested.told(child), 1)
+end
+
+T['with its source window closed']['\\Wn and \\Wp there tell where they work'] = function()
+  start()
+  close_the_source_window()
+
+  child.lua([[require('aineo.explain').next_test_file(vim.api.nvim_get_current_win())]])
+  child.lua([[require('aineo.explain').correct_test_file(vim.api.nvim_get_current_win())]])
+
+  eq(
+    tested.told(child),
+    { 'aineo: this works in a test window', 'aineo: this works in a test window' }
+  )
 end
 
 return T

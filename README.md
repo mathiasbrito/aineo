@@ -521,8 +521,9 @@ float, which is test-driven development's first step; `\WI` on that test
 writes the code that makes it pass in its source, shown in the window above.
 Where a source's test file is, `aineo.test_layout` tells; `\Wp` in the test
 window corrects it and `\Wn` shows the next test file found. A test file or a
-source not on disk is written, with its folders, when you accept its first
-proposal, and never if you reject them all. While any written code shows,
+source not on disk is written, with its folders, at the path the test layout
+gave, when you accept its first proposal, never over a file that is on disk
+by then, and never if you reject them all. While any written code shows,
 `\Ws` asks how to change it and asks again, its answer in place of the
 proposals left.
 
