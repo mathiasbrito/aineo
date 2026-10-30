@@ -238,6 +238,38 @@ T['refining']['is stopped, and told, when a proposal is decided meanwhile'] = fu
   )
 end
 
+T['refining']['is stopped by every decision'] = MiniTest.new_set({
+  parametrize = {
+    { [[require('aineo.explain').accept_fix(vim.api.nvim_get_current_buf(), 'write', 1)]] },
+    { [[require('aineo.explain').accept_all(vim.api.nvim_get_current_buf(), 'write')]] },
+    { [[require('aineo.explain').reject_all(vim.api.nvim_get_current_buf(), 'write')]] },
+  },
+})
+
+T['refining']['is stopped by every decision']['made meanwhile, told'] = function(decision)
+  propose(
+    { summary = 'Sorts.', edits = { below_line_3('  values = sorted(values)'), IMPORTING } },
+    true
+  )
+  child.lua('vim.env.AINEO_FAKE_CLAUDE_PRINT_MS = "3000"')
+  refine('Sort in place.', SORTED_IN_PLACE)
+
+  child.lua(decision)
+
+  eq(
+    child.lua_get([[#vim.api.nvim_buf_get_extmarks(0,
+    vim.api.nvim_create_namespace('aineo_explain_write'), 0, -1, {})]]),
+    0
+  )
+  eq(
+    vim.tbl_contains(
+      tested.told(child),
+      'aineo: the refinement was stopped: a proposal was decided'
+    ),
+    true
+  )
+end
+
 T['refining']['tells the user when no written code is shown'] = function()
   explained.start(child, 'explain-refine', CODE, { claude = { cmd = explained.FAKE_CLAUDE } })
 
