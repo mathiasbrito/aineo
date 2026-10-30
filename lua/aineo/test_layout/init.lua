@@ -5,9 +5,11 @@
 --- (`aineo.test_layout.trust`) — and the keeping of those rules.
 ---
 --- The rules are kept per repository in the editor's state directory,
---- `stdpath('state')`, read here as the home's one ambient value: the
---- functions take the path of a file and nothing else.
+--- `stdpath('state')`, and a worktree's files are kept 10 s between calls
+--- by the event loop's clock: the home's two ambient values, read here, as
+--- the functions take the path of a file and nothing else.
 
+local cache = require('aineo.test_layout.cache')
 local finding = require('aineo.test_layout.finding')
 local presets = require('aineo.test_layout.presets')
 local repository = require('aineo.test_layout.repository')
@@ -95,6 +97,37 @@ local function state_directory()
   return vim.fn.stdpath('state') --[[@as string]]
 end
 
+--- How long the files of a worktree, and the presets ranked for them, are
+--- kept between calls, in milliseconds.
+local KEPT_MS = 10000
+
+--- The view of each worktree read lately, by its folder, with the presets
+--- ranked for it (`view.ranked`), by the event loop's clock.
+local views = cache.new(vim.uv.now, KEPT_MS)
+
+--- The view of the worktree at `root`: the one read within `KEPT_MS`, else
+--- read now.
+---
+---@param root string
+---@return aineo.test_layout.View
+local function view_of(root)
+  return views:get(root, function()
+    local view = repository.view_of(root)
+    view.ranked = {}
+    return view
+  end)
+end
+
+--- Drops what is kept of the worktree whose folder is `repository_root`,
+--- its files and the presets ranked for them, so that the next call reads
+--- them again: for a caller that has just written a file there, such as a
+--- new test file. `correct()` and `declare()` do it themselves.
+---
+---@param repository_root string
+function M.forget(repository_root)
+  views:forget(vim.uv.fs_realpath(repository_root) or absolute_path(repository_root))
+end
+
 --- Where `path`, any file's path, is, and the rules in force for it; nil
 --- and why when it is in no git worktree.
 ---
@@ -109,7 +142,7 @@ local function locate(path)
   if not relative then
     return nil, absolute .. ' is in no git worktree'
   end
-  local view = repository.view_of(root)
+  local view = view_of(root)
   local stored = store.read(state_directory(), repository.main_worktree_of(root))
   return {
     view = view,
@@ -142,8 +175,11 @@ function M.test_for(source_path)
 end
 
 --- Where the source of the test file at `test_path` is, or nil and why not
---- — it is in no git worktree, or no two-way rule gives it a source — in
---- the shape of `test_for()`'s place, with no `sibling` and no companions.
+--- — it is in no git worktree, or no rule gives it a source — in the shape
+--- of `test_for()`'s place, with no `sibling` and no companions. A two-way
+--- rule gives the source; with none, the existing files named by the stem
+--- a one-way rule's test template binds, then those the test imports
+--- (`aineo.test_layout.finding`'s `source_for()`).
 ---
 ---@param test_path string
 ---@return aineo.test_layout.Place?
@@ -202,6 +238,7 @@ function M.correct(source_path, test_path)
   end
   stored.user = user
   store.write(state_directory(), main, stored)
+  views:forget(located.view.root)
   return true
 end
 
@@ -223,7 +260,7 @@ function M.rules_in_force(directory)
   local stored = store.read(state_directory(), repository.main_worktree_of(root))
   local named = vim.tbl_map(function(rule)
     return named_rule(rule.description, rule.origin)
-  end, trust.in_force(repository.view_of(root), stored, presets))
+  end, trust.in_force(view_of(root), stored, presets))
   return named, root
 end
 
@@ -317,8 +354,9 @@ function M.declare(declaration)
   end
   stored.agent = { rules = statements, framework = declaration.framework }
   store.write(state_directory(), main, stored)
+  views:forget(root)
   local lines = { ('aineo keeps %s for this repository:'):format(counted(#statements, 'rule')) }
-  for position, assessment in ipairs(trust.assess(repository.view_of(root), stored, presets)) do
+  for position, assessment in ipairs(trust.assess(view_of(root), stored, presets)) do
     table.insert(lines, assessment_line(position, assessment))
   end
   return { text = table.concat(lines, '\n'), is_error = false }

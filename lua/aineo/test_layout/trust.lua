@@ -153,13 +153,18 @@ end
 --- The presets of `catalogue` for sources of `extension` that `view`'s
 --- repository shows — one of their markers is present — and the language's
 --- defaults, ranked by how many sources each pairs with test files, then a
---- marked preset before a default, then in the catalogue's order.
+--- marked preset before a default, then in the catalogue's order. Kept in
+--- `view.ranked`, by extension, when the view has that table, and read
+--- from it the next time.
 ---
 ---@param view aineo.test_layout.View
 ---@param catalogue aineo.test_layout.Catalogue
 ---@param extension string
 ---@return aineo.test_layout.Ranked[]
 local function ranked_presets(view, catalogue, extension)
+  if view.ranked and view.ranked[extension] then
+    return view.ranked[extension]
+  end
   local defaults = {}
   for _, id in ipairs(catalogue.defaults(extension, view)) do
     defaults[id] = true
@@ -188,6 +193,9 @@ local function ranked_presets(view, catalogue, extension)
     end
     return left.order < right.order
   end)
+  if view.ranked then
+    view.ranked[extension] = ranked
+  end
   return ranked
 end
 
@@ -299,7 +307,8 @@ end
 --- of those tests another rule in force — the user's, another statement's,
 --- a preset's — pairs with a different source; and, for one that pairs
 --- nothing while presets for the files it matches pair some, those
---- presets, which it is kept after (`rules_for()`).
+--- presets, which it is kept after (`rules_for()`). Each rule's pairs are
+--- read once.
 ---
 ---@param view aineo.test_layout.View
 ---@param stored aineo.test_layout.Stored
@@ -308,10 +317,15 @@ end
 function M.assess(view, stored, catalogue)
   local stated = agent_rules(stored.agent, catalogue)
   local groups = rule_groups(view, stored, catalogue, stated)
+  local pairs_of_rule = {}
+  local function paired(rule)
+    pairs_of_rule[rule] = pairs_of_rule[rule] or finding.paired_sources(rule, view)
+    return pairs_of_rule[rule]
+  end
   local sources_of_test = {}
   for _, group in ipairs(groups) do
     for _, rule in ipairs(group.rules) do
-      for _, pair in ipairs(finding.paired_sources(rule, view)) do
+      for _, pair in ipairs(paired(rule)) do
         sources_of_test[pair.test] = sources_of_test[pair.test] or {}
         table.insert(sources_of_test[pair.test], { key = group.key, source = pair.source })
       end
@@ -322,7 +336,7 @@ function M.assess(view, stored, catalogue)
     local key = 'agent ' .. position
     local pairs_count, contradictions = 0, 0
     for _, rule in ipairs(rules_of_one) do
-      for _, pair in ipairs(finding.paired_sources(rule, view)) do
+      for _, pair in ipairs(paired(rule)) do
         pairs_count = pairs_count + 1
         local contradicted = vim.iter(sources_of_test[pair.test]):any(function(other)
           return other.key ~= key and other.source ~= pair.source

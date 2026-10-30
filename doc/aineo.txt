@@ -4545,9 +4545,11 @@ needed, or a rule of its own:
   them.
 A template is a path from the unit root, the folder of the nearest
 manifest above the file (`pyproject.toml`, `setup.py`, `setup.cfg`,
-`go.mod`, `pom.xml`, `build.gradle`, `build.gradle.kts`, `package.json`,
-`CMakeLists.txt`, `meson.build`, `Makefile`; the repository's root when
-none), with `/` separators. `{name}` is the file name without its
+`go.mod`, `pom.xml`, `build.gradle`, `build.gradle.kts`, `package.json`),
+or of the outermost above it that holds a build file of C or C++
+(`CMakeLists.txt`, `meson.build`, `Makefile`), whichever is nearer — a
+`src/Makefile` under a root that has one is no unit root; the repository's
+root when none — with `/` separators. `{name}` is the file name without its
 extension, dots inside kept (`foo.component`); `{path}` the folders
 between, none when a `/` follows it; `{ext}` the extension; `{unit}`, only
 at the start, the unit root itself; any other `{word}` one folder.
@@ -4588,15 +4590,23 @@ flat `tests/` folder, Jest's `<name>.test.<ext>` beside the source, Go's
 The test file of a source is the existing one the first rules name,
 shortest path first; when no template names one, a test file whose text
 names the source as its language imports it; else the file the creating
-rule gives, which does not exist yet. A source is found from a test file
-only by a rule whose test template keeps every placeholder of its source.
+rule gives, which does not exist yet. The source of a test file is the one
+a rule whose test template keeps every placeholder of its source gives;
+when no such rule does, the existing files of the test's language whose
+name is the `{name}` its test template binds (`test_utils.py` gives
+`utils.py`, `io_test.cc` gives `io.cc`, `io.cpp` or `io.h`), then the
+files the test imports, shortest path first.
 Your correction of a source's test file holds in every worktree of the
 repository, and when a preset gives that pair, the preset becomes your
 rule for the other sources. aineo keeps the agent's rules and your
 corrections in |stdpath()| `state`, under `aineo/test_layout/`, one file
-per repository, never in the repository. Lua code reads all this through
-`require('aineo.test_layout')`: `test_for(path)`, `source_for(path)`,
-`is_test(path)`, `correct(source, test)` and `describe(path)`.
+per repository, never in the repository. It keeps a worktree's list of
+files, and the presets ranked for it, for 10 seconds; a correction, the
+agent's call and `forget()` drop them at once. Lua code reads all this
+through `require('aineo.test_layout')`: `test_for(path)`,
+`source_for(path)`, `is_test(path)`, `correct(source, test)`,
+`describe(path)` and `forget(worktree)`, for a caller that has just
+written a file there.
 
                                                          *aineo-report-claims*
 Each report belongs to the Claude session its Claude Code is on, which the
