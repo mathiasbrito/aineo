@@ -27,7 +27,7 @@ local M = {}
 ---@field test_for fun(source: string): aineo.explain.TestPlace|nil, string? the place of the test file of the source at that absolute path, or `nil` and why
 ---@field source_for fun(test: string): aineo.explain.TestPlace|nil, string? the place of the source of the test file at that absolute path, or `nil` and why
 ---@field is_test fun(path: string): boolean whether the file at that absolute path is a test file
----@field correct fun(source: string, test: string) records that the source's test file is the one at `test`, as the user said
+---@field correct fun(source: string, test: string): boolean, string? records that the source's test file is the one at `test`, as the user said; `false` and why when it cannot
 ---@field describe fun(source: string): string the rule that pairs the source at that absolute path with its test file, and its origin, on one line
 
 --- What a test window shows, by the window of the source above it.
@@ -221,6 +221,29 @@ vim.api.nvim_create_autocmd('BufWinEnter', {
   end,
 })
 
+--- Names again, in the bar of each test window that shows `buffer`, the
+--- file it shows (`bar_of()`), which is on disk once written.
+---
+---@param buffer integer
+local function rename_in_bars(buffer)
+  for _, tests in pairs(shown) do
+    if
+      vim.api.nvim_win_is_valid(tests.window) and vim.api.nvim_win_get_buf(tests.window) == buffer
+    then
+      vim.wo[tests.window].winbar =
+        bar_of(tests.source, vim.api.nvim_buf_get_name(buffer), tests.layout)
+    end
+  end
+end
+
+vim.api.nvim_create_autocmd('BufWritePost', {
+  group = 'aineo_explain_test_window',
+  desc = 'aineo: name a test file written as no longer new in the test window',
+  callback = function(event)
+    rename_in_bars(event.buf)
+  end,
+})
+
 --- The test files the test window of `tests` goes through: the one the
 --- layout placed first, then each other candidate, in their order.
 ---
@@ -286,7 +309,8 @@ end
 --- window or the window of its source — for the path of the source's test
 --- file, and, for a path given, tells the layout the correction and shows
 --- the test file it then places (`show()`), the file at that path when it
---- places none. Nothing when the user gives none.
+--- places none; a correction the layout refuses is told to the user, once,
+--- and changes nothing. Nothing when the user gives none.
 ---
 ---@param window integer
 function M.correct_file(window)
@@ -305,7 +329,11 @@ function M.correct_file(window)
       return
     end
     local path = absolute_path(vim.trim(answer), folder)
-    tests.layout.correct(tests.source, path)
+    local kept, problem = tests.layout.correct(tests.source, path)
+    if kept == false then
+      vim.notify('aineo: the test file was not corrected: ' .. problem, vim.log.levels.WARN)
+      return
+    end
     show(tests, tests.source, tests.layout.test_for(tests.source) or {
       path = path,
       exists = vim.uv.fs_stat(path) ~= nil,
