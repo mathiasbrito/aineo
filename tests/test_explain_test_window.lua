@@ -52,6 +52,14 @@ local MORE_PLACES = {
     rule = 'busted spec',
     inline = false,
   },
+  ['src/calc2.lua'] = {
+    path = 'tests/calc2_spec.lua',
+    exists = false,
+    candidates = {},
+    origin = 'preset',
+    rule = 'busted spec',
+    inline = false,
+  },
   ['src/pct.lua'] = {
     path = 'tests/100%_spec.lua',
     exists = false,
@@ -297,6 +305,69 @@ T['the test window']['keeps half the height on a resize'] = function()
 
   local shown = windows()
   eq(math.abs(shown[1].height - shown[2].height) <= 1, true)
+end
+
+T['the test window']['follows the source renamed above it'] = function()
+  local folder = start()
+  toggle()
+
+  child.cmd('file ' .. folder .. '/src/calc2.lua')
+
+  eq(windows()[2].name, folder .. '/tests/calc2_spec.lua')
+end
+
+T['the test window']['is left alone on a resize while the layout is zoomed'] = function()
+  start()
+  child.lua([[
+    _G.zoomed = false
+    require('aineo.explain').toggle_test_window(vim.api.nvim_get_current_win(), _G.layout, function()
+      return _G.zoomed
+    end)
+  ]])
+  child.cmd('resize 40')
+  child.lua('_G.zoomed = true')
+
+  child.o.lines = 46
+
+  local shown = windows()
+  eq(shown[1].height > shown[2].height + 20, true)
+end
+
+T['the test window']['shares the height again on entering its tab after a resize elsewhere'] = function()
+  start()
+  toggle()
+  child.cmd('tabnew')
+  child.o.lines = 30
+
+  child.cmd('tabprevious')
+
+  local shown = windows()
+  eq(math.abs(shown[1].height - shown[2].height) <= 1, true)
+end
+
+T['with aineo.test_layout'] = MiniTest.new_set()
+
+T['with aineo.test_layout']['a dangling link at the test file is told, and nothing opens'] = function()
+  local folder = tested.start(
+    child,
+    'explain-test-window-link',
+    { ['calc.py'] = { 'def add(a, b):', '    return a + b' } },
+    {},
+    'calc.py'
+  )
+  vim.fn.mkdir(folder .. '/tests', 'p')
+  vim.uv.fs_symlink(folder .. '/tests/missing.py', folder .. '/tests/test_calc.py')
+  local place =
+    child.lua_get([[{ require('aineo.test_layout').test_for(vim.api.nvim_buf_get_name(0)) }]])
+
+  child.lua(
+    [[require('aineo.explain').toggle_test_window(vim.api.nvim_get_current_win(), require('aineo.test_layout'))]]
+  )
+
+  eq(#windows(), 1)
+  eq(place[1], vim.NIL)
+  eq(place[2]:find('tests/test_calc.py', 1, true) ~= nil, true)
+  eq(tested.told(child), { 'aineo: no test file is known for calc.py: ' .. tostring(place[2]) })
 end
 
 T['with its source window closed'] = MiniTest.new_set()

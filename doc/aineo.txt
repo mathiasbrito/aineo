@@ -2313,7 +2313,10 @@ In a source, `\WT` first shows the test window when it is hidden
 chose included: the list, the tests chosen and the file they are written
 into are that one, whatever the test window shows afterwards; when no
 window shows it any more by the time you choose, you are told and nothing
-is asked. In a file the test layout knows no test file for, `\WT` tells
+is asked. A file the test window shows that the test layout did not give
+the source, one you edited there, is never written by an accept: the code
+is proposed in it, and you are told it will not be written. In a file the
+test layout knows no test file for, `\WT` tells
 you so and asks nothing. It then asks for a list of the tests worth writing
 for the code around the cursor: the selected lines in Visual mode; else the
 function or method that holds the cursor's line, else the class (a C
@@ -2371,12 +2374,15 @@ nothing, as always.
 half of the height they shared, or hides it, from the source or from
 itself; `\WT` in a source shows it when hidden, while `\WI` shows the
 source above the test it is pressed in, not the test window. A resize of
-the editor gives the two windows half of the height each again. Its window
-bar names the test
-file from the project, `new` when it is not on disk, and the rule of the
-test layout that placed it, with its origin. While shown it follows the
-source: another source in the window above shows its test file; a buffer
-that is no source, or no file, leaves it as it is. In the test window,
+the editor gives the two windows half of the height each again, unless
+aineo's layout is zoomed (|aineo-zoom|), which it leaves as it is; a tab
+page resized while another was current shares them once you enter it. Its
+window bar names the test file from the project, `new` when it is not on
+disk, and the rule of the test layout that placed it, with its origin.
+While shown it follows the source: another source in the window above, or
+the source given another name there (`:file`, `:saveas`), shows its test
+file; a buffer that is no source, or no file, leaves it as it is. In the
+test window,
 `\Wp` asks for the path of the test file, the current one filled in, and
 tells the test layout your correction, which it remembers; `\Wn` shows the
 next test file found for the source, after the last the first. Elsewhere
@@ -2389,8 +2395,9 @@ it. The request is asked again with the proposals still left and your
 instructions, and its answer replaces them: placed as the first request's
 when none was decided yet, else wherever it belongs in the file. A second
 `\Ws` stops the first; accepting or rejecting a proposal while it runs
-stops it too, telling you `aineo: the refinement was stopped: a proposal
-was decided`, so a decided proposal never comes back. It is mapped in the
+stops it too (a `\WT` list or another request of the buffer goes on), telling
+you `aineo: the refinement was stopped: a proposal was decided`, so a decided
+proposal never comes back. It is mapped in the
 buffer while the code shows, as `\Wa` is, and the head row names it
 (`· \Ws refines`). The keys are
 |<Plug>(aineo-write-tests)|, |<Plug>(aineo-write-implementation)|,
