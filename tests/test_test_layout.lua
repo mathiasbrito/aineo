@@ -149,6 +149,247 @@ T['source_for()']['finds the source of a test file by each preset, none when one
   eq(relative_path(top, place), source)
 end
 
+T['declare()'] = MiniTest.new_set()
+
+T['declare()']['keeps the agent’s rules, which then come before the presets'] = function()
+  local top = repository_of('python')
+  keep_agent_rules(top, {})
+
+  local answer =
+    test_layout.declare({ worktree = top, rules = { { preset = 'python.pytest.suffix' } } })
+
+  local place = test_layout.test_for(vim.fs.joinpath(top, 'lib/extra.py'))
+  eq(
+    { answer.is_error, relative_path(top, place), place.origin },
+    { false, 'lib/extra_test.py', 'agent' }
+  )
+end
+
+T['declare()']['answers how many sources each rule pairs with a test, and its contradictions'] = function()
+  local top = repository_of('python')
+  keep_agent_rules(top, {})
+
+  local answer = test_layout.declare({
+    worktree = top,
+    rules = {
+      { preset = 'python.pytest.suffix' },
+      { source = '{path}/{name}.py', test = 'tests/{path}/test_{name}.py' },
+    },
+  })
+
+  eq(answer, {
+    is_error = false,
+    text = 'aineo keeps 2 rules for this repository:\n'
+      .. '1. agent rule 1 (python.pytest.suffix): pairs 1 source with a test, 0 contradictions\n'
+      .. '2. agent rule 2: pairs 1 source with a test, 1 contradiction',
+  })
+end
+
+T['declare()']['says a rule that pairs nothing is kept after the presets that pair'] = function()
+  local top = repository_of('go')
+  keep_agent_rules(top, {})
+
+  local answer = test_layout.declare({
+    worktree = top,
+    rules = { { source = '{path}/{name}.go', test = 'spec/{name}_spec.go' } },
+  })
+
+  eq(
+    answer.text,
+    'aineo keeps 1 rule for this repository:\n'
+      .. '1. agent rule 1: pairs 0 sources with a test, 0 contradictions;'
+      .. ' kept after go.testing.colocated, which pairs the repository’s sources with tests'
+  )
+end
+
+T['declare()']['adds to the rules kept when told not to replace them'] = function()
+  local top = repository_of('python')
+  keep_agent_rules(top, { { preset = 'python.pytest.flat' } })
+
+  local answer = test_layout.declare({
+    worktree = top,
+    rules = { { preset = 'python.pytest.suffix' } },
+    replace = false,
+  })
+
+  eq(vim.split(answer.text, '\n')[1], 'aineo keeps 2 rules for this repository:')
+end
+
+T['declare()']['refuses the rules, keeping none, naming the field at fault'] = MiniTest.new_set({
+  parametrize = {
+    { { { preset = 'python.nose' } }, 'rules[1].preset: no preset python.nose' },
+    {
+      { { preset = 'python.pytest.flat', test = 'x' } },
+      'rules[1].test: not a field of a preset rule',
+    },
+    { { { source = '{name}.py' } }, 'rules[1]: give one of test, inline and folder' },
+    {
+      { { source = '{name}.py', test = 'a', inline = true } },
+      'rules[1]: give one of test, inline and folder',
+    },
+    { { { test = 'tests/test_{name}.py' } }, 'rules[1].source: expected a template' },
+    {
+      { { source = '{name}.py', test = '../tests/test_{name}.py' } },
+      'rules[1].test: a .. segment',
+    },
+    { { { source = '/abs/{name}.py', test = 'x' } }, 'rules[1].source: an absolute path' },
+    {
+      { { source = '{name}.py', test = { 'ok/{name}.py', '~/{name}.py' } } },
+      'rules[1].test[2]: a ~',
+    },
+    {
+      { { source = '{name}.py', test = {} } },
+      'rules[1].test: expected a template or a non-empty list of them',
+    },
+    {
+      { { source = '{name}.py', test = 'tests/{pkg}/{name}.py' } },
+      'rules[1].test: {pkg} is not in the source template',
+    },
+    { { { source = '{name}.py', inline = false } }, 'rules[1].inline: expected true' },
+    { { { folder = 'e2e' } }, 'rules[1].folder: expected a folder ending in /' },
+    { { { folder = '../e2e/' } }, 'rules[1].folder: a .. segment' },
+    { { { folder = 'e2e/{name}/' } }, 'rules[1].folder: a placeholder' },
+    {
+      { { source = '{name}.py', test = 'x', discover = { '../**/*.py' } } },
+      'rules[1].discover[1]: a .. segment',
+    },
+    {
+      { { source = '{name}.py', test = 'x', discover = '**/*.py' } },
+      'rules[1].discover: expected a list of globs',
+    },
+    {
+      { { source = '{name}.py', test = 'x', companions = { 'a/b.py' } } },
+      'rules[1].companions[1]: expected a file name',
+    },
+    {
+      { { source = '{name}.py', test = 'x', create = 'yes' } },
+      'rules[1].create: expected true or false',
+    },
+    { { { source = '{name}.py', test = 'x', kind = 3 } }, 'rules[1].kind: expected a string' },
+    {
+      { { source = '{name}.py', test = 'x', run = 'pytest' } },
+      'rules[1].run: not a field of a rule',
+    },
+    { { 'python.pytest.flat' }, 'rules[1]: expected an object' },
+  },
+})
+
+T['declare()']['refuses the rules, keeping none, naming the field at fault']['given'] = function(
+  statements,
+  refusal
+)
+  local top = repository_of('python')
+  keep_agent_rules(top, { { preset = 'python.pytest.suffix' } })
+
+  local answer = test_layout.declare({ worktree = top, rules = statements })
+
+  eq(answer, { is_error = true, text = 'aineo refused the test layout: ' .. refusal })
+  eq(store.read(vim.fn.stdpath('state'), top).agent.rules, { { preset = 'python.pytest.suffix' } })
+end
+
+T['declare()']['refuses more than 32 rules'] = function()
+  local top = repository_of('python')
+  local statements = {}
+  for _ = 1, 33 do
+    table.insert(statements, { preset = 'python.pytest.flat' })
+  end
+
+  local answer = test_layout.declare({ worktree = top, rules = statements })
+
+  eq(answer.text, 'aineo refused the test layout: rules: more than 32 rules')
+end
+
+T['declare()']['refuses a worktree that is no git checkout'] = function()
+  local folder = vim.fs.joinpath(vim.fn.getcwd(), '.tests', 'fixtures', 'test-layout-plain')
+  vim.fn.mkdir(folder, 'p')
+
+  local answer = test_layout.declare({ worktree = folder, rules = {} })
+
+  eq(answer, {
+    is_error = true,
+    text = 'aineo refused the test layout: worktree: ' .. folder .. ' is not a git checkout',
+  })
+end
+
+T['correct()'] = MiniTest.new_set()
+
+T['correct()']['makes the user’s test file the test of the source before any rule'] = function()
+  local top = repository_of('python')
+  keep_agent_rules(top, {})
+
+  test_layout.correct(
+    vim.fs.joinpath(top, 'src/shop/cart.py'),
+    vim.fs.joinpath(top, 'checks/cart_check.py')
+  )
+
+  local place = test_layout.test_for(vim.fs.joinpath(top, 'src/shop/cart.py'))
+  eq(
+    { relative_path(top, place), place.exists, place.origin, place.rule },
+    { 'checks/cart_check.py', false, 'user', 'your correction' }
+  )
+end
+
+T['correct()']['keeps the preset template the correction fits as the user’s rule'] = function()
+  local top = repository_of('python')
+  keep_agent_rules(top, {})
+
+  test_layout.correct(
+    vim.fs.joinpath(top, 'lib/utils.py'),
+    vim.fs.joinpath(top, 'lib/utils_test.py')
+  )
+
+  local place = test_layout.test_for(vim.fs.joinpath(top, 'lib/extra.py'))
+  eq(
+    { relative_path(top, place), place.origin, place.rule },
+    { 'lib/extra_test.py', 'user', 'your rule (python.pytest.suffix)' }
+  )
+end
+
+T['correct()']['holds in every worktree of the repository'] = function()
+  local top = repository_of('python')
+  keep_agent_rules(top, {})
+  git_repo.commit_all(top, 'fixture')
+  local other = top .. '-other'
+  vim.fn.delete(other, 'rf')
+  git_repo.git(top, { 'worktree', 'add', '--quiet', other })
+
+  test_layout.correct(
+    vim.fs.joinpath(top, 'src/shop/cart.py'),
+    vim.fs.joinpath(top, 'checks/cart_check.py')
+  )
+
+  local place = test_layout.test_for(vim.fs.joinpath(other, 'src/shop/cart.py'))
+  eq({ relative_path(other, place), place.origin }, { 'checks/cart_check.py', 'user' })
+end
+
+T['describe()'] = MiniTest.new_set()
+
+T['describe()']['names the rule that gives a file its pair, and who stated it'] = function()
+  local top = repository_of('python')
+  keep_agent_rules(top, { { preset = 'python.pytest.suffix' } })
+
+  local lines = {
+    test_layout.describe(vim.fs.joinpath(top, 'tools/fmt.py')),
+    test_layout.describe(vim.fs.joinpath(top, 'tools/fmt_test.py')),
+    test_layout.describe(vim.fs.joinpath(top, 'src/shop/cart.py')),
+  }
+
+  eq(lines, {
+    'agent rule 1 (python.pytest.suffix), from the agent',
+    'agent rule 1 (python.pytest.suffix), from the agent',
+    'python.pytest.src-mirror, from the repository',
+  })
+end
+
+T['describe()']['says why a file has no pair'] = function()
+  local top = repository_of('python')
+  keep_agent_rules(top, {})
+
+  local line = test_layout.describe(vim.fs.joinpath(top, 'pyproject.toml'))
+
+  eq(line, 'no rule of the project matches pyproject.toml')
+end
+
 T['is_test()'] = MiniTest.new_set()
 
 T['is_test()']['tells a test file from a source'] = function()
