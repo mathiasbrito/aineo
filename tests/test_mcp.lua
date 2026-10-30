@@ -53,10 +53,27 @@ end
 
 T['allowed_mcp_tools()'] = MiniTest.new_set()
 
-T['allowed_mcp_tools()']['pre-allows the report tool, the announcement tool and the reading of output, and nothing else'] = function()
+T['allowed_mcp_tools()']['pre-allows the report tool, the announcement tool, the reading of output and the test layout, and nothing else'] = function()
   local tools = mcp.allowed_mcp_tools()
 
-  eq(tools, { 'mcp__aineo__report', 'mcp__aineo__announce_work', 'mcp__aineo__run_output' })
+  eq(tools, {
+    'mcp__aineo__report',
+    'mcp__aineo__announce_work',
+    'mcp__aineo__run_output',
+    'mcp__aineo__test_layout',
+  })
+end
+
+T['test_layout_instructions()'] = MiniTest.new_set()
+
+T['test_layout_instructions()']['tell the agent to state the layout once per project, naming the presets'] = function()
+  local sentence = mcp.test_layout_instructions({ 'python.pytest.flat', 'go.testing.colocated' })
+
+  eq(
+    sentence,
+    'Call `mcp__aineo__test_layout` once per project, when you first learn how the project'
+      .. ' lays out its tests, with presets when one fits: python.pytest.flat, go.testing.colocated.'
+  )
 end
 
 T['the names of the run tools'] = MiniTest.new_set()

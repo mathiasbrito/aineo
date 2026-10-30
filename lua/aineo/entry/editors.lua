@@ -129,8 +129,10 @@ end
 --- followed by each tab it concerns (`aineo.entry.Tab`'s
 --- `follow_told_switch()`); and work an agent announced goes to the tab
 --- whose Claude Code has its start token (`take_announced_work()`), and so
---- does a call of a run tool (`take_run_call()`). Made at the first entry
---- write, so that sourcing this file makes none.
+--- does a call of a run tool (`take_run_call()`); a call of the test layout
+--- tool is kept for its repository, whichever tab's Claude Code made it
+--- (`aineo.test_layout`'s `declare()`). Made at the first entry write, so
+--- that sourcing this file makes none.
 local function make_editor_handlers()
   if editor_handlers_made then
     return
@@ -178,6 +180,9 @@ local function make_editor_handlers()
   end)
   require('aineo.mcp').on_work_announced(take_announced_work)
   require('aineo.mcp').on_run_called(take_run_call)
+  require('aineo.mcp').on_test_layout_declared(function(call)
+    return require('aineo.test_layout').declare(call)
+  end)
 end
 
 M.make_editor_handlers = make_editor_handlers

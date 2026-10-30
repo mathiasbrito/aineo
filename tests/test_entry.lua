@@ -15,11 +15,13 @@ local CLAUDE_WINDOW_BUFFER = 'vim.api.nvim_win_get_buf(vim.fn.win_getid(1))'
 local REPORT_SERVERS = "require('aineo.mcp').mcp_servers(vim.v.servername, vim.v.progpath)"
 
 --- The instructions for the report tool, then, after a blank line each, the
---- paragraphs for the announcement tool and for the run tools, read in the
+--- paragraphs for the announcement tool and for the run tools, and the
+--- sentence for the test layout tool naming its presets, read in the
 --- child.
 local REPORT_INSTRUCTIONS = "require('aineo.report').report_instructions(require('aineo.mcp').report_tool_name())"
   .. " .. '\\n\\n' .. require('aineo.mcp').announce_instructions()"
   .. " .. '\\n\\n' .. require('aineo.mcp').run_instructions()"
+  .. " .. '\\n\\n' .. require('aineo.mcp').test_layout_instructions(require('aineo.test_layout').preset_ids())"
 
 --- What Claude's terminal receives when Send sends an Input holding `hello`:
 --- one bracketed paste, then Enter.

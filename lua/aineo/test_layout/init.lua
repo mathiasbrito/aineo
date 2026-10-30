@@ -25,6 +25,15 @@ local ORIGIN_WORDS = {
   preset = 'the default',
 }
 
+--- A rule named for the user: its description and who stated it.
+---
+---@param description string
+---@param origin 'user'|'agent'|'repository'|'preset'
+---@return string
+local function named_rule(description, origin)
+  return ('%s, from %s'):format(description, ORIGIN_WORDS[origin])
+end
+
 --- What a file's path tells of where it is: the view of its worktree, its
 --- path relative to that worktree, and the rules in force for it.
 ---@class aineo.test_layout.Located
@@ -196,6 +205,35 @@ function M.correct(source_path, test_path)
   return true
 end
 
+--- The rules in force for the tests of the git worktree that holds the
+--- folder `directory`, each once, in the order of trust, named with who
+--- stated it as `describe()` names a rule, such as `python.pytest.flat,
+--- from the repository`; and the worktree's folder. Nil and why when
+--- `directory` is in no git worktree.
+---
+---@param directory string
+---@return string[]? rules
+---@return string root_or_problem the worktree's folder, or why there are no rules
+function M.rules_in_force(directory)
+  local folder = vim.uv.fs_realpath(directory)
+  local root = folder and repository.worktree_of(folder)
+  if not root then
+    return nil, absolute_path(directory) .. ' is in no git worktree'
+  end
+  local stored = store.read(state_directory(), repository.main_worktree_of(root))
+  local named = vim.tbl_map(function(rule)
+    return named_rule(rule.description, rule.origin)
+  end, trust.in_force(repository.view_of(root), stored, presets))
+  return named, root
+end
+
+--- The ids of the presets an agent may name, in the catalogue's order.
+---
+---@return string[]
+function M.preset_ids()
+  return presets.ids()
+end
+
 --- What an agent states of a repository's test layout, through aineo's
 --- `test_layout` tool.
 ---@class aineo.test_layout.Declaration
@@ -307,7 +345,7 @@ function M.describe(path)
   if not place then
     return why
   end
-  return ('%s, from %s'):format(place.rule, ORIGIN_WORDS[place.origin])
+  return named_rule(place.rule, place.origin)
 end
 
 return M
