@@ -29,6 +29,15 @@ local function repository_of(language)
   return assert(vim.uv.fs_realpath(top))
 end
 
+--- What `declare()` answers for `declaration` in an editor that has its
+--- worktree open.
+---
+---@param declaration aineo.test_layout.Declaration
+---@return { text: string, is_error: boolean }
+local function declare_opened(declaration)
+  return test_layout.declare(declaration, { declaration.worktree })
+end
+
 --- Keeps `statements` as the agent's rules of the repository at `top`, in
 --- place of anything kept for it before.
 ---
@@ -64,6 +73,34 @@ local function read_place(top, place, fields)
     read[position + 1] = place[field]
   end
   return read
+end
+
+--- Writes an empty file at `path` under `top`, making its folders.
+---
+---@param top string
+---@param path string
+local function write_file(top, path)
+  local file = vim.fs.joinpath(top, path)
+  vim.fn.mkdir(vim.fs.dirname(file), 'p')
+  assert(vim.fn.writefile({}, file) == 0, 'cannot write ' .. path)
+end
+
+--- A fresh git repository holding `files`, each a path and its lines, and
+--- no agent rule; its folder as the file system resolves it.
+---
+---@param files table<string, string[]>
+---@return string top
+local function repository_holding(files)
+  local top = git_repo.create_unborn('test-layout-text')
+  for path, lines in pairs(files) do
+    local file = vim.fs.joinpath(top, path)
+    vim.fn.mkdir(vim.fs.dirname(file), 'p')
+    assert(vim.fn.writefile(lines, file) == 0, 'cannot write ' .. path)
+  end
+  test_layout.forget(top)
+  local real = assert(vim.uv.fs_realpath(top))
+  keep_agent_rules(real, {})
+  return real
 end
 
 local T = MiniTest.new_set({
@@ -176,8 +213,7 @@ T['declare()']['keeps the agent’s rules, which then come before the presets'] 
   local top = repository_of('python')
   keep_agent_rules(top, {})
 
-  local answer =
-    test_layout.declare({ worktree = top, rules = { { preset = 'python.pytest.suffix' } } })
+  local answer = declare_opened({ worktree = top, rules = { { preset = 'python.pytest.suffix' } } })
 
   local place = test_layout.test_for(vim.fs.joinpath(top, 'lib/extra.py'))
   eq(
@@ -190,7 +226,7 @@ T['declare()']['answers how many sources each rule pairs with a test, and its co
   local top = repository_of('python')
   keep_agent_rules(top, {})
 
-  local answer = test_layout.declare({
+  local answer = declare_opened({
     worktree = top,
     rules = {
       { preset = 'python.pytest.suffix' },
@@ -210,7 +246,7 @@ T['declare()']['says a rule that pairs nothing is kept after the presets that pa
   local top = repository_of('go')
   keep_agent_rules(top, {})
 
-  local answer = test_layout.declare({
+  local answer = declare_opened({
     worktree = top,
     rules = { { source = '{path}/{name}.go', test = 'spec/{name}_spec.go' } },
   })
@@ -227,7 +263,7 @@ T['declare()']['adds to the rules kept when told not to replace them'] = functio
   local top = repository_of('python')
   keep_agent_rules(top, { { preset = 'python.pytest.flat' } })
 
-  local answer = test_layout.declare({
+  local answer = declare_opened({
     worktree = top,
     rules = { { preset = 'python.pytest.suffix' } },
     replace = false,
@@ -335,16 +371,47 @@ T['declare()']['refuses the rules, keeping none, naming the field at fault']['gi
   local top = repository_of('python')
   keep_agent_rules(top, { { preset = 'python.pytest.suffix' } })
 
-  local answer = test_layout.declare({ worktree = top, rules = statements })
+  local answer = declare_opened({ worktree = top, rules = statements })
 
   eq(answer, { is_error = true, text = 'aineo refused the test layout: ' .. refusal })
   eq(store.read(vim.fn.stdpath('state'), top).agent.rules, { { preset = 'python.pytest.suffix' } })
 end
 
+--- Milliseconds since `started`, a `vim.uv.hrtime()`.
+---
+---@param started number
+---@return number
+local function milliseconds_since(started)
+  return (vim.uv.hrtime() - started) / 1e6
+end
+
+T['declare()']['and the calls after it end in a bounded time on a template many splits match'] = function()
+  local top = repository_of('python')
+  for number = 1, 10 do
+    write_file(top, ('pkg/%s%02d.py'):format(('m'):rep(28), number))
+  end
+  keep_agent_rules(top, {})
+  local rule = { source = '{path}/{a}m{b}m{c}m{d}m{e}m{f}.zz', test = '{path}/t.zz' }
+  local started = vim.uv.hrtime()
+
+  declare_opened({ worktree = top, rules = { rule }, replace = true })
+  local declared = milliseconds_since(started)
+  test_layout.forget(top)
+  started = vim.uv.hrtime()
+  test_layout.test_for(vim.fs.joinpath(top, 'lib/utils.py'))
+  local found = milliseconds_since(started)
+  test_layout.forget(top)
+  started = vim.uv.hrtime()
+  test_layout.is_test(vim.fs.joinpath(top, 'lib/utils.py'))
+  local told = milliseconds_since(started)
+
+  eq({ declared < 2000, found < 2000, told < 2000 }, { true, true, true })
+end
+
 T['declare()']['refuses a framework longer than 64 characters'] = function()
   local top = repository_of('python')
 
-  local answer = test_layout.declare({ worktree = top, rules = {}, framework = ('p'):rep(65) })
+  local answer = declare_opened({ worktree = top, rules = {}, framework = ('p'):rep(65) })
 
   eq(answer.text, 'aineo refused the test layout: framework: longer than 64 characters')
 end
@@ -356,7 +423,7 @@ T['declare()']['refuses more than 32 rules'] = function()
     table.insert(statements, { preset = 'python.pytest.flat' })
   end
 
-  local answer = test_layout.declare({ worktree = top, rules = statements })
+  local answer = declare_opened({ worktree = top, rules = statements })
 
   eq(answer.text, 'aineo refused the test layout: rules: more than 32 rules')
 end
@@ -365,12 +432,147 @@ T['declare()']['refuses a worktree that is no git checkout'] = function()
   local folder = vim.fs.joinpath(vim.fn.getcwd(), '.tests', 'fixtures', 'test-layout-plain')
   vim.fn.mkdir(folder, 'p')
 
-  local answer = test_layout.declare({ worktree = folder, rules = {} })
+  local answer = declare_opened({ worktree = folder, rules = {} })
 
   eq(answer, {
     is_error = true,
     text = 'aineo refused the test layout: worktree: ' .. folder .. ' is not a git checkout',
   })
+end
+
+T['declare()']['refuses a worktree of a repository the editor has not open'] = function()
+  local opened = repository_of('go')
+  local other = repository_of('python')
+  keep_agent_rules(other, { { preset = 'python.pytest.suffix' } })
+
+  local answer = test_layout.declare({ worktree = other, rules = {} }, { opened })
+
+  eq(answer, {
+    is_error = true,
+    text = 'aineo refused the test layout: worktree: '
+      .. other
+      .. ' is no checkout of a repository the editor has open',
+  })
+  eq(
+    store.read(vim.fn.stdpath('state'), other).agent.rules,
+    { { preset = 'python.pytest.suffix' } }
+  )
+end
+
+T['declare()']['takes a worktree of a repository the editor has open from another folder of it'] = function()
+  local top = repository_of('python')
+  keep_agent_rules(top, {})
+
+  local answer = test_layout.declare(
+    { worktree = vim.fs.joinpath(top, 'lib'), rules = {} },
+    { vim.fs.joinpath(top, 'tests') }
+  )
+
+  eq(answer.is_error, false)
+end
+
+T['C++'] = MiniTest.new_set()
+
+T['C++']['keeps the default in a CMake project with no .test.cpp file'] = function()
+  local top = repository_holding({ ['CMakeLists.txt'] = {}, ['src/vec.cpp'] = {} })
+
+  local place = test_layout.test_for(vim.fs.joinpath(top, 'src/vec.cpp'))
+
+  eq(
+    read_place(top, place, { 'rule', 'origin' }),
+    { 'tests/vec_test.cpp', 'cpp.convention.tests-suffix', 'preset' }
+  )
+end
+
+T['C++']['follows Pitchfork once a .test.cpp file exists'] = function()
+  local top = repository_holding({
+    ['CMakeLists.txt'] = {},
+    ['src/vec.cpp'] = {},
+    ['src/mat.cpp'] = {},
+    ['src/mat.test.cpp'] = {},
+  })
+
+  local place = test_layout.test_for(vim.fs.joinpath(top, 'src/vec.cpp'))
+
+  eq(read_place(top, place, { 'rule' }), { 'src/vec.test.cpp', 'cpp.pitchfork.merged' })
+end
+
+T['the reply'] = MiniTest.new_set()
+
+T['the reply']['counts no contradiction for a rule the repository’s own preset states'] = function()
+  local top = repository_holding({
+    ['conftest.py'] = {},
+    ['a/util.py'] = {},
+    ['b/util.py'] = {},
+    ['tests/test_util.py'] = {},
+  })
+
+  local answer = declare_opened({ worktree = top, rules = { { preset = 'python.pytest.flat' } } })
+
+  eq(
+    vim.split(answer.text, '\n')[2],
+    '1. agent rule 1 (python.pytest.flat): pairs 2 sources with a test, 0 contradictions'
+  )
+end
+
+T['the reply']['counts no contradiction for the sources one rule pairs with one test'] = function()
+  local top = repository_holding({
+    ['a/util.py'] = {},
+    ['b/util.py'] = {},
+    ['checks/test_util.py'] = {},
+  })
+
+  local answer = declare_opened({
+    worktree = top,
+    rules = { { source = '{path}/{name}.py', test = 'checks/test_{name}.py' } },
+  })
+
+  eq(
+    vim.split(answer.text, '\n')[2],
+    '1. agent rule 1: pairs 2 sources with a test, 0 contradictions'
+  )
+end
+
+T['a preset of another language'] = MiniTest.new_set()
+
+T['a preset of another language']['decides nothing for a source, stated by the agent'] = function()
+  local top = repository_of('go')
+  write_file(top, 'lib/extra.py')
+  keep_agent_rules(top, { { preset = 'js.jest.colocated' } })
+
+  local place = test_layout.test_for(vim.fs.joinpath(top, 'lib/extra.py'))
+
+  eq(read_place(top, place, { 'rule' }), { 'tests/test_extra.py', 'python.pytest.flat' })
+end
+
+T['a preset of another language']['decides nothing for a source, fitted by a correction'] = function()
+  local top = repository_of('python')
+  keep_agent_rules(top, {})
+  write_file(top, 'web/new.ts')
+  test_layout.correct(vim.fs.joinpath(top, 'web/new.ts'), vim.fs.joinpath(top, 'web/new.test.ts'))
+
+  local place = test_layout.test_for(vim.fs.joinpath(top, 'lib/extra.py'))
+
+  eq(read_place(top, place, { 'rule' }), { 'tests/test_extra.py', 'python.pytest.flat' })
+end
+
+T['git'] = MiniTest.new_set()
+
+T['git']['runs no file system monitor a repository configures'] = function()
+  local top = repository_of('python')
+  keep_agent_rules(top, {})
+  local ran = vim.fs.joinpath(top, '..', 'monitor-ran')
+  vim.fn.delete(ran)
+  local monitor = vim.fs.joinpath(top, '..', 'monitor.sh')
+  vim.fn.writefile({ '#!/bin/sh', 'echo ran >> ' .. vim.fn.shellescape(ran) }, monitor)
+  vim.fn.setfperm(monitor, 'rwx------')
+  git_repo.git(top, { 'config', 'core.fsmonitor', monitor })
+  git_repo.git(top, { 'config', 'core.untrackedCache', 'true' })
+
+  declare_opened({ worktree = top, rules = { { preset = 'python.pytest.flat' } } })
+  test_layout.test_for(vim.fs.joinpath(top, 'lib/extra.py'))
+
+  eq(vim.uv.fs_stat(ran), nil)
 end
 
 T['a kept rule aineo cannot read'] = MiniTest.new_set()
@@ -401,6 +603,168 @@ T['a kept rule aineo cannot read']['is named among the rules in force, as skippe
   local _, _, skipped = test_layout.rules_in_force(top)
 
   eq(skipped, { 'agent rule 1: discover[1]: not a glob aineo can read' })
+end
+
+T['the text fallback'] = MiniTest.new_set()
+
+T['the text fallback']['takes a test that imports the source, by git grep, in each language'] =
+  MiniTest.new_set({
+    parametrize = {
+      {
+        {
+          ['conftest.py'] = {},
+          ['shop/cart.py'] = {},
+          ['tests/test_flows.py'] = { 'from shop import cart' },
+        },
+        'shop/cart.py',
+        'tests/test_flows.py',
+      },
+      {
+        {
+          ['go.mod'] = { 'module example.com/m' },
+          ['internal/store/db.go'] = {},
+          ['test/flow_test.go'] = { 'import (', '\t"example.com/m/internal/store"', ')' },
+        },
+        'internal/store/db.go',
+        'test/flow_test.go',
+      },
+      {
+        {
+          ['pom.xml'] = {},
+          ['src/main/java/a/Cart.java'] = {},
+          ['src/test/java/a/CheckoutTest.java'] = { 'import a.Cart;' },
+        },
+        'src/main/java/a/Cart.java',
+        'src/test/java/a/CheckoutTest.java',
+      },
+      {
+        {
+          ['project.yml'] = {},
+          ['src/list.c'] = {},
+          ['test/test_flow.c'] = { '#include "list.h"' },
+        },
+        'src/list.c',
+        'test/test_flow.c',
+      },
+      {
+        {
+          ['package.json'] = { '{}' },
+          ['src/cart.ts'] = {},
+          ['tests/flow.test.ts'] = { "import { cart } from '../src/cart';" },
+        },
+        'src/cart.ts',
+        'tests/flow.test.ts',
+      },
+    },
+  })
+
+T['the text fallback']['takes a test that imports the source, by git grep, in each language']['given'] = function(
+  files,
+  source,
+  test
+)
+  local top = repository_holding(files)
+
+  local place = test_layout.test_for(vim.fs.joinpath(top, source))
+
+  eq(read_place(top, place, { 'exists', 'rule' }), { test, true, 'names the source' })
+end
+
+T['the text fallback']['leaves a test that names another module alike'] = MiniTest.new_set({
+  parametrize = {
+    {
+      {
+        ['conftest.py'] = {},
+        ['app.py'] = {},
+        ['models.py'] = {},
+        ['tests/test_models.py'] = { 'from models import make_app' },
+      },
+      'app.py',
+      'tests/test_app.py',
+    },
+    {
+      {
+        ['go.mod'] = { 'module example.com/m' },
+        ['internal/store/db.go'] = {},
+        ['test/flow_test.go'] = { 'import "example.com/m/internal/restore"' },
+      },
+      'internal/store/db.go',
+      'internal/store/db_test.go',
+    },
+    {
+      {
+        ['pom.xml'] = {},
+        ['src/main/java/a/Cart.java'] = {},
+        ['src/main/java/a/CartItem.java'] = {},
+        ['src/test/java/a/CartItemTest.java'] = { 'class CartItemTest { CartItem item; }' },
+      },
+      'src/main/java/a/Cart.java',
+      'src/test/java/a/CartTest.java',
+    },
+    {
+      {
+        ['project.yml'] = {},
+        ['src/list.c'] = {},
+        ['src/linked_list.c'] = {},
+        ['test/test_linked_list.c'] = { '#include "linked_list.h"' },
+      },
+      'src/list.c',
+      'test/test_list.c',
+    },
+    {
+      {
+        ['package.json'] = { '{}' },
+        ['src/cart.ts'] = {},
+        ['tests/other.test.ts'] = { "import { item } from '../src/cartItem';" },
+      },
+      'src/cart.ts',
+      'src/cart.test.ts',
+    },
+  },
+})
+
+T['the text fallback']['leaves a test that names another module alike']['given'] = function(
+  files,
+  source,
+  test
+)
+  local top = repository_holding(files)
+
+  local place = test_layout.test_for(vim.fs.joinpath(top, source))
+
+  eq(read_place(top, place, { 'exists' }), { test, false })
+end
+
+T['a place'] = MiniTest.new_set()
+
+T['a place']['exists when the file is on disk, though git ignores it'] = function()
+  local top = repository_of('python')
+  keep_agent_rules(top, {})
+  vim.fn.writefile({ 'checks/' }, vim.fs.joinpath(top, '.gitignore'))
+  write_file(top, 'checks/test_extra.py')
+  test_layout.correct(
+    vim.fs.joinpath(top, 'lib/extra.py'),
+    vim.fs.joinpath(top, 'checks/test_extra.py')
+  )
+
+  local place = test_layout.test_for(vim.fs.joinpath(top, 'lib/extra.py'))
+
+  eq(read_place(top, place, { 'exists' }), { 'checks/test_extra.py', true })
+end
+
+T['a place']['is refused when a link in its folders leads out of the repository'] = function()
+  local top = repository_of('go')
+  write_file(top, 'lib/extra.py')
+  local outside = git_repo.directory('test-layout-outside')
+  assert(vim.uv.fs_symlink(outside, vim.fs.joinpath(top, 'checks')), 'cannot link checks')
+  keep_agent_rules(top, { { source = '{path}/{name}.py', test = 'checks/test_{name}.py' } })
+
+  local place, problem = test_layout.test_for(vim.fs.joinpath(top, 'lib/extra.py'))
+
+  eq(
+    { place, problem },
+    { nil, vim.fs.joinpath(top, 'checks/test_extra.py') .. ' is outside the repository' }
+  )
 end
 
 T['correct()'] = MiniTest.new_set()
@@ -437,6 +801,23 @@ T['correct()']['keeps the preset template the correction fits as the user’s ru
   )
 end
 
+T['correct()']['refuses a test file outside the worktree of its source, keeping nothing'] = function()
+  local top = repository_of('python')
+  keep_agent_rules(top, {})
+  local outside = git_repo.directory('test-layout-outside-test')
+
+  local kept, problem = test_layout.correct(
+    vim.fs.joinpath(top, 'lib/extra.py'),
+    vim.fs.joinpath(outside, 'test_extra.py')
+  )
+
+  eq({ kept, problem, store.read(vim.fn.stdpath('state'), top).user }, {
+    false,
+    vim.fs.joinpath(outside, 'test_extra.py') .. ' is outside the worktree of its source',
+    nil,
+  })
+end
+
 T['correct()']['holds in every worktree of the repository'] = function()
   local top = repository_of('python')
   keep_agent_rules(top, {})
@@ -456,14 +837,6 @@ end
 
 T['forget()'] = MiniTest.new_set()
 
---- Writes an empty file at `path` under `top`.
----
----@param top string
----@param path string
-local function write_file(top, path)
-  assert(vim.fn.writefile({}, vim.fs.joinpath(top, path)) == 0, 'cannot write ' .. path)
-end
-
 T['forget()']['the files read are kept a while, until forget() drops them'] = function()
   local top = repository_of('python')
   keep_agent_rules(top, { { preset = 'python.pytest.flat' } })
@@ -475,7 +848,8 @@ T['forget()']['the files read are kept a while, until forget() drops them'] = fu
   test_layout.forget(top)
   local read_again = test_layout.test_for(source)
 
-  eq({ kept.exists, read_again.exists }, { false, true })
+  local written = vim.fs.joinpath(top, 'tests/test_extra.py')
+  eq({ vim.tbl_contains(kept.candidates, written), read_again.candidates[1] }, { false, written })
 end
 
 T['forget()']['is done by correct() and declare()'] = MiniTest.new_set({
@@ -490,7 +864,7 @@ T['forget()']['is done by correct() and declare()'] = MiniTest.new_set({
     },
     {
       function(top)
-        test_layout.declare({ worktree = top, rules = { { preset = 'python.pytest.flat' } } })
+        declare_opened({ worktree = top, rules = { { preset = 'python.pytest.flat' } } })
       end,
     },
   },
@@ -505,7 +879,7 @@ T['forget()']['is done by correct() and declare()']['given'] = function(change)
 
   change(top)
 
-  eq(test_layout.test_for(source).exists, true)
+  eq(test_layout.test_for(source).candidates[1], vim.fs.joinpath(top, 'tests/test_extra.py'))
 end
 
 T['describe()'] = MiniTest.new_set()

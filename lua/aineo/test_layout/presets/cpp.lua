@@ -14,7 +14,7 @@ return {
       framework = 'c++',
       doc = 'https://github.com/vector-of-bool/pitchfork',
       extensions = { 'cpp' },
-      markers = { 'CMakeLists.txt' },
+      markers = { '**/*.test.cpp', '**/*.test.cc' },
       discover = { '**/*.test.cpp' },
       rules = { { source = '{path}/{name}.cpp', test = '{path}/{name}.test.cpp', kind = 'unit' } },
     },

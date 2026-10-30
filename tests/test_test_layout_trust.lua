@@ -172,6 +172,22 @@ T['rules_for()']['marks a preset by a file that holds a text, and not by the fil
   eq(described(rules), expected)
 end
 
+T['rules_for()']['ranks a marked preset before a default that pairs more'] = function()
+  local view = view_of({ 'a.ini', 'pkg/x.py', 'pkg/y.py', 'tests/test_x.py', 'tests/test_y.py' })
+
+  local rules = trust.rules_for(view, {}, CATALOGUE, 'pkg/x.py')
+
+  eq(described(rules), { 'py.marked (repository)', 'py.default (repository)' })
+end
+
+T['rules_for()']['names a default that pairs sources the repository’s'] = function()
+  local view = view_of({ 'pkg/x.py', 'tests/test_x.py' })
+
+  local rules = trust.rules_for(view, {}, CATALOGUE, 'pkg/x.py')
+
+  eq(described(rules), { 'py.default (repository)' })
+end
+
 T['rules_for()']['leaves out the presets of another language'] = function()
   local view = view_of({ 'a.ini', 'main.go' })
 

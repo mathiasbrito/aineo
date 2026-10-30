@@ -70,10 +70,13 @@ local function python_repository()
   return assert(vim.uv.fs_realpath(top))
 end
 
---- Restarts the editor with the handlers aineo's composition root makes
---- for a tab's Claude Code.
-local function restart_editor_with_handlers()
+--- Restarts the editor, its working folder `folder`, with the handlers
+--- aineo's composition root makes for a tab's Claude Code.
+---
+---@param folder string
+local function restart_editor_with_handlers(folder)
   children.restart(editor)
+  editor.cmd('cd ' .. vim.fn.fnameescape(folder))
   editor.lua([[require('aineo.entry.editors').make_editor_handlers()]])
 end
 
@@ -125,7 +128,7 @@ T['in the editor'] = MiniTest.new_set()
 
 T['in the editor']['a valid call keeps the rules and answers what each pairs'] = function()
   local top = python_repository()
-  restart_editor_with_handlers()
+  restart_editor_with_handlers(top)
   local relay = relay_for(editor.job.address)
 
   relay:send(call({ worktree = top, rules = { { preset = 'python.pytest.suffix' } } }))
@@ -148,7 +151,7 @@ end
 
 T['in the editor']['rules the editor refuses are a tool error saying why'] = function()
   local top = python_repository()
-  restart_editor_with_handlers()
+  restart_editor_with_handlers(top)
   local relay = relay_for(editor.job.address)
 
   relay:send(call({ worktree = top, rules = { { preset = 'python.nose' } } }))
@@ -156,6 +159,24 @@ T['in the editor']['rules the editor refuses are a tool error saying why'] = fun
   eq(
     get(decoded(relay:next_line()), 'result'),
     result_of('aineo refused the test layout: rules[1].preset: no preset python.nose', true)
+  )
+end
+
+T['in the editor']['a call for a repository the editor has not open is refused'] = function()
+  local top = python_repository()
+  restart_editor_with_handlers(vim.fn.getcwd())
+  local relay = relay_for(editor.job.address)
+
+  relay:send(call({ worktree = top, rules = { { preset = 'python.pytest.suffix' } } }))
+
+  eq(
+    get(decoded(relay:next_line()), 'result'),
+    result_of(
+      'aineo refused the test layout: worktree: '
+        .. top
+        .. ' is no checkout of a repository the editor has open',
+      true
+    )
   )
 end
 
