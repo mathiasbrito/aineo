@@ -827,8 +827,9 @@ local function make_tab(homes, key, callbacks)
   --- (`aineo.claude`'s `start_session()` and `join_session()`): `config`'s
   --- `claude.cmd` and `claude.hide_multiplexer`, the report server, the tools
   --- that need no approval allowed, the instructions — the report's, then,
-  --- after a blank line each, the announcement tool's paragraph and the run
-  --- tools' — and the subagents' context for the `SubagentStart` hook
+  --- after a blank line each, the announcement tool's paragraph, the run
+  --- tools' and the test layout tool's sentence, naming the presets
+  --- (`aineo.test_layout`) — and the subagents' context for the `SubagentStart` hook
   --- (`aineo.mcp`), the state directory of `kept_places()`, the editor's
   --- address and program for the session hooks, and the callbacks that make
   --- the panes follow the session (`replacement_callbacks()`,
@@ -858,7 +859,9 @@ local function make_tab(homes, key, callbacks)
         .. '\n\n'
         .. mcp.announce_instructions()
         .. '\n\n'
-        .. mcp.run_instructions(),
+        .. mcp.run_instructions()
+        .. '\n\n'
+        .. mcp.test_layout_instructions(require('aineo.test_layout').preset_ids()),
       subagent_context = mcp.subagent_announce_context(),
       state_directory = places.kept_places().state_directory,
       new_session = new_session,

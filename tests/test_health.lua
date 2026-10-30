@@ -66,7 +66,7 @@ local EDITOR_STATE = [[(function()
   }
 end)()]]
 
-T['the check']['starts nothing, maps nothing and loads only the configuration, the Claude session, the file finder, the shell home and the office’s packs and states'] = function()
+T['the check']['starts nothing, maps nothing and loads only the configuration, the Claude session, the file finder, the shell home, the office’s packs and states and the test layout'] = function()
   start_with({ autostart = false })
   local before = child.lua_get(EDITOR_STATE)
 
@@ -84,6 +84,7 @@ T['the check']['starts nothing, maps nothing and loads only the configuration, t
         'aineo.office_pack',
         'aineo.office_states',
         'aineo.shell',
+        'aineo.test_layout',
       },
     })
   )
