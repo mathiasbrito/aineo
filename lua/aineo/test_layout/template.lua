@@ -20,6 +20,14 @@ local SEVERAL_SEGMENTS = { path = true, unit = true }
 --- The longest template, in characters.
 local LONGEST_TEMPLATE = 256
 
+--- The most tries one match takes before it fails: far more than a
+--- template of a real layout needs on a real path.
+local MOST_STEPS = 10000
+
+--- The templates a match stopped at `MOST_STEPS` for, as a set.
+---@type table<string, true>
+local costly = {}
+
 --- What each modifier does to the value of the placeholder it follows.
 ---@type table<string, fun(value: string): string>
 local MODIFIERS = {
@@ -156,16 +164,23 @@ end
 --- Each failure is remembered by the piece, the position in `path` and the
 --- bindings the pieces after it read, so no split is tried twice: the
 --- matching ends in a time that grows with the pieces and the path, not
---- with the ways to split it.
+--- with the ways to split it. Past `MOST_STEPS` tries the match fails,
+--- whatever is left untried.
 ---
 ---@param pieces aineo.test_layout.Piece[]
 ---@param path string
 ---@param bound table<string, string>
----@return table<string, string>?
+---@return table<string, string>? bindings
+---@return boolean exhausted whether the match stopped at `MOST_STEPS`
 local function match_pieces(pieces, path, bound)
   local reads = words_read_from(pieces)
   local failed = {}
+  local steps = 0
   local function match_from(index, at, bindings)
+    steps = steps + 1
+    if steps > MOST_STEPS then
+      return nil
+    end
     local piece = pieces[index]
     if not piece then
       return at == #path + 1 and bindings or nil
@@ -204,7 +219,8 @@ local function match_pieces(pieces, path, bound)
     end
     return matched
   end
-  return match_from(1, 1, bound)
+  local matched = match_from(1, 1, bound)
+  return matched, steps > MOST_STEPS
 end
 
 --- The text `piece`, a placeholder, stands for under `bindings`: its
@@ -233,20 +249,24 @@ end
 local REFUSED_SEGMENTS =
   { ['..'] = 'a .. segment', ['.'] = 'a . segment', ['.git'] = 'a .git segment' }
 
---- Why the text of `template` outside its placeholders is refused: an
---- absolute path, a `..`, `.` or `.git` segment, a `~`, a backslash, an
---- empty segment, a trailing `/` or a brace that opens or closes no
---- placeholder; nil when it is accepted.
+--- Why the text of `template` outside its placeholders is refused: a
+--- control character (NUL among them), an absolute path, a `..`, `.` or
+--- `.git` segment (`.git` in any letter case, as a file system may not tell
+--- them apart), a `~`, a backslash, an empty segment, a trailing `/` or a
+--- brace that opens or closes no placeholder; nil when it is accepted.
 ---
 ---@param template string
 ---@return string?
 local function path_problem(template)
+  if template:find('[%c\127]') or template:find('\194[\128-\159]') then
+    return 'a control character'
+  end
   if vim.startswith(template, '/') then
     return 'an absolute path'
   end
   for _, segment in ipairs(vim.split(template, '/', { plain = true })) do
-    if REFUSED_SEGMENTS[segment] then
-      return REFUSED_SEGMENTS[segment]
+    if REFUSED_SEGMENTS[segment:lower()] then
+      return REFUSED_SEGMENTS[segment:lower()]
     end
   end
   if vim.endswith(template, '/') then
@@ -268,14 +288,23 @@ local function path_problem(template)
 end
 
 --- Why a placeholder of `template` is refused: two side by side, with no
---- text between to tell where one ends, an empty one, an unknown modifier,
---- or a `{unit}` anywhere but at the start; nil when none is.
+--- text between to tell where one ends, one word given twice, with or
+--- without a modifier — the second would multiply the ways to match — an
+--- empty one, an unknown modifier, or a `{unit}` anywhere but at the
+--- start; nil when none is.
 ---
 ---@param template string
 ---@return string?
 local function placeholder_problem(template)
   if template:find('}{', 1, true) then
     return 'two placeholders side by side'
+  end
+  local given = {}
+  for _, piece in ipairs(pieces_of(template)) do
+    if piece.word and given[piece.name] then
+      return ('a placeholder given twice: {%s}'):format(piece.name)
+    end
+    given[piece.name or ''] = piece.word ~= nil or nil
   end
   for index, piece in ipairs(pieces_of(template)) do
     if piece.word and piece.name == '' then
@@ -367,14 +396,34 @@ end
 --- The bindings `template` gives `path` when it matches it whole, or nil:
 --- each placeholder's whole word, its modifier included, to the text it
 --- stands for. A placeholder `bound` gives a value matches that value only,
---- and keeps it in the bindings.
+--- and keeps it in the bindings. A match that takes more than `MOST_STEPS`
+--- tries fails, and `template` is kept among those too costly to match
+--- (`too_costly()`), which match nothing from then on.
 ---
 ---@param template string
 ---@param path string
 ---@param bound? table<string, string>
 ---@return table<string, string>?
 function M.match(template, path, bound)
-  return match_pieces(pieces_of(template), path, bound or {})
+  if costly[template] then
+    return nil
+  end
+  local bindings, exhausted = match_pieces(pieces_of(template), path, bound or {})
+  if exhausted then
+    costly[template] = true
+    return nil
+  end
+  return bindings
+end
+
+--- The templates a match stopped at `MOST_STEPS` for, since this editor
+--- started, sorted.
+---
+---@return string[]
+function M.too_costly()
+  local templates = vim.tbl_keys(costly)
+  table.sort(templates)
+  return templates
 end
 
 --- `template` with each placeholder replaced by its value in `bindings`; a

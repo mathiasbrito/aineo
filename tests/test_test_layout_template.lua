@@ -90,6 +90,13 @@ T['problem()']['refuses a template that could leave the repository or cannot be 
       { '.', 'a . segment' },
       { '.git/config', 'a .git segment' },
       { 'src/.git/{name}', 'a .git segment' },
+      { 'src/.GIT/{name}', 'a .git segment' },
+      { 'src/.Git/{name}', 'a .git segment' },
+      { '{a}m{b}m{a}.py', 'a placeholder given twice: {a}' },
+      { 'tests/{name}_{name|-_}.py', 'a placeholder given twice: {name}' },
+      { 'tests/test_{name}.py\0x', 'a control character' },
+      { 'tests/te\27st_{name}.py', 'a control character' },
+      { 'tests/te\127st_{name}.py', 'a control character' },
     },
   })
 
@@ -162,6 +169,19 @@ T['match()']['binds no . or .. segment, and no empty one']['given'] = function(p
   local bindings = template.match(pattern, path)
 
   eq(bindings, nil)
+end
+
+T['match()']['fails past its budget of tries, and names the template too costly'] = function()
+  local pattern = '{path}/{a}m{b}m{c}m{d}m{e}m{f}m{g}m{h}m{i}m{j}.zz'
+  local path = 'pkg/' .. ('m'):rep(120) .. '.py'
+  local started = vim.uv.hrtime()
+
+  local bindings = template.match(pattern, path)
+
+  eq(
+    { bindings, (vim.uv.hrtime() - started) / 1e6 < 100, template.too_costly() },
+    { nil, true, { pattern } }
+  )
 end
 
 T['match()']['ends in a bounded time on a path many splits could match'] = function()

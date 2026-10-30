@@ -224,10 +224,31 @@ end
 --- `vim.glob` takes to match a path.
 local MOST_DOUBLE_STARS = 2
 
+--- The most brace groups a discovery glob may hold, and the most paths
+--- their alternatives may spell together: `vim.glob` takes a time that
+--- grows with each group to read a glob.
+local MOST_BRACE_GROUPS = 4
+local MOST_ALTERNATIVES = 64
+
+--- How many paths the brace groups of `glob` spell together: the product
+--- of each group's number of alternatives.
+---
+---@param glob string
+---@return integer
+local function alternatives_of(glob)
+  local product = 1
+  for group in glob:gmatch('{([^{}]*)}') do
+    local _, commas = group:gsub(',', '')
+    product = product * (commas + 1)
+  end
+  return product
+end
+
 --- Why `glob`, a discovery glob, is refused: more than 256 characters,
 --- what `template.problem()` refuses of a path — an absolute one, a `..`
---- segment, a `~` — more than two `**`, or a glob `vim.glob` cannot read;
---- nil when it is accepted.
+--- segment, a `~`, a control character — more than two `**`, more than four
+--- brace groups or 64 alternatives, or a glob `vim.glob` cannot read; nil
+--- when it is accepted. The limits come before `vim.glob` reads it.
 ---
 ---@param glob string
 ---@return string?
@@ -242,6 +263,13 @@ function M.glob_problem(glob)
   local _, double_stars = glob:gsub('%*%*', '')
   if double_stars > MOST_DOUBLE_STARS then
     return 'more than two **'
+  end
+  local _, brace_groups = glob:gsub('{', '')
+  if brace_groups > MOST_BRACE_GROUPS then
+    return 'more than four brace groups'
+  end
+  if alternatives_of(glob) > MOST_ALTERNATIVES then
+    return ('more than %d alternatives'):format(MOST_ALTERNATIVES)
   end
   if not pcall(vim.glob.to_lpeg, glob) then
     return 'not a glob aineo can read'
