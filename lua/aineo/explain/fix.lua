@@ -6,6 +6,7 @@ local answer = require('aineo.explain.answer')
 local kept = require('aineo.explain.kept')
 local kinds = require('aineo.explain.kinds')
 local marks = require('aineo.explain.marks')
+local new_files = require('aineo.explain.new_files')
 local placement = require('aineo.explain.placement')
 local preview = require('aineo.explain.preview')
 local request = require('aineo.explain.request')
@@ -406,6 +407,21 @@ local function shows_another_kind(buffer, kind)
   return true
 end
 
+--- Stops the refinement of the written code `buffer` shows, when one
+--- runs — a run marked as refining (`aineo.explain.runs`) — and tells the
+--- user, once: a proposal is being decided, which the refined answer
+--- would no longer match. Any other request of the buffer goes on.
+---
+---@param buffer integer
+local function stop_refinement(buffer)
+  local running = runs.find(buffer, kinds.WRITE)
+  if not running or not running.refines then
+    return
+  end
+  runs.stop(running)
+  vim.notify('aineo: the refinement was stopped: a proposal was decided', vim.log.levels.INFO)
+end
+
 --- What the user is told once written code is accepted, by whether
 --- proposals of it are left to decide.
 local WRITTEN = {
@@ -416,9 +432,11 @@ local WRITTEN = {
 --- Accepts the fix or the code written for a request that `buffer` shows
 --- (`aineo.explain.preview`'s `apply()`), or, for code whose edits are
 --- proposals of their own, the one the cursor's line `line` chooses: what
---- is accepted is applied as one undo step, the file is not written, and
+--- is accepted is applied as one undo step, the file is not written but for
+--- a new file that waited for it, and
 --- the issue a fix fixes is no longer shown; the user is told, once, that
---- the fix was applied or the code written (`WRITTEN`). Tells the user
+--- the fix was applied or the code written (`WRITTEN`), and a new file
+--- that waited for it is written (`aineo.explain.new_files`). Tells the user
 --- when `buffer` shows neither, and changes nothing when it shows a
 --- proposal of another kind than `kind` names (`shows_another_kind()`).
 ---
@@ -433,6 +451,7 @@ function M.accept(buffer, kind, line)
   if shows_another_kind(buffer, kind) then
     return
   end
+  stop_refinement(buffer)
   local issue = fixed_issues[buffer]
   if preview.apply(buffer, line) then
     marks.remove_issue(buffer, issue)
@@ -441,12 +460,14 @@ function M.accept(buffer, kind, line)
       issue and 'aineo: fix applied (u undoes it)' or WRITTEN[preview.is_shown(buffer)],
       vim.log.levels.INFO
     )
+    new_files.write_if_expected(buffer)
   end
 end
 
 --- Accepts every proposal of the code written for a request that `buffer`
 --- shows (`aineo.explain.preview`'s `apply_all()`): all that still stand
---- are applied as one undo step, the file is not written, and the user is
+--- are applied as one undo step, the file is not written, unless it is a
+--- new file that waited for it (`aineo.explain.new_files`), and the user is
 --- told, once, that the code was written (`WRITTEN`). Tells the user when
 --- `buffer` shows no proposal, and changes nothing when it shows a
 --- proposal of another kind than `kind` names (`shows_another_kind()`).
@@ -461,8 +482,10 @@ function M.accept_all(buffer, kind)
   if shows_another_kind(buffer, kind) then
     return
   end
+  stop_refinement(buffer)
   if preview.apply_all(buffer) then
     vim.notify(WRITTEN[preview.is_shown(buffer)], vim.log.levels.INFO)
+    new_files.write_if_expected(buffer)
   end
 end
 
@@ -495,6 +518,7 @@ function M.reject_chosen(buffer, kind, line)
   if shows_another_kind(buffer, kind) then
     return
   end
+  stop_refinement(buffer)
   preview.drop(buffer, line)
   if not preview.is_shown(buffer) then
     fixed_issues[buffer] = nil
@@ -511,6 +535,7 @@ function M.reject(buffer, kind)
   if shows_another_kind(buffer, kind) then
     return
   end
+  stop_refinement(buffer)
   fixed_issues[buffer] = nil
   preview.clear(buffer)
 end

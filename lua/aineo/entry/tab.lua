@@ -173,6 +173,7 @@ end
 ---@field runs_session fun(id: string): boolean whether the tab's Claude Code runs the session `id`
 ---@field start_token fun(): string? see `aineo.claude.Session`'s `start_token()`
 ---@field has_start_token fun(token: string): boolean whether `token` names the start of the tab's Claude Code (`aineo.claude.Session`'s `has_start_token()`)
+---@field claude_directory fun(): string? the folder the tab's Claude Code started in last, nil before it has started
 ---@field start_in_new_tab fun() what `:Aineo tab new` does once the tab page exists
 ---@field start_on_session fun(listed: aineo.claude.ListedSession, sessions: aineo.claude.ListedSession[]) what a pick of `\S` does once the tab page exists: starts Claude Code on that session
 ---@field open_on_session fun(id: string, kept_claim: string?) what reopening the folder's tabs does for each tab once its tab page exists: starts Claude Code on the session `id`, resumed or attached to where it runs in the background, in a layout of its own, and takes up `kept_claim`, the claim the folder's list kept for it, as `open_on_session()` says
@@ -706,6 +707,11 @@ local function make_tab(homes, key, callbacks)
   ---@type integer|nil
   local claude_terminal = nil
 
+  --- The folder the tab's Claude Code started in last (`begin_claude()`), or
+  --- `nil` before it has started.
+  ---@type string|nil
+  local claude_directory = nil
+
   --- Whether the Claude Code on the tab's terminal is busy now
   --- (`b:aineo_session_busy`); false before a terminal exists, and once it is
   --- wiped.
@@ -827,8 +833,9 @@ local function make_tab(homes, key, callbacks)
   --- (`aineo.claude`'s `start_session()` and `join_session()`): `config`'s
   --- `claude.cmd` and `claude.hide_multiplexer`, the report server, the tools
   --- that need no approval allowed, the instructions — the report's, then,
-  --- after a blank line each, the announcement tool's paragraph and the run
-  --- tools' — and the subagents' context for the `SubagentStart` hook
+  --- after a blank line each, the announcement tool's paragraph, the run
+  --- tools' and the test layout tool's sentence, naming the presets
+  --- (`aineo.test_layout`) — and the subagents' context for the `SubagentStart` hook
   --- (`aineo.mcp`), the state directory of `kept_places()`, the editor's
   --- address and program for the session hooks, and the callbacks that make
   --- the panes follow the session (`replacement_callbacks()`,
@@ -858,7 +865,9 @@ local function make_tab(homes, key, callbacks)
         .. '\n\n'
         .. mcp.announce_instructions()
         .. '\n\n'
-        .. mcp.run_instructions(),
+        .. mcp.run_instructions()
+        .. '\n\n'
+        .. mcp.test_layout_instructions(require('aineo.test_layout').preset_ids()),
       subagent_context = mcp.subagent_announce_context(),
       state_directory = places.kept_places().state_directory,
       new_session = new_session,
@@ -923,6 +932,7 @@ local function make_tab(homes, key, callbacks)
   ---@return integer terminal
   local function begin_claude(config, new_session, start)
     local working_directory = start_directory()
+    claude_directory = working_directory
     forget_confirmation_unless_running()
     claude_terminal = start(homes.claude, claude_settings(config, working_directory, new_session))
     follow_claude_terminal_activity(claude_terminal)
@@ -2093,6 +2103,9 @@ local function make_tab(homes, key, callbacks)
   end
   tab.has_start_token = function(token)
     return homes.claude.has_start_token(token)
+  end
+  tab.claude_directory = function()
+    return claude_directory
   end
   tab.start_in_new_tab = function()
     start_in_new_tab(start_new_session)

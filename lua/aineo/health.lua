@@ -1038,6 +1038,57 @@ local function check_write(resolved_config)
   )
 end
 
+--- Shows the rules in force for the tests of the project in the current
+--- folder, and who stated each (`aineo.test_layout`), or why none is; and
+--- warns of each kept rule of the agent's that is skipped, and why.
+local function check_test_layout()
+  vim.health.start('Test layout')
+  local rules, root_or_problem, skipped =
+    require('aineo.test_layout').rules_in_force(vim.fn.getcwd())
+  if not rules then
+    vim.health.info(
+      ('no rule is in force for the tests here: %s: :help |aineo-test-layout|'):format(
+        root_or_problem
+      )
+    )
+    return
+  end
+  vim.health.info(
+    ('rules in force for the tests of %s: %s: :help |aineo-test-layout|'):format(
+      root_or_problem,
+      table.concat(rules, '; ')
+    )
+  )
+  for _, rule in ipairs(skipped or {}) do
+    vim.health.warn(rule)
+  end
+end
+
+--- Reports how `\WT`, `\WI`, `\Wt`, `\Wp`, `\Wn` and `\Ws` write tests and
+--- the code a test asks for, with `resolved_config`'s `write` settings.
+--- Nothing while the configuration is wrong.
+---
+---@param resolved_config table|nil the configuration, `nil` when it is wrong
+local function check_write_tests(resolved_config)
+  if not resolved_config then
+    return
+  end
+  local settings = resolved_config.write
+  vim.health.start('Write tests')
+  vim.health.info(
+    ('\\WT in a source lists, with model %s (write.model) and no tool, stopped after %g s (write.timeout_ms), the tests worth writing for the code around the cursor (the Visual lines, else the function or method, else the class) in a checklist (x or <Space> marks, a marks all, <CR> writes, q cancels), then writes those chosen into its test file as proposals; in a test file it writes the test of a requirement, the Visual lines or one typed in a float, as \\WW writes code: :help |aineo-write-tests|'):format(
+      settings.model,
+      settings.timeout_ms / 1000
+    )
+  )
+  vim.health.info(
+    '\\WI in a test file asks the same model for the code that makes the test under the cursor pass, as proposals in its source, shown in the window above; a test or source file not on disk is written, with its folders, when its first proposal is accepted: :help |aineo-write-implementation|'
+  )
+  vim.health.info(
+    '\\Wt shows or hides the test window, the test file below the source, which follows the source; in it \\Wp corrects the path of the test file and \\Wn shows the next one found; while written code shows, \\Ws refines it with instructions: :help |aineo-test-window|'
+  )
+end
+
 --- The names of the packs the report tells of: those the setting `office.pack`
 --- names, in its order, then the others found, by name; each once.
 ---
@@ -1219,6 +1270,8 @@ function M.check()
   check_find(resolved_config)
   check_explain(resolved_config)
   check_write(resolved_config)
+  check_write_tests(resolved_config)
+  check_test_layout()
   check_office(resolved_config)
   check_autostart()
   name_limits()

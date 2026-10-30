@@ -171,6 +171,10 @@ resumes it.
 | `\Vf`, `\VVf` | propose a fix for the issue on the cursor's line, shown over the code, the buffer read-only, until you accept it with `\Va` (one undo step, no file written), reject it with `\Vr`, or see it as a diff with `\Vd`; `\VVf` opens the float to edit the prompt first; `\Vf` on unchanged code shows the fix kept from before |
 | `\w`, `\W` | write code for a request: in Normal mode a float asks for it and the code goes below the cursor's line, or in its place when that line is blank; in Visual mode the selected lines are the request, sent at once, and the code replaces them. `\w` asks the cheapest model with the file alone, `\W` a stronger one at a higher effort that may read the project. The code shows as a fix does and has keys of its own: `\Wa` accepts it, `\Wr` rejects it, `\Wd` shows the diff |
 | `\WW` | write code as `\W` does, the code allowed to change other places of the file too (an import at the top, a variable outside the function): each change is a proposal of its own, `]w` and `[w` move between them, `\Wa`, `\Wr` and `\Wd` act on the one under the cursor, `\WA` accepts all those left as one undo step, `\WR` rejects them |
+| `\WT` | in a source: lists the tests worth writing for the code around the cursor (the function or method, else the class, or the selected lines) in a checklist (`x` or `<Space>` marks, `a` marks all, `<CR>` writes, `q` cancels) and writes those chosen into its test file as proposals; in a test file: writes the test of a requirement, the selected lines or one typed in a float |
+| `\WI` | in a test file: writes the code that makes the test under the cursor pass, as proposals in its source, shown in the window above |
+| `\Wt` | shows or hides the test window, the source's test file below it, which follows the source; in it `\Wp` corrects the test file's path and `\Wn` shows the next one found |
+| `\Ws` | while written code shows: type how to change it, and it is asked for again in place of the proposals left |
 | `\vc` | cleans the buffer of everything the `\v`, `\V` and `\w` keys added (answers, marks, a fix or written code, requests that run, kept answers), leaving its text and undo history as they were |
 | `\vm` | marks the issues on the cursor's line (on each selected line in Visual mode), or unmarks them; `\s` then sends the marked issues to Claude |
 | `]v`, `[v` | jump to the next and the previous explanation or issue of the buffer |
@@ -506,6 +510,23 @@ kept from before. `:Aineo write [deep]`, with a range for the request's lines,
 does the same. The groups are `AineoWrite`, `AineoWriteGutter` and
 `AineoWriteGutterFill`.
 
+`\WT` writes tests and `\WI` the code a test asks for, with `write.model`
+and the file alone, as `\w` does. In a source, `\WT` shows the test window,
+the source's test file below it in the middle column, and lists the tests
+worth writing for the code around the cursor in a checklist; those you choose
+are written into the test file, wherever they belong, imports and helpers
+included, each a proposal of its own decided as `\WW`'s are. In a test file,
+`\WT` writes the test of a requirement, the selected lines or one typed in a
+float, which is test-driven development's first step; `\WI` on that test
+writes the code that makes it pass in its source, shown in the window above.
+Where a source's test file is, `aineo.test_layout` tells; `\Wp` in the test
+window corrects it and `\Wn` shows the next test file found. A test file or a
+source not on disk is written, with its folders, at the path the test layout
+gave, when you accept its first proposal, never over a file that is on disk
+by then, and never if you reject them all. While any written code shows,
+`\Ws` asks how to change it and asks again, its answer in place of the
+proposals left.
+
 An explanation shows as a band tinted from your colour scheme, its text italic
 in the accent of `DiagnosticInfo`, starting at the explained line's indent,
 with a `▎` and the label `expl` in the number column and the line's number in
@@ -564,9 +585,10 @@ start. `:help aineo-run` has the details.
 ## What Claude tells aineo
 
 aineo starts Claude Code with an MCP server of its own. Its tools `report` and
-`announce_work` tell aineo what Claude does, and `run`, `run_output` and
-`run_stop` give Claude the run pane. `report`, `announce_work` and
-`run_output` are allowed without asking; `run` and `run_stop` are not.
+`announce_work` tell aineo what Claude does, `run`, `run_output` and
+`run_stop` give Claude the run pane, and `test_layout` tells aineo where the
+project keeps its tests. `report`, `announce_work`, `run_output` and
+`test_layout` are allowed without asking; `run` and `run_stop` are not.
 
 - **`report`.** Claude calls it to tell you what it does: a `task`, a `status`
   (`started`, `progress`, `blocked`, `done` or `failed`), a one-line `summary`
@@ -602,6 +624,24 @@ aineo starts Claude Code with an MCP server of its own. Its tools `report` and
   never of the `\X` shells, and filters it by a Vim regex (`pattern`,
   `exclude`, `ignore_case`, `last`, `after_line`, `context`); the matching is
   stopped after 2 seconds. `:help aineo-run-tools` has the details.
+- **`test_layout`.** Claude calls it once per project, when it first learns
+  how the project lays out its tests: a list of `rules`, each a preset by its
+  id (`python.pytest.flat`, `js.jest.colocated`, `go.testing.colocated`,
+  `java.junit.maven-mirror`, `c.ceedling.unity`… for Python, JavaScript and
+  TypeScript, Go, Java, C and C++) or path templates of its own, such as
+  `src/{path}/{name}.py` for the sources and `tests/{path}/test_{name}.py`
+  for their tests. A template with a `..` or `.` folder, a `.git` folder in
+  any letter case or a control character in it is refused, and so is a
+  test file a rule gives through a link that leads out of the repository
+  or to nothing; the worktree named must be of a repository the editor has
+  open. The reply says how many of the project's sources each rule pairs with an
+  existing test, and how many of those tests another rule pairs with a
+  different source. Your own correction of a test file comes first, then
+  Claude's rules, then the presets the repository shows (its `pytest.ini`,
+  `go.mod`, `angular.json`…), then the language's default. aineo keeps them
+  in its state folder, one file per repository, shared by its worktrees; the
+  health check shows the rules in force. `:help aineo-test-layout` has the
+  details.
 
 aineo also gives Claude Code hooks that tell aineo when you switch session
 inside Claude Code with `/clear`, `/resume` or `/branch`, so the Report,

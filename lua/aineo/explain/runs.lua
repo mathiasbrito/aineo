@@ -26,6 +26,7 @@ local FRAME_MS = 100
 ---@field started_ms integer when it started, by `vim.uv.now()`
 ---@field frame integer the spinner's frame it shows, from 1
 ---@field process? vim.SystemObj set once Claude Code is started
+---@field refines boolean whether it refines the written code its buffer shows
 ---@field progress_mark integer the virtual line that says it is working
 ---@field deadline uv.uv_timer_t stops it at its timeout
 ---@field spinner uv.uv_timer_t advances its frame
@@ -47,6 +48,7 @@ local started_count = 0
 ---@field line integer the first line asked for, from 1
 ---@field timeout_ms integer how long it may run
 ---@field on_timeout fun(run: aineo.explain.Run) called, scheduled, when it outlasts its timeout
+---@field refines? boolean whether it refines the written code its buffer shows
 
 --- The request of `kind` that runs for `buffer`, or `nil`.
 ---
@@ -168,6 +170,7 @@ function M.begin(start)
     frame = 1,
     deadline = assert(vim.uv.new_timer()),
     spinner = assert(vim.uv.new_timer()),
+    refines = start.refines == true,
   }
   run.progress_mark =
     marks.show_progress(start.buffer, start.window, start.kind, start.line, progress_text(run))
