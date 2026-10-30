@@ -588,8 +588,9 @@ T['a kept rule aineo cannot read']['is skipped, and the next rule answers'] = fu
   local top = repository_of('python')
   keep_agent_rules(top, UNREADABLE_THEN_SUFFIX)
 
-  local place = test_layout.test_for(vim.fs.joinpath(top, 'lib/extra.py'))
+  local answered, place = pcall(test_layout.test_for, vim.fs.joinpath(top, 'lib/extra.py'))
 
+  eq(answered, true)
   eq(
     read_place(top, place, { 'rule' }),
     { 'lib/extra_test.py', 'agent rule 2 (python.pytest.suffix)' }
