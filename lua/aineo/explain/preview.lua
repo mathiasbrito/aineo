@@ -67,6 +67,7 @@ local CONCEALING = 2
 ---@field reject_all? string
 ---@field next? string
 ---@field previous? string
+---@field steer? string what refines written code with instructions
 
 --- The preview each buffer shows.
 ---@type table<integer, aineo.explain.Preview>
@@ -907,18 +908,19 @@ vim.api.nvim_create_autocmd('BufWipeout', {
 local KEYS_DESCRIPTION = 'aineo: a key of the proposal shown'
 
 --- What a key of a preview does to it, or to the edit chosen when its
---- edits are proposals of their own.
----@alias aineo.explain.Action 'accept'|'reject'|'diff'|'accept_all'|'reject_all'|'next'|'previous'
+--- edits are proposals of their own; `steer` refines written code.
+---@alias aineo.explain.Action 'accept'|'reject'|'diff'|'accept_all'|'reject_all'|'next'|'previous'|'steer'
 
 --- The actions of a preview's keys.
 ---@type aineo.explain.Action[]
-local ACTIONS = { 'accept', 'reject', 'diff' }
+local ACTIONS = { 'accept', 'reject', 'diff', 'steer' }
 
 --- The actions of the keys of a preview whose edits are proposals of their
---- own: `ACTIONS`, then those that act on them all and move between them.
+--- own: `ACTIONS`, those that act on them all and move between them among
+--- them.
 ---@type aineo.explain.Action[]
 local SEPARATE_ACTIONS =
-  { 'accept', 'reject', 'diff', 'accept_all', 'reject_all', 'next', 'previous' }
+  { 'accept', 'reject', 'diff', 'accept_all', 'reject_all', 'next', 'previous', 'steer' }
 
 --- Each key of `preview` (`aineo.explain.FixKeys`) with its action and the
 --- `<Plug>` mapping of its kind it is mapped to (`aineo.explain.kinds`'

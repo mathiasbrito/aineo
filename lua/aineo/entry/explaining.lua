@@ -129,11 +129,11 @@ end
 --- `write.deep_model` at `write.deep_effort` with the read-only tools, the
 --- code allowed to edit the whole file for an order that says so. While the
 --- code shows, the prefix followed by `Wa`, `Wr` and `Wd` accept it, reject
---- it and show its diff, and, for code that may edit the whole file, `WA`
---- and `WR` accept and reject every proposal of it, and `]w` and `[w` move
---- between them, unless the prefix is `false`; what asks again is told as
---- the prefix followed by `w`, `W` or `WW` (`ask_key_of()`), or as their
---- `<Plug>` mapping.
+--- it and show its diff, `Ws` refines it, and, for code that may edit the
+--- whole file, `WA` and `WR` accept and reject every proposal of it, and
+--- `]w` and `[w` move between them, unless the prefix is `false`; what asks
+--- again is told as the prefix followed by `w`, `W` or `WW`
+--- (`ask_key_of()`), or as their `<Plug>` mapping.
 ---
 --- Raises an error when the current buffer holds no file, and the
 --- configuration's or the explain home's errors.
@@ -167,6 +167,7 @@ function M.write(order)
       reject_all = prefix .. 'WR',
       next = ']w',
       previous = '[w',
+      steer = prefix .. 'Ws',
     } or nil,
     ask_key = prefix and prefix .. ask.suffix or ask.plug,
   })
