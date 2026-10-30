@@ -460,6 +460,50 @@ for words, order in pairs(WRITE_ORDERS) do
   end, { desc = 'aineo: ' .. words .. ' for the selected lines' })
 end
 
+--- What writing tests and code from a test ask for, by the words of their
+--- `<Plug>` mappings after `aineo-`: in Normal mode for the code or the
+--- test around the cursor, in Visual mode for the selected lines
+--- (`aineo.entry`'s `write_tests()`, `write_implementation()` and their
+--- `_selection()` twins).
+local TEST_ORDERS = {
+  ['write-tests'] = 'write_tests',
+  ['write-implementation'] = 'write_implementation',
+}
+
+for words, action in pairs(TEST_ORDERS) do
+  vim.keymap.set('n', ('<Plug>(aineo-%s)'):format(words), function()
+    run(function()
+      require('aineo.entry')[action]()
+    end)
+  end, { desc = 'aineo: ' .. words })
+  vim.keymap.set('x', ('<Plug>(aineo-%s)'):format(words), function()
+    run(function()
+      require('aineo.entry')[action .. '_selection']()
+    end)
+  end, { desc = 'aineo: ' .. words .. ' for the selected lines' })
+end
+
+--- The `<Plug>` mappings of the test window and of refining written code,
+--- by the words after `aineo-`, in Normal mode: show or hide the test
+--- window, correct the path of its test file, show the next one found
+--- (`aineo.entry`'s `toggle_test_window()`, `correct_test_file()`,
+--- `next_test_file()`), and refine the written code shown
+--- (`refine_written()`).
+local TEST_WINDOW_ACTIONS = {
+  ['test-window'] = 'toggle_test_window',
+  ['test-path'] = 'correct_test_file',
+  ['test-next'] = 'next_test_file',
+  ['write-steer'] = 'refine_written',
+}
+
+for words, action in pairs(TEST_WINDOW_ACTIONS) do
+  vim.keymap.set('n', ('<Plug>(aineo-%s)'):format(words), function()
+    run(function()
+      require('aineo.entry')[action]()
+    end)
+  end, { desc = 'aineo: ' .. words })
+end
+
 --- The `<Plug>` mapping that returns the current buffer to how it behaved
 --- when it was opened, as `:Aineo explain clear` does (`aineo.entry`'s
 --- `clear_explanations()`).

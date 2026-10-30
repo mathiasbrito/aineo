@@ -141,7 +141,7 @@ T['the sheet']['holds each row once, in its group and its section'] = function()
   eq(held, declared)
 end
 
-T['the sheet']['has one group for explaining, fixing and writing, in seven sections in this order'] = function()
+T['the sheet']['has one group for explaining, fixing and writing, in eight sections in this order'] = function()
   local sheet = require('aineo.keys').sheet()
 
   local explain = vim.iter(sheet):find(function(group)
@@ -156,6 +156,7 @@ T['the sheet']['has one group for explaining, fixing and writing, in seven secti
       'Issues',
       'Fix',
       'Write',
+      'Tests',
       'While a proposal shows',
       'In the steering float',
       'Clean',
@@ -186,9 +187,10 @@ T['the sheet']['lists the keys of each section in the order of the ruling'] = Mi
     { 'Issues', { 'vi', 'VI', 'VVI', 'vm', '(send)', ']v', '[v' } },
     { 'Fix', { 'Vf', 'VVf' } },
     { 'Write', { 'w', 'W', 'WW' } },
+    { 'Tests', { 'WT', 'WI', 'Wt', 'Wp', 'Wn' } },
     {
       'While a proposal shows',
-      { 'Va', 'Vr', 'Vd', 'Wa', 'Wr', 'Wd', 'WA', 'WR', ']w', '[w' },
+      { 'Va', 'Vr', 'Vd', 'Wa', 'Wr', 'Wd', 'WA', 'WR', ']w', '[w', 'Ws' },
     },
     { 'In the steering float', { '<CR>', 'q', 'R' } },
     { 'Clean', { 'vc' } },

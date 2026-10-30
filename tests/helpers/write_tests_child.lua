@@ -63,19 +63,21 @@ end
 --- project made for `name` holding `files` (lines by path from the
 --- project), with the stand-in layout `layout` answers (places by path
 --- from the project, as `fake_test_layout.lua` takes them) in
---- `_G.layout`, the notifications it shows kept for `told()`, and `open`
---- edited. Returns the project's folder and the record of the fake
---- `claude`.
+--- `_G.layout`, the notifications it shows kept for `told()`, `aineo`
+--- configured as `config` says, and `open` edited. Returns the project's
+--- folder and the record of the fake `claude`.
 ---
 ---@param child table
 ---@param name string
 ---@param files table<string, string[]>
 ---@param layout { tests?: table, sources?: table }
 ---@param open string the file to edit, from the project
+---@param config? table more of `vim.g.aineo`, set before the plugin maps its keys
 ---@return string folder
 ---@return string record
-function M.start(child, name, files, layout, open)
-  children.restart(child, { '--cmd', 'lua vim.g.aineo = { autostart = false }' })
+function M.start(child, name, files, layout, open, config)
+  local settings = vim.tbl_deep_extend('force', { autostart = false }, config or {})
+  children.restart(child, { '--cmd', 'lua vim.g.aineo = ' .. vim.inspect(settings) })
   child.o.columns = 200
   child.o.lines = 50
   local folder = git_repo.create_unborn(name)
