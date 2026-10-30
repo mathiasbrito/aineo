@@ -56,6 +56,16 @@ local function relative_path(top, place)
   return place and place.path:sub(#top + 2)
 end
 
+--- The value of `field` in `place`, nil with no place, so that a missing
+--- place fails the case's assertion rather than the case itself.
+---
+---@param place? aineo.test_layout.Place
+---@param field string
+---@return any
+local function field_of(place, field)
+  return place and place[field]
+end
+
 --- What a case reads of `place`: its path relative to `top`, then the
 --- value of each of `fields`, in order; nothing with no place, so that a
 --- missing place fails the case's assertion rather than the case itself.
@@ -851,6 +861,41 @@ T['forget()']['the files read are kept a while, until forget() drops them'] = fu
 
   local written = vim.fs.joinpath(top, 'tests/test_extra.py')
   eq({ vim.tbl_contains(kept.candidates, written), read_again.candidates[1] }, { false, written })
+end
+
+T['forget()']['takes any path inside the repository, a link to it included'] = MiniTest.new_set({
+  parametrize = {
+    { 'lib' },
+    { 'lib/extra.py' },
+    { 'tests/test_extra.py' },
+    { '../link' },
+    { '../link/lib' },
+  },
+})
+
+T['forget()']['takes any path inside the repository, a link to it included']['path'] = function(
+  inside
+)
+  local top = repository_of('python')
+  keep_agent_rules(top, { { preset = 'python.pytest.flat' } })
+  assert(vim.uv.fs_symlink(top, vim.fs.joinpath(top, '..', 'link')), 'cannot link')
+  local source = vim.fs.joinpath(top, 'lib/extra.py')
+  test_layout.test_for(source)
+  write_file(top, 'tests/test_extra.py')
+
+  test_layout.forget(top .. '/' .. inside)
+
+  eq(test_layout.test_for(source).candidates[1], vim.fs.joinpath(top, 'tests/test_extra.py'))
+end
+
+T['a place']['carries the root of the repository it was read in'] = function()
+  local top = repository_of('python')
+  keep_agent_rules(top, {})
+
+  local test_place = test_layout.test_for(vim.fs.joinpath(top, 'lib/extra.py'))
+  local source_place = test_layout.source_for(vim.fs.joinpath(top, 'tests/test_utils.py'))
+
+  eq({ field_of(test_place, 'root'), field_of(source_place, 'root') }, { top, top })
 end
 
 T['forget()']['is done by correct() and declare()'] = MiniTest.new_set({

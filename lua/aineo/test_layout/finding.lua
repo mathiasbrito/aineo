@@ -46,6 +46,7 @@ local M = {}
 ---@field framework? string
 ---@field sibling? string an existing test file nearest to `path`
 ---@field companions string[] the absolute paths of the files to create with the first write
+---@field root? string the folder of the worktree the place was read in, which the entry point adds
 
 --- The absolute path of `relative`, a path in `view`'s repository.
 ---

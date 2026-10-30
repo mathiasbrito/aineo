@@ -4620,8 +4620,9 @@ files, and the presets ranked for it, for 10 seconds; a correction, the
 agent's call and `forget()` drop them at once. Lua code reads all this
 through `require('aineo.test_layout')`: `test_for(path)`,
 `source_for(path)`, `is_test(path)`, `correct(source, test)`,
-`describe(path)` and `forget(worktree)`, for a caller that has just
-written a file there.
+`describe(path)` and `forget(path)`, which takes any path inside the
+repository, such as a place's `root`, for a caller that has just written a
+file there.
 
                                                          *aineo-report-claims*
 Each report belongs to the Claude session its Claude Code is on, which the

@@ -118,14 +118,24 @@ local function view_of(root)
   end)
 end
 
---- Drops what is kept of the worktree whose folder is `repository_root`,
---- its files and the presets ranked for them, so that the next call reads
---- them again: for a caller that has just written a file there, such as a
---- new test file. `correct()` and `declare()` do it themselves.
+--- Drops what is kept of the worktree that holds `path`, any path inside
+--- it — its folder, a place's `root`, a file just written, through links
+--- too — its files and the presets ranked for them, so that the next call
+--- reads them again: for a caller that has just written a file there, such
+--- as a new test file. `correct()` and `declare()` do it themselves. Does
+--- nothing for a path in no git worktree.
 ---
----@param repository_root string
-function M.forget(repository_root)
-  views:forget(vim.uv.fs_realpath(repository_root) or absolute_path(repository_root))
+---@param path string
+function M.forget(path)
+  local absolute = absolute_path(path)
+  local folder = vim.uv.fs_realpath(absolute)
+  if not (folder and vim.fn.isdirectory(folder) == 1) then
+    folder = existing_folder(absolute)
+  end
+  local root = folder and repository.worktree_of(folder)
+  if root then
+    views:forget(root)
+  end
 end
 
 --- Where `path`, any file's path, is, and the rules in force for it; nil
@@ -169,8 +179,9 @@ end
 --- `place`, as finding gave it for a file of the worktree at `root`,
 --- checked against the file system: nil and why when its path leads out of
 --- the worktree (`stays_inside()`); else with the candidates that lead out
---- left out and `exists` the file system's answer, not git's listing, so
---- that a file git ignores still exists. Nil and `problem` with no place.
+--- left out, `exists` the file system's answer, not git's listing, so
+--- that a file git ignores still exists, and `root` the worktree's folder,
+--- for `forget()`. Nil and `problem` with no place.
 ---
 ---@param root string
 ---@param place? aineo.test_layout.Place
@@ -188,6 +199,7 @@ local function checked(root, place, problem)
     return stays_inside(root, candidate)
   end, place.candidates)
   place.exists = vim.uv.fs_stat(place.path) ~= nil
+  place.root = root
   return place
 end
 
