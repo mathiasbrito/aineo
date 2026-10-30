@@ -32,6 +32,7 @@ local M = {}
 ---@field has table<string, true> the same files, as a set
 ---@field grep fun(patterns: string[]): string[] the files holding any of the fixed strings `patterns`
 ---@field read fun(relative: string): string? the text of a file, nil when it cannot be read
+---@field ranked? table<string, table> the presets ranked for each extension, kept with the view (`aineo.test_layout.trust`)
 
 --- Where the test file of a source is, or the source of a test file.
 ---@class aineo.test_layout.Place
@@ -66,27 +67,51 @@ local MANIFESTS = {
   'build.gradle',
   'build.gradle.kts',
   'package.json',
-  'CMakeLists.txt',
-  'meson.build',
-  'Makefile',
 }
 
+--- The build files of C and C++, whose folder is a unit root only when no
+--- folder above it holds one: a project nests them in its own folders.
+local BUILD_FILES = { 'CMakeLists.txt', 'meson.build', 'Makefile' }
+
+--- Whether `folder`, relative to `view`'s root (`''` for the root), holds
+--- one of `files`.
+---
+---@param view aineo.test_layout.View
+---@param folder string
+---@param files string[]
+---@return boolean
+local function holds_one_of(view, folder, files)
+  return vim.iter(files):any(function(file)
+    return view.has[folder == '' and file or folder .. '/' .. file] == true
+  end)
+end
+
 --- The folder of the unit `path` belongs to, relative to `view`'s root:
---- the nearest folder above it holding one of the `MANIFESTS`; `''`, the
---- repository's root, when none does.
+--- the nearest folder above it that holds one of the `MANIFESTS`, or the
+--- outermost that holds one of the `BUILD_FILES`, whichever is nearer;
+--- `''`, the repository's root, when none does.
 ---
 ---@param view aineo.test_layout.View
 ---@param path string
 ---@return string
 function M.unit_of(view, path)
+  local folders = {}
   local folder = vim.fs.dirname(path)
   while folder ~= '.' and folder ~= '' do
-    for _, manifest in ipairs(MANIFESTS) do
-      if view.has[folder .. '/' .. manifest] then
-        return folder
-      end
-    end
+    table.insert(folders, folder)
     folder = vim.fs.dirname(folder)
+  end
+  table.insert(folders, '')
+  local outermost_build
+  for _, above in ipairs(folders) do
+    if holds_one_of(view, above, BUILD_FILES) then
+      outermost_build = above
+    end
+  end
+  for _, above in ipairs(folders) do
+    if above == outermost_build or holds_one_of(view, above, MANIFESTS) then
+      return above
+    end
   end
   return ''
 end
@@ -472,10 +497,87 @@ local function reverse_matches(rules, view, test)
   return given
 end
 
+--- The first of `rules` whose test templates match `test`, and the
+--- bindings of the first that does; nil when none does.
+---
+---@param rules aineo.test_layout.Rule[]
+---@param view aineo.test_layout.View
+---@param test string
+---@return aineo.test_layout.Rule?
+---@return table<string, string>?
+local function rule_naming(rules, view, test)
+  for _, rule in ipairs(rules) do
+    for _, pattern in ipairs(rule.source and rule.tests or {}) do
+      local bindings =
+        template.match(from_unit(rule, pattern), test, { unit = M.unit_of(view, test) })
+      if bindings then
+        return rule, bindings
+      end
+    end
+  end
+  return nil
+end
+
+--- The existing files of `view`, test files by `rules` and `test` aside,
+--- that `is_source` holds for, shortest path first, then by name.
+---
+---@param rules aineo.test_layout.Rule[]
+---@param view aineo.test_layout.View
+---@param test string
+---@param is_source fun(path: string): boolean
+---@return string[]
+local function sources_where(rules, view, test, is_source)
+  local found = vim.tbl_filter(function(file)
+    return file ~= test and is_source(file) and not M.is_test(rules, view, file)
+  end, view.files)
+  table.sort(found, function(left, right)
+    if #left ~= #right then
+      return #left < #right
+    end
+    return left < right
+  end)
+  return found
+end
+
+--- The existing sources of `test` when no rule gives it a source in
+--- reverse, with the rule whose test template matches it (A681): first the
+--- files whose stem is the `{name}` that template binds, of the test's
+--- language (`modules.family()`), then the files the test imports
+--- (`modules.imported()`), each shortest path first; none when no rule's
+--- test template matches it.
+---
+---@param rules aineo.test_layout.Rule[]
+---@param view aineo.test_layout.View
+---@param test string
+---@return string[] sources
+---@return aineo.test_layout.Rule? rule
+local function way_back(rules, view, test)
+  local rule, bindings = rule_naming(rules, view, test)
+  if not rule then
+    return {}, nil
+  end
+  local family = modules.family(test:match('%.([^./]+)$') or '')
+  local by_stem = sources_where(rules, view, test, function(file)
+    local stem, extension = vim.fs.basename(file):match('^(.+)%.([^.]+)$')
+    return stem ~= nil and stem == bindings.name and family[extension] == true
+  end)
+  local imported = modules.imported(test, view.read(test) or '')
+  local by_import = sources_where(rules, view, test, function(file)
+    return not vim.tbl_contains(by_stem, file)
+      and vim.iter(imported):any(function(source)
+        return modules.is_imported(file, source)
+      end)
+  end)
+  return vim.list_extend(by_stem, by_import), rule
+end
+
 --- Where the source of `test`, a test file relative to `view`'s root, is
 --- by `rules`, in order, or nil and why not: the existing sources the
 --- two-way pairs of templates give it, best first, else the source the
---- first of them gives. The place has no `sibling`, and no companions.
+--- first of them gives. When no two-way pair gives one, the sources found
+--- by the stem the rule's template binds, then by the test's imports
+--- (`way_back()`), with that rule. The place has no `sibling`, and no
+--- companions.
 ---
 ---@param rules aineo.test_layout.Rule[]
 ---@param view aineo.test_layout.View
@@ -485,7 +587,14 @@ end
 function M.source_for(rules, view, test)
   local given = reverse_matches(rules, view, test)
   if #given == 0 then
-    return nil, 'no rule of the project gives a source of ' .. test
+    local sources, rule = way_back(rules, view, test)
+    if #sources == 0 then
+      return nil, 'no rule of the project gives a source of ' .. test
+    end
+    given = {}
+    for position, source in ipairs(sources) do
+      given[position] = { path = source, rule = rule, position = position }
+    end
   end
   local found = vim.tbl_filter(function(match)
     return view.has[match.path] == true
