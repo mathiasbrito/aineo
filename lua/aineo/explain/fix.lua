@@ -408,14 +408,14 @@ local function shows_another_kind(buffer, kind)
 end
 
 --- Stops the refinement of the written code `buffer` shows, when one
---- runs — a request for code while its proposals show — and tells the
+--- runs — a run marked as refining (`aineo.explain.runs`) — and tells the
 --- user, once: a proposal is being decided, which the refined answer
---- would no longer match.
+--- would no longer match. Any other request of the buffer goes on.
 ---
 ---@param buffer integer
 local function stop_refinement(buffer)
   local running = runs.find(buffer, kinds.WRITE)
-  if not running or not preview.is_shown(buffer) then
+  if not running or not running.refines then
     return
   end
   runs.stop(running)

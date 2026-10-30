@@ -585,12 +585,14 @@ end
 
 --- Shows the test window of the source `window` shows, below it, or hides
 --- it when shown (`aineo.explain.test_window`'s `toggle()`), its test file
---- found by `layout`.
+--- found by `layout`, a resize leaving it alone while `zoomed` says the
+--- layout of its tab page is zoomed.
 ---
 ---@param window integer
 ---@param layout aineo.explain.TestLayout
-function M.toggle_test_window(window, layout)
-  test_window.toggle(window, layout)
+---@param zoomed? fun(tabpage: integer): boolean
+function M.toggle_test_window(window, layout, zoomed)
+  test_window.toggle(window, layout, zoomed)
 end
 
 --- Has the test window of `window`, a test window or the window of its

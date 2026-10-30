@@ -28,6 +28,7 @@ local M = {}
 ---@field timeout_ms integer how long each request may run
 ---@field keys? aineo.explain.FixKeys the keys the proposals map; none when absent
 ---@field ask_key string what asks again, as the user is told it
+---@field zoomed? fun(tabpage: integer): boolean whether the layout of that tab page is zoomed, for the test window it opens
 
 --- The file at `path`, from `folder`, as its buffer reads when it has one
 --- loaded, else as it reads on disk.
@@ -46,17 +47,16 @@ end
 
 --- Has the file of `buffer` written when code is first accepted in it,
 --- at the path `place` gives, with its companions, when it is not on disk
---- (`aineo.explain.new_files`); once written, `layout` reads the project's
---- repository, at `folder`, again.
+--- (`aineo.explain.new_files`); once written, `layout` reads the
+--- repository `place` was read in again (`place.root`).
 ---
 ---@param buffer integer
----@param place aineo.explain.TestPlace
+---@param place aineo.explain.TestPlace a place the layout gave
 ---@param layout aineo.explain.TestLayout
----@param folder string
-local function write_when_accepted(buffer, place, layout, folder)
+local function write_when_accepted(buffer, place, layout)
   if not vim.uv.fs_stat(place.path) then
     new_files.expect(buffer, place.path, place.companions or {}, function()
-      layout.forget(folder)
+      layout.forget(place.root)
     end)
   end
 end
@@ -158,17 +158,19 @@ end
 --- wherever it belongs there, with any import, fixture or helper they
 --- need, each edit a proposal of its own (`aineo.explain.write`'s `ask()`),
 --- from `folder`, in a window that shows it; a test file not on disk is
---- written once code is first accepted in it (`write_when_accepted()`).
+--- written once code is first accepted in it (`write_when_accepted()`)
+--- when it is the one `laid_out` names, else never, the user told so.
 --- Tells the user, once, and asks nothing when no window shows it any
 --- more.
 ---
 ---@param order aineo.explain.TestOrder
 ---@param test_buffer integer
----@param place aineo.explain.TestPlace
+---@param place aineo.explain.TestPlace the place of the test file `test_buffer` holds
+---@param laid_out aineo.explain.TestPlace the place the layout gave the source when `\WT` was pressed, the only one written when new
 ---@param range integer[]
 ---@param chosen aineo.explain.ListedTest[]
 ---@param folder string
-local function write_chosen(order, test_buffer, place, range, chosen, folder)
+local function write_chosen(order, test_buffer, place, laid_out, range, chosen, folder)
   local window = vim.fn.win_findbuf(test_buffer)[1]
   if not window then
     vim.notify(
@@ -179,7 +181,18 @@ local function write_chosen(order, test_buffer, place, range, chosen, folder)
     )
     return
   end
-  write_when_accepted(test_buffer, place, order.layout, folder)
+  if place.path == laid_out.path then
+    write_when_accepted(test_buffer, laid_out, order.layout)
+  elseif not vim.uv.fs_stat(place.path) then
+    local source = vim.api.nvim_buf_get_name(order.buffer)
+    vim.notify(
+      ('aineo: %s is not the test file the layout gives %s: accepting code there does not write it'):format(
+        vim.fs.relpath(folder, place.path) or place.path,
+        vim.fs.relpath(folder, source) or source
+      ),
+      vim.log.levels.INFO
+    )
+  end
   write.ask({
     buffer = test_buffer,
     window = window,
@@ -275,9 +288,8 @@ end
 
 --- The place of the test file `test_buffer` holds, which the test window
 --- shows for its source, whose test file the layout placed at `place`: a
---- copy of `place` for that file, which may be another candidate, whether
---- it is on disk read now, and the files written beside it only for the
---- file the layout placed.
+--- copy of `place` for that file, which may be another candidate, and
+--- whether it is on disk read now.
 ---
 ---@param place aineo.explain.TestPlace
 ---@param test_buffer integer
@@ -287,7 +299,6 @@ local function place_shown(place, test_buffer)
   return vim.tbl_extend('force', vim.deepcopy(place), {
     path = path,
     exists = vim.uv.fs_stat(path) ~= nil,
-    companions = path == place.path and place.companions or {},
   })
 end
 
@@ -303,10 +314,11 @@ end
 ---@param order aineo.explain.TestOrder
 local function write_tests_for_source(order)
   local source = vim.api.nvim_buf_get_name(order.buffer)
-  if not test_window.test_place(source, order.layout) then
+  local laid_out = test_window.test_place(source, order.layout)
+  if not laid_out then
     return
   end
-  local tests = test_window.ensure(order.window, order.layout)
+  local tests = test_window.ensure(order.window, order.layout, order.zoomed)
   if not tests then
     return
   end
@@ -315,7 +327,7 @@ local function write_tests_for_source(order)
   local range = order.range or context.around(order.buffer, order.line)
   local folder = folders.project_of(source)
   ask_for_a_list(order, range, place, folder, function(chosen)
-    write_chosen(order, test_buffer, place, range, chosen, folder)
+    write_chosen(order, test_buffer, place, laid_out, range, chosen, folder)
   end)
 end
 
@@ -359,7 +371,7 @@ local function write_test_of_a_requirement(order)
   local source = order.layout.source_for(path)
   local place = source and order.layout.test_for(source.path)
   if place and place.path == path then
-    write_when_accepted(order.buffer, place, order.layout, folder)
+    write_when_accepted(order.buffer, place, order.layout)
   end
   write.propose({
     buffer = order.buffer,
@@ -450,7 +462,7 @@ local function write_implementation_of_a_test(order)
   local range = order.range or context.around(order.buffer, order.line)
   local source_window = test_window.show_source(order.window, place.path)
   local source_buffer = vim.api.nvim_win_get_buf(source_window)
-  write_when_accepted(source_buffer, place, order.layout, folder)
+  write_when_accepted(source_buffer, place, order.layout)
   local test_file = shown_file(test_path, folder)
   write.ask({
     buffer = source_buffer,

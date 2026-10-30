@@ -200,6 +200,20 @@ for _, pane in ipairs({ 'agent', 'changes', 'run' }) do
   end
 end
 
+T['toggling the zoom']['is told by is_zoomed(), for a zoom and for a full zoom'] = function()
+  local buffers = open_every_pane()
+  enter(buffers.report)
+  local before = child.lua_get([[require('aineo.layout').is_zoomed()]])
+
+  toggle_zoom()
+  local zoomed = child.lua_get([[require('aineo.layout').is_zoomed()]])
+  toggle_zoom()
+  child.lua([[require('aineo.layout').toggle_full_zoom()]])
+  local fully = child.lua_get([[require('aineo.layout').is_zoomed()]])
+
+  eq({ before, zoomed, fully }, { false, true, true })
+end
+
 T['moving the cursor while zoomed'] = MiniTest.new_set()
 
 T['moving the cursor while zoomed']['keeps the zoom on the window that was zoomed'] = function()

@@ -19,6 +19,7 @@ local M = {}
 ---@field framework? string the test framework the file is written for
 ---@field sibling? string an existing test file nearest to `path`, whose header and style a new one follows
 ---@field companions string[] the absolute paths of files written beside a new test file with it
+---@field root string the root of the repository it was read in
 
 --- The layout of a project's tests: where a source's test file is, and a
 --- test file's source. A port the composition root binds to
@@ -27,7 +28,7 @@ local M = {}
 ---@field test_for fun(source: string): aineo.explain.TestPlace|nil, string? the place of the test file of the source at that absolute path, or `nil` and why
 ---@field source_for fun(test: string): aineo.explain.TestPlace|nil, string? the place of the source of the test file at that absolute path, or `nil` and why
 ---@field is_test fun(path: string): boolean whether the file at that absolute path is a test file
----@field forget fun(repository_root: string) reads the repository at that folder again, as after a file was written there
+---@field forget fun(path: string) reads again the repository that holds that path, as after a file was written there
 ---@field correct fun(source: string, test: string): boolean, string? records that the source's test file is the one at `test`, as the user said; `false` and why when it cannot
 ---@field describe fun(source: string): string the rule that pairs the source at that absolute path with its test file, and its origin, on one line
 
@@ -35,6 +36,7 @@ local M = {}
 ---@class aineo.explain.ShownTests
 ---@field window integer the test window
 ---@field layout aineo.explain.TestLayout
+---@field zoomed? fun(tabpage: integer): boolean whether the layout of that tab page is zoomed, which a resize then leaves alone
 ---@field source string the absolute path of the source whose test file it shows
 ---@field place aineo.explain.TestPlace the place of that test file, as the layout answered it
 
@@ -104,13 +106,15 @@ end
 ---@param source string
 ---@param place aineo.explain.TestPlace
 ---@param layout aineo.explain.TestLayout
-local function open(source_window, source, place, layout)
+---@param zoomed? fun(tabpage: integer): boolean
+local function open(source_window, source, place, layout, zoomed)
   local window = vim.api.nvim_open_win(buffer_of(place.path), false, {
     split = 'below',
     win = source_window,
     height = math.floor(vim.api.nvim_win_get_height(source_window) / 2),
   })
-  shown[source_window] = { window = window, layout = layout, source = source, place = place }
+  shown[source_window] =
+    { window = window, layout = layout, zoomed = zoomed, source = source, place = place }
   show(shown[source_window], source, place)
 end
 
@@ -171,49 +175,54 @@ function M.test_place(source, layout)
 end
 
 --- Opens the test window of the source `source_window` shows (`open()`),
---- its test file found by `layout`, and returns what it shows; tells the
---- user, once, when `layout` finds none, and opens nothing then.
+--- its test file found by `layout`, a resize leaving it alone while
+--- `zoomed` says the layout is zoomed, and returns what it shows; tells
+--- the user, once, when `layout` finds none, and opens nothing then.
 ---
 ---@param source_window integer
 ---@param layout aineo.explain.TestLayout
+---@param zoomed? fun(tabpage: integer): boolean
 ---@return aineo.explain.ShownTests|nil
-local function open_for(source_window, layout)
+local function open_for(source_window, layout, zoomed)
   local source = vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(source_window))
   local place = M.test_place(source, layout)
   if not place then
     return nil
   end
-  open(source_window, source, place, layout)
+  open(source_window, source, place, layout, zoomed)
   return shown[source_window]
 end
 
 --- Hides the test window when `window` is it or the window of its source
 --- (`close()`); else shows the test window of the source `window` shows,
---- its test file found by `layout` (`open_for()`).
+--- its test file found by `layout`, which a resize leaves alone while
+--- `zoomed` says the layout of its tab page is zoomed (`open_for()`).
 ---
 ---@param window integer
 ---@param layout aineo.explain.TestLayout
-function M.toggle(window, layout)
+---@param zoomed? fun(tabpage: integer): boolean
+function M.toggle(window, layout, zoomed)
   local shown_for = source_window_of(window)
   if shown_for then
     close(shown_for)
     return
   end
-  open_for(window, layout)
+  open_for(window, layout, zoomed)
 end
 
 --- The test window of the source `source_window` shows, and what it
---- shows, opened when hidden (`open_for()`); `nil` when the layout knows
---- no test file of the source, the user told so.
+--- shows, opened when hidden (`open_for()`, with `zoomed`); `nil` when the
+--- layout knows no test file of the source, the user told so.
 ---
 ---@param source_window integer
 ---@param layout aineo.explain.TestLayout
+---@param zoomed? fun(tabpage: integer): boolean
 ---@return aineo.explain.ShownTests|nil
-function M.ensure(source_window, layout)
+function M.ensure(source_window, layout, zoomed)
   if shown[source_window] and vim.api.nvim_win_is_valid(shown[source_window].window) then
     return shown[source_window]
   end
-  return open_for(source_window, layout)
+  return open_for(source_window, layout, zoomed)
 end
 
 --- Has the test window of `source_window`, when it has one, show the test
@@ -238,9 +247,9 @@ local function follow(source_window)
   end
 end
 
-vim.api.nvim_create_autocmd('BufWinEnter', {
+vim.api.nvim_create_autocmd({ 'BufWinEnter', 'BufFilePost' }, {
   group = vim.api.nvim_create_augroup('aineo_explain_test_window', {}),
-  desc = 'aineo: show in the test window the test file of the source above it',
+  desc = 'aineo: show in the test window the test file of the source above it, also renamed',
   -- Nested, so that a test file loaded here runs its own BufRead and
   -- FileType autocommands: its filetype, syntax and ftplugin.
   nested = true,
@@ -398,11 +407,24 @@ function M.show_source(window, path)
   return vim.api.nvim_open_win(buffer, false, { split = 'above', win = window })
 end
 
---- Gives each source window and its test window half of the rows they
---- hold together, as when the test window was opened.
-local function share_heights()
+--- The tab pages resized while they were not the current one, whose
+--- source and test windows share their heights again once entered.
+---@type table<integer, true>
+local resized_elsewhere = {}
+
+--- Gives each source window and its test window in the tab page
+--- `tabpage` half of the rows they hold together, as when the test window
+--- was opened, but for a pair whose layout says it is zoomed.
+---
+---@param tabpage integer
+local function share_heights_in(tabpage)
   for source_window, tests in pairs(shown) do
-    if vim.api.nvim_win_is_valid(source_window) and vim.api.nvim_win_is_valid(tests.window) then
+    if
+      vim.api.nvim_win_is_valid(source_window)
+      and vim.api.nvim_win_is_valid(tests.window)
+      and vim.api.nvim_win_get_tabpage(source_window) == tabpage
+      and not (tests.zoomed and tests.zoomed(tabpage))
+    then
       local rows = vim.api.nvim_win_get_height(source_window)
         + vim.api.nvim_win_get_height(tests.window)
       vim.api.nvim_win_set_height(tests.window, math.floor(rows / 2))
@@ -410,10 +432,38 @@ local function share_heights()
   end
 end
 
+--- After a resize of the editor: shares the heights of the current tab
+--- page's pairs (`share_heights_in()`), and marks every other tab page that
+--- holds a pair to share them once it is entered.
+local function share_heights_after_a_resize()
+  local current = vim.api.nvim_get_current_tabpage()
+  for source_window, tests in pairs(shown) do
+    if vim.api.nvim_win_is_valid(source_window) and vim.api.nvim_win_is_valid(tests.window) then
+      local tabpage = vim.api.nvim_win_get_tabpage(source_window)
+      if tabpage ~= current then
+        resized_elsewhere[tabpage] = true
+      end
+    end
+  end
+  share_heights_in(current)
+end
+
 vim.api.nvim_create_autocmd('VimResized', {
   group = 'aineo_explain_test_window',
   desc = 'aineo: keep a source and its test window at half the height each',
-  callback = share_heights,
+  callback = share_heights_after_a_resize,
+})
+
+vim.api.nvim_create_autocmd('TabEnter', {
+  group = 'aineo_explain_test_window',
+  desc = 'aineo: share the heights of a tab page resized while another was current',
+  callback = function()
+    local tabpage = vim.api.nvim_get_current_tabpage()
+    if resized_elsewhere[tabpage] then
+      resized_elsewhere[tabpage] = nil
+      share_heights_in(tabpage)
+    end
+  end,
 })
 
 return M
