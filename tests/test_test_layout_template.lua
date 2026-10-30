@@ -84,6 +84,12 @@ T['problem()']['refuses a template that could leave the repository or cannot be 
       { 'tests/test_{name|up}.py', 'an unknown modifier |up' },
       { 'tests/{unit}/test_{name}.py', '{unit} only begins a template' },
       { 'tests/' .. ('a'):rep(251) .. '.py', 'longer than 256 characters' },
+      { '{path}/{a}{b}.py', 'two placeholders side by side' },
+      { 'tests/{name}/', 'a trailing /' },
+      { 'tests/./test_{name}.py', 'a . segment' },
+      { '.', 'a . segment' },
+      { '.git/config', 'a .git segment' },
+      { 'src/.git/{name}', 'a .git segment' },
     },
   })
 
@@ -140,6 +146,32 @@ T['match()']['binds a modified placeholder to one segment only'] = function()
   local two_segments = template.match('tests/test_{path|_}.lua', 'tests/test_a/b.lua')
 
   eq({ one_segment, two_segments }, { { ['path|_'] = 'a_b' }, nil })
+end
+
+T['match()']['binds no . or .. segment, and no empty one'] = MiniTest.new_set({
+  parametrize = {
+    { '{path}/{name}.py', '../x.py' },
+    { '{path}/{name}.py', 'a/./x.py' },
+    { '{dir}/{name}.py', './x.py' },
+    { '{name}/test.py', '../test.py' },
+    { '{name}.py', '..py' },
+  },
+})
+
+T['match()']['binds no . or .. segment, and no empty one']['given'] = function(pattern, path)
+  local bindings = template.match(pattern, path)
+
+  eq(bindings, nil)
+end
+
+T['match()']['ends in a bounded time on a path many splits could match'] = function()
+  local pattern = '{path}/{a}m{b}m{c}m{d}m{e}m{f}m{g}m{h}.zz'
+  local path = 'pkg/' .. ('m'):rep(40) .. '.py'
+  local started = vim.uv.hrtime()
+
+  local bindings = template.match(pattern, path)
+
+  eq({ bindings, (vim.uv.hrtime() - started) / 1e6 < 200 }, { nil, true })
 end
 
 return T

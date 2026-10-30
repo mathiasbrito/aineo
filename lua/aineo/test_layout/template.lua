@@ -84,8 +84,8 @@ end
 
 --- Whether `value` can stand for the placeholder `piece`: one segment, or,
 --- for an unmodified placeholder of several (`SEVERAL_SEGMENTS`), segments
---- joined by `/`, none of them empty; nothing at all when it takes the
---- slash after it.
+--- joined by `/`; no segment empty, `.` or `..`, so that no binding leads
+--- out of a folder; nothing at all when it takes the slash after it.
 ---
 ---@param piece aineo.test_layout.Piece
 ---@param value string
@@ -94,13 +94,15 @@ local function can_stand_for(piece, value)
   if piece.folders and value == '' then
     return true
   end
-  if SEVERAL_SEGMENTS[piece.name] and piece.modifier == '' then
-    return value ~= ''
-      and not value:find('//', 1, true)
-      and not vim.startswith(value, '/')
-      and not vim.endswith(value, '/')
+  for _, segment in ipairs(vim.split(value, '/', { plain = true })) do
+    if segment == '' or segment == '.' or segment == '..' then
+      return false
+    end
   end
-  return value ~= '' and not value:find('/', 1, true)
+  if SEVERAL_SEGMENTS[piece.name] and piece.modifier == '' then
+    return true
+  end
+  return not value:find('/', 1, true)
 end
 
 --- The value `piece`, a placeholder, already has under `bindings`: its own
@@ -132,42 +134,77 @@ local function folders_value(text)
   return vim.endswith(text, '/') and text:sub(1, -2) or nil
 end
 
---- The bindings that make `pieces`, from the `index`th on, spell `path`
---- from its byte `at` on, extending `bindings`; nil when none do. A
---- placeholder tries its longest text first.
+--- The words whose bindings the pieces from each index on read: each
+--- placeholder's whole word and plain word, by index.
 ---
 ---@param pieces aineo.test_layout.Piece[]
----@param index integer
----@param path string
----@param at integer
----@param bindings table<string, string>
----@return table<string, string>?
-local function match_from(pieces, index, path, at, bindings)
-  local piece = pieces[index]
-  if not piece then
-    return at == #path + 1 and bindings or nil
+---@return string[][]
+local function words_read_from(pieces)
+  local read = {}
+  local words = {}
+  for index = #pieces, 1, -1 do
+    if pieces[index].word then
+      words = vim.list_extend({ pieces[index].word, pieces[index].name }, words)
+    end
+    read[index] = words
   end
-  if piece.text then
-    if path:sub(at, at + #piece.text - 1) ~= piece.text then
+  return read
+end
+
+--- The bindings that make `pieces` spell `path` whole, extending
+--- `bound`; nil when none do. A placeholder tries its longest text first.
+--- Each failure is remembered by the piece, the position in `path` and the
+--- bindings the pieces after it read, so no split is tried twice: the
+--- matching ends in a time that grows with the pieces and the path, not
+--- with the ways to split it.
+---
+---@param pieces aineo.test_layout.Piece[]
+---@param path string
+---@param bound table<string, string>
+---@return table<string, string>?
+local function match_pieces(pieces, path, bound)
+  local reads = words_read_from(pieces)
+  local failed = {}
+  local function match_from(index, at, bindings)
+    local piece = pieces[index]
+    if not piece then
+      return at == #path + 1 and bindings or nil
+    end
+    local key = { index, at }
+    for _, word in ipairs(reads[index]) do
+      table.insert(key, bindings[word] or '\0')
+    end
+    key = table.concat(key, '\1')
+    if failed[key] then
       return nil
     end
-    return match_from(pieces, index + 1, path, at + #piece.text, bindings)
-  end
-  local bound = bound_value(piece, bindings)
-  for stop = #path, at - 1, -1 do
-    local value = path:sub(at, stop)
-    if piece.folders then
-      value = folders_value(value)
-    end
-    if value and can_stand_for(piece, value) and (bound == nil or bound == value) then
-      local extended = vim.tbl_extend('force', bindings, { [piece.word] = value })
-      local matched = match_from(pieces, index + 1, path, stop + 1, extended)
-      if matched then
-        return matched
+    local matched
+    if piece.text then
+      if path:sub(at, at + #piece.text - 1) == piece.text then
+        matched = match_from(index + 1, at + #piece.text, bindings)
+      end
+    else
+      local already = bound_value(piece, bindings)
+      for stop = #path, at - 1, -1 do
+        local value = path:sub(at, stop)
+        if piece.folders then
+          value = folders_value(value)
+        end
+        if value and can_stand_for(piece, value) and (already == nil or already == value) then
+          local extended = vim.tbl_extend('force', bindings, { [piece.word] = value })
+          matched = match_from(index + 1, stop + 1, extended)
+          if matched then
+            break
+          end
+        end
       end
     end
+    if not matched then
+      failed[key] = true
+    end
+    return matched
   end
-  return nil
+  return match_from(1, 1, bound)
 end
 
 --- The text `piece`, a placeholder, stands for under `bindings`: its
@@ -189,9 +226,17 @@ local function rendered_placeholder(piece, bindings)
   return value
 end
 
---- Why the text of `template` outside its placeholders is refused: a `..`
---- segment, an absolute path, a `~`, a backslash, an empty segment or a
---- brace that opens or closes no placeholder; nil when it is accepted.
+--- The words for the segment `segment` of a template when it is refused:
+--- `..` and `.`, which lead out of or nowhere from a folder, and `.git`,
+--- the repository's own folder; nil for any other.
+---@type table<string, string>
+local REFUSED_SEGMENTS =
+  { ['..'] = 'a .. segment', ['.'] = 'a . segment', ['.git'] = 'a .git segment' }
+
+--- Why the text of `template` outside its placeholders is refused: an
+--- absolute path, a `..`, `.` or `.git` segment, a `~`, a backslash, an
+--- empty segment, a trailing `/` or a brace that opens or closes no
+--- placeholder; nil when it is accepted.
 ---
 ---@param template string
 ---@return string?
@@ -200,9 +245,12 @@ local function path_problem(template)
     return 'an absolute path'
   end
   for _, segment in ipairs(vim.split(template, '/', { plain = true })) do
-    if segment == '..' then
-      return 'a .. segment'
+    if REFUSED_SEGMENTS[segment] then
+      return REFUSED_SEGMENTS[segment]
     end
+  end
+  if vim.endswith(template, '/') then
+    return 'a trailing /'
   end
   if template:find('~', 1, true) then
     return 'a ~'
@@ -219,12 +267,16 @@ local function path_problem(template)
   return nil
 end
 
---- Why a placeholder of `template` is refused: an empty one, an unknown
---- modifier, or a `{unit}` anywhere but at the start; nil when none is.
+--- Why a placeholder of `template` is refused: two side by side, with no
+--- text between to tell where one ends, an empty one, an unknown modifier,
+--- or a `{unit}` anywhere but at the start; nil when none is.
 ---
 ---@param template string
 ---@return string?
 local function placeholder_problem(template)
+  if template:find('}{', 1, true) then
+    return 'two placeholders side by side'
+  end
   for index, piece in ipairs(pieces_of(template)) do
     if piece.word and piece.name == '' then
       return 'an empty placeholder'
@@ -240,11 +292,12 @@ local function placeholder_problem(template)
 end
 
 --- Why `template` is refused, in words, or nil when it is accepted: it is
---- empty, longer than 256 characters, could reach out of the repository —
---- an absolute path, a `..` segment, a `~` — uses another separator than
---- `/`, has an empty segment, a brace of no placeholder, an empty
---- placeholder or an unknown modifier, or a `{unit}` that does not begin
---- it.
+--- empty, longer than 256 characters, could reach out of the repository or
+--- into its `.git` folder — an absolute path, a `..`, `.` or `.git`
+--- segment, a `~` — uses another separator than `/`, has an empty segment
+--- or a trailing `/`, a brace of no placeholder, two placeholders side by
+--- side, an empty placeholder or an unknown modifier, or a `{unit}` that
+--- does not begin it.
 ---
 ---@param template string
 ---@return string?
@@ -321,7 +374,7 @@ end
 ---@param bound? table<string, string>
 ---@return table<string, string>?
 function M.match(template, path, bound)
-  return match_from(pieces_of(template), 1, path, 1, bound or {})
+  return match_pieces(pieces_of(template), path, bound or {})
 end
 
 --- `template` with each placeholder replaced by its value in `bindings`; a
