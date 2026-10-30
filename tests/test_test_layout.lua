@@ -541,7 +541,7 @@ T['reading'] = MiniTest.new_set()
 T['reading']['leaves a file over 1 MiB unread'] = function()
   local top = repository_holding({
     ['src/a.js'] = {},
-    ['package.json'] = { ('x'):rep(1024 * 1024), '"jest"' },
+    ['package.json'] = { '"jest"', ('x'):rep(1024 * 1024) },
   })
 
   local line = test_layout.describe(vim.fs.joinpath(top, 'src/a.js'))
