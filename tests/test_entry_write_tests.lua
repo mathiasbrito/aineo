@@ -157,6 +157,35 @@ T['the keys']['\\Ws while written code shows opens the float that refines it'] =
   eq(float_title(), ' Refine the written code: <CR> sends · q or <Esc> cancels ')
 end
 
+T['the keys']['\\Ws refines the test \\WT proposes too'] = function()
+  local folder = start()
+  child.cmd('edit ' .. folder .. '/tests/calc_spec.lua')
+  child.api.nvim_buf_set_lines(0, 3, 3, false, { '  -- adding nothing gives 0' })
+  child.cmd('4')
+  tested.answer_with(child, {
+    summary = 'Tests adding nothing.',
+    edits = {
+      {
+        line = 4,
+        last = 4,
+        old = { '  -- adding nothing gives 0' },
+        new = { "  it('adds nothing', function() end)" },
+        why = 'Tests it.',
+      },
+    },
+  })
+  tested.press(child, 'V', '\\WT')
+  tested.wait_until(
+    child,
+    [[#vim.api.nvim_buf_get_extmarks(0,
+    vim.api.nvim_create_namespace('aineo_explain_fix_drawn'), 0, -1, {}) > 0 or nil]]
+  )
+
+  tested.press(child, '\\Ws')
+
+  eq(float_title(), ' Refine the written code: <CR> sends · q or <Esc> cancels ')
+end
+
 T['the keys']['\\WT in a buffer of no file tells so'] = function()
   start()
   child.cmd('enew')
