@@ -91,16 +91,42 @@ local function unknown_field(statement, fields)
   return unknown[1] and tostring(unknown[1])
 end
 
---- Why the optional fields every statement may give — `kind`, a string,
---- and `create`, true or false — are refused, naming the field after
---- `at`; nil when they are accepted.
+--- The longest free text a rule may give, its `kind` or `framework`, in
+--- characters.
+local LONGEST_TEXT = 64
+
+--- Why `value`, the free text an agent gives as a rule's `kind` or a
+--- `framework`, is refused: no string, longer than 64 characters, or
+--- holding a control character, a line break among them; nil when it is
+--- accepted. It reaches the user's window bar and the prompts of written
+--- tests.
+---
+---@param value any
+---@return string?
+function M.text_problem(value)
+  if type(value) ~= 'string' then
+    return 'expected a string'
+  end
+  if vim.fn.strchars(value) > LONGEST_TEXT then
+    return ('longer than %d characters'):format(LONGEST_TEXT)
+  end
+  if value:find('[%c\127]') or value:find('\194[\128-\159]') then
+    return 'holds a control character'
+  end
+  return nil
+end
+
+--- Why the optional fields every statement may give — `kind`, a short
+--- text (`text_problem()`), and `create`, true or false — are refused,
+--- naming the field after `at`; nil when they are accepted.
 ---
 ---@param statement table
 ---@param at string
 ---@return string?
 local function common_problem(statement, at)
-  if statement.kind ~= nil and type(statement.kind) ~= 'string' then
-    return at .. '.kind: expected a string'
+  local kind_problem = statement.kind ~= nil and M.text_problem(statement.kind)
+  if kind_problem then
+    return at .. '.kind: ' .. kind_problem
   end
   if statement.create ~= nil and type(statement.create) ~= 'boolean' then
     return at .. '.create: expected true or false'
@@ -194,17 +220,33 @@ local function list_problem(value, field, expected, item_problem)
   return nil
 end
 
---- Why `glob`, a discovery glob, is refused: what `template.problem()`
---- refuses of a path — an absolute one, a `..` segment, a `~` — or more
---- than 256 characters.
+--- The most `**` a discovery glob may hold: each more multiplies the time
+--- `vim.glob` takes to match a path.
+local MOST_DOUBLE_STARS = 2
+
+--- Why `glob`, a discovery glob, is refused: more than 256 characters,
+--- what `template.problem()` refuses of a path — an absolute one, a `..`
+--- segment, a `~` — more than two `**`, or a glob `vim.glob` cannot read;
+--- nil when it is accepted.
 ---
 ---@param glob string
 ---@return string?
-local function glob_problem(glob)
+function M.glob_problem(glob)
   if #glob > LONGEST_GLOB then
     return ('longer than %d characters'):format(LONGEST_GLOB)
   end
-  return template.problem((glob:gsub('[{}]', '')))
+  local problem = template.problem((glob:gsub('[{}]', '')))
+  if problem then
+    return problem
+  end
+  local _, double_stars = glob:gsub('%*%*', '')
+  if double_stars > MOST_DOUBLE_STARS then
+    return 'more than two **'
+  end
+  if not pcall(vim.glob.to_lpeg, glob) then
+    return 'not a glob aineo can read'
+  end
+  return nil
 end
 
 --- Why `name`, a companion, is refused: it is no plain file name.
@@ -266,14 +308,15 @@ local function rule_problem(statement, at)
     problem = folder_problem(statement.folder, at)
   end
   problem = problem
-    or list_problem(statement.discover, at .. '.discover', 'globs', glob_problem)
+    or list_problem(statement.discover, at .. '.discover', 'globs', M.glob_problem)
     or list_problem(statement.companions, at .. '.companions', 'file names', companion_problem)
     or common_problem(statement, at)
   if problem then
     return problem
   end
-  if statement.framework ~= nil and type(statement.framework) ~= 'string' then
-    return at .. '.framework: expected a string'
+  local framework_problem = statement.framework ~= nil and M.text_problem(statement.framework)
+  if framework_problem then
+    return at .. '.framework: ' .. framework_problem
   end
   local unknown = unknown_field(statement, RULE_FIELDS)
   return unknown and ('%s.%s: not a field of a rule'):format(at, unknown)

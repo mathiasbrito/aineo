@@ -64,8 +64,22 @@ local function user_rules(user, catalogue)
   return found
 end
 
+--- Why the agent's kept statement `statement` is skipped — what
+--- `rules.statements_problem()` refuses of it now, such as a glob kept by
+--- an older aineo that `vim.glob` cannot read — without the `rules[1].`
+--- that problem begins with; nil when it is read.
+---
+---@param statement aineo.test_layout.Statement
+---@param catalogue aineo.test_layout.Catalogue
+---@return string?
+local function skip_reason(statement, catalogue)
+  local problem = rules.statements_problem({ statement }, catalogue)
+  return problem and (problem:gsub('^rules%[1%]%.?', ''))
+end
+
 --- The rules of the agent's statements, `agent`, in their order, each
---- described by its position, and by the preset it names, if it does.
+--- described by its position, and by the preset it names, if it does; a
+--- statement `skip_reason()` skips has none.
 ---
 ---@param agent? { rules: aineo.test_layout.Statement[], framework?: string }
 ---@param catalogue aineo.test_layout.Catalogue
@@ -74,7 +88,9 @@ local function agent_rules(agent, catalogue)
   local stated = {}
   for position, statement in ipairs(agent and agent.rules or {}) do
     local description = ('agent rule %d'):format(position)
-    if statement.preset then
+    if skip_reason(statement, catalogue) then
+      table.insert(stated, {})
+    elseif statement.preset then
       local preset = preset_of(catalogue, statement.preset)
       table.insert(
         stated,
@@ -390,6 +406,23 @@ function M.in_force(view, stored, catalogue)
       for _, ranked in ipairs(ranked_presets(view, catalogue, extension)) do
         vim.iter(preset_rules(ranked)):each(name)
       end
+    end
+  end
+  return named
+end
+
+--- The agent's kept statements that are skipped, each as `agent rule <n>:
+--- <why>` (`skip_reason()`), in their order.
+---
+---@param stored aineo.test_layout.Stored
+---@param catalogue aineo.test_layout.Catalogue
+---@return string[]
+function M.skipped(stored, catalogue)
+  local named = {}
+  for position, statement in ipairs(stored.agent and stored.agent.rules or {}) do
+    local reason = skip_reason(statement, catalogue)
+    if reason then
+      table.insert(named, ('agent rule %d: %s'):format(position, reason))
     end
   end
   return named

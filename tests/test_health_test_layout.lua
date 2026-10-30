@@ -58,6 +58,24 @@ T['the test layout']['shows the rules in force for the project of the current fo
   })
 end
 
+T['the test layout']['warns of each kept rule it skips, and why'] = function()
+  local top = go_repository()
+  require('aineo.test_layout.store').write(vim.fn.stdpath('state'), top, {
+    agent = {
+      rules = { { source = '{path}/{name}.go', test = 'x/{name}.go', discover = { 'x/[' } } },
+    },
+  })
+  children.restart(child)
+  child.cmd('cd ' .. vim.fn.fnameescape(top))
+
+  local report = health.report(child)
+
+  eq(
+    health.section(report, 'Test layout')[2],
+    '- ⚠️ WARNING agent rule 1 is skipped: discover[1]: not a glob aineo can read'
+  )
+end
+
 T['the test layout']['says why no rule is in force outside a git worktree'] = function()
   local folder = vim.fs.joinpath(vim.fn.getcwd(), '.tests', 'fixtures', 'health-test-layout-plain')
   vim.fn.mkdir(folder, 'p')
