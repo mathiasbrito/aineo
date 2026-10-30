@@ -1036,6 +1036,32 @@ function M.shown(buffer)
     }
 end
 
+--- The edits of the preview `buffer` shows that are left to decide, each
+--- with the lines it spans now, from 1, its old and new lines and why, in
+--- the order of their lines; none when it shows no preview, or when an
+--- extmark of its edits is gone.
+---
+---@param buffer integer
+---@return aineo.explain.PlacedEdit[]
+function M.left(buffer)
+  local preview = previews[buffer]
+  local spans = preview and spans_of(preview)
+  if not spans then
+    return {}
+  end
+  local left = {}
+  for index, edit in ipairs(preview.edits) do
+    table.insert(left, {
+      first = spans[index].first + 1,
+      last = spans[index].last + 1,
+      old = edit.old,
+      new = edit.new,
+      why = edit.why,
+    })
+  end
+  return left
+end
+
 --- Whether the new lines of `edit` start with its old lines, unchanged: it
 --- then only adds lines after them.
 ---

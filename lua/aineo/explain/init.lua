@@ -272,6 +272,7 @@ vim.api.nvim_create_autocmd('BufWipeout', {
     kept.forget(event.buf)
     marks.forget(event.buf)
     new_files.forget(event.buf)
+    write.forget(event.buf)
   end,
 })
 
@@ -631,6 +632,16 @@ end
 ---@param order aineo.explain.TestOrder
 function M.write_implementation(order)
   test_writing.write_implementation(order)
+end
+
+--- Opens the float in which the user types how to change the written code
+--- `buffer` shows, and asks for it again with those instructions, its
+--- answer in place of the proposals left (`aineo.explain.write`'s
+--- `refine()`).
+---
+---@param buffer integer
+function M.refine(buffer)
+  write.refine(buffer)
 end
 
 return M
