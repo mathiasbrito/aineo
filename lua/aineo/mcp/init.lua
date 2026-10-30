@@ -1,9 +1,10 @@
 --- aineo's MCP home, `require('aineo.mcp')`: the report server Claude Code
 --- runs, described for Claude Code's `--mcp-config` and `--allowedTools`,
 --- with its tools — the report, the announcement of a worktree an agent
---- works in and its branches, and the three that run a command in the run
---- pane, read what it printed and stop it — and the words that tell Claude
---- Code's agents of the last four.
+--- works in and its branches, the three that run a command in the run
+--- pane, read what it printed and stop it, and the one that tells aineo how
+--- a project lays out its tests — and the words that tell Claude Code's
+--- agents of all but the first.
 
 local editors = require('aineo.mcp.editors')
 local names = require('aineo.mcp.names')
@@ -96,14 +97,40 @@ function M.run_stop_tool_name()
   return ('mcp__%s__%s'):format(names.SERVER_NAME, names.RUN_STOP_TOOL)
 end
 
+--- The name Claude Code gives the test layout tool: `mcp__<server>__<tool>`.
+---
+---@return string
+function M.test_layout_tool_name()
+  return ('mcp__%s__%s'):format(names.SERVER_NAME, names.TEST_LAYOUT_TOOL)
+end
+
 --- The tools Claude Code may call without asking the user (its
---- `--allowedTools`): the report tool, the announcement tool and the tool
---- that reads the output of a process, in that order, and nothing else —
---- the tools that run a command and stop one stay with the user's approval.
+--- `--allowedTools`): the report tool, the announcement tool, the tool
+--- that reads the output of a process and the test layout tool, in that
+--- order, and nothing else — the tools that run a command and stop one stay
+--- with the user's approval.
 ---
 ---@return string[]
 function M.allowed_mcp_tools()
-  return { M.report_tool_name(), M.announce_tool_name(), M.run_output_tool_name() }
+  return {
+    M.report_tool_name(),
+    M.announce_tool_name(),
+    M.run_output_tool_name(),
+    M.test_layout_tool_name(),
+  }
+end
+
+--- The sentence appended to Claude Code's system prompt after the run
+--- tools' paragraph: when to tell aineo how the project lays out its tests,
+--- naming `preset_ids`, the presets the tool knows.
+---
+---@param preset_ids string[]
+---@return string
+function M.test_layout_instructions(preset_ids)
+  return (
+    'Call `%s` once per project, when you first learn how the project lays out its tests,'
+    .. ' with presets when one fits: %s.'
+  ):format(M.test_layout_tool_name(), table.concat(preset_ids, ', '))
 end
 
 --- The paragraph appended to Claude Code's system prompt after the
@@ -348,6 +375,39 @@ function M.receive_run_call(run_call, start_token)
     return false
   end
   return run_called_handler(run_call, start_token)
+end
+
+--- The handler `on_test_layout_declared()` registered, called with each
+--- call of the test layout tool a relay offers this editor.
+---@type fun(call: aineo.mcp.TestLayoutCall, start_token: string): { text: string, is_error: boolean }|false
+local test_layout_handler
+
+--- Registers `handler`, in place of any before, as what this editor does
+--- with each call of the test layout tool, which the relay of a Claude Code
+--- this editor started offers it (`receive_test_layout()`):
+--- `handler(call, start_token)` keeps the layout the call states and
+--- answers the words for the agent and whether they are an error, or
+--- `false` when it does not take the call. Its strategy is the composition
+--- root's: plain dependency inversion, bound once at start.
+---
+---@param handler fun(call: aineo.mcp.TestLayoutCall, start_token: string): { text: string, is_error: boolean }|false
+function M.on_test_layout_declared(handler)
+  test_layout_handler = handler
+end
+
+--- Takes a call of the test layout tool a relay offers, `call` of the start
+--- `start_token`, and answers what the handler `on_test_layout_declared()`
+--- registered answers, or `false` when none is registered. Called in the
+--- RPC request that offers it.
+---
+---@param call aineo.mcp.TestLayoutCall
+---@param start_token string
+---@return { text: string, is_error: boolean }|false
+function M.receive_test_layout(call, start_token)
+  if not test_layout_handler then
+    return false
+  end
+  return test_layout_handler(call, start_token)
 end
 
 --- Records what a session hook of the Claude Code process `hook.pid` told —

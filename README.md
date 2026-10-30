@@ -564,9 +564,10 @@ start. `:help aineo-run` has the details.
 ## What Claude tells aineo
 
 aineo starts Claude Code with an MCP server of its own. Its tools `report` and
-`announce_work` tell aineo what Claude does, and `run`, `run_output` and
-`run_stop` give Claude the run pane. `report`, `announce_work` and
-`run_output` are allowed without asking; `run` and `run_stop` are not.
+`announce_work` tell aineo what Claude does, `run`, `run_output` and
+`run_stop` give Claude the run pane, and `test_layout` tells aineo where the
+project keeps its tests. `report`, `announce_work`, `run_output` and
+`test_layout` are allowed without asking; `run` and `run_stop` are not.
 
 - **`report`.** Claude calls it to tell you what it does: a `task`, a `status`
   (`started`, `progress`, `blocked`, `done` or `failed`), a one-line `summary`
@@ -602,6 +603,24 @@ aineo starts Claude Code with an MCP server of its own. Its tools `report` and
   never of the `\X` shells, and filters it by a Vim regex (`pattern`,
   `exclude`, `ignore_case`, `last`, `after_line`, `context`); the matching is
   stopped after 2 seconds. `:help aineo-run-tools` has the details.
+- **`test_layout`.** Claude calls it once per project, when it first learns
+  how the project lays out its tests: a list of `rules`, each a preset by its
+  id (`python.pytest.flat`, `js.jest.colocated`, `go.testing.colocated`,
+  `java.junit.maven-mirror`, `c.ceedling.unity`… for Python, JavaScript and
+  TypeScript, Go, Java, C and C++) or path templates of its own, such as
+  `src/{path}/{name}.py` for the sources and `tests/{path}/test_{name}.py`
+  for their tests. A template with a `..` or `.` folder, a `.git` folder in
+  any letter case or a control character in it is refused, and so is a
+  test file a rule gives through a link that leads out of the repository
+  or to nothing; the worktree named must be of a repository the editor has
+  open. The reply says how many of the project's sources each rule pairs with an
+  existing test, and how many of those tests another rule pairs with a
+  different source. Your own correction of a test file comes first, then
+  Claude's rules, then the presets the repository shows (its `pytest.ini`,
+  `go.mod`, `angular.json`…), then the language's default. aineo keeps them
+  in its state folder, one file per repository, shared by its worktrees; the
+  health check shows the rules in force. `:help aineo-test-layout` has the
+  details.
 
 aineo also gives Claude Code hooks that tell aineo when you switch session
 inside Claude Code with `/clear`, `/resume` or `/branch`, so the Report,

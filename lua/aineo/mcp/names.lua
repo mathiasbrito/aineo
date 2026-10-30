@@ -22,6 +22,10 @@ M.RUN_OUTPUT_TOOL = 'run_output'
 --- The name of the server's tool that stops a process of the run pane.
 M.RUN_STOP_TOOL = 'run_stop'
 
+--- The name of the server's tool that tells aineo how a project lays out
+--- its tests.
+M.TEST_LAYOUT_TOOL = 'test_layout'
+
 --- The environment variable that tells the relay which editor to deliver to.
 M.EDITOR_ADDRESS_VARIABLE = 'AINEO_EDITOR_ADDRESS'
 

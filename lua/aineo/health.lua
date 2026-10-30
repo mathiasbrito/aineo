@@ -1038,6 +1038,32 @@ local function check_write(resolved_config)
   )
 end
 
+--- Shows the rules in force for the tests of the project in the current
+--- folder, and who stated each (`aineo.test_layout`), or why none is; and
+--- warns of each kept rule of the agent's that is skipped, and why.
+local function check_test_layout()
+  vim.health.start('Test layout')
+  local rules, root_or_problem, skipped =
+    require('aineo.test_layout').rules_in_force(vim.fn.getcwd())
+  if not rules then
+    vim.health.info(
+      ('no rule is in force for the tests here: %s: :help |aineo-test-layout|'):format(
+        root_or_problem
+      )
+    )
+    return
+  end
+  vim.health.info(
+    ('rules in force for the tests of %s: %s: :help |aineo-test-layout|'):format(
+      root_or_problem,
+      table.concat(rules, '; ')
+    )
+  )
+  for _, rule in ipairs(skipped or {}) do
+    vim.health.warn(rule)
+  end
+end
+
 --- The names of the packs the report tells of: those the setting `office.pack`
 --- names, in its order, then the others found, by name; each once.
 ---
@@ -1219,6 +1245,7 @@ function M.check()
   check_find(resolved_config)
   check_explain(resolved_config)
   check_write(resolved_config)
+  check_test_layout()
   check_office(resolved_config)
   check_autostart()
   name_limits()
