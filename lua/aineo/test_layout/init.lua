@@ -161,27 +161,44 @@ local function locate(path)
   }
 end
 
---- Whether `path`, an absolute path, stays inside the worktree at `root`:
---- the deepest of its folders that exists, as the file system resolves it
---- (links followed), is `root` or inside it, and no segment of it is
---- `.git`.
+--- Whether `path`, the absolute path of a file of the worktree at `root`
+--- (`root` followed by `/` and the file's path in it), stays inside the
+--- worktree: it holds no control character; no segment below `root` is
+--- `.git` in any letter case; the deepest of its folders that exists, as
+--- the file system resolves it (links followed), is `root` or inside it;
+--- and when the file itself is a link, its target exists and is inside
+--- `root` — a dangling link would make a write land where it points.
 ---
 ---@param root string
 ---@param path string
 ---@return boolean
 local function stays_inside(root, path)
+  if path:find('[%c\127]') or not vim.startswith(path, root .. '/') then
+    return false
+  end
+  for _, segment in ipairs(vim.split(path:sub(#root + 2), '/', { plain = true })) do
+    if segment:lower() == '.git' then
+      return false
+    end
+  end
   local real_root = vim.uv.fs_realpath(root) or root
-  local folder = existing_folder(path)
-  local inside = folder ~= nil and (folder == real_root or vim.startswith(folder, real_root .. '/'))
-  return inside and not vim.tbl_contains(vim.split(path, '/', { plain = true }), '.git')
+  local function is_inside(real)
+    return real ~= nil and (real == real_root or vim.startswith(real, real_root .. '/'))
+  end
+  if not is_inside(existing_folder(path)) then
+    return false
+  end
+  local file = vim.uv.fs_lstat(path)
+  return not (file and file.type == 'link') or is_inside(vim.uv.fs_realpath(path))
 end
 
 --- `place`, as finding gave it for a file of the worktree at `root`,
---- checked against the file system: nil and why when its path leads out of
---- the worktree (`stays_inside()`); else with the candidates that lead out
---- left out, `exists` the file system's answer, not git's listing, so
---- that a file git ignores still exists, and `root` the worktree's folder,
---- for `forget()`. Nil and `problem` with no place.
+--- checked against the file system: the candidates that lead out of the
+--- worktree left out (`stays_inside()`), the place's path the best of
+--- those left when it was a candidate; nil and why when its path leads out;
+--- else with `exists` the file system's answer, not git's listing, so that
+--- a file git ignores still exists, and `root` the worktree's folder, for
+--- `forget()`. Nil and `problem` with no place.
 ---
 ---@param root string
 ---@param place? aineo.test_layout.Place
@@ -192,12 +209,16 @@ local function checked(root, place, problem)
   if not place then
     return nil, problem
   end
-  if not stays_inside(root, place.path) then
-    return nil, place.path .. ' is outside the repository'
-  end
+  local was_candidate = place.candidates[1] == place.path
   place.candidates = vim.tbl_filter(function(candidate)
     return stays_inside(root, candidate)
   end, place.candidates)
+  if was_candidate and place.candidates[1] then
+    place.path = place.candidates[1]
+  end
+  if not stays_inside(root, place.path) then
+    return nil, place.path .. ' is outside the repository'
+  end
   place.exists = vim.uv.fs_stat(place.path) ~= nil
   place.root = root
   return place

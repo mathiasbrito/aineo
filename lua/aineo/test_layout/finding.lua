@@ -270,17 +270,19 @@ end
 
 --- The existing test files the test templates of `matching`, the rules
 --- whose source template matches `source`, name for it, best first: in the
---- order of the rules, then shortest path first.
+--- order of the rules, then shortest path first; each file once, with the
+--- first rule that names it.
 ---
 ---@param view aineo.test_layout.View
 ---@param matching aineo.test_layout.Rule[]
 ---@param source string
 ---@return aineo.test_layout.Match[]
 local function template_matches(view, matching, source)
-  local found = {}
+  local found, seen = {}, {}
   for position, rule in ipairs(matching) do
     for _, path in ipairs(test_paths(view, rule, source)) do
-      if view.has[path] then
+      if view.has[path] and not seen[path] then
+        seen[path] = true
         table.insert(found, { path = path, rule = rule, position = position })
       end
     end
@@ -289,11 +291,11 @@ local function template_matches(view, matching, source)
   return found
 end
 
---- The test files, by `rules`, that import `source` as its language reads
---- an import: the lines one text search finds for its fixed strings, each
---- read by `modules.imports()`; shortest path first, each once, named by a
---- rule of the repository's that carries the framework of `creating`, the
---- rule that creates a test file of `source`.
+--- The test files, by `rules`, that import `source` as its language writes
+--- an import: the files one text search finds for its fixed strings, each
+--- read whole (`view.read`) by `modules.imports()`; shortest path first,
+--- each once, named by a rule of the repository's that carries the
+--- framework of `creating`, the rule that creates a test file of `source`.
 ---
 ---@param rules aineo.test_layout.Rule[]
 ---@param view aineo.test_layout.View
@@ -301,8 +303,7 @@ end
 ---@param creating aineo.test_layout.Rule
 ---@return aineo.test_layout.Match[]
 local function text_matches(rules, view, source, creating)
-  local in_unit = within_unit(M.unit_of(view, source), source)
-  local patterns = modules.patterns(in_unit)
+  local patterns = modules.patterns(within_unit(M.unit_of(view, source), source))
   if #patterns == 0 then
     return {}
   end
@@ -314,13 +315,11 @@ local function text_matches(rules, view, source, creating)
   local found, seen = {}, {}
   for _, hit in ipairs(view.grep(patterns)) do
     local path = hit.path
-    local taken = not seen[path]
-      and path ~= source
-      and modules.imports(in_unit, hit.text)
-      and M.is_test(rules, view, path)
-    if taken then
+    if not seen[path] and path ~= source and M.is_test(rules, view, path) then
       seen[path] = true
-      table.insert(found, { path = path, rule = naming, position = 1 })
+      if modules.imports(source, path, view.read(path) or '') then
+        table.insert(found, { path = path, rule = naming, position = 1 })
+      end
     end
   end
   sort_best_first(found)
@@ -490,19 +489,20 @@ end
 --- The sources the two-way test templates of `rules` (`template`'s
 --- `is_two_way()`) give `test`, each with its rule and the rule's position
 --- among those that give one, in the order of the rules and their
---- templates; a pair that is one-way is skipped.
+--- templates, each source once; a pair that is one-way is skipped.
 ---
 ---@param rules aineo.test_layout.Rule[]
 ---@param view aineo.test_layout.View
 ---@param test string
 ---@return aineo.test_layout.Match[]
 local function reverse_matches(rules, view, test)
-  local given = {}
+  local given, seen = {}, {}
   for _, rule in ipairs(rules) do
     for _, pattern in ipairs(rule.source and rule.tests or {}) do
       local source = template.is_two_way(rule.source, pattern)
         and translate(view, rule, pattern, rule.source, test)
-      if source then
+      if source and not seen[source] then
+        seen[source] = true
         table.insert(given, { path = source, rule = rule, position = #given + 1 })
       end
     end

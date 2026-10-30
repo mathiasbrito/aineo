@@ -162,6 +162,27 @@ T['in the editor']['rules the editor refuses are a tool error saying why'] = fun
   )
 end
 
+T['in the editor']['a call for a repository open as the working folder of another tab or window is kept'] =
+  MiniTest.new_set({
+    parametrize = {
+      { 'tabnew | tcd %s | tabprevious' },
+      { 'vsplit | lcd %s | wincmd p' },
+    },
+  })
+
+T['in the editor']['a call for a repository open as the working folder of another tab or window is kept']['opening'] = function(
+  opening
+)
+  local top = python_repository()
+  restart_editor_with_handlers(vim.fn.getcwd())
+  editor.cmd(opening:format(vim.fn.fnameescape(top)))
+  local relay = relay_for(editor.job.address)
+
+  relay:send(call({ worktree = top, rules = { { preset = 'python.pytest.suffix' } } }))
+
+  eq(get(decoded(relay:next_line()), 'result', 'isError'), false)
+end
+
 T['in the editor']['a call for a repository the editor has not open is refused'] = function()
   local top = python_repository()
   restart_editor_with_handlers(vim.fn.getcwd())
