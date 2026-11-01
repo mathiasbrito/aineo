@@ -109,6 +109,7 @@ end
 ---@field included? string the path a quoted `#include` names, without its extension
 ---@field resolved? string that path from the test's folder, without its extension
 ---@field extensions? table<string, true>
+---@field lua_module? string a Lua module's path, `a/b/c`: the source's path ends with `a/b/c.lua` or `a/b/c/init.lua`
 ---@field outside? string a top folder whose files are not the source, such as the folder of the tests
 
 --- The modules a Python test imports: `import a.b, c` names `a/b.py` and
@@ -329,8 +330,8 @@ local function required_name_at(text, position)
 end
 
 --- The modules a Lua test at `test` requires by a literal name, each as
---- the path the source's path ends with, as a file (`a/b/c.lua`) and as a
---- folder's `init.lua`, each with the top folder of the test's unit it
+--- the path the source's path ends with, as a file (`a/b/c.lua`) or as a
+--- folder's `init.lua` (`lua_module`), each with the top folder of the test's unit it
 --- sits in (`outside`); a `require` in a comment or a string, called as a
 --- field or a method, or with any other argument, names none.
 ---
@@ -361,10 +362,7 @@ local function lua_imports(test, text, unit)
         and before ~= ':'
         and required_name_at(text, word_end + 1)
       if name then
-        local path = name:gsub('%.', '/')
-        for _, ending in ipairs({ path .. '.lua', path .. '/init.lua' }) do
-          table.insert(found, { ends_with = ending, outside = top })
-        end
+        table.insert(found, { lua_module = (name:gsub('%.', '/')), outside = top })
       end
       position = word_end + 1
     else
@@ -374,17 +372,14 @@ local function lua_imports(test, text, unit)
   return found
 end
 
---- The sources `text`, the text of the test file at `test` (relative to
---- the repository's root), imports, as its language writes an import:
---- Python's modules, Go's packages, Java's classes, the headers C and C++
---- include in quotes, the relative imports of JavaScript and TypeScript,
---- the literal `require` of Lua; none for another language.
+--- Every source `text`, the text of the test file at `test`, imports, as
+--- its language writes an import, in the order of the text.
 ---
 ---@param test string
 ---@param text string
----@param unit? string the folder of the unit the test belongs to, `''` (the default) for the repository's root
+---@param unit string
 ---@return aineo.test_layout.Imported[]
-function M.imported(test, text, unit)
+local function read_imports(test, text, unit)
   local extension = test:match('%.([^./]+)$') or ''
   if extension == 'py' then
     return python_imports(text)
@@ -402,13 +397,68 @@ function M.imported(test, text, unit)
     return script_imports(test, text)
   end
   if extension == 'lua' then
-    return lua_imports(test, text, unit or '')
+    return lua_imports(test, text, unit)
   end
   return {}
 end
 
+--- The most distinct imports of one test file that are read.
+local MOST_IMPORTS = 64
+
+--- What tells two imports apart: the path, folder or module each names.
+---
+---@param imported aineo.test_layout.Imported
+---@return string
+local function import_key(imported)
+  return table.concat({
+    imported.ends_with or '',
+    imported.lua_module or '',
+    imported.folder or '',
+    imported.without_extension or '',
+    imported.included or '',
+    imported.resolved or '',
+  }, '\0')
+end
+
+--- The first `most` of `imports` that differ from every one before them.
+---
+---@param imports aineo.test_layout.Imported[]
+---@param most integer
+---@return aineo.test_layout.Imported[]
+local function first_distinct(imports, most)
+  local kept, seen = {}, {}
+  for _, imported in ipairs(imports) do
+    local key = import_key(imported)
+    if not seen[key] then
+      seen[key] = true
+      table.insert(kept, imported)
+      if #kept == most then
+        break
+      end
+    end
+  end
+  return kept
+end
+
+--- The sources `text`, the text of the test file at `test` (relative to
+--- the repository's root), imports, as its language writes an import:
+--- Python's modules, Go's packages, Java's classes, the headers C and C++
+--- include in quotes, the relative imports of JavaScript and TypeScript,
+--- the literal `require` of Lua; none for another language. Each differs
+--- from the others, and only the first 64 are given, so that a crafted
+--- test file cannot make the search for its sources run long.
+---
+---@param test string
+---@param text string
+---@param unit? string the folder of the unit the test belongs to, `''` (the default) for the repository's root
+---@return aineo.test_layout.Imported[]
+function M.imported(test, text, unit)
+  return first_distinct(read_imports(test, text, unit or ''), MOST_IMPORTS)
+end
+
 --- Whether `path`, a file relative to the repository's root, is the source
---- `imported` names: its path ends with the path named; or it is of the
+--- `imported` names: its path ends with the path named, or with the
+--- Lua module's path as a file or as a folder's `init.lua`; or it is of the
 --- extensions named and is in the folder named, is the path named without
 --- its extension or that folder's `index`, or is the header included,
 --- resolved from the test's folder or ending the source's path.
@@ -417,6 +467,14 @@ end
 ---@param imported aineo.test_layout.Imported
 ---@return boolean
 function M.is_imported(path, imported)
+  if imported.lua_module then
+    local file = imported.lua_module .. '.lua'
+    local folder_init = imported.lua_module .. '/init.lua'
+    return path == file
+      or path == folder_init
+      or vim.endswith(path, '/' .. file)
+      or vim.endswith(path, '/' .. folder_init)
+  end
   if imported.ends_with then
     return path == imported.ends_with or vim.endswith(path, '/' .. imported.ends_with)
   end
