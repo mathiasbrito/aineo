@@ -627,8 +627,9 @@ project keeps its tests. `report`, `announce_work`, `run_output` and
 - **`test_layout`.** Claude calls it once per project, when it first learns
   how the project lays out its tests: a list of `rules`, each a preset by its
   id (`python.pytest.flat`, `js.jest.colocated`, `go.testing.colocated`,
-  `java.junit.maven-mirror`, `c.ceedling.unity`… for Python, JavaScript and
-  TypeScript, Go, Java, C and C++) or path templates of its own, such as
+  `java.junit.maven-mirror`, `c.ceedling.unity`, `lua.mini-test.flat`… for
+  Python, JavaScript and TypeScript, Go, Java, C, C++ and Lua) or path
+  templates of its own, such as
   `src/{path}/{name}.py` for the sources and `tests/{path}/test_{name}.py`
   for their tests. A template with a `..` or `.` folder, a `.git` folder in
   any letter case or a control character in it is refused, and so is a

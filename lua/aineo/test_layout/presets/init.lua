@@ -12,6 +12,7 @@ local LANGUAGES = {
   require('aineo.test_layout.presets.java'),
   require('aineo.test_layout.presets.c'),
   require('aineo.test_layout.presets.cpp'),
+  require('aineo.test_layout.presets.lua'),
 }
 
 --- Every preset, language after language.
