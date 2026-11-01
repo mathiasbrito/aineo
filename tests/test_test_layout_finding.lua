@@ -473,6 +473,54 @@ T['source_for()']['takes a Lua module a test requires, never a helper of the tes
   eq(fields_of(place, { 'candidates' }), { { '/repo/lua/kit/finder/ranker.lua' } })
 end
 
+--- The rules of a flat mini.test layout that name a source's test file by
+--- its folder below the plugin's, an `init.lua` first.
+local FLAT_LUA = {
+  {
+    source = 'lua/{pkg}/{dir}/init.lua',
+    tests = { 'tests/test_{dir}.lua' },
+    origin = 'preset',
+    description = 'lua.mini-test.flat',
+  },
+  {
+    source = 'lua/{pkg}/{dir}/{name}.lua',
+    tests = { 'tests/test_{dir}_{name}.lua' },
+    origin = 'preset',
+    description = 'lua.mini-test.flat',
+  },
+}
+
+T['source_for()']['puts first the required source whose rules give the test file back'] =
+  MiniTest.new_set({
+    parametrize = {
+      { 'kit.config', 'lua/kit/config.lua' },
+      { 'kit.finder', 'lua/kit/finder/init.lua' },
+    },
+  })
+
+T['source_for()']['puts first the required source whose rules give the test file back']['given'] = function(
+  other,
+  other_source
+)
+  local view = view_reading(
+    {
+      'lua/kit/config.lua',
+      'lua/kit/finder/init.lua',
+      'lua/kit/finder/ranker.lua',
+      'tests/test_finder_ranker.lua',
+    },
+    'tests/test_finder_ranker.lua',
+    ("local other = require('%s')\nlocal ranker = require('kit.finder.ranker')\n"):format(other)
+  )
+
+  local place = finding.source_for(FLAT_LUA, view, 'tests/test_finder_ranker.lua')
+
+  eq(
+    fields_of(place, { 'candidates' }),
+    { { '/repo/lua/kit/finder/ranker.lua', '/repo/' .. other_source } }
+  )
+end
+
 T['test_for()']['falls back on the Lua test files that require the source'] = function()
   local rule = {
     source = 'lua/{pkg}/{name}.lua',
