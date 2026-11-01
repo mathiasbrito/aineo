@@ -796,6 +796,20 @@ T['Lua']['mini.test finds the source of a test file by the module it requires'][
   eq(relative_path(top, place), source)
 end
 
+T['Lua']['mini.test takes, of the modules a test requires, the one its rules give the test for'] = function()
+  local top = repository_of('lua')
+  keep_agent_rules(top, { { preset = 'lua.mini-test.flat' } })
+  local test = vim.fs.joinpath(top, 'tests/test_finder_ranker.lua')
+  vim.fn.writefile(
+    { "local finder = require('kit.finder')", "local ranker = require('kit.finder.ranker')" },
+    test
+  )
+
+  local place = test_layout.source_for(test)
+
+  eq(relative_path(top, place), 'lua/kit/finder/ranker.lua')
+end
+
 T['the reply'] = MiniTest.new_set()
 
 T['the reply']['counts no contradiction for a rule the repository’s own preset states'] = function()
