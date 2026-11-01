@@ -264,6 +264,7 @@ T['test_for()']['asks the text search for the module as each language imports it
       { 'lua/kit.lua', { 'kit' } },
       { 'lua/kit/reinit.lua', { 'kit.reinit' } },
       { 'src/kit/store.lua', { 'kit.store' } },
+      { 'lua/src/store.lua', { 'src.store' } },
     },
   })
 
@@ -709,6 +710,9 @@ T['source_for()']['reads no import that is no import'] = MiniTest.new_set({
     { 'tests/flow.check.ts', "import { a } from 'cart';\n", 'src/cart.ts' },
     { 'tests/flow.check.ts', "import { a } from './cart';\n", 'src/cart.ts' },
     { 'tests/test_x.lua', 'local f = require(name)\n', 'lua/kit/finder.lua' },
+    { 'tests/test_x.lua', 'local ok, f = pcall(require, name)\n', 'lua/kit/finder.lua' },
+    { 'tests/test_x.lua', "local ok, f = pcall(require, 'kit.' .. name)\n", 'lua/kit/finder.lua' },
+    { 'tests/test_x.lua', "local ok, f = pcall(print, 'kit.finder')\n", 'lua/kit/finder.lua' },
     { 'tests/test_x.lua', "local f = require('kit.' .. name)\n", 'lua/kit/finder.lua' },
     { 'tests/test_x.lua', "local f = require('kit.finder' .. suffix)\n", 'lua/kit/finder.lua' },
     { 'tests/test_x.lua', "-- local f = require('kit.finder')\n", 'lua/kit/finder.lua' },
@@ -793,6 +797,21 @@ T['source_for()']['reads the imports of each language'] = MiniTest.new_set({
     {
       'tests/test_finder.lua',
       "local broken = 'not closed\nlocal finder = require('kit.finder')\n",
+      { 'lua/kit/finder/init.lua' },
+    },
+    {
+      'tests/test_finder.lua',
+      "local ok, finder = pcall(require, 'kit.finder')\n",
+      { 'lua/kit/finder/init.lua' },
+    },
+    {
+      'tests/test_finder.lua',
+      "-- a comment\rlocal finder = require('kit.finder')\r",
+      { 'lua/kit/finder/init.lua' },
+    },
+    {
+      'tests/test_finder.lua',
+      "local broken = 'not closed\rlocal finder = require('kit.finder')\r",
       { 'lua/kit/finder/init.lua' },
     },
     {
