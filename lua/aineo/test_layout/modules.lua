@@ -330,16 +330,19 @@ end
 
 --- The modules a Lua test at `test` requires by a literal name, each as
 --- the path the source's path ends with, as a file (`a/b/c.lua`) and as a
---- folder's `init.lua`, never a file below the test's own top folder; a
---- `require` in a comment or a string, called as a field or a method, or
---- with any other argument, names none.
+--- folder's `init.lua`, each with the top folder of the test's unit it
+--- sits in (`outside`); a `require` in a comment or a string, called as a
+--- field or a method, or with any other argument, names none.
 ---
 ---@param test string
 ---@param text string
+---@param unit string the folder of the unit the test belongs to, `''` for the repository's root
 ---@return aineo.test_layout.Imported[]
-local function lua_imports(test, text)
+local function lua_imports(test, text, unit)
   local found = {}
-  local top = test:match('^([^/]+)/')
+  local in_unit = unit == '' and test or test:sub(#unit + 2)
+  local top = in_unit:match('^([^/]+)/')
+  top = top and (unit == '' and top or unit .. '/' .. top)
   local position = 1
   while position <= #text do
     local word_start, word_end = text:find('^[%a_][%w_]*', position)
@@ -379,8 +382,9 @@ end
 ---
 ---@param test string
 ---@param text string
+---@param unit? string the folder of the unit the test belongs to, `''` (the default) for the repository's root
 ---@return aineo.test_layout.Imported[]
-function M.imported(test, text)
+function M.imported(test, text, unit)
   local extension = test:match('%.([^./]+)$') or ''
   if extension == 'py' then
     return python_imports(text)
@@ -398,7 +402,7 @@ function M.imported(test, text)
     return script_imports(test, text)
   end
   if extension == 'lua' then
-    return lua_imports(test, text)
+    return lua_imports(test, text, unit or '')
   end
   return {}
 end
@@ -413,9 +417,6 @@ end
 ---@param imported aineo.test_layout.Imported
 ---@return boolean
 function M.is_imported(path, imported)
-  if imported.outside and vim.startswith(path, imported.outside .. '/') then
-    return false
-  end
   if imported.ends_with then
     return path == imported.ends_with or vim.endswith(path, '/' .. imported.ends_with)
   end
@@ -432,6 +433,19 @@ function M.is_imported(path, imported)
       or vim.endswith(without, '/' .. imported.included)
   end
   return without == imported.without_extension or without == imported.without_extension .. '/index'
+end
+
+--- Whether `path`, a file relative to the repository's root, is the source
+--- `imported` names (`is_imported()`) and no file of the folder the test
+--- sits in (`outside`): a helper the test requires is not the code under
+--- test.
+---
+---@param path string
+---@param imported aineo.test_layout.Imported
+---@return boolean
+function M.is_imported_source(path, imported)
+  local in_tests_folder = imported.outside ~= nil and vim.startswith(path, imported.outside .. '/')
+  return not in_tests_folder and M.is_imported(path, imported)
 end
 
 --- Whether the test file at `test`, of text `text`, imports `source`, both
