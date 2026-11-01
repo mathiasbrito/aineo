@@ -581,6 +581,23 @@ T['source_for()']['leaves out only the folder of the test’s top folder, not an
   eq(fields_of(place, { 'candidates' }), { { '/repo/tools/x.lua' } })
 end
 
+T['source_for()']['leaves out the tests folder of the unit, not the repository’s'] = function()
+  local view = view_reading(
+    {
+      'editor/Makefile',
+      'editor/tests/helpers/shared.lua',
+      'editor/lua/kit/finder/rank/ranker.lua',
+      'editor/tests/test_ranking.lua',
+    },
+    'editor/tests/test_ranking.lua',
+    "local shared = require('helpers.shared')\nlocal ranker = require('kit.finder.rank.ranker')\n"
+  )
+
+  local place = finding.source_for({ ANY_TEST }, view, 'editor/tests/test_ranking.lua')
+
+  eq(fields_of(place, { 'candidates' }), { { '/repo/editor/lua/kit/finder/rank/ranker.lua' } })
+end
+
 T['source_for()']['takes the Lua module of a test in a unit below the repository’s root'] = function()
   local view = view_reading(
     { 'editor/Makefile', 'editor/lua/kit/finder/ranker.lua', 'editor/tests/test_finder_ranker.lua' },
@@ -713,6 +730,11 @@ T['source_for()']['reads no import that is no import'] = MiniTest.new_set({
     { 'tests/test_x.lua', 'local ok, f = pcall(require, name)\n', 'lua/kit/finder.lua' },
     { 'tests/test_x.lua', "local ok, f = pcall(require, 'kit.' .. name)\n", 'lua/kit/finder.lua' },
     { 'tests/test_x.lua', "local ok, f = pcall(print, 'kit.finder')\n", 'lua/kit/finder.lua' },
+    {
+      'tests/test_x.lua',
+      "local ok, f = pcall(require, 'kit.finder' .. name)\n",
+      'lua/kit/finder.lua',
+    },
     { 'tests/test_x.lua', "local f = require('kit.' .. name)\n", 'lua/kit/finder.lua' },
     { 'tests/test_x.lua', "local f = require('kit.finder' .. suffix)\n", 'lua/kit/finder.lua' },
     { 'tests/test_x.lua', "-- local f = require('kit.finder')\n", 'lua/kit/finder.lua' },
@@ -799,6 +821,12 @@ T['source_for()']['reads the imports of each language'] = MiniTest.new_set({
       "local broken = 'not closed\nlocal finder = require('kit.finder')\n",
       { 'lua/kit/finder/init.lua' },
     },
+    {
+      'tests/test_finder.lua',
+      "local finder = require('kit.finder')\n",
+      { 'kit/finder/init.lua' },
+    },
+    { 'tests/test_finder.lua', "local finder = require('kit.finder')\n", { 'kit/finder.lua' } },
     {
       'tests/test_finder.lua',
       "local ok, finder = pcall(require, 'kit.finder')\n",
