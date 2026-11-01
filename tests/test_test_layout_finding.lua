@@ -473,6 +473,77 @@ T['source_for()']['takes a Lua module a test requires, never a helper of the tes
   eq(fields_of(place, { 'candidates' }), { { '/repo/lua/kit/finder/ranker.lua' } })
 end
 
+--- The text of `count` lines, line `number` being `template` with `%d`
+--- replaced by `number`.
+---
+---@param template string
+---@param count integer
+---@return string
+local function numbered_lines(template, count)
+  local lines = {}
+  for number = 1, count do
+    table.insert(lines, template:format(number))
+  end
+  return table.concat(lines, '\n') .. '\n'
+end
+
+--- The rule of an agent whose test files `tests/<anything>` bind no stem.
+local ANY_TEST = {
+  source = 'none/{dir}/{name}.x',
+  tests = { 'tests/{name}' },
+  origin = 'agent',
+  description = 'agent rule 1',
+}
+
+T['source_for()']['reads at most 64 distinct imports of a test file'] = MiniTest.new_set({
+  parametrize = {
+    { 'tests/check_x.lua', "require('kit.m%d')", 'lua/kit/m%d.lua' },
+    { 'tests/check_x.py', 'import kit.m%d', 'kit/m%d.py' },
+  },
+})
+
+T['source_for()']['reads at most 64 distinct imports of a test file']['given'] = function(
+  test,
+  import_line,
+  source
+)
+  local sources = { source:format(1), source:format(64), source:format(65), source:format(100) }
+  local view =
+    view_reading(vim.list_extend({ test }, sources), test, numbered_lines(import_line, 100))
+
+  local place = finding.source_for({ ANY_TEST }, view, test)
+
+  eq(
+    fields_of(place, { 'candidates' }),
+    { { '/repo/' .. source:format(1), '/repo/' .. source:format(64) } }
+  )
+end
+
+T['source_for()']['counts a Lua require as one import, though it names a file and a folder'] = function()
+  local view = view_reading(
+    { 'lua/kit/m64.lua', 'tests/check_x.lua' },
+    'tests/check_x.lua',
+    numbered_lines("require('kit.m%d')", 64)
+  )
+
+  local place = finding.source_for({ ANY_TEST }, view, 'tests/check_x.lua')
+
+  eq(fields_of(place, { 'candidates' }), { { '/repo/lua/kit/m64.lua' } })
+end
+
+T['source_for()']['counts an import repeated in a test file once'] = function()
+  local text = numbered_lines("require('kit.a')", 100) .. "require('kit.b')\n"
+  local view = view_reading(
+    { 'lua/kit/a.lua', 'lua/kit/b.lua', 'tests/check_x.lua' },
+    'tests/check_x.lua',
+    text
+  )
+
+  local place = finding.source_for({ ANY_TEST }, view, 'tests/check_x.lua')
+
+  eq(fields_of(place, { 'candidates' }), { { '/repo/lua/kit/a.lua', '/repo/lua/kit/b.lua' } })
+end
+
 T['source_for()']['leaves out the whole top folder of a test in a nested folder, not the nested folder'] = function()
   local view = view_reading(
     { 'tests/helpers/shared.lua', 'lua/kit/finder/rank/ranker.lua', 'tests/unit/test_ranking.lua' },
