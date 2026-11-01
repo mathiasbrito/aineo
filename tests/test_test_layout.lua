@@ -774,14 +774,26 @@ T['Lua']['offers its presets to the agent after those of C++'] = function()
   )
 end
 
-T['Lua']['mini.test finds no source of a test file named by joined folders'] = function()
+T['Lua']['mini.test finds the source of a test file by the module it requires'] = MiniTest.new_set({
+  parametrize = {
+    { 'tests/test_finder_ranker.lua', 'kit.finder.ranker', 'lua/kit/finder/ranker.lua' },
+    { 'tests/test_finder.lua', 'kit.finder', 'lua/kit/finder/init.lua' },
+    { 'tests/test_layout.lua', 'kit.layout', 'lua/kit/layout.lua' },
+  },
+})
+
+T['Lua']['mini.test finds the source of a test file by the module it requires']['test'] = function(
+  test,
+  module,
+  source
+)
   local top = repository_of('lua')
   keep_agent_rules(top, { { preset = 'lua.mini-test.flat' } })
-  write_file(top, 'tests/test_finder_ranker.lua')
+  vim.fn.writefile({ ("local subject = require('%s')"):format(module) }, vim.fs.joinpath(top, test))
 
-  local place = test_layout.source_for(vim.fs.joinpath(top, 'tests/test_finder_ranker.lua'))
+  local place = test_layout.source_for(vim.fs.joinpath(top, test))
 
-  eq(place, nil)
+  eq(relative_path(top, place), source)
 end
 
 T['the reply'] = MiniTest.new_set()

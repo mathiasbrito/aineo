@@ -259,6 +259,11 @@ T['test_for()']['asks the text search for the module as each language imports it
       { 'src/list.c', { 'list.h', 'list.hpp', 'list.hh' } },
       { 'lib/list.cpp', { 'list.h', 'list.hpp', 'list.hh' } },
       { 'src/app/foo.component.ts', { 'foo.component' } },
+      { 'lua/aineo/test_layout/finding.lua', { 'aineo.test_layout.finding' } },
+      { 'lua/aineo/test_layout/init.lua', { 'aineo.test_layout' } },
+      { 'lua/kit.lua', { 'kit' } },
+      { 'lua/kit/reinit.lua', { 'kit.reinit' } },
+      { 'src/kit/store.lua', { 'kit.store' } },
     },
   })
 
@@ -435,6 +440,49 @@ T['source_for()']['then takes the sources the test file imports'] = function()
   )
 end
 
+T['source_for()']['takes a Lua module a test requires, never a helper of the test’s own top folder'] = function()
+  local view = view_reading(
+    { 'tests/helpers/git.lua', 'lua/kit/finder/ranker.lua', 'tests/test_ranking.lua' },
+    'tests/test_ranking.lua',
+    "local git = require('helpers.git')\nlocal ranker = require('kit.finder.ranker')\n"
+  )
+
+  local rule = {
+    source = 'none/{dir}/{name}.x',
+    tests = { 'tests/{name}' },
+    origin = 'agent',
+    description = 'agent rule 1',
+  }
+
+  local place = finding.source_for({ rule }, view, 'tests/test_ranking.lua')
+
+  eq(fields_of(place, { 'candidates' }), { { '/repo/lua/kit/finder/ranker.lua' } })
+end
+
+T['test_for()']['falls back on the Lua test files that require the source'] = function()
+  local rule = {
+    source = 'lua/{pkg}/{name}.lua',
+    tests = { 'tests/test_{name}.lua' },
+    discover = { 'tests/**/test_*.lua' },
+    origin = 'preset',
+    description = 'lua.mini-test.flat',
+  }
+  local asked = {}
+  local view = view_of({ 'lua/kit/ranker.lua', 'tests/test_ranking.lua' }, {
+    { path = 'tests/test_ranking.lua', text = "local r = require('kit.ranker')" },
+  }, asked)
+  view.read = function(file)
+    return file == 'tests/test_ranking.lua' and "local r = require('kit.ranker')\n" or nil
+  end
+
+  local place = finding.test_for({ rule }, view, 'lua/kit/ranker.lua')
+
+  eq(
+    { place.path, place.exists, place.rule, asked },
+    { '/repo/tests/test_ranking.lua', true, 'names the source', { { 'kit.ranker' } } }
+  )
+end
+
 T['source_for()']['takes by the stem only the files of the test’s language'] = function()
   local view = view_of({ 'a/util.ts', 'lib/util.py', 'tests/test_util.py' })
 
@@ -453,6 +501,16 @@ T['source_for()']['reads no import that is no import'] = MiniTest.new_set({
     { 'tests/flow_check.c', '#include <list.h>\n', 'src/list.c' },
     { 'tests/flow.check.ts', "import { a } from 'cart';\n", 'src/cart.ts' },
     { 'tests/flow.check.ts', "import { a } from './cart';\n", 'src/cart.ts' },
+    { 'tests/test_x.lua', 'local f = require(name)\n', 'lua/kit/finder.lua' },
+    { 'tests/test_x.lua', "local f = require('kit.' .. name)\n", 'lua/kit/finder.lua' },
+    { 'tests/test_x.lua', "local f = require('kit.finder' .. suffix)\n", 'lua/kit/finder.lua' },
+    { 'tests/test_x.lua', "-- local f = require('kit.finder')\n", 'lua/kit/finder.lua' },
+    { 'tests/test_x.lua', "--[[\nlocal f = require('kit.finder')\n]]\n", 'lua/kit/finder.lua' },
+    { 'tests/test_x.lua', 'local s = "require(\'kit.finder\')"\n', 'lua/kit/finder.lua' },
+    { 'tests/test_x.lua', "local s = [[\nrequire('kit.finder')\n]]\n", 'lua/kit/finder.lua' },
+    { 'tests/test_x.lua', "local f = loader.require('kit.finder')\n", 'lua/kit/finder.lua' },
+    { 'tests/test_x.lua', "local f = loader:require('kit.finder')\n", 'lua/kit/finder.lua' },
+    { 'tests/test_x.lua', "local f = my_require('kit.finder')\n", 'lua/kit/finder.lua' },
   },
 })
 
@@ -492,6 +550,26 @@ T['source_for()']['reads the imports of each language'] = MiniTest.new_set({
       'tests/flow.check.ts',
       'import { a } from \'../src/cart\';\nconst b = require("lodash");\n',
       { 'src/cart.ts' },
+    },
+    {
+      'tests/test_finder_ranker.lua',
+      'local ranker = require(\'kit.finder.ranker\')\nlocal fs = require("vim.fs")\n',
+      { 'lua/kit/finder/ranker.lua' },
+    },
+    {
+      'tests/test_finder.lua',
+      'local finder = require "kit.finder"\n',
+      { 'lua/kit/finder/init.lua' },
+    },
+    {
+      'tests/test_finder.lua',
+      'local finder = require [[kit.finder]]\n',
+      { 'lua/kit/finder/init.lua' },
+    },
+    {
+      'tests/test_finder.lua',
+      "-- the finder\nlocal finder = require(  'kit.finder'  )\n",
+      { 'lua/kit/finder/init.lua' },
     },
   },
 })
