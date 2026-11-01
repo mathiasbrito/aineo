@@ -624,6 +624,8 @@ T['Lua']['mini.test gives the test file to create, its name joining the folders 
       { 'lua/kit/finder/rank/score.lua', 'tests/test_finder_rank_score.lua' },
       { 'lua/kit/tree/init.lua', 'tests/test_tree.lua' },
       { 'lua/kit/finder/rank/init.lua', 'tests/test_finder_rank.lua' },
+      { 'lua/kit/finder/rank/deep/leaf.lua', 'tests/test_finder_rank_deep_leaf.lua' },
+      { 'lua/kit/finder/rank/deep/init.lua', 'tests/test_finder_rank_deep.lua' },
       { 'lua/kit/init.lua', 'tests/test_init.lua' },
     },
   })
@@ -723,6 +725,17 @@ T['Lua']['defaults to busted’s mirror where the repository has a spec folder']
   eq(
     read_place(top, place, { 'rule', 'origin', 'kind' }),
     { 'spec/kit/a_spec.lua', 'lua.busted.spec-mirror', 'preset', 'unit' }
+  )
+end
+
+T['Lua']['busted’s mirror takes the sources of a src folder too'] = function()
+  local top = repository_holding({ ['spec/helper.lua'] = {}, ['src/kit/a.lua'] = {} })
+
+  local place = test_layout.test_for(vim.fs.joinpath(top, 'src/kit/a.lua'))
+
+  eq(
+    read_place(top, place, { 'rule', 'kind' }),
+    { 'spec/kit/a_spec.lua', 'lua.busted.spec-mirror', 'unit' }
   )
 end
 
