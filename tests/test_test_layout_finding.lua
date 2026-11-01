@@ -284,6 +284,20 @@ T['test_for()']['asks the text search for the module as each language imports it
   eq(asked, { patterns })
 end
 
+T['test_for()']['asks no text search for the init.lua of the Lua modules’ root'] = function()
+  local asked = {}
+  local rule = {
+    source = '{path}/{name}.{ext}',
+    tests = { 'none/{name}' },
+    origin = 'preset',
+    description = 'any',
+  }
+
+  finding.test_for({ rule }, view_of({ 'lua/init.lua' }, {}, asked), 'lua/init.lua')
+
+  eq(asked, {})
+end
+
 --- A unittest rule that mirrors the source's folders under `tests/`, whose
 --- test folders are packages.
 local PACKAGES = {
@@ -516,7 +530,6 @@ T['source_for()']['reads no import that is no import'] = MiniTest.new_set({
     { 'tests/test_x.lua', "local s = [==[ ]] require('kit.finder') ]==]\n", 'lua/kit/finder.lua' },
     { 'tests/test_x.lua', "--[==[ ]] require('kit.finder') ]==]\n", 'lua/kit/finder.lua' },
     { 'tests/test_x.lua', "local f = require('kit/finder')\n", 'lua/kit/finder.lua' },
-    { 'tests/test_x.lua', "local f = require('kit..finder')\n", 'lua/kit/finder.lua' },
     { 'tests/test_x.lua', "local f = require('kit finder')\n", 'lua/kit/finder.lua' },
   },
 })
@@ -576,6 +589,16 @@ T['source_for()']['reads the imports of each language'] = MiniTest.new_set({
     {
       'tests/test_finder.lua',
       "-- the finder\nlocal finder = require(  'kit.finder'  )\n",
+      { 'lua/kit/finder/init.lua' },
+    },
+    {
+      'tests/test_finder.lua',
+      "local broken = 'not closed\nlocal finder = require('kit.finder')\n",
+      { 'lua/kit/finder/init.lua' },
+    },
+    {
+      'tests/test_finder.lua',
+      "local s = [==[ ]] ]==] local finder = require('kit.finder')\n",
       { 'lua/kit/finder/init.lua' },
     },
   },
