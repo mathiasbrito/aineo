@@ -325,7 +325,7 @@ local function required_name_at(text, position)
   if parenthesised and text:sub(text:find('%S', after) or #text + 1):sub(1, 1) ~= ')' then
     return nil
   end
-  return name:match('^[%w_%-]+[%w_%-%.]*$') and not name:find('..', 1, true) and name or nil
+  return name:match('^[%w_%-]+[%w_%-%.]*$') and name or nil
 end
 
 --- The modules a Lua test at `test` requires by a literal name, each as
