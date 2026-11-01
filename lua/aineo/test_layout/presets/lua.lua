@@ -13,7 +13,7 @@
 --- fewer, which gives the test file in that case, and an `init.lua` rule
 --- comes before the rules of any file, which also match it. The first
 --- rule's test template matches every flat test file and binds no `{name}`,
---- so no source is found from a test file.
+--- so the source of a test file is found by the modules it requires.
 
 return {
   presets = {
