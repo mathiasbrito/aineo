@@ -473,6 +473,80 @@ T['source_for()']['takes a Lua module a test requires, never a helper of the tes
   eq(fields_of(place, { 'candidates' }), { { '/repo/lua/kit/finder/ranker.lua' } })
 end
 
+T['source_for()']['leaves out the whole top folder of a test in a nested folder, not the nested folder'] = function()
+  local view = view_reading(
+    { 'tests/helpers/shared.lua', 'lua/kit/finder/rank/ranker.lua', 'tests/unit/test_ranking.lua' },
+    'tests/unit/test_ranking.lua',
+    "local shared = require('helpers.shared')\nlocal ranker = require('kit.finder.rank.ranker')\n"
+  )
+  local rule = {
+    source = 'none/{dir}/{name}.x',
+    tests = { 'tests/unit/{name}' },
+    origin = 'agent',
+    description = 'agent rule 1',
+  }
+
+  local place = finding.source_for({ rule }, view, 'tests/unit/test_ranking.lua')
+
+  eq(fields_of(place, { 'candidates' }), { { '/repo/lua/kit/finder/rank/ranker.lua' } })
+end
+
+T['source_for()']['leaves out only the folder of the test’s top folder, not another that begins alike'] = function()
+  local view = view_reading(
+    { 'tools/x.lua', 't/test_x.lua' },
+    't/test_x.lua',
+    "local x = require('tools.x')\n"
+  )
+  local rule = {
+    source = 'none/{dir}/{name}.x',
+    tests = { 't/{name}' },
+    origin = 'agent',
+    description = 'agent rule 1',
+  }
+
+  local place = finding.source_for({ rule }, view, 't/test_x.lua')
+
+  eq(fields_of(place, { 'candidates' }), { { '/repo/tools/x.lua' } })
+end
+
+T['source_for()']['takes the Lua module of a test in a unit below the repository’s root'] = function()
+  local view = view_reading(
+    { 'editor/Makefile', 'editor/lua/kit/finder/ranker.lua', 'editor/tests/test_finder_ranker.lua' },
+    'editor/tests/test_finder_ranker.lua',
+    "local ranker = require('kit.finder.ranker')\n"
+  )
+  local rule = {
+    source = 'none/{dir}/{name}.x',
+    tests = { 'tests/{name}' },
+    origin = 'agent',
+    description = 'agent rule 1',
+  }
+
+  local place = finding.source_for({ rule }, view, 'editor/tests/test_finder_ranker.lua')
+
+  eq(fields_of(place, { 'candidates' }), { { '/repo/editor/lua/kit/finder/ranker.lua' } })
+end
+
+T['test_for()']['finds a spec beside its source that requires it'] = function()
+  local rule = {
+    source = 'lua/{path}/{name}.lua',
+    tests = { 'lua/{path}/{name}_spec.lua' },
+    discover = { '**/*_spec.lua' },
+    origin = 'agent',
+    description = 'agent rule 1',
+  }
+  local view = view_of({ 'lua/kit/finder.lua', 'lua/kit/finder_extra_spec.lua' }, {
+    { path = 'lua/kit/finder_extra_spec.lua', text = "require('kit.finder')" },
+  })
+  view.read = function(file)
+    return file == 'lua/kit/finder_extra_spec.lua' and "local f = require('kit.finder')\n" or nil
+  end
+
+  local place = finding.test_for({ rule }, view, 'lua/kit/finder.lua')
+
+  eq(fields_of(place, { 'path', 'exists' }), { '/repo/lua/kit/finder_extra_spec.lua', true })
+end
+
 --- The rules of a flat mini.test layout that name a source's test file by
 --- its folder below the plugin's, an `init.lua` first.
 local FLAT_LUA = {
