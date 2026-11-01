@@ -638,7 +638,7 @@ T['Lua']['mini.test gives the test file to create, its name joining the folders 
 
   local place = test_layout.test_for(vim.fs.joinpath(top, source))
 
-  eq(read_place(top, place, { 'exists' }), { test, false })
+  eq(read_place(top, place, { 'exists', 'kind' }), { test, false, 'unit' })
 end
 
 T['Lua']['follows the framework a marker file shows over the default'] = MiniTest.new_set({
@@ -721,8 +721,8 @@ T['Lua']['defaults to busted’s mirror where the repository has a spec folder']
   local place = test_layout.test_for(vim.fs.joinpath(top, 'lua/kit/a.lua'))
 
   eq(
-    read_place(top, place, { 'rule', 'origin' }),
-    { 'spec/kit/a_spec.lua', 'lua.busted.spec-mirror', 'preset' }
+    read_place(top, place, { 'rule', 'origin', 'kind' }),
+    { 'spec/kit/a_spec.lua', 'lua.busted.spec-mirror', 'preset', 'unit' }
   )
 end
 
@@ -732,8 +732,8 @@ T['Lua']['defaults to plenary’s mirror where the repository has no spec folder
   local place = test_layout.test_for(vim.fs.joinpath(top, 'lua/kit/a.lua'))
 
   eq(
-    read_place(top, place, { 'rule', 'origin' }),
-    { 'tests/kit/a_spec.lua', 'lua.plenary.spec-mirror', 'preset' }
+    read_place(top, place, { 'rule', 'origin', 'kind' }),
+    { 'tests/kit/a_spec.lua', 'lua.plenary.spec-mirror', 'preset', 'unit' }
   )
 end
 
