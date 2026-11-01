@@ -4776,24 +4776,28 @@ in quotes of `name.h`, `.hpp` or `.hh`, from the test's folder or ending
 the source's path; JavaScript and TypeScript a relative import or
 `require`, `./` or `../`, that resolves from the test's folder to the
 source, with or without its extension, or to its folder's `index`; Lua a
-`require` with a literal name, `require('a.b.c')`, `require "a.b.c"` or
-`require [[a.b.c]]`, outside a comment and a string, that names a source
-whose path ends in `a/b/c.lua` or `a/b/c/init.lua`, never one in the
-test's own top folder); else the file the creating rule gives. Whether
-the file exists is the file system's answer, so a test file git ignores
-counts. A place that would
-lead out of the repository is refused: a folder on its path that is a link
-to a folder outside it, a file that is itself a link out or a link to
-nothing, or a `.git` folder in any letter case below the repository's
-folder. A place carries `root`, the folder of the worktree it was read in.
+`require` with a literal name, `require('a.b.c')`, `require "a.b.c"`,
+`require [[a.b.c]]` or `pcall(require, 'a.b.c')`, outside a comment and a
+string, that names a source whose path ends in `a/b/c.lua` or
+`a/b/c/init.lua`); else the file the creating rule gives. Whether the
+file exists is the file system's answer, so a test file git ignores
+counts. A place that would lead out of the repository is refused: a
+folder on its path that is a link to a folder outside it, a file that is
+itself a link out or a link to nothing, or a `.git` folder in any letter
+case below the repository's folder. A place carries `root`, the folder of
+the worktree it was read in.
 The source of a test file is the one
 a rule whose test template keeps every placeholder of its source gives;
 when no such rule does, the existing files of the test's language whose
 name is the `{name}` its test template binds (`test_utils.py` gives
 `utils.py`, `io_test.cc` gives `io.cc`, `io.cpp` or `io.h`), then the
-files the test imports, shortest path first. A Lua test file that
+files the test imports, those some rule gives this test file for first,
+each group shortest path first; only the first 64 imports of a test file
+that differ from one another are read. A Lua test file that
 `lua.mini-test.flat` names binds no `{name}`, so its source is the one it
-requires.
+requires whose rules give back that test file, and no file of the top
+folder of the test's unit that the test sits in, such as `tests/`, is
+the source it requires.
 Your correction of a source's test file holds in every worktree of the
 repository, and when a preset gives that pair, the preset becomes your
 rule for the other sources. aineo keeps the agent's rules and your

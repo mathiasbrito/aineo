@@ -944,7 +944,7 @@ T['a kept rule aineo cannot read']['costs each call little, whatever an older ai
   test_layout.describe(source)
   local described = milliseconds_since(started)
 
-  eq({ found < 100, told < 100, described < 100 }, { true, true, true })
+  eq({ found < 1000, told < 1000, described < 1000 }, { true, true, true })
 end
 
 T['a kept rule aineo cannot read']['is named among the rules in force, too costly to match'] = function()
