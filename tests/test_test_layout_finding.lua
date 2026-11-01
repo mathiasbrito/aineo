@@ -511,6 +511,13 @@ T['source_for()']['reads no import that is no import'] = MiniTest.new_set({
     { 'tests/test_x.lua', "local f = loader.require('kit.finder')\n", 'lua/kit/finder.lua' },
     { 'tests/test_x.lua', "local f = loader:require('kit.finder')\n", 'lua/kit/finder.lua' },
     { 'tests/test_x.lua', "local f = my_require('kit.finder')\n", 'lua/kit/finder.lua' },
+    { 'tests/test_x.lua', 'local s = \'require("kit.finder")\'\n', 'lua/kit/finder.lua' },
+    { 'tests/test_x.lua', 'local s = "a\\" require(\'kit.finder\')"\n', 'lua/kit/finder.lua' },
+    { 'tests/test_x.lua', "local s = [==[ ]] require('kit.finder') ]==]\n", 'lua/kit/finder.lua' },
+    { 'tests/test_x.lua', "--[==[ ]] require('kit.finder') ]==]\n", 'lua/kit/finder.lua' },
+    { 'tests/test_x.lua', "local f = require('kit/finder')\n", 'lua/kit/finder.lua' },
+    { 'tests/test_x.lua', "local f = require('kit..finder')\n", 'lua/kit/finder.lua' },
+    { 'tests/test_x.lua', "local f = require('kit finder')\n", 'lua/kit/finder.lua' },
   },
 })
 
