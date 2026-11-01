@@ -48,7 +48,9 @@ end
 ---@param path string
 ---@return string?
 local function lua_module_name(path)
-  local below = path:gsub('^lua/', ''):gsub('^src/', ''):gsub('%.lua$', ''):gsub('/init$', '')
+  local below = (path:match('^lua/(.*)$') or path:match('^src/(.*)$') or path)
+    :gsub('%.lua$', '')
+    :gsub('/init$', '')
   return below ~= 'init' and (below:gsub('/', '.')) or nil
 end
 
@@ -276,8 +278,8 @@ local function quoted_end(text, position)
   local quote = text:sub(position, position)
   local at = position + 1
   while true do
-    local stop = text:find('[\\\n' .. quote .. ']', at)
-    if not stop or text:sub(stop, stop) == '\n' then
+    local stop = text:find('[\\\r\n' .. quote .. ']', at)
+    if not stop or text:sub(stop, stop):find('[\r\n]') then
       local after = stop or #text + 1
       return after, text:sub(position + 1, after - 1)
     end
@@ -305,6 +307,32 @@ local function string_literal_at(text, position)
   return content, after
 end
 
+--- The module name written as a string literal at `position` of `text`
+--- and the position after it; nil when what is there is no literal, or the
+--- name is no module path.
+---
+---@param text string
+---@param position integer
+---@return string? name
+---@return integer? after
+local function module_literal_at(text, position)
+  local name, after = string_literal_at(text, position)
+  if name and name:match('^[%w_%-]+[%w_%-%.]*$') then
+    return name, after
+  end
+  return nil
+end
+
+--- Whether the first character of `text` from `position` on that is no
+--- blank is `)`.
+---
+---@param text string
+---@param position integer
+---@return boolean
+local function closes_at(text, position)
+  return text:sub(text:find('%S', position) or #text + 1):sub(1, 1) == ')'
+end
+
 --- The literal module name `require` takes when `position` follows the
 --- word in `text`: `require 'a.b'`, `require("a.b")`, `require [[a.b]]`,
 --- with a literal alone between the parentheses; nil for any other
@@ -319,21 +347,32 @@ local function required_name_at(text, position)
   if parenthesised then
     at = text:find('%S', at + 1) or #text + 1
   end
-  local name, after = string_literal_at(text, at)
-  if not name then
+  local name, after = module_literal_at(text, at)
+  if not name or (parenthesised and not closes_at(text, after)) then
     return nil
   end
-  if parenthesised and text:sub(text:find('%S', after) or #text + 1):sub(1, 1) ~= ')' then
-    return nil
-  end
-  return name:match('^[%w_%-]+[%w_%-%.]*$') and name or nil
+  return name
 end
 
---- The modules a Lua test at `test` requires by a literal name, each as
---- the path the source's path ends with, as a file (`a/b/c.lua`) or as a
---- folder's `init.lua` (`lua_module`), each with the top folder of the test's unit it
---- sits in (`outside`); a `require` in a comment or a string, called as a
---- field or a method, or with any other argument, names none.
+--- The literal module name of `pcall(require, 'a.b')` when `position`
+--- follows the word `pcall` in `text`; nil for any other call.
+---
+---@param text string
+---@param position integer
+---@return string?
+local function pcalled_name_at(text, position)
+  local at = text:match('^%s*%(%s*require%s*,%s*()', position)
+  local name, after = module_literal_at(text, at or #text + 1)
+  return name and closes_at(text, after) and name or nil
+end
+
+--- The modules a Lua test at `test` requires by a literal name, with
+--- `require` or `pcall(require, …)`, each as the path the source's path
+--- ends with, as a file (`a/b/c.lua`) or as a folder's `init.lua`
+--- (`lua_module`), with the top folder of the test's unit it sits in
+--- (`outside`); a `require` in a comment or a string, called as a field or
+--- a method, or with any other argument, names none. A line ends with
+--- `\r` or `\n`.
 ---
 ---@param test string
 ---@param text string
@@ -350,17 +389,20 @@ local function lua_imports(test, text, unit)
     local first = text:sub(position, position)
     if text:find('^%-%-', position) then
       position = long_bracket_end(text, position + 2)
-        or (text:find('\n', position, true) or #text) + 1
+        or (text:find('[\r\n]', position) or #text) + 1
     elseif first == '"' or first == "'" then
       position = quoted_end(text, position)
     elseif long_bracket_end(text, position) then
       position = long_bracket_end(text, position)
     elseif word_start then
       local before = text:sub(position - 1, position - 1)
-      local name = text:sub(word_start, word_end) == 'require'
-        and before ~= '.'
+      local word = text:sub(word_start, word_end)
+      local name = before ~= '.'
         and before ~= ':'
-        and required_name_at(text, word_end + 1)
+        and (
+          (word == 'require' and required_name_at(text, word_end + 1))
+          or (word == 'pcall' and pcalled_name_at(text, word_end + 1))
+        )
       if name then
         table.insert(found, { lua_module = (name:gsub('%.', '/')), outside = top })
       end
