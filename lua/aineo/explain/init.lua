@@ -1,20 +1,25 @@
 --- aineo's explain home, `require('aineo.explain')`: asks a Claude Code of
 --- its own, started for one request and never kept, to explain the code of a
 --- buffer, or of some of its lines, to find its potential issues, to propose
---- a fix of one, or to write code for a request of the user's.
+--- a fix of one, or to write code for a request of the user's; and shows a
+--- source's test file in a test window below it.
 
 local answer = require('aineo.explain.answer')
 local fix = require('aineo.explain.fix')
+local folders = require('aineo.explain.folders')
 local kinds = require('aineo.explain.kinds')
 local jump = require('aineo.explain.jump')
 local kept = require('aineo.explain.kept')
 local look = require('aineo.explain.look')
 local marks = require('aineo.explain.marks')
 local message = require('aineo.explain.message')
+local new_files = require('aineo.explain.new_files')
 local preview = require('aineo.explain.preview')
 local request = require('aineo.explain.request')
 local runs = require('aineo.explain.runs')
 local steer = require('aineo.explain.steer')
+local test_window = require('aineo.explain.test_window')
+local test_writing = require('aineo.explain.test_writing')
 local write = require('aineo.explain.write')
 
 local M = {}
@@ -50,32 +55,9 @@ end)
 ---@field timeout_ms integer how long the request may run
 ---@field send_key? string what the user presses to send marked issues, said in the badge; `\s` when absent
 
---- The nearest folder that exists among the folders holding `path`: its
---- own, else the first of its parents, which a file not written yet may lack.
----
----@param path string a file's absolute path
----@return string
-local function nearest_existing_folder(path)
-  local folder = vim.fs.dirname(path)
-  while not vim.uv.fs_stat(folder) do
-    local parent = vim.fs.dirname(folder)
-    if parent == folder then
-      break
-    end
-    folder = parent
-  end
-  return folder
-end
-
---- The folder Claude Code runs in for the file at `path`: the top level of
---- the git repository holding it, else the nearest folder of the file that
---- exists (`nearest_existing_folder()`).
----
----@param path string the file's absolute path
----@return string
-local function project_folder(path)
-  return vim.fs.root(path, '.git') or nearest_existing_folder(path)
-end
+--- The folder Claude Code runs in for the file at `path`
+--- (`aineo.explain.folders`' `project_of()`).
+local project_folder = folders.project_of
 
 --- The explanations of the lines from `first` to `last` that the run `ended`
 --- of Claude Code answered (`aineo.explain.answer`), or `nil` and what went
@@ -289,6 +271,8 @@ vim.api.nvim_create_autocmd('BufWipeout', {
     runs.stop_all_of(event.buf)
     kept.forget(event.buf)
     marks.forget(event.buf)
+    new_files.forget(event.buf)
+    write.forget(event.buf)
   end,
 })
 
@@ -597,6 +581,69 @@ end
 ---@param count integer at least 1
 function M.jump(window, way, count)
   jump.go(window, way, count)
+end
+
+--- Shows the test window of the source `window` shows, below it, or hides
+--- it when shown (`aineo.explain.test_window`'s `toggle()`), its test file
+--- found by `layout`, a resize leaving it alone while `zoomed` says the
+--- layout of its tab page is zoomed.
+---
+---@param window integer
+---@param layout aineo.explain.TestLayout
+---@param zoomed? fun(tabpage: integer): boolean
+function M.toggle_test_window(window, layout, zoomed)
+  test_window.toggle(window, layout, zoomed)
+end
+
+--- Has the test window of `window`, a test window or the window of its
+--- source, show the next of the test files the layout found for its
+--- source, after the last the first (`aineo.explain.test_window`'s
+--- `next_file()`).
+---
+---@param window integer
+function M.next_test_file(window)
+  test_window.next_file(window)
+end
+
+--- Asks the user for the path of the test file of the source of the test
+--- window of `window`, a test window or the window of its source, tells
+--- the layout the correction and shows that file
+--- (`aineo.explain.test_window`'s `correct_file()`).
+---
+---@param window integer
+function M.correct_test_file(window)
+  test_window.correct_file(window)
+end
+
+--- Writes tests for the code `order.buffer` holds, a file's
+--- (`aineo.explain.test_writing`'s `write_tests()`).
+---
+--- Raises an error naming `claude.cmd` when its command cannot be run.
+---
+---@param order aineo.explain.TestOrder
+function M.write_tests(order)
+  test_writing.write_tests(order)
+end
+
+--- Writes the code that makes a test of `order.buffer`, a test file's,
+--- pass, in its source (`aineo.explain.test_writing`'s
+--- `write_implementation()`).
+---
+--- Raises an error naming `claude.cmd` when its command cannot be run.
+---
+---@param order aineo.explain.TestOrder
+function M.write_implementation(order)
+  test_writing.write_implementation(order)
+end
+
+--- Opens the float in which the user types how to change the written code
+--- `buffer` shows, and asks for it again with those instructions, its
+--- answer in place of the proposals left (`aineo.explain.write`'s
+--- `refine()`).
+---
+---@param buffer integer
+function M.refine(buffer)
+  write.refine(buffer)
 end
 
 return M

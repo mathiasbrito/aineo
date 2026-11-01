@@ -67,6 +67,7 @@ local CONCEALING = 2
 ---@field reject_all? string
 ---@field next? string
 ---@field previous? string
+---@field steer? string what refines written code with instructions
 
 --- The preview each buffer shows.
 ---@type table<integer, aineo.explain.Preview>
@@ -136,10 +137,21 @@ local function named_key(preview, action)
   return preview.mapped[action] and preview.keys[action] or preview.kind.plugs[action]
 end
 
+--- Whether the head row of `preview` names what refines it: a kind that can
+--- be refined, written code, whose request gave the key that refines it,
+--- or gave no keys at all, its `<Plug>` mappings then named.
+---
+---@param preview aineo.explain.Preview
+---@return boolean
+local function names_refining(preview)
+  return preview.kind.plugs.steer ~= nil and (preview.keys == nil or preview.keys.steer ~= nil)
+end
+
 --- What a head row of `preview` says of the decision: that its buffer is
 --- read-only until it is accepted or rejected, while its 'modifiable' is
---- off, and what accepts it, rejects it and shows its diff (`named_key()`);
---- for what is `stale`, what its kind says when the code under it changed
+--- off, and what accepts it, rejects it and shows its diff (`named_key()`),
+--- then what refines it, for written code (`names_refining()`); for what is
+--- `stale`, what its kind says when the code under it changed
 --- (`aineo.explain.kinds`' `changed`), what rejects it and what asks again.
 ---
 ---@param preview aineo.explain.Preview
@@ -157,7 +169,11 @@ local function decision_text(preview, stale)
     vim.bo[preview.buffer].modifiable and '%s accepts · %s rejects'
     or 'read-only until %s accepts or %s rejects'
   ):format(named_key(preview, 'accept'), named_key(preview, 'reject'))
-  return ('%s · %s shows the diff'):format(keys, named_key(preview, 'diff'))
+  local text = ('%s · %s shows the diff'):format(keys, named_key(preview, 'diff'))
+  if not names_refining(preview) then
+    return text
+  end
+  return ('%s · %s refines'):format(text, named_key(preview, 'steer'))
 end
 
 --- What the head row of `preview` says (`decision_text()`); for a preview
@@ -907,18 +923,19 @@ vim.api.nvim_create_autocmd('BufWipeout', {
 local KEYS_DESCRIPTION = 'aineo: a key of the proposal shown'
 
 --- What a key of a preview does to it, or to the edit chosen when its
---- edits are proposals of their own.
----@alias aineo.explain.Action 'accept'|'reject'|'diff'|'accept_all'|'reject_all'|'next'|'previous'
+--- edits are proposals of their own; `steer` refines written code.
+---@alias aineo.explain.Action 'accept'|'reject'|'diff'|'accept_all'|'reject_all'|'next'|'previous'|'steer'
 
 --- The actions of a preview's keys.
 ---@type aineo.explain.Action[]
-local ACTIONS = { 'accept', 'reject', 'diff' }
+local ACTIONS = { 'accept', 'reject', 'diff', 'steer' }
 
 --- The actions of the keys of a preview whose edits are proposals of their
---- own: `ACTIONS`, then those that act on them all and move between them.
+--- own: `ACTIONS`, those that act on them all and move between them among
+--- them.
 ---@type aineo.explain.Action[]
 local SEPARATE_ACTIONS =
-  { 'accept', 'reject', 'diff', 'accept_all', 'reject_all', 'next', 'previous' }
+  { 'accept', 'reject', 'diff', 'accept_all', 'reject_all', 'next', 'previous', 'steer' }
 
 --- Each key of `preview` (`aineo.explain.FixKeys`) with its action and the
 --- `<Plug>` mapping of its kind it is mapped to (`aineo.explain.kinds`'
@@ -1034,6 +1051,32 @@ function M.shown(buffer)
       reject = named_key(preview, 'reject'),
       diff = named_key(preview, 'diff'),
     }
+end
+
+--- The edits of the preview `buffer` shows that are left to decide, each
+--- with the lines it spans now, from 1, its old and new lines and why, in
+--- the order of their lines; none when it shows no preview, or when an
+--- extmark of its edits is gone.
+---
+---@param buffer integer
+---@return aineo.explain.PlacedEdit[]
+function M.left(buffer)
+  local preview = previews[buffer]
+  local spans = preview and spans_of(preview)
+  if not spans then
+    return {}
+  end
+  local left = {}
+  for index, edit in ipairs(preview.edits) do
+    table.insert(left, {
+      first = spans[index].first + 1,
+      last = spans[index].last + 1,
+      old = edit.old,
+      new = edit.new,
+      why = edit.why,
+    })
+  end
+  return left
 end
 
 --- Whether the new lines of `edit` start with its old lines, unchanged: it

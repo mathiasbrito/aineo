@@ -121,6 +121,27 @@ local function take_run_call(run_call, start_token)
   })
 end
 
+--- The folders this editor has open, whose repositories an agent may state
+--- the test layout of (`aineo.test_layout`'s `declare()`): the folder it
+--- started in, the working folder of each tab page and each window, and
+--- the folder each aineo tab's Claude Code started in, when it has.
+---
+---@return string[]
+local function open_folders()
+  local folders = { places.kept_places().working_directory }
+  for _, page in ipairs(vim.api.nvim_list_tabpages()) do
+    local number = vim.api.nvim_tabpage_get_number(page)
+    table.insert(folders, vim.fn.getcwd(-1, number))
+    for _, window in ipairs(vim.api.nvim_tabpage_list_wins(page)) do
+      table.insert(folders, vim.fn.getcwd(vim.fn.win_id2tabwin(window)[2], number))
+    end
+  end
+  for _, tab in ipairs(registry.tab_list) do
+    table.insert(folders, tab.claude_directory())
+  end
+  return folders
+end
+
 --- Makes, once, the handlers this Neovim's entries in the list of running
 --- editors need: `FocusGained` writes the entry of the tab used last again,
 --- marking it used; `TabEnter` writes the entry of an aineo tab entered;
@@ -129,8 +150,12 @@ end
 --- followed by each tab it concerns (`aineo.entry.Tab`'s
 --- `follow_told_switch()`); and work an agent announced goes to the tab
 --- whose Claude Code has its start token (`take_announced_work()`), and so
---- does a call of a run tool (`take_run_call()`). Made at the first entry
---- write, so that sourcing this file makes none.
+--- does a call of a run tool (`take_run_call()`); a call of the test layout
+--- tool is kept for its repository, whichever tab's Claude Code made it,
+--- when that repository is one of a folder the editor has open
+--- (`open_folders()`, `aineo.test_layout`'s `declare()`). Made at the
+--- first entry write, so
+--- that sourcing this file makes none.
 local function make_editor_handlers()
   if editor_handlers_made then
     return
@@ -178,6 +203,9 @@ local function make_editor_handlers()
   end)
   require('aineo.mcp').on_work_announced(take_announced_work)
   require('aineo.mcp').on_run_called(take_run_call)
+  require('aineo.mcp').on_test_layout_declared(function(call)
+    return require('aineo.test_layout').declare(call, open_folders())
+  end)
 end
 
 M.make_editor_handlers = make_editor_handlers
