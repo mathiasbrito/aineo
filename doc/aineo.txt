@@ -4748,16 +4748,24 @@ Go `go.testing.colocated`, `go.testing.folder-integration`; Java
 `java.junit.gradle-mirror`, `java.junit.gradle-integrationtest`; C
 `c.ceedling.unity`, `c.convention.tests-prefix` (convention); C++
 `cpp.pitchfork.merged`, `cpp.convention.tests-suffix` and
-`cpp.convention.colocated-suffix` (conventions).
+`cpp.convention.colocated-suffix` (conventions); Lua `lua.busted.spec-mirror`
+and `lua.plenary.spec-mirror` (conventions: their file pattern is
+documented, their folder is not) and `lua.mini-test.flat`, which drops the
+plugin's folder under `lua/` and joins the rest with `_`
+(`lua/kit/finder/ranker.lua` gives `tests/test_finder_ranker.lua`, and
+`lua/kit/finder/init.lua` gives `tests/test_finder.lua`).
 
 Which rules hold for a file, in this order: your corrections; the
 agent's rules; the presets of the file's language whose marker files the
 repository holds (`pytest.ini`, `go.mod`, `angular.json`, a `*.test.cpp`
-file…), the one that pairs the most sources with tests first; then the
-language's default, even when it pairs more — the
+file, `.busted`, a `tests/test_*.lua` file…), the one that pairs the most
+sources with tests first; then the language's default, even when it pairs
+more — the
 `src/` mirror for Python when the repository has a `src/` folder, else the
 flat `tests/` folder, Jest's `<name>.test.<ext>` beside the source, Go's
-`_test.go`, Maven's mirror, Ceedling, and `tests/<name>_test.cpp` for C++.
+`_test.go`, Maven's mirror, Ceedling, `tests/<name>_test.cpp` for C++, and
+busted's `spec/` mirror for Lua when the repository has a `spec/` folder,
+else plenary.nvim's `tests/` mirror.
 The test file of a source is the existing one the first rules name,
 shortest path first; when no template names one, a test file that imports
 the source as its language writes an import (Python `import a.b.mod`,
@@ -4779,7 +4787,9 @@ a rule whose test template keeps every placeholder of its source gives;
 when no such rule does, the existing files of the test's language whose
 name is the `{name}` its test template binds (`test_utils.py` gives
 `utils.py`, `io_test.cc` gives `io.cc`, `io.cpp` or `io.h`), then the
-files the test imports, shortest path first.
+files the test imports, shortest path first. A Lua test file that
+`lua.mini-test.flat` names has no source found this way: its joined name
+binds no `{name}`, and Lua imports are not read.
 Your correction of a source's test file holds in every worktree of the
 repository, and when a preset gives that pair, the preset becomes your
 rule for the other sources. aineo keeps the agent's rules and your
