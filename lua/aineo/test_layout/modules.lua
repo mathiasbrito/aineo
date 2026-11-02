@@ -415,7 +415,9 @@ local function lua_imports(test, text, unit)
 end
 
 --- Every source `text`, the text of the test file at `test`, imports, as
---- its language writes an import, in the order of the text.
+--- its language writes an import, in the order of the text, except that
+--- JavaScript and TypeScript give every `from`, then every `require`, then
+--- every `import()`; a Python `from m import a, b` gives three.
 ---
 ---@param test string
 ---@param text string
@@ -536,9 +538,9 @@ function M.is_imported(path, imported)
 end
 
 --- Whether `path`, a file relative to the repository's root, is the source
---- `imported` names (`is_imported()`) and no file of the folder the test
---- sits in (`outside`): a helper the test requires is not the code under
---- test.
+--- `imported` names (`is_imported()`) and no file of the top folder of the
+--- unit the test sits in (`outside`, `tests` for `tests/unit/test_x.lua`):
+--- a helper the test requires is not the code under test.
 ---
 ---@param path string
 ---@param imported aineo.test_layout.Imported

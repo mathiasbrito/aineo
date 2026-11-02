@@ -4792,8 +4792,10 @@ when no such rule does, the existing files of the test's language whose
 name is the `{name}` its test template binds (`test_utils.py` gives
 `utils.py`, `io_test.cc` gives `io.cc`, `io.cpp` or `io.h`), then the
 files the test imports, those some rule gives this test file for first,
-each group shortest path first; only the first 64 imports of a test file
-that differ from one another are read. A Lua test file that
+each group shortest path first. Wherever aineo reads a test file's imports,
+to find its source or the test files of a source, it reads the first 64 that
+differ from one another, each import counting once as the reader gives it
+(Python's `from m import a, b` gives three). A Lua test file that
 `lua.mini-test.flat` names binds no `{name}`, so its source is the one it
 requires whose rules give back that test file, and no file of the top
 folder of the test's unit that the test sits in, such as `tests/`, is
