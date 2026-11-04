@@ -965,6 +965,34 @@ T['a key after a message was sent']['goes when a step is shown, the agent not be
   })
 end
 
+T['a key after a message was sent']['stays held when a step is shown while the agent works, until its turn ends'] = function()
+  local token = open_layout('walkthrough-key-step-while-busy')
+  show_a_step(token)
+  be_busy(true)
+  entry.press(child, '\\vn')
+
+  walk(token, step_for('src/other.lua', { step = 2 }))
+  local while_busy = send.writes(child)
+  be_busy(false)
+
+  eq(while_busy, {})
+  eq(writes_after_waiting_for(1), { paste('Next walkthrough step') })
+end
+
+T['a key after a message was sent']['is sent at once once a step was shown and no key waits'] = function()
+  local token = open_layout('walkthrough-key-after-step')
+  show_a_step(token)
+  entry.press(child, '\\vn')
+  walk(token, step_for('src/other.lua', { step = 2 }))
+
+  entry.press(child, '\\vp')
+
+  eq(writes_after_waiting_for(2), {
+    paste('Next walkthrough step'),
+    paste('Previous walkthrough step'),
+  })
+end
+
 T['a key after a message was sent']['is sent at once once the turn has ended and no key waits'] = function()
   local token = open_layout('walkthrough-key-after-turn')
   show_a_step(token)
