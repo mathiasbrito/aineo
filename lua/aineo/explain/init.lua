@@ -20,6 +20,7 @@ local runs = require('aineo.explain.runs')
 local steer = require('aineo.explain.steer')
 local test_window = require('aineo.explain.test_window')
 local test_writing = require('aineo.explain.test_writing')
+local walkthrough = require('aineo.explain.walkthrough')
 local write = require('aineo.explain.write')
 
 local M = {}
@@ -404,7 +405,7 @@ end
 --- shown later; closes the float steering a request for it, if open
 --- (`aineo.explain.steer`); rejects the fix or the code written that it
 --- shows (`aineo.explain.fix`), which gives back its 'modifiable' and its
---- windows' options; removes every
+--- windows' options; removes every walkthrough band, every
 --- explanation and every issue it shows, with their marks, which takes back
 --- its keys `]v` and `[v` and its windows' badges; and drops the answers,
 --- fixes and code kept for it (`aineo.explain.kept`), so that the next
@@ -418,6 +419,7 @@ function M.clear(buffer)
   for _, kind in ipairs(kinds.ALL) do
     marks.clear(buffer, kind)
   end
+  walkthrough.clear(buffer)
   kept.forget(buffer)
 end
 
@@ -634,6 +636,30 @@ end
 ---@param order aineo.explain.TestOrder
 function M.write_implementation(order)
   test_writing.write_implementation(order)
+end
+
+--- Shows one step of a code walkthrough in its buffer, in place of the
+--- walkthrough bands the buffer showed, and touches none of the user's own
+--- explanations (`aineo.explain.walkthrough`'s `show()`).
+---
+---@param step aineo.explain.WalkthroughStep
+function M.show_walkthrough_step(step)
+  walkthrough.show(step)
+end
+
+--- Removes the walkthrough bands `buffer` shows, and nothing else.
+---
+---@param buffer integer
+function M.clear_walkthrough(buffer)
+  walkthrough.clear(buffer)
+end
+
+--- Whether `buffer` shows any walkthrough band.
+---
+---@param buffer integer
+---@return boolean
+function M.is_walkthrough_shown(buffer)
+  return walkthrough.is_shown(buffer)
 end
 
 --- Opens the float in which the user types how to change the written code
