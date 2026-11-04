@@ -68,6 +68,7 @@ local zoom = require('aineo.layout.zoom')
 ---@field shown_pane fun(): aineo.layout.Pane
 ---@field show_diff fun(diff: integer): integer|nil
 ---@field show_file fun(file: integer): integer|nil
+---@field is_file_column_window fun(window: integer): boolean
 ---@field follow_claude_terminal fun(terminal: integer)
 ---@field toggle_claude_numbers fun()
 ---@field toggle_zoom fun()
@@ -2330,6 +2331,15 @@ local function make_layout(input_name, group_name)
   function M.show_diff(diff)
     state.diffs[diff] = true
     return show_in_file_column_keeping_cursor(diff)
+  end
+
+  --- Whether `window` is one of the file column's windows, where files and
+  --- diffs are shown (`file_column_windows()`).
+  ---
+  ---@param window integer
+  ---@return boolean
+  function M.is_file_column_window(window)
+    return vim.list_contains(file_column_windows(), window)
   end
 
   --- Shows `file`, a buffer that holds a file, in the file column
