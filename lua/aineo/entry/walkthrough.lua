@@ -77,6 +77,23 @@ local function clear_bands(tab)
   end
 end
 
+--- How many lines above a range's first line a step shows, so that the
+--- band drawn above that line is in view.
+local LINES_ABOVE_FIRST_RANGE = 3
+
+--- Puts line `line` of the buffer `window` shows under the cursor of
+--- `window`, with `LINES_ABOVE_FIRST_RANGE` lines above it in view, without
+--- moving the current window.
+---
+---@param window integer
+---@param line integer
+local function put_in_view(window, line)
+  vim.api.nvim_win_set_cursor(window, { line, 0 })
+  vim.api.nvim_win_call(window, function()
+    vim.fn.winrestview({ topline = math.max(line - LINES_ABOVE_FIRST_RANGE, 1) })
+  end)
+end
+
 --- The words for the agent that tell what a step shows.
 ---
 ---@param call aineo.mcp.WalkthroughCall
@@ -97,10 +114,11 @@ end
 --- the bands of the step before, whichever file that showed. A call with no
 --- range ends the walkthrough: its bands are cleared, and nothing else is
 --- checked. Refuses a step, drawing nothing and keeping what is shown, when
---- the tab shows one already in the turn its Claude Code works in, or when
---- its file or a range is not what `aineo.entry.walkthrough_file` allows,
---- given `folders`, the folders whose repositories are open; a turn is told
---- only while the Claude Code is seen working.
+--- the tab shows one already in the turn its Claude Code works in, when its
+--- file or a range is not what `aineo.entry.walkthrough_file` allows, given
+--- `folders`, the folders whose repositories are open, and when the layout
+--- has no room for the file. A turn is told only while the Claude Code is
+--- seen working.
 ---
 ---@param tab aineo.entry.WalkthroughTab
 ---@param call aineo.mcp.WalkthroughCall
@@ -122,10 +140,13 @@ function M.take_step(tab, call, folders)
   if problem then
     return refused(problem)
   end
-  clear_bands(tab)
   local buffer = vim.fn.bufadd(call.file)
   vim.fn.bufload(buffer)
   local window = tab.homes.layout.show_file(buffer)
+  if not window then
+    return refused('the middle column has no room for the file')
+  end
+  clear_bands(tab)
   require('aineo.explain').show_walkthrough_step({
     buffer = buffer,
     window = window,
@@ -136,6 +157,7 @@ function M.take_step(tab, call, folders)
       return { start = range.start, text = range.text }
     end, call.ranges),
   })
+  put_in_view(window, call.ranges[1].start)
   shown_in[tab] = buffer
   stepped_this_turn[tab] = tab.is_busy() or nil
   return done(shown_words(call))
