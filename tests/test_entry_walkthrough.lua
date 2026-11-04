@@ -570,6 +570,50 @@ T['a step while the user types in the middle window']['is held in Insert mode, a
   eq(bands_by_file(), { ['src/other.lua'] = { 2, 5 } })
 end
 
+T['a step while the user types in the middle window']['is shown when they leave Insert mode with CTRL-C, which fires no InsertLeave'] = function()
+  local token = open_layout('walkthrough-held-ctrl-c')
+  walk(token, step_for('src/code.lua'))
+  type_in_the_window_of('src/code.lua', 'i')
+  walk(token, step_for('src/other.lua', { step = 2 }))
+
+  child.type_keys('<C-c>')
+  wait_for_bands_in('src/other.lua')
+
+  eq(bands_by_file(), { ['src/other.lua'] = { 2, 5 } })
+end
+
+T['a step while the user types in the middle window']['is held while a command of Insert mode runs from Normal mode'] = function()
+  local token = open_layout('walkthrough-held-ctrl-o')
+  walk(token, step_for('src/code.lua'))
+  type_in_the_window_of('src/code.lua', 'i<C-o>')
+
+  walk(token, step_for('src/other.lua', { step = 2 }))
+  local while_pending = { bands_by_file(), current_file() }
+  child.type_keys('l<Esc>')
+  wait_for_bands_in('src/other.lua')
+
+  eq(while_pending, { { ['src/code.lua'] = { 2, 5 } }, 'src/code.lua' })
+  eq(bands_by_file(), { ['src/other.lua'] = { 2, 5 } })
+end
+
+T['a step while the user types in the middle window']['one held is dropped by a step shown, which it must not replace later'] = function()
+  local token = open_layout('walkthrough-held-left-over')
+  walk(token, step_for('src/code.lua'))
+  type_in_the_window_of('src/code.lua', 'i')
+  walk(token, step_for('src/other.lua', { step = 2 }))
+  child.cmd('Aineo input')
+  child.api.nvim_input('i')
+  walk(
+    token,
+    step_for('src/long.lua', { step = 3, ranges = { { start = 10, ['end'] = 10, text = 'Ten.' } } })
+  )
+
+  child.type_keys('<Esc>')
+  vim.wait(500)
+
+  eq(bands_by_file(), { ['src/long.lua'] = { 10 } })
+end
+
 T['a step while the user types in the middle window']['is held in Replace mode too'] = function()
   local token = open_layout('walkthrough-held-replace')
   walk(token, step_for('src/code.lua'))
