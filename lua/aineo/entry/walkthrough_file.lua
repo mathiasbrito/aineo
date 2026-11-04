@@ -8,14 +8,16 @@ local M = {}
 local LARGEST_FILE_BYTES = 1024 * 1024
 
 --- The lines of the file at `path`: those its buffer holds when one is
---- loaded, so that a range is checked against what the user sees, else
---- those on disk.
+--- loaded, found by the real path of both, however `path` is spelled, so that
+--- a range is checked against what the user sees, else those on disk.
 ---
 ---@param path string
 ---@return string[]
 local function lines_of(path)
+  local real = vim.uv.fs_realpath(path)
   local loaded = vim.iter(vim.api.nvim_list_bufs()):find(function(buffer)
-    return vim.api.nvim_buf_is_loaded(buffer) and vim.api.nvim_buf_get_name(buffer) == path
+    return vim.api.nvim_buf_is_loaded(buffer)
+      and vim.uv.fs_realpath(vim.api.nvim_buf_get_name(buffer)) == real
   end)
   if loaded then
     return vim.api.nvim_buf_get_lines(loaded, 0, -1, false)

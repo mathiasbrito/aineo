@@ -153,8 +153,8 @@ local function file_problem(file)
   return nil
 end
 
---- Why `title` is refused: no non-empty string, holding a line break, or
---- longer than 200 bytes.
+--- Why `title` is refused: no non-empty string, holding a NUL or a line
+--- break, or longer than 200 bytes.
 ---
 ---@param title any
 ---@return string?
@@ -162,8 +162,8 @@ local function title_problem(title)
   if type(title) ~= 'string' or title == '' then
     return 'title: expected a non-empty string'
   end
-  if title:find('[\n\r]') then
-    return 'title: holds a line break'
+  if title:find('[%z\n\r]') then
+    return 'title: holds a NUL or a line break'
   end
   if #title > LONGEST_TITLE_BYTES then
     return ('title: longer than %d bytes'):format(LONGEST_TITLE_BYTES)
@@ -209,6 +209,9 @@ local function range_problem(range, position)
   end
   if #range.text > LONGEST_TEXT_BYTES then
     return ('%s.text: longer than %d bytes'):format(where, LONGEST_TEXT_BYTES)
+  end
+  if range.text:find('%z') then
+    return where .. '.text: holds a NUL'
   end
   local first_line = range.first_line
   if first_line ~= nil and type(first_line) ~= 'string' then
