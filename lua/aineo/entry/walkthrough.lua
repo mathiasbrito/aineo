@@ -36,10 +36,10 @@ local held = setmetatable({}, { __mode = 'k' })
 ---@type table<aineo.entry.WalkthroughTab, boolean>
 local stepped_this_turn = setmetatable({}, { __mode = 'k' })
 
---- What is told, with the tab, when a tab shows a step, and when its
---- walkthrough ends with a session switch.
----@type fun(tab: aineo.entry.WalkthroughTab)[], fun(tab: aineo.entry.WalkthroughTab)[]
-local step_shown_listeners, session_switched_listeners = {}, {}
+--- What is told, with the tab, when a tab shows a step, when its bands are
+--- cleared, and when its walkthrough ends with a session switch.
+---@type fun(tab: aineo.entry.WalkthroughTab)[], fun(tab: aineo.entry.WalkthroughTab)[], fun(tab: aineo.entry.WalkthroughTab)[]
+local step_shown_listeners, cleared_listeners, session_switched_listeners = {}, {}, {}
 
 --- The tabs whose turns are followed (`follow_turns()`).
 ---@type table<aineo.entry.WalkthroughTab, boolean>
@@ -254,8 +254,7 @@ end
 ---@return aineo.entry.WalkthroughAnswer
 function M.take_step(tab, call, folders)
   if #call.ranges == 0 then
-    held[tab] = nil
-    clear_bands(tab)
+    M.clear(tab)
     return done('The walkthrough is ended and its bands are cleared.')
   end
   follow_turns(tab)
@@ -289,12 +288,17 @@ function M.is_shown(tab)
   return buffer ~= nil and require('aineo.explain').is_walkthrough_shown(buffer)
 end
 
---- Removes the bands `tab` shows, in whichever file.
+--- Removes the bands `tab` shows, in whichever file, and drops the step held
+--- back; the listeners of `on_cleared()` are told, so that no message of the
+--- walkthrough that waits brings it back.
 ---
 ---@param tab aineo.entry.WalkthroughTab
 function M.clear(tab)
   held[tab] = nil
   clear_bands(tab)
+  for _, listener in ipairs(cleared_listeners) do
+    listener(tab)
+  end
 end
 
 --- Ends the walkthrough of `tab` because its Claude Code switched session: its
@@ -316,6 +320,14 @@ end
 ---@param listener fun(tab: aineo.entry.WalkthroughTab)
 function M.on_step_shown(listener)
   table.insert(step_shown_listeners, listener)
+end
+
+--- Has `listener` called with the tab whenever the bands of a tab are cleared
+--- (`M.clear()`), by a key, an end call of the agent or a session switch.
+---
+---@param listener fun(tab: aineo.entry.WalkthroughTab)
+function M.on_cleared(listener)
+  table.insert(cleared_listeners, listener)
 end
 
 --- Has `listener` called with the tab whenever a tab's walkthrough ends with

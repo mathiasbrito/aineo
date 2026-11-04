@@ -33,18 +33,32 @@ local NOTHING_SHOWN = 'aineo: no walkthrough step is shown in this tab'
 ---@type table<aineo.entry.WalkthroughMovingTab, string>
 local waiting = setmetatable({}, { __mode = 'k' })
 
---- The tabs that sent a message whose answer is not in yet: until their
---- agent is seen working and then idle, or a step is shown, another message
---- is held back, though the agent is not seen working.
----@type table<aineo.entry.WalkthroughMovingTab, boolean>
+--- How long a message waits for its answer when the agent is never seen
+--- working, as when the terminal title is off: the next key then goes.
+local ANSWER_WAIT_MS = 10000
+
+--- The tabs that sent a message whose answer is not in yet, by the number of
+--- that sending: until their agent is seen working and then idle, a step is
+--- shown, or `ANSWER_WAIT_MS` have passed with the agent idle, another
+--- message is held back, though the agent is not seen working.
+---@type table<aineo.entry.WalkthroughMovingTab, integer>
 local awaiting = setmetatable({}, { __mode = 'k' })
+
+--- How many messages each tab has sent.
+---@type table<aineo.entry.WalkthroughMovingTab, integer>
+local sendings = setmetatable({}, { __mode = 'k' })
 
 --- The tabs whose turns are followed (`follow_the_turns_of()`).
 ---@type table<aineo.entry.WalkthroughMovingTab, boolean>
 local followed = setmetatable({}, { __mode = 'k' })
 
+--- Sends the message `tab` holds back, if any (defined below).
+---@type fun(tab: aineo.entry.WalkthroughMovingTab)
+local deliver_waiting
+
 --- Sends `message` to the session of `tab` and notes that its answer is
---- awaited when it went. When the session cannot be written to, which is what
+--- awaited when it went, for at most `ANSWER_WAIT_MS` while the agent is not
+--- working, then sends the message held back, if any. When the session cannot be written to, which is what
 --- a session that has ended is, drops the message and tells the user, once,
 --- as information.
 ---
@@ -59,13 +73,22 @@ local function deliver(tab, message)
     )
     return
   end
-  awaiting[tab] = sent or nil
+  if not sent then
+    awaiting[tab] = nil
+    return
+  end
+  sendings[tab] = (sendings[tab] or 0) + 1
+  local this_sending = sendings[tab]
+  awaiting[tab] = this_sending
+  vim.defer_fn(function()
+    if awaiting[tab] == this_sending and not tab.is_busy() then
+      awaiting[tab] = nil
+      deliver_waiting(tab)
+    end
+  end, ANSWER_WAIT_MS)
 end
 
---- Sends the message `tab` holds back, if any.
----
----@param tab aineo.entry.WalkthroughMovingTab
-local function deliver_waiting(tab)
+function deliver_waiting(tab)
   local message = waiting[tab]
   if message then
     waiting[tab] = nil
@@ -97,8 +120,11 @@ walkthrough.on_step_shown(function(tab)
   end
 end)
 
-walkthrough.on_session_switched(function(tab)
+walkthrough.on_cleared(function(tab)
   waiting[tab] = nil
+end)
+
+walkthrough.on_session_switched(function(tab)
   awaiting[tab] = nil
 end)
 
