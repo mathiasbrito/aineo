@@ -25,6 +25,7 @@ local office_pack_choice = require('aineo.entry.office_pack_choice')
 local places = require('aineo.entry.places')
 local reopening = require('aineo.entry.reopening')
 local test_writing = require('aineo.entry.test_writing')
+local walkthrough_moves = require('aineo.entry.walkthrough_moves')
 
 local M = {}
 
@@ -65,5 +66,6 @@ M.toggle_test_window = test_writing.toggle_test_window
 M.correct_test_file = test_writing.correct_test_file
 M.next_test_file = test_writing.next_test_file
 M.refine_written = test_writing.refine_written
+M.walk = walkthrough_moves.walk_in_current_tab
 
 return M

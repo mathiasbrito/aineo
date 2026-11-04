@@ -513,6 +513,17 @@ vim.keymap.set('n', '<Plug>(aineo-explain-clean)', function()
   end)
 end, { desc = 'aineo: clean the explanations from this buffer' })
 
+--- What each key of a walkthrough asks of the agent, by the words of its
+--- `<Plug>` mappings after `aineo-walk-`: the next step, the previous step,
+--- or the end (`aineo.entry`'s `walk()`).
+for _, move in ipairs({ 'next', 'previous', 'end' }) do
+  vim.keymap.set('n', ('<Plug>(aineo-walk-%s)'):format(move), function()
+    run(function()
+      require('aineo.entry').walk(move)
+    end)
+  end, { desc = 'aineo: ask the agent for the walkthrough move ' .. move })
+end
+
 --- The `<Plug>` mappings of a proposal shown, a fix or written code, which
 --- the keys of its buffer map to while it is shown, by the words after
 --- `aineo-fix-` and `aineo-write-`: what each does to the proposal of its
