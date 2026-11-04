@@ -103,6 +103,7 @@ end
 ---@field refresh_shown_pane fun()
 ---@field toggle_focused_view fun() reads the shown pane again, and, with the cursor in one of its windows, switches it between its default view and the focused view
 ---@field add_reported_work fun(work: aineo.changes.ReportedWork, tell: fun(message: string)): boolean whether the home took the report
+---@field reported_worktree_tops fun(): string[] the folders of the worktrees of the Reported section, in the order their last reports were taken
 ---@field resolve_reported_work fun(work: aineo.changes.ReportedWork, done: fun(resolved: aineo.changes.ReportedWork|nil, refusal: string|nil)) checks a report's branches are local branches and resolves each base to its full id in the worktree's folder, else in the session's repository, or says why it is refused
 ---@field pane_buffers fun(): { files: integer, commits: integer }
 ---@field close_shown_diff fun() closes the windows of the current tab page that show a diff the home showed, and tells once when none was closed
@@ -3621,6 +3622,15 @@ function M.new(label)
     table.insert(session.waiting, waiting)
     read_reported()
     return true
+  end
+
+  --- The folders of the worktrees of the Reported section: those the agents
+  --- of the tab's Claude Code reported and the repository lists, in the order
+  --- their last reports were taken; none before the session has begun.
+  ---
+  ---@return string[]
+  function home.reported_worktree_tops()
+    return session and reports.worktree_tops(session.nodes) or {}
   end
 
   --- Resolves `reported`, the item at `position` of a report's branches,

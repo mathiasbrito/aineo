@@ -54,6 +54,16 @@ end
 
 local T = MiniTest.new_set()
 
+T['worktree_tops()'] = MiniTest.new_set()
+
+T['worktree_tops()']['lists the folder of each reported worktree, in the order of the nodes'] = function()
+  eq(report_rules.worktree_tops(NODES), { '/projects/agent-1', '/projects/agent-2' })
+end
+
+T['worktree_tops()']['lists none for no node'] = function()
+  eq(report_rules.worktree_tops({}), {})
+end
+
 T['the Reported section'] = MiniTest.new_set()
 
 T['the Reported section']['is not listed while the session has no report'] = function()
