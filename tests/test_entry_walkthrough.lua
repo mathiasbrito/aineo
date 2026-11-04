@@ -907,6 +907,134 @@ T['a key while the agent works']['\\vq clears the bands at once and its message 
   eq(writes_after_waiting_for(1), { paste('End the walkthrough') })
 end
 
+T['a key after a message was sent'] = MiniTest.new_set()
+
+T['a key after a message was sent']['waits until the agent has answered, though it is not seen working yet'] = function()
+  local token = open_layout('walkthrough-key-twice')
+  show_a_step(token)
+  entry.press(child, '\\vn')
+  child.lua('_G.entry_test_messages = {}')
+
+  entry.press(child, '\\vp')
+  local before_the_answer = send.writes(child)
+  be_busy(true)
+  be_busy(false)
+
+  eq(before_the_answer, { paste('Next walkthrough step') })
+  eq(writes_after_waiting_for(2), {
+    paste('Next walkthrough step'),
+    paste('Previous walkthrough step'),
+  })
+  eq(entry.messages(child), {
+    {
+      message = 'aineo: the agent has not answered yet: "Previous walkthrough step" goes when its turn ends',
+      level = vim.log.levels.INFO,
+    },
+  })
+end
+
+T['a key after a message was sent']['is replaced by the key pressed after it, so that one message waits'] = function()
+  local token = open_layout('walkthrough-key-thrice')
+  show_a_step(token)
+  entry.press(child, '\\vn')
+  entry.press(child, '\\vp')
+  entry.press(child, '\\vq')
+
+  be_busy(true)
+  be_busy(false)
+
+  eq(writes_after_waiting_for(2), {
+    paste('Next walkthrough step'),
+    paste('End the walkthrough'),
+  })
+  vim.wait(300)
+  eq(#send.writes(child), 2)
+end
+
+T['a key after a message was sent']['goes when a step is shown, the agent not being seen working'] = function()
+  local token = open_layout('walkthrough-key-step-shown')
+  show_a_step(token)
+  entry.press(child, '\\vn')
+  entry.press(child, '\\vp')
+
+  walk(token, step_for('src/other.lua', { step = 2 }))
+
+  eq(writes_after_waiting_for(2), {
+    paste('Next walkthrough step'),
+    paste('Previous walkthrough step'),
+  })
+end
+
+T['a key after a message was sent']['is sent at once once the turn has ended and no key waits'] = function()
+  local token = open_layout('walkthrough-key-after-turn')
+  show_a_step(token)
+  entry.press(child, '\\vn')
+  be_busy(true)
+  be_busy(false)
+
+  entry.press(child, '\\vp')
+
+  eq(writes_after_waiting_for(2), {
+    paste('Next walkthrough step'),
+    paste('Previous walkthrough step'),
+  })
+end
+
+T['a walkthrough and a session switch'] = MiniTest.new_set()
+
+T['a walkthrough and a session switch']['ends with the switch: its bands are cleared and no message waits'] = function()
+  child.lua('vim.env.XDG_STATE_HOME = ...', { fixture.directory('walkthrough-switch') })
+  local fake = claude_session.fake('walkthrough-switch', 'ready', { AINEO_FAKE_CLAUDE_HOOKS = '1' })
+  entry.use_fake(child, fake)
+  child.cmd('Aineo open')
+  claude_session.wait_for_start(fake)
+  claude_session.wait_for_status(child, 'ready')
+  vim.wait(explained.PATIENCE_MS, function()
+    return child.lua_get([[(pcall(vim.api.nvim_get_autocmds, { group = 'aineo.editors' }))]])
+  end, 20)
+  local token = claude_session.start_token(fake, 1)
+  show_a_step(token)
+  be_busy(true)
+  entry.press(child, '\\vn')
+
+  claude_session.press_keys(child, terminal_buffer(), '/clear\r')
+  vim.wait(explained.PATIENCE_MS, function()
+    return next(bands_by_file()) == nil
+  end, 20)
+  be_busy(false)
+  vim.wait(300)
+
+  eq(bands_by_file(), {})
+  eq(
+    vim.tbl_filter(function(bytes)
+      return bytes:find('Next walkthrough step', 1, true) ~= nil
+    end, send.writes(child)),
+    {}
+  )
+end
+
+T['a message waiting when its session ends'] = MiniTest.new_set()
+
+T['a message waiting when its session ends']['is dropped with one notice, and raises no error'] = function()
+  local token = open_layout('walkthrough-terminal-gone')
+  show_a_step(token)
+  be_busy(true)
+  entry.press(child, '\\vn')
+  child.lua('_G.entry_test_messages = {}')
+
+  child.lua('vim.api.nvim_buf_delete(..., { force = true })', { terminal_buffer() })
+  vim.wait(explained.PATIENCE_MS, function()
+    return #entry.messages(child) > 0
+  end, 20)
+
+  eq(entry.messages(child), {
+    {
+      message = 'aineo: "Next walkthrough step" was not sent: the session of this tab has ended',
+      level = vim.log.levels.INFO,
+    },
+  })
+end
+
 T['the keys']['send nothing while a claim of another session holds, and say why'] = function()
   local claimed = '063cc43c-8e1a-4d2f-b5c7-91d0e3a4f852'
   child.lua('vim.env.XDG_STATE_HOME = ...', { fixture.directory('walkthrough-claim') })

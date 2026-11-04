@@ -19,6 +19,7 @@ local M = {}
 ---@field homes { layout: aineo.layout.Layout } the tab's layout, whose middle window shows the file, and which tells whether a window is in it
 ---@field is_busy fun(): boolean whether the tab's Claude Code is working
 ---@field on_busy_change fun(listener: fun(busy: boolean)) has `listener` told whenever the tab's Claude Code starts or stops working
+---@field on_session_switch fun(listener: fun()) has `listener` told whenever the tab's Claude Code switches session
 
 --- The buffer each tab shows its walkthrough's bands in, by tab; none for a
 --- tab that shows no walkthrough.
@@ -35,12 +36,18 @@ local held = setmetatable({}, { __mode = 'k' })
 ---@type table<aineo.entry.WalkthroughTab, boolean>
 local stepped_this_turn = setmetatable({}, { __mode = 'k' })
 
+--- What is told, with the tab, when a tab shows a step, and when its
+--- walkthrough ends with a session switch.
+---@type fun(tab: aineo.entry.WalkthroughTab)[], fun(tab: aineo.entry.WalkthroughTab)[]
+local step_shown_listeners, session_switched_listeners = {}, {}
+
 --- The tabs whose turns are followed (`follow_turns()`).
 ---@type table<aineo.entry.WalkthroughTab, boolean>
 local followed = setmetatable({}, { __mode = 'k' })
 
 --- Has the end of each turn of `tab`'s Claude Code noted, once: its
---- stopping work lets the tab show a step again.
+--- stopping work lets the tab show a step again; and a switch of its session
+--- ends the walkthrough (`M.end_for_session_switch()`).
 ---
 ---@param tab aineo.entry.WalkthroughTab
 local function follow_turns(tab)
@@ -48,6 +55,9 @@ local function follow_turns(tab)
     return
   end
   followed[tab] = true
+  tab.on_session_switch(function()
+    M.end_for_session_switch(tab)
+  end)
   tab.on_busy_change(function(busy)
     if not busy then
       stepped_this_turn[tab] = nil
@@ -156,6 +166,9 @@ local function show(tab, call)
   })
   put_in_view(window, call.ranges[1].start)
   shown_in[tab] = buffer
+  for _, listener in ipairs(step_shown_listeners) do
+    listener(tab)
+  end
   return done(shown_words(call))
 end
 
@@ -280,6 +293,35 @@ end
 function M.clear(tab)
   held[tab] = nil
   clear_bands(tab)
+end
+
+--- Ends the walkthrough of `tab` because its Claude Code switched session: its
+--- bands are cleared, the step held back is dropped, and the listeners of
+--- `on_session_switched()` are told, so that no message of the walkthrough
+--- reaches the new session.
+---
+---@param tab aineo.entry.WalkthroughTab
+function M.end_for_session_switch(tab)
+  M.clear(tab)
+  for _, listener in ipairs(session_switched_listeners) do
+    listener(tab)
+  end
+end
+
+--- Has `listener` called with the tab whenever a tab shows a step, one held
+--- back included, once it is shown.
+---
+---@param listener fun(tab: aineo.entry.WalkthroughTab)
+function M.on_step_shown(listener)
+  table.insert(step_shown_listeners, listener)
+end
+
+--- Has `listener` called with the tab whenever a tab's walkthrough ends with
+--- a session switch of its Claude Code.
+---
+---@param listener fun(tab: aineo.entry.WalkthroughTab)
+function M.on_session_switched(listener)
+  table.insert(session_switched_listeners, listener)
 end
 
 return M

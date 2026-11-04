@@ -2436,28 +2436,36 @@ shown there, which stays listed, and puts an explanation above each of up to
 `walk`, with the heading `<step>/<total> · <title>` (`<step> · <title>`
 when it gives no total) on the first. The first range is in view, three
 lines of the file above it, and the cursor of that window is on its first
-line; the window you are in is not moved. The bands are in highlight groups
+line; the window you are in is not moved, nor its buffer or cursor: while you
+type in the middle window, in Insert or Replace mode, the step is held back,
+told to the agent as held, and shown, checked again, once you leave Insert
+mode (a newer step replaces it, an end call drops it, and one that no longer
+fits is told once and not shown). The bands are in highlight groups
 of their own, `AineoWalk`, `AineoWalkGutter`, `AineoWalkGutterFill` and
 `AineoWalkNr`, which follow `DiagnosticInfo` as `\v` does, and `]v` and
 `[v` jump between them (|aineo-explain-jump|). The tool is allowed without
 asking, and its answer says what it showed or why it refused. Its arguments:
 - `file`, `title` and `step`, required: the absolute path of the file, what
-  the step is about (at most 200 bytes, on one line) and its number from 1;
+  the step is about (at most 200 bytes, on one line, no NUL) and its number
+  from 1;
 - `total`, how many steps there will be, not below `step`;
 - `ranges`, each `{ start, end, text, first_line? }`: the first and last
   line the explanation is about, from 1, its Markdown (at most 8 KiB, and
-  32 KiB for all of them; shown as the text it is, wrapped), and the
+  32 KiB for all of them, no NUL; shown as the text it is, wrapped), and the
   expected text of line `start`, compared with the spaces around both left
-  out: a mismatch refuses the call and nothing is shown. A call with no
+  out: a mismatch refuses the call and nothing is shown, whatever the
+  spelling of the path (the lines are those of the buffer you edit, when
+  one holds the file). A call with no
   `ranges` ends the walkthrough and clears its bands, and needs no `file`
   that is there.
 The file must be on disk, a regular file of at most 1 MiB, inside a checkout
 of a repository this editor has open (the folder it started in, the working
 folder of each tab page and window, the folder each tab's Claude Code started
 in) or of a worktree the tab's agents reported (|aineo-changes-reported|),
-below no `.git` and through no link that leaves the checkout, as the test
-layout guards the paths an agent gives it (|aineo-test-layout|). A branch no
-worktree has checked out has no file on disk: walk through checked-out work.
+below no `.git`, also by a link, and through no link that leaves the checkout,
+as the test layout guards the paths an agent gives it (|aineo-test-layout|).
+A branch no worktree has checked out has no file on disk: walk through
+checked-out work.
 A step is refused in a turn of the agent in which it showed one already: aineo
 tells a turn by the tab's Claude Code being seen working, so with an agent
 never seen working two steps may show. The instructions appended to the system
@@ -2473,9 +2481,14 @@ The agent moves only when you ask. `\vn` sends `Next walkthrough step`,
 also clears the bands at once, to the Claude Code of the tab you are in, as
 a message of yours, as Send sends Input (|aineo-send|). They act only while
 the tab shows a step; otherwise you are told `aineo: no walkthrough step is
-shown in this tab`. While the agent is working the message waits, and goes
-when its turn ends; one waits at most, and the last key replaces it. Closing
-the buffer is no signal. A claim of another session refuses them, as it
+shown in this tab`. While the agent is working, or has not answered the
+message sent before (until it is seen working and then idle, or a step is
+shown), the message waits, and goes when its turn ends or a step is shown; one
+waits at most, and the last key replaces it, so two presses never send two
+messages. A message that waits when its session has ended is dropped with one
+notice. A switch of the tab's session, a `/clear` or a resume, ends the
+walkthrough: its bands are cleared and no message waits. Closing the buffer is
+no signal. A claim of another session refuses them, as it
 refuses Send. `\vc` clears the bands too, without sending anything
 (|aineo-explain-clean|). Your own explanations are never touched by a step.
 The keys are |<Plug>(aineo-walk-next)|, |<Plug>(aineo-walk-previous)| and
