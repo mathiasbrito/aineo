@@ -764,6 +764,26 @@ T['a second step']['in the turn after is shown'] = function()
   eq(bands_by_file(), { ['src/other.lua'] = { 2, 5 } })
 end
 
+T['a step refused for lack of room leaves the turn open for a corrected call in it'] = function()
+  local token = open_layout('walkthrough-no-room-turn')
+  be_busy(true)
+  child.lua([[
+    local layout = require('aineo.entry.registry').tab_list[1].homes.layout
+    _G.show_file_before = layout.show_file
+    layout.show_file = function() return nil end
+  ]])
+  local refused = walk(token, step_for('src/code.lua'))
+  child.lua(
+    [[require('aineo.entry.registry').tab_list[1].homes.layout.show_file = _G.show_file_before]]
+  )
+
+  local corrected = walk(token, step_for('src/code.lua'))
+
+  eq(refused.text, 'refused: the middle column has no room for the file')
+  eq(corrected.is_error, false)
+  eq(bands_by_file(), { ['src/code.lua'] = { 2, 5 } })
+end
+
 T['a second step']['is shown once the turn that showed the first has ended'] = function()
   local token = open_layout('walkthrough-turn-ended')
   be_busy(true)
@@ -937,6 +957,33 @@ T['a key while the agent works']['never leaves two messages waiting: the last ke
   eq(send.writes(child), { paste('Previous walkthrough step') })
 end
 
+T['a key while the agent works']['\\vc clears the bands and drops the message waiting, which would bring the walkthrough back'] = function()
+  local token = open_layout('walkthrough-wait-clean')
+  show_a_step(token)
+  be_busy(true)
+  entry.press(child, '\\vn')
+
+  entry.press(child, '\\vc')
+  be_busy(false)
+  vim.wait(300)
+
+  eq(bands_by_file(), {})
+  eq(send.writes(child), {})
+end
+
+T['a key while the agent works']['an end call of the agent drops the message waiting too'] = function()
+  local token = open_layout('walkthrough-wait-agent-end')
+  show_a_step(token)
+  be_busy(true)
+  entry.press(child, '\\vn')
+
+  walk(token, step_for('src/code.lua', { step = 2, ranges = {} }))
+  be_busy(false)
+  vim.wait(300)
+
+  eq(send.writes(child), {})
+end
+
 T['a key while the agent works']['\\vq clears the bands at once and its message replaces the one waiting'] = function()
   local token = open_layout('walkthrough-wait-end')
   show_a_step(token)
@@ -974,6 +1021,42 @@ T['a key after a message was sent']['waits until the agent has answered, though 
       message = 'aineo: the agent has not answered yet: "Previous walkthrough step" goes when its turn ends',
       level = vim.log.levels.INFO,
     },
+  })
+end
+
+T['a key after a message was sent']['goes after 10 s when the agent is never seen working, as with the busy title off'] = function()
+  local token = open_layout('walkthrough-key-ten-seconds')
+  show_a_step(token)
+  entry.press(child, '\\vn')
+  entry.press(child, '\\vp')
+  local before_the_bound = send.writes(child)
+
+  vim.wait(15000, function()
+    return #send.writes(child) >= 2
+  end, 50)
+
+  eq(before_the_bound, { paste('Next walkthrough step') })
+  eq(send.writes(child), {
+    paste('Next walkthrough step'),
+    paste('Previous walkthrough step'),
+  })
+end
+
+T['a key after a message was sent']['stays held after 10 s while the agent works, and goes when its turn ends'] = function()
+  local token = open_layout('walkthrough-key-ten-seconds-busy')
+  show_a_step(token)
+  entry.press(child, '\\vn')
+  entry.press(child, '\\vp')
+  be_busy(true)
+
+  vim.wait(11500)
+  local while_working = send.writes(child)
+  be_busy(false)
+
+  eq(while_working, { paste('Next walkthrough step') })
+  eq(writes_after_waiting_for(2), {
+    paste('Next walkthrough step'),
+    paste('Previous walkthrough step'),
   })
 end
 
