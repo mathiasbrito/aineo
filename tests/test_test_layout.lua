@@ -265,6 +265,8 @@ local function repository_with_links()
     vim.uv.fs_symlink(vim.fs.joinpath(outside, 'missing.txt'), vim.fs.joinpath(top, 'dangling'))
   )
   assert(vim.uv.fs_symlink(outside, vim.fs.joinpath(top, 'door')))
+  assert(vim.uv.fs_symlink(vim.fs.joinpath(top, '.git/HEAD'), vim.fs.joinpath(top, 'head')))
+  assert(vim.uv.fs_symlink(vim.fs.joinpath(top, '.git'), vim.fs.joinpath(top, 'gitdoor')))
   return top
 end
 
@@ -287,6 +289,8 @@ T['stays_inside()']['fails for a path that leaves the checkout, goes under .git 
       { 'outward' },
       { 'dangling' },
       { 'door/secret.txt' },
+      { 'head' },
+      { 'gitdoor/config' },
       { '.git/config' },
       { 'lib/.GIT/config' },
       { 'lib/a\nb.py' },

@@ -88,7 +88,8 @@ T['a call']['whose arguments are refused is a tool error naming the field'] = Mi
     { step_with({ file = '/repo/a\nb.lua' }), 'file: holds a NUL or a line break' },
     { step_with({ file = '/' .. ('a'):rep(4096) }), 'file: longer than 4096 bytes' },
     { step_with({ title = '' }), 'title: expected a non-empty string' },
-    { step_with({ title = 'one\ntwo' }), 'title: holds a line break' },
+    { step_with({ title = 'one\ntwo' }), 'title: holds a NUL or a line break' },
+    { step_with({ title = 'one\0two' }), 'title: holds a NUL or a line break' },
     { step_with({ title = ('t'):rep(201) }), 'title: longer than 200 bytes' },
     { step_with({ step = 'one' }), 'step: expected a whole number from 1' },
     { step_with({ step = 0 }), 'step: expected a whole number from 1' },
@@ -121,6 +122,10 @@ T['a call']['whose arguments are refused is a tool error naming the field'] = Mi
     {
       step_with({ ranges = { range_with({ text = ('x'):rep(8193) }) } }),
       'ranges[1].text: longer than 8192 bytes',
+    },
+    {
+      step_with({ ranges = { range_with({ text = 'one\0two' }) } }),
+      'ranges[1].text: holds a NUL',
     },
     {
       step_with({
@@ -215,6 +220,50 @@ T['in the editor']['a call without an editor address is not taken, and offers no
     get(decoded(relay:next_line()), 'result'),
     result_of('not taken: the editor that started Claude Code shows no walkthrough', true)
   )
+end
+
+--- Offers `arguments` as a call of the tool to an editor whose handler takes
+--- every call and says `shown`, and returns the result the relay answers.
+---
+---@param arguments table
+---@return table
+local function answer_of_a_taking_editor(arguments)
+  children.restart(editor)
+  editor.lua([[
+    require('aineo.mcp').on_walkthrough_stepped(function()
+      return { text = 'shown', is_error = false }
+    end)
+  ]])
+  local relay = mcp_relay.start_relay({
+    AINEO_EDITOR_ADDRESS = editor.job.address,
+    AINEO_START_TOKEN = TOKEN,
+  })
+  relay:send(call(arguments))
+  return get(decoded(relay:next_line()), 'result')
+end
+
+T['in the editor']['takes 16 ranges, the most a step has'] = function()
+  local ranges = {}
+  for _ = 1, 16 do
+    table.insert(ranges, range_with({}))
+  end
+
+  eq(answer_of_a_taking_editor(step_with({ ranges = ranges })), result_of('shown', false))
+end
+
+T['in the editor']['takes texts of 32 KiB in all, and no more'] = function()
+  local ranges = {}
+  for _ = 1, 4 do
+    table.insert(ranges, range_with({ text = ('x'):rep(8192) }))
+  end
+
+  eq(answer_of_a_taking_editor(step_with({ ranges = ranges })), result_of('shown', false))
+end
+
+T['in the editor']['takes a text of 8 KiB, the most one range has'] = function()
+  local ranges = { range_with({ text = ('x'):rep(8192) }) }
+
+  eq(answer_of_a_taking_editor(step_with({ ranges = ranges })), result_of('shown', false))
 end
 
 return T

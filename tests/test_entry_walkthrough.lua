@@ -231,6 +231,108 @@ local function refusal(text)
   return 'refused: ' .. text:gsub('PROJECT', project)
 end
 
+--- The spellings of the path of `src/code.lua` that name the same file, by
+--- a name for the case, each made from the project's folder.
+local SPELLINGS = {
+  dot = function()
+    return project .. '/src/./code.lua'
+  end,
+  up = function()
+    return project .. '/src/../src/code.lua'
+  end,
+  double_slash = function()
+    return '/' .. project .. '/src/code.lua'
+  end,
+  through_a_link = function()
+    local link = project .. '-link'
+    vim.uv.fs_unlink(link)
+    assert(vim.uv.fs_symlink(project, link))
+    return link .. '/src/code.lua'
+  end,
+}
+
+T['a step']['checks the ranges against the buffer the user edits, whatever the spelling of the path'] =
+  MiniTest.new_set({
+    parametrize = { { 'dot' }, { 'up' }, { 'double_slash' }, { 'through_a_link' } },
+  })
+
+T['a step']['checks the ranges against the buffer the user edits, whatever the spelling of the path']['given'] = function(
+  spelling
+)
+  local token = open_layout('walkthrough-spelling-' .. spelling)
+  walk(token, step_for('src/code.lua'))
+  child.lua(
+    [[
+    local buffer = vim.fn.bufnr(...)
+    vim.api.nvim_buf_set_lines(buffer, 2, 6, false, {})
+  ]],
+    { project .. '/src/code.lua' }
+  )
+  local file = SPELLINGS[spelling]()
+
+  local answer = walk(
+    token,
+    step_for('src/code.lua', {
+      file = file,
+      step = 2,
+      ranges = { { start = 5, ['end'] = 5, text = 'Gone.', first_line = 'local e = 5' } },
+    })
+  )
+
+  eq(answer, {
+    text = 'refused: ranges[1]: lines 5-5 are outside the file, which has 2 lines',
+    is_error = true,
+  })
+  eq(bands_by_file(), { ['src/code.lua'] = { 2 } })
+end
+
+T['a step']['that is refused leaves the bands of the step before as they were'] = MiniTest.new_set({
+  parametrize = {
+    { { file = 'PROJECT/src/missing.lua' } },
+    { { ranges = { { start = 2, ['end'] = 70, text = 'Too far.' } } } },
+  },
+})
+
+T['a step']['that is refused leaves the bands of the step before as they were']['given'] = function(
+  overrides
+)
+  local token = open_layout('walkthrough-refused-keeps')
+  walk(token, step_for('src/code.lua'))
+  local call = step_for('src/other.lua', vim.tbl_extend('force', { step = 2 }, overrides))
+  call.file = call.file:gsub('PROJECT', project)
+
+  local answer = walk(token, call)
+
+  eq(answer.is_error, true)
+  eq(bands_by_file(), { ['src/code.lua'] = { 2, 5 } })
+end
+
+T['a step']['checks first_line against the buffer the user edits, whatever the spelling of the path'] = function()
+  local token = open_layout('walkthrough-spelling-first-line')
+  walk(token, step_for('src/code.lua'))
+  child.lua(
+    [[
+    local buffer = vim.fn.bufnr(...)
+    vim.api.nvim_buf_set_lines(buffer, 0, 0, false, { 'new one', 'new two' })
+  ]],
+    { project .. '/src/code.lua' }
+  )
+
+  local answer = walk(
+    token,
+    step_for('src/code.lua', {
+      file = SPELLINGS.dot(),
+      step = 2,
+      ranges = { { start = 5, ['end'] = 5, text = 'Moved.', first_line = 'local e = 5' } },
+    })
+  )
+
+  eq(answer, {
+    text = 'refused: ranges[1].first_line: line 5 reads "local c = 3", not "local e = 5"',
+    is_error = true,
+  })
+end
+
 T['a step']['is refused, and shows nothing, when the file or a range is not what the agent says'] =
   MiniTest.new_set({
     parametrize = {
@@ -329,6 +431,24 @@ T['a step']['is refused for a link that leads out of the repository'] = function
   eq(bands_by_file(), {})
 end
 
+T['a step']['is refused for a link that resolves under .git'] = function()
+  local token = open_layout('walkthrough-link-dot-git')
+  local link = project .. '/src/head.lua'
+  vim.uv.fs_unlink(link)
+  assert(vim.uv.fs_symlink(project .. '/.git/HEAD', link))
+
+  local answer = walk(token, step_for('src/head.lua'))
+
+  vim.uv.fs_unlink(link)
+  eq(answer, {
+    text = ('refused: file: %s is under .git, outside the repository or a link leading out of it'):format(
+      link
+    ),
+    is_error = true,
+  })
+  eq(bands_by_file(), {})
+end
+
 T['a step']['is refused for a file larger than 1 MiB'] = function()
   local token = open_layout('walkthrough-large')
   local large = project .. '/src/large.txt'
@@ -358,23 +478,34 @@ T['a step']['shows a file of exactly 1 MiB'] = function()
   eq(answer.is_error, false)
 end
 
-T['a step']['shows a file of a worktree the tab’s agents reported, besides the repositories the editor has open'] = function()
+T['a step']['shows a file of a worktree the tab’s agents reported with announce_work'] = function()
   local token = open_layout('walkthrough-reported')
-  local other = other_repository('walkthrough-reported-other')
-  child.lua(
-    [[
-    local other = ...
-    require('aineo.entry.registry').tab_list[1].homes.changes.reported_worktree_tops = function()
-      return { other }
-    end
-  ]],
-    { other }
+  local worktree = project .. '-reported'
+  git_repo.git(project, { 'worktree', 'add', '--quiet', '-b', 'reported-work', worktree })
+  vim.fn.writefile(CODE, worktree .. '/src/extra.lua')
+  local taken = child.lua_get(
+    [[require('aineo.mcp').receive_work_announcement({
+      worktree = ..., label = 'reported', branches = { { name = 'reported-work', base = 'HEAD' } },
+    }, select(2, ...))]],
+    { worktree, token }
   )
+  vim.wait(explained.PATIENCE_MS, function()
+    return #child.lua_get(
+      'require("aineo.entry.registry").tab_list[1].homes.changes.reported_worktree_tops()'
+    ) > 0
+  end, 20)
 
-  local answer = walk(token, step_for('src/code.lua', { file = other .. '/a.lua' }))
+  local answer = walk(token, step_for('src/code.lua', { file = worktree .. '/src/extra.lua' }))
 
+  eq(taken, true)
+  eq(
+    child.lua_get(
+      'require("aineo.entry.registry").tab_list[1].homes.changes.reported_worktree_tops()'
+    ),
+    { vim.uv.fs_realpath(worktree) }
+  )
   eq(answer.is_error, false)
-  eq(bands_by_file(), { [other .. '/a.lua'] = { 2, 5 } })
+  eq(bands_by_file(), { [worktree .. '/src/extra.lua'] = { 2, 5 } })
 end
 
 T['a step']['is refused, and shows nothing, when the layout has no room for the file'] = function()
