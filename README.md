@@ -652,13 +652,16 @@ code, one step at a time. `report`, `announce_work`, `run_output`,
   whether to start. Each step opens one file in the middle window and puts
   an explanation above up to 16 ranges of lines, in the look of `\v` under
   the label `walk`, with the heading `<step>/<total> · <title>` on the first;
-  the window you are in is not moved. The agent moves only when you ask:
+  the window you are in is not moved, and while you type in the middle window
+  the step waits until you leave Insert mode. The agent moves only when you
+  ask:
   `\vn` sends `Next walkthrough step`, `\vp` `Previous walkthrough step`
   and `\vq` `End the walkthrough`, which also clears the bands, to the Claude
-  Code of your tab; while the agent works the message waits and goes when its
-  turn ends. The file must lie in a repository the editor has open or in a
+  Code of your tab; while the agent works, or has not answered the last
+  message, the next one waits (one at most) and goes when its turn ends. A
+  switch of the tab's session ends the walkthrough. The file must lie in a repository the editor has open or in a
   worktree its agents reported, with the guards `test_layout` applies to its
-  paths (nothing under `.git`, no link out), be a regular file of at most
+  paths (nothing under `.git`, also by a link, no link out), be a regular file of at most
   1 MiB, and be checked out: a branch no worktree has checked out has no file
   to show. Claude is told to plan the way the solution is built, a concept
   introduced before any step that relies on it. `:help aineo-walkthrough` has
