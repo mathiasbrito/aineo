@@ -36,7 +36,9 @@ local waiting = setmetatable({}, { __mode = 'k' })
 ---@type table<aineo.entry.WalkthroughMovingTab, boolean>
 local followed = setmetatable({}, { __mode = 'k' })
 
---- Has the message `tab` holds back sent once its agent stops working.
+--- Has the message `tab` holds back sent once its agent stops working: a
+--- message is held back only while the agent works, so the first change of
+--- its busy state after that is the end of the turn.
 ---
 ---@param tab aineo.entry.WalkthroughMovingTab
 local function send_waiting_when_the_turn_ends(tab)
@@ -44,13 +46,12 @@ local function send_waiting_when_the_turn_ends(tab)
     return
   end
   followed[tab] = true
-  tab.on_busy_change(function(busy)
+  tab.on_busy_change(function()
     local message = waiting[tab]
-    if busy or not message then
-      return
+    if message then
+      waiting[tab] = nil
+      tab.submit(message)
     end
-    waiting[tab] = nil
-    tab.submit(message)
   end)
 end
 
@@ -73,7 +74,6 @@ function M.ask(tab, move)
   end
   local message = MESSAGES[move]
   if not tab.is_busy() then
-    waiting[tab] = nil
     tab.submit(message)
     return
   end
