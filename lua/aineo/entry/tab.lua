@@ -835,7 +835,7 @@ local function make_tab(homes, key, callbacks)
   --- that need no approval allowed, the instructions — the report's, then,
   --- after a blank line each, the announcement tool's paragraph, the run
   --- tools' and the test layout tool's sentence, naming the presets
-  --- (`aineo.test_layout`) — and the subagents' context for the `SubagentStart` hook
+  --- (`aineo.test_layout`), then the walkthrough tool's — and the subagents' context for the `SubagentStart` hook
   --- (`aineo.mcp`), the state directory of `kept_places()`, the editor's
   --- address and program for the session hooks, and the callbacks that make
   --- the panes follow the session (`replacement_callbacks()`,
@@ -867,7 +867,9 @@ local function make_tab(homes, key, callbacks)
         .. '\n\n'
         .. mcp.run_instructions()
         .. '\n\n'
-        .. mcp.test_layout_instructions(require('aineo.test_layout').preset_ids()),
+        .. mcp.test_layout_instructions(require('aineo.test_layout').preset_ids())
+        .. '\n\n'
+        .. mcp.walkthrough_instructions(),
       subagent_context = mcp.subagent_announce_context(),
       state_directory = places.kept_places().state_directory,
       new_session = new_session,
