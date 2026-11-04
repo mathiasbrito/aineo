@@ -2437,10 +2437,11 @@ shown there, which stays listed, and puts an explanation above each of up to
 when it gives no total) on the first. The first range is in view, three
 lines of the file above it, and the cursor of that window is on its first
 line; the window you are in is not moved, nor its buffer or cursor: while you
-type in the middle window, in Insert or Replace mode, the step is held back,
-told to the agent as held, and shown, checked again, once you leave Insert
-mode (a newer step replaces it, an end call drops it, and one that no longer
-fits is told once and not shown). The bands are in highlight groups
+type in the middle window, in Insert or Replace mode, or in a command run
+with i_CTRL-O, the step is held back, told to the agent as held, and shown,
+checked again, once you stop (leaving Insert mode with CTRL-C too; a newer
+step replaces it, one shown drops it, an end call drops it, and one that no
+longer fits is told once and not shown). The bands are in highlight groups
 of their own, `AineoWalk`, `AineoWalkGutter`, `AineoWalkGutterFill` and
 `AineoWalkNr`, which follow `DiagnosticInfo` as `\v` does, and `]v` and
 `[v` jump between them (|aineo-explain-jump|). The tool is allowed without
@@ -2482,15 +2483,16 @@ also clears the bands at once, to the Claude Code of the tab you are in, as
 a message of yours, as Send sends Input (|aineo-send|). They act only while
 the tab shows a step; otherwise you are told `aineo: no walkthrough step is
 shown in this tab`. While the agent is working, or has not answered the
-message sent before (until it is seen working and then idle, or a step is
-shown), the message waits, and goes when its turn ends or a step is shown; one
-waits at most, and the last key replaces it, so two presses never send two
-messages. A message that waits when its session has ended is dropped with one
-notice. A switch of the tab's session, a `/clear` or a resume, ends the
-walkthrough: its bands are cleared and no message waits. Closing the buffer is
-no signal. A claim of another session refuses them, as it
-refuses Send. `\vc` clears the bands too, without sending anything
-(|aineo-explain-clean|). Your own explanations are never touched by a step.
+message sent before, the message waits, and goes when its turn ends or a step
+is shown, or after 10 s with the agent not seen working (the terminal title
+off); one waits at most, and the last key replaces it: the next key waits for
+the answer to the last, so no two are queued. A message that waits when its
+session has ended is dropped with one notice. A switch of the tab's session,
+a `/clear` or a resume, ends the walkthrough: its bands are cleared and no
+message waits. Closing the buffer is no signal. A claim of another session
+refuses them, as it refuses Send. `\vc` clears the bands too, without sending
+anything, and drops the message that waits (|aineo-explain-clean|). Your own
+explanations are never touched by a step.
 The keys are |<Plug>(aineo-walk-next)|, |<Plug>(aineo-walk-previous)| and
 |<Plug>(aineo-walk-end)|; `:Aineo` has no word for them.
 
