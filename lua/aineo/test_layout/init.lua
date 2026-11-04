@@ -161,13 +161,26 @@ local function locate(path)
   }
 end
 
+--- Whether any segment of `real`, a real path inside the real folder
+--- `real_root`, below it, is `.git` in any letter case.
+---
+---@param real_root string
+---@param real string
+---@return boolean
+local function is_below_dot_git(real_root, real)
+  return vim.iter(vim.split(real:sub(#real_root + 2), '/', { plain = true })):any(function(segment)
+    return segment:lower() == '.git'
+  end)
+end
+
 --- Whether `path`, the absolute path of a file of the worktree at `root`
 --- (`root` followed by `/` and the file's path in it), stays inside the
 --- worktree: it holds no control character; no segment below `root` is
 --- `.git` in any letter case; the deepest of its folders that exists, as
---- the file system resolves it (links followed), is `root` or inside it;
---- and when the file itself is a link, its target exists and is inside
---- `root` — a dangling link would make a write land where it points.
+--- the file system resolves it (links followed), is `root` or inside it and
+--- below no `.git`; and when the file itself is a link, its target exists,
+--- is inside `root` and below no `.git` — a dangling link would make a
+--- write land where it points.
 ---
 ---@param root string
 ---@param path string
@@ -183,7 +196,9 @@ local function stays_inside(root, path)
   end
   local real_root = vim.uv.fs_realpath(root) or root
   local function is_inside(real)
-    return real ~= nil and (real == real_root or vim.startswith(real, real_root .. '/'))
+    return real ~= nil
+      and (real == real_root or vim.startswith(real, real_root .. '/'))
+      and not is_below_dot_git(real_root, real)
   end
   if not is_inside(existing_folder(path)) then
     return false
