@@ -125,13 +125,14 @@ local function shown_words(call)
 end
 
 --- Whether the user is typing in `tab`'s middle window: the current window
---- is one of the file column's, and the mode is Insert or Replace.
+--- is one of the file column's, and the mode is Insert or Replace, also
+--- while an Insert-mode command runs from Normal mode (`CTRL-O`).
 ---
 ---@param tab aineo.entry.WalkthroughTab
 ---@return boolean
 local function is_typing_in_the_middle_window(tab)
-  local mode = vim.fn.mode()
-  local is_typing = vim.startswith(mode, 'i') or vim.startswith(mode, 'R')
+  local mode = vim.fn.mode(1)
+  local is_typing = mode:find('^[iR]') ~= nil or mode:find('^ni') ~= nil
   return is_typing and tab.homes.layout.is_file_column_window(vim.api.nvim_get_current_win())
 end
 
@@ -163,6 +164,7 @@ local function show(tab, call)
   })
   put_in_view(window, call.ranges[1].start)
   shown_in[tab] = buffer
+  held[tab] = nil
   for _, listener in ipairs(step_shown_listeners) do
     listener(tab)
   end
@@ -170,7 +172,7 @@ local function show(tab, call)
 end
 
 --- Whether the autocommand that shows held steps is made.
-local watching_insert_leave = false
+local watching_modes = false
 
 --- Shows the step `tab` held back, now that the user no longer types in its
 --- middle window; tells the user, once, when the step no longer fits the file
@@ -192,15 +194,17 @@ local function show_held(tab, holding)
   end
 end
 
---- Has the steps tabs hold back shown when Insert mode is left, once the
---- editor has settled: for each tab whose user no longer types in its middle
---- window.
-local function show_held_steps_on_insert_leave()
-  if watching_insert_leave then
+--- Has the steps tabs hold back shown at each change of mode, once the
+--- editor has settled, for each tab whose user no longer types in its middle
+--- window: `ModeChanged` is told of leaving Insert mode with `CTRL-C` too,
+--- which `InsertLeave` is not.
+local function show_held_steps_when_typing_ends()
+  if watching_modes then
     return
   end
-  watching_insert_leave = true
-  vim.api.nvim_create_autocmd('InsertLeave', {
+  watching_modes = true
+  vim.api.nvim_create_autocmd('ModeChanged', {
+    pattern = '*:*',
     group = vim.api.nvim_create_augroup('aineo.entry.walkthrough', {}),
     desc = 'aineo: show the walkthrough step held while the user typed',
     callback = function()
@@ -238,10 +242,11 @@ end
 --- repositories are open, and when the layout has no room for the file. A
 --- turn is told only while the Claude Code is seen working.
 ---
---- While the user types in the middle window, in Insert or Replace mode, the
---- step is held back instead, in place of one held before, and shown when
---- Insert mode is left, checked again then: neither the buffer of the window
---- they type in nor its cursor is changed under them.
+--- While the user types in the middle window, in Insert or Replace mode, or
+--- in a command of Insert mode run with `CTRL-O`, the step is held back
+--- instead, in place of one held before, and shown, checked again, when the
+--- user no longer types there: neither the buffer of the window they type in
+--- nor its cursor is changed under them. A step shown drops the one held.
 ---
 ---@param tab aineo.entry.WalkthroughTab
 ---@param call aineo.mcp.WalkthroughCall
@@ -266,7 +271,7 @@ function M.take_step(tab, call, folders)
   end
   if is_typing_in_the_middle_window(tab) then
     held[tab] = { call = call, folders = folders }
-    show_held_steps_on_insert_leave()
+    show_held_steps_when_typing_ends()
     stepped_this_turn[tab] = tab.is_busy() or nil
     return done(held_words(call))
   end
