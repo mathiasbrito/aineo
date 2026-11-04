@@ -9,6 +9,7 @@
 local editors = require('aineo.mcp.editors')
 local names = require('aineo.mcp.names')
 local processes = require('aineo.mcp.processes')
+local walkthrough_tool = require('aineo.mcp.walkthrough_tool')
 
 local M = {}
 
@@ -104,11 +105,18 @@ function M.test_layout_tool_name()
   return ('mcp__%s__%s'):format(names.SERVER_NAME, names.TEST_LAYOUT_TOOL)
 end
 
+--- The name Claude Code gives the walkthrough tool: `mcp__<server>__<tool>`.
+---
+---@return string
+function M.walkthrough_tool_name()
+  return ('mcp__%s__%s'):format(names.SERVER_NAME, names.WALKTHROUGH_TOOL)
+end
+
 --- The tools Claude Code may call without asking the user (its
 --- `--allowedTools`): the report tool, the announcement tool, the tool
---- that reads the output of a process and the test layout tool, in that
---- order, and nothing else — the tools that run a command and stop one stay
---- with the user's approval.
+--- that reads the output of a process, the test layout tool and the
+--- walkthrough tool, in that order, and nothing else — the tools that run a
+--- command and stop one stay with the user's approval.
 ---
 ---@return string[]
 function M.allowed_mcp_tools()
@@ -117,7 +125,22 @@ function M.allowed_mcp_tools()
     M.announce_tool_name(),
     M.run_output_tool_name(),
     M.test_layout_tool_name(),
+    M.walkthrough_tool_name(),
   }
+end
+
+--- The paragraph appended to Claude Code's system prompt after the test
+--- layout's sentence: how a walkthrough of code goes, and in what order its
+--- plan is built (`aineo.mcp.walkthrough_tool`'s `PLAN_ORDER` and `PACE`).
+---
+---@return string
+function M.walkthrough_instructions()
+  return (
+    'aineo can walk the user through code in Neovim. When the user asks for a walkthrough of'
+    .. ' code, build its plan, tell the user the plan is done and ask whether to start, and show'
+    .. ' nothing until the user says yes. Then call `%s` to show a step: it opens a file in the'
+    .. ' middle window with an explanation above the lines it is about, and needs no approval. %s %s'
+  ):format(M.walkthrough_tool_name(), walkthrough_tool.PACE, walkthrough_tool.PLAN_ORDER)
 end
 
 --- The sentence appended to Claude Code's system prompt after the run
@@ -408,6 +431,40 @@ function M.receive_test_layout(call, start_token)
     return false
   end
   return test_layout_handler(call, start_token)
+end
+
+--- The handler `on_walkthrough_stepped()` registered, called with each
+--- call of the walkthrough tool a relay offers this editor.
+---@type fun(call: aineo.mcp.WalkthroughCall, start_token: string): { text: string, is_error: boolean }|false
+local walkthrough_handler
+
+--- Registers `handler`, in place of any before, as what this editor does
+--- with each call of the walkthrough tool, which the relay of a Claude Code
+--- this editor started offers it (`receive_walkthrough_step()`):
+--- `handler(call, start_token)`, with the call and the token of the start of
+--- the Claude Code whose agent made it, shows the step the call gives and
+--- answers the words for the agent and whether they are an error, or `false`
+--- when it does not take the call. Its strategy is the composition root's:
+--- plain dependency inversion, bound once at start.
+---
+---@param handler fun(call: aineo.mcp.WalkthroughCall, start_token: string): { text: string, is_error: boolean }|false
+function M.on_walkthrough_stepped(handler)
+  walkthrough_handler = handler
+end
+
+--- Takes a call of the walkthrough tool a relay offers, `call` of the start
+--- `start_token`, and answers what the handler `on_walkthrough_stepped()`
+--- registered answers, or `false` when none is registered. Called in the
+--- RPC request that offers it.
+---
+---@param call aineo.mcp.WalkthroughCall
+---@param start_token string
+---@return { text: string, is_error: boolean }|false
+function M.receive_walkthrough_step(call, start_token)
+  if not walkthrough_handler then
+    return false
+  end
+  return walkthrough_handler(call, start_token)
 end
 
 --- Records what a session hook of the Claude Code process `hook.pid` told —

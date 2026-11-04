@@ -140,7 +140,7 @@ end
 
 T['tools/list'] = MiniTest.new_set()
 
-T['tools/list']['lists the three run tools after report and announce_work, and test_layout last'] = function()
+T['tools/list']['lists the three run tools after report and announce_work, then test_layout and walkthrough_step'] = function()
   local relay = mcp_relay.start_relay()
 
   relay:send(mcp_messages.recorded('tools/list'))
@@ -149,7 +149,15 @@ T['tools/list']['lists the three run tools after report and announce_work, and t
     vim.tbl_map(function(tool)
       return tool.name
     end, get(decoded(relay:next_line()), 'result', 'tools')),
-    { 'report', 'announce_work', 'run', 'run_output', 'run_stop', 'test_layout' }
+    {
+      'report',
+      'announce_work',
+      'run',
+      'run_output',
+      'run_stop',
+      'test_layout',
+      'walkthrough_step',
+    }
   )
 end
 

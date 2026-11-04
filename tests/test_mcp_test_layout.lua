@@ -82,13 +82,13 @@ end
 
 T['tools/list'] = MiniTest.new_set()
 
-T['tools/list']['lists test_layout last, with its worktree and rules required'] = function()
+T['tools/list']['lists test_layout before walkthrough_step, with its worktree and rules required'] = function()
   local relay = mcp_relay.start_relay()
 
   relay:send(mcp_messages.recorded('tools/list'))
 
   local tools = get(decoded(relay:next_line()), 'result', 'tools')
-  local listed = tools[#tools]
+  local listed = tools[#tools - 1]
   eq(
     { listed.name, listed.inputSchema.required, listed.inputSchema.additionalProperties },
     { 'test_layout', { 'worktree', 'rules' }, false }
