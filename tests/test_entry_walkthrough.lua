@@ -520,6 +520,140 @@ T['a step']['is refused, and shows nothing, when the layout has no room for the 
   eq(bands_by_file(), {})
 end
 
+T['a step while the user types in the middle window'] = MiniTest.new_set()
+
+--- Moves the cursor of the child to the window that shows `file`, a file of
+--- the project, and types `keys` there (`i` or `R`).
+---
+---@param file string
+---@param keys string
+local function type_in_the_window_of(file, keys)
+  child.lua(
+    [[vim.api.nvim_set_current_win(vim.fn.bufwinid(vim.fn.bufnr(...)))]],
+    { project .. '/' .. file }
+  )
+  child.type_keys(keys)
+end
+
+--- Waits until the child shows bands in the buffer of `file`, a file of the
+--- project, or the time a case waits is over.
+---
+---@param file string
+local function wait_for_bands_in(file)
+  vim.wait(explained.PATIENCE_MS, function()
+    return bands_by_file()[file] ~= nil
+  end, 20)
+end
+
+--- The name, from the project, of the file the child's current window shows.
+---
+---@return string
+local function current_file()
+  return child.lua_get([[vim.api.nvim_buf_get_name(0)]]):sub(#project + 2)
+end
+
+local HELD_WORDS = 'The user is typing in the middle window: step 2/3, "The values" shows once they'
+  .. ' leave Insert mode. Show the next step only when the user asks to move on.'
+
+T['a step while the user types in the middle window']['is held in Insert mode, and shown once they leave it'] = function()
+  local token = open_layout('walkthrough-held')
+  walk(token, step_for('src/code.lua'))
+  type_in_the_window_of('src/code.lua', 'i')
+
+  local answer = walk(token, step_for('src/other.lua', { step = 2 }))
+  local while_typing = { bands_by_file(), current_file(), child.fn.mode() }
+  child.type_keys('<Esc>')
+  wait_for_bands_in('src/other.lua')
+
+  eq(answer, { text = HELD_WORDS, is_error = false })
+  eq(while_typing, { { ['src/code.lua'] = { 2, 5 } }, 'src/code.lua', 'i' })
+  eq(bands_by_file(), { ['src/other.lua'] = { 2, 5 } })
+end
+
+T['a step while the user types in the middle window']['is held in Replace mode too'] = function()
+  local token = open_layout('walkthrough-held-replace')
+  walk(token, step_for('src/code.lua'))
+  type_in_the_window_of('src/code.lua', 'R')
+
+  walk(token, step_for('src/other.lua', { step = 2 }))
+  local while_typing = bands_by_file()
+  child.type_keys('<Esc>')
+  wait_for_bands_in('src/other.lua')
+
+  eq(while_typing, { ['src/code.lua'] = { 2, 5 } })
+  eq(bands_by_file(), { ['src/other.lua'] = { 2, 5 } })
+end
+
+T['a step while the user types in the middle window']['a newer step replaces the one held'] = function()
+  local token = open_layout('walkthrough-held-newer')
+  walk(token, step_for('src/code.lua'))
+  type_in_the_window_of('src/code.lua', 'i')
+  walk(token, step_for('src/other.lua', { step = 2 }))
+  child.type_keys('<Esc>')
+  wait_for_bands_in('src/other.lua')
+  type_in_the_window_of('src/other.lua', 'i')
+  walk(
+    token,
+    step_for('src/other.lua', { step = 3, ranges = { { start = 4, ['end'] = 4, text = 'Four.' } } })
+  )
+  walk(
+    token,
+    step_for('src/long.lua', { step = 4, ranges = { { start = 9, ['end'] = 9, text = 'Nine.' } } })
+  )
+  child.type_keys('<Esc>')
+  wait_for_bands_in('src/long.lua')
+
+  eq(bands_by_file(), { ['src/long.lua'] = { 9 } })
+end
+
+T['a step while the user types in the middle window']['is shown at once when they type in another window'] = function()
+  local token = open_layout('walkthrough-not-held')
+  walk(token, step_for('src/code.lua'))
+  child.cmd('Aineo input')
+  child.type_keys('i')
+
+  local answer = walk(token, step_for('src/other.lua', { step = 2 }))
+
+  eq(child.fn.mode(), 'i')
+  eq(answer.text:sub(1, 12), 'Showing step')
+  eq(bands_by_file(), { ['src/other.lua'] = { 2, 5 } })
+end
+
+T['a step while the user types in the middle window']['ending the walkthrough drops the one held'] = function()
+  local token = open_layout('walkthrough-held-ended')
+  walk(token, step_for('src/code.lua'))
+  type_in_the_window_of('src/code.lua', 'i')
+  walk(token, step_for('src/other.lua', { step = 2 }))
+
+  walk(token, step_for('src/other.lua', { step = 3, ranges = {} }))
+  child.type_keys('<Esc>')
+  vim.wait(300)
+
+  eq(bands_by_file(), {})
+end
+
+T['a step while the user types in the middle window']['that no longer fits is told and not shown'] = function()
+  local token = open_layout('walkthrough-held-unfit')
+  walk(token, step_for('src/code.lua'))
+  type_in_the_window_of('src/code.lua', 'i')
+  walk(token, step_for('src/other.lua', { step = 2 }))
+  vim.fn.writefile({ 'a', 'b' }, project .. '/src/other.lua')
+  child.lua('_G.entry_test_messages = {}')
+
+  child.type_keys('<Esc>')
+  vim.wait(explained.PATIENCE_MS, function()
+    return #entry.messages(child) > 0
+  end, 20)
+  vim.fn.writefile(CODE, project .. '/src/other.lua')
+
+  eq(entry.messages(child), {
+    {
+      message = 'aineo: the walkthrough step held while you typed is not shown: ranges[1]: lines 2-3 are outside the file, which has 2 lines',
+      level = vim.log.levels.INFO,
+    },
+  })
+end
+
 T['ending the walkthrough'] = MiniTest.new_set()
 
 T['ending the walkthrough']['clears the bands, whichever file shows them, and says so'] = function()

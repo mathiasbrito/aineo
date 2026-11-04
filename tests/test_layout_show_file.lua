@@ -98,4 +98,20 @@ T['a file']['opens above a file with changes that cannot leave the window, which
   }, { true, changed, true })
 end
 
+T['a window'] = MiniTest.new_set()
+
+T['a window']['is a window of the file column when it shows a file there, and not when it is a window of the layout'] = function()
+  local buffers = layout.open_with_stand_ins(child)
+  local file_window = show_file(loaded_buffer(file('first.txt')))
+  local function is_in_file_column(window)
+    return child.lua_get("require('aineo.layout').is_file_column_window(...)", { window })
+  end
+
+  eq({
+    is_in_file_column(file_window),
+    is_in_file_column(layout.window_showing(child, buffers.report)),
+    is_in_file_column(layout.window_showing(child, buffers.claude)),
+  }, { true, false, false })
+end
+
 return T
