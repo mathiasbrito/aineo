@@ -1968,11 +1968,11 @@ Visual mode they ask about the lines selected. When it finds none, you are
 told once: `aineo: no potential issues found`. Issues show as explanations do,
 in a namespace of their own and in the look of |hl-AineoExplainIssue|, the
 accent being the foreground of |hl-DiagnosticWarn|, `#e5c07b` without one, and
-the label `issue`. Since `\v` starts `\vi`, `\vm`, `\vc`, `\vn`, `\vp` and `\vq`, `\V` starts
-`\VI`, `\VV` and `\Vf`, and `\VV` starts `\VVI` and `\VVf`, Neovim waits
-'timeoutlen' for a following `i`, `m`, `c`, `n`, `p` or `q` before it runs `\v`, for a
-following `I`, `V` or `f` before it runs `\V`, and for a following `I` or `f`
-before it runs `\VV`.
+the label `issue`. Since `\v` starts `\vi`, `\vm`, `\vc`, `\vn`, `\vp` and
+`\vq`, `\V` starts `\VI`, `\VV` and `\Vf`, and `\VV` starts `\VVI` and `\VVf`,
+Neovim waits 'timeoutlen' for a following `i`, `m`, `c`, `n`, `p` or `q`
+before it runs `\v`, for a following `I`, `V` or `f` before it runs `\V`, and
+for a following `I` or `f` before it runs `\VV`.
 
 Explanations and issues are shown together on a buffer, and each key toggles
 its own kind: pressed in Normal mode on a buffer that shows what the key asks
