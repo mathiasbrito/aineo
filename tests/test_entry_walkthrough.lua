@@ -30,6 +30,7 @@ local function make_the_project()
   project = git_repo.create('walkthrough', {
     ['src/code.lua'] = CODE,
     ['src/other.lua'] = CODE,
+    ['src/long.lua'] = vim.fn.map(vim.fn.range(1, 100), 'printf("local v%d = %d", v:val, v:val)'),
   })
 end
 
@@ -164,6 +165,33 @@ T['a step']['opens the file in the middle window with a band above each range, t
   eq(
     child.lua_get([[vim.fn.bufwinid(vim.fn.bufnr(...)) > 0]], { project .. '/src/code.lua' }),
     true
+  )
+end
+
+T['a step']['puts the first range in view, with a few lines above it, and the cursor on its first line'] = function()
+  local token = open_layout('walkthrough-in-view')
+  local was_in = child.lua_get('vim.api.nvim_get_current_win()')
+
+  walk(
+    token,
+    step_for('src/long.lua', {
+      ranges = {
+        { start = 80, ['end'] = 82, text = 'Far down.' },
+        { start = 10, ['end'] = 10, text = 'Not first.' },
+      },
+    })
+  )
+
+  eq(
+    child.lua_get(
+      [[(function(file)
+        local window = vim.fn.bufwinid(vim.fn.bufnr(file))
+        local view = vim.api.nvim_win_call(window, vim.fn.winsaveview)
+        return { view.topline, view.lnum, vim.api.nvim_get_current_win() }
+      end)(...)]],
+      { project .. '/src/long.lua' }
+    ),
+    { 77, 80, was_in }
   )
 end
 
@@ -327,6 +355,18 @@ T['a step']['shows a file of a worktree the tab’s agents reported, besides the
 
   eq(answer.is_error, false)
   eq(bands_by_file(), { [other .. '/a.lua'] = { 2, 5 } })
+end
+
+T['a step']['is refused, and shows nothing, when the layout has no room for the file'] = function()
+  local token = open_layout('walkthrough-no-room')
+  child.lua(
+    [[require('aineo.entry.registry').tab_list[1].homes.layout.show_file = function() return nil end]]
+  )
+
+  local answer = walk(token, step_for('src/code.lua'))
+
+  eq(answer, { text = 'refused: the middle column has no room for the file', is_error = true })
+  eq(bands_by_file(), {})
 end
 
 T['ending the walkthrough'] = MiniTest.new_set()
