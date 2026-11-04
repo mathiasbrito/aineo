@@ -130,7 +130,7 @@ function M.take_step(tab, call, folders)
     return done('The walkthrough is ended and its bands are cleared.')
   end
   follow_turns(tab)
-  if tab.is_busy() and stepped_this_turn[tab] then
+  if stepped_this_turn[tab] then
     return refused(
       'a step is shown in this turn already;'
         .. ' show the next one in a turn of its own, once the user asks to move on'

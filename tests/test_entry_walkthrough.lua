@@ -113,16 +113,20 @@ end
 
 --- Offers the child's MCP home a call of the walkthrough tool, as the relay
 --- of the Claude Code with the start token `token` does, and returns what
---- the editor answers.
+--- the editor answers, or, when the editor raises an error instead, a table
+--- naming it, so that a case compares it with what it expects and fails by
+--- its assertion.
 ---
 ---@param token string
 ---@param call table
----@return { text: string, is_error: boolean }|false
+---@return { text: string, is_error: boolean }|false|{ raised: string }
 local function walk(token, call)
-  return child.lua_get(
+  local answered, answer = pcall(
+    child.lua_get,
     [[require('aineo.mcp').receive_walkthrough_step(..., select(2, ...))]],
     { call, token }
   )
+  return answered and answer or { raised = tostring(answer) }
 end
 
 --- The buffers of the child that show walkthrough bands, by the name of
@@ -328,7 +332,7 @@ end
 T['a step']['is refused for a file larger than 1 MiB'] = function()
   local token = open_layout('walkthrough-large')
   local large = project .. '/src/large.txt'
-  vim.fn.writefile({ ('x'):rep(1024 * 1024 + 1) }, large)
+  vim.fn.writefile({ ('x'):rep(1024 * 1024) }, large)
 
   local answer = walk(
     token,
@@ -451,6 +455,18 @@ T['a second step']['in the turn after is shown'] = function()
   eq(bands_by_file(), { ['src/other.lua'] = { 2, 5 } })
 end
 
+T['a second step']['is shown once the turn that showed the first has ended'] = function()
+  local token = open_layout('walkthrough-turn-ended')
+  be_busy(true)
+  walk(token, step_for('src/code.lua'))
+  be_busy(false)
+
+  local answer = walk(token, step_for('src/other.lua', { step = 2 }))
+
+  eq(answer.is_error, false)
+  eq(bands_by_file(), { ['src/other.lua'] = { 2, 5 } })
+end
+
 T['a second step']['is shown when the agent is not seen working, which tells no turn from the next'] = function()
   local token = open_layout('walkthrough-no-turn')
   walk(token, step_for('src/code.lua'))
@@ -529,6 +545,19 @@ T['the keys']['say so, and send nothing, while no step is shown']['given'] = fun
   send.watch_writes(child)
 
   entry.press(child, keys)
+
+  eq(send.writes(child), {})
+  eq(entry.messages(child), {
+    { message = 'aineo: no walkthrough step is shown in this tab', level = vim.log.levels.INFO },
+  })
+end
+
+T['the keys']['say so, and send nothing, in a tab page that holds no tab of aineo'] = function()
+  local token = open_layout('walkthrough-key-other-page')
+  show_a_step(token)
+  child.cmd('tabnew')
+
+  entry.press(child, '\\vn')
 
   eq(send.writes(child), {})
   eq(entry.messages(child), {
