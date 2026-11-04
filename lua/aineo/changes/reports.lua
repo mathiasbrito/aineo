@@ -404,4 +404,14 @@ function M.nodes_of_kept_reports(kept, candidates)
   return (M.still_listed(nodes, candidates))
 end
 
+--- The folder of each worktree of `nodes`, in their order.
+---
+---@param nodes aineo.changes.ReportedNode[]
+---@return string[]
+function M.worktree_tops(nodes)
+  return vim.tbl_map(function(node)
+    return node.worktree.top
+  end, nodes)
+end
+
 return M
