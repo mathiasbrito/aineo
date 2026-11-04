@@ -124,17 +124,14 @@ local function shown_words(call)
   )
 end
 
---- Whether the user is typing in a window of `tab`'s middle window: the
---- current window is one of the file column's, in Insert or Replace mode,
---- also while a command of Insert mode runs from Normal mode (`CTRL-O`).
+--- Whether the user is typing in `tab`'s middle window: the current window
+--- is one of the file column's, and the mode is Insert or Replace.
 ---
 ---@param tab aineo.entry.WalkthroughTab
 ---@return boolean
 local function is_typing_in_the_middle_window(tab)
   local mode = vim.fn.mode()
-  local is_typing = vim.startswith(mode, 'i')
-    or vim.startswith(mode, 'R')
-    or mode:match('^n[iRv]') ~= nil
+  local is_typing = vim.startswith(mode, 'i') or vim.startswith(mode, 'R')
   return is_typing and tab.homes.layout.is_file_column_window(vim.api.nvim_get_current_win())
 end
 
