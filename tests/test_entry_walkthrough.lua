@@ -1029,6 +1029,7 @@ T['a key after a message was sent']['goes after 10 s when the agent is never see
   show_a_step(token)
   entry.press(child, '\\vn')
   entry.press(child, '\\vp')
+  vim.wait(5000)
   local before_the_bound = send.writes(child)
 
   vim.wait(15000, function()
@@ -1039,6 +1040,27 @@ T['a key after a message was sent']['goes after 10 s when the agent is never see
   eq(send.writes(child), {
     paste('Next walkthrough step'),
     paste('Previous walkthrough step'),
+  })
+end
+
+T['a key after a message was sent']['waits 10 s from its own sending, not from an earlier one'] = function()
+  local token = open_layout('walkthrough-key-ten-seconds-own')
+  show_a_step(token)
+  entry.press(child, '\\vn')
+  be_busy(true)
+  be_busy(false)
+  vim.wait(6000)
+  entry.press(child, '\\vp')
+  child.lua('_G.entry_test_messages = {}')
+  entry.press(child, '\\vq')
+
+  vim.wait(6000)
+
+  eq(entry.messages(child), {
+    {
+      message = 'aineo: the agent has not answered yet: "End the walkthrough" goes when its turn ends',
+      level = vim.log.levels.INFO,
+    },
   })
 end
 
