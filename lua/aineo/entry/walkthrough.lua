@@ -16,7 +16,7 @@ local M = {}
 
 --- What a step needs of the tab it is shown for.
 ---@class aineo.entry.WalkthroughTab
----@field homes { layout: aineo.layout.Layout } the tab's layout, whose middle window shows the file
+---@field homes { layout: aineo.layout.Layout } the tab's layout, whose middle window shows the file, and which tells whether a window is in it
 ---@field is_busy fun(): boolean whether the tab's Claude Code is working
 ---@field on_busy_change fun(listener: fun(busy: boolean)) has `listener` told whenever the tab's Claude Code starts or stops working
 
@@ -24,6 +24,11 @@ local M = {}
 --- tab that shows no walkthrough.
 ---@type table<aineo.entry.WalkthroughTab, integer>
 local shown_in = setmetatable({}, { __mode = 'k' })
+
+--- The step each tab holds back while the user types in the middle window,
+--- with the folders its file was checked against, by tab; one at most.
+---@type table<aineo.entry.WalkthroughTab, { call: aineo.mcp.WalkthroughCall, folders: string[] }>
+local held = setmetatable({}, { __mode = 'k' })
 
 --- The tabs that showed a step in the turn their Claude Code is working in
 --- now, which ends when it stops working.
@@ -109,37 +114,29 @@ local function shown_words(call)
   )
 end
 
---- Shows `call`, a step of a walkthrough, for `tab`: its file in the
---- middle window, a band above the first line of each range, in place of
---- the bands of the step before, whichever file that showed. A call with no
---- range ends the walkthrough: its bands are cleared, and nothing else is
---- checked. Refuses a step, drawing nothing and keeping what is shown, when
---- the tab shows one already in the turn its Claude Code works in, when its
---- file or a range is not what `aineo.entry.walkthrough_file` allows, given
---- `folders`, the folders whose repositories are open, and when the layout
---- has no room for the file. A turn is told only while the Claude Code is
---- seen working.
+--- Whether the user is typing in a window of `tab`'s middle window: the
+--- current window is one of the file column's, in Insert or Replace mode,
+--- also while a command of Insert mode runs from Normal mode (`CTRL-O`).
+---
+---@param tab aineo.entry.WalkthroughTab
+---@return boolean
+local function is_typing_in_the_middle_window(tab)
+  local mode = vim.fn.mode()
+  local is_typing = vim.startswith(mode, 'i')
+    or vim.startswith(mode, 'R')
+    or mode:match('^n[iRv]') ~= nil
+  return is_typing and tab.homes.layout.is_file_column_window(vim.api.nvim_get_current_win())
+end
+
+--- Shows `call`, already checked, for `tab`: its file in the middle window,
+--- the bands of the step before cleared, a band above each range, the first
+--- range in view. Refuses it, changing nothing, when the layout has no room
+--- for the file.
 ---
 ---@param tab aineo.entry.WalkthroughTab
 ---@param call aineo.mcp.WalkthroughCall
----@param folders string[]
 ---@return aineo.entry.WalkthroughAnswer
-function M.take_step(tab, call, folders)
-  if #call.ranges == 0 then
-    clear_bands(tab)
-    return done('The walkthrough is ended and its bands are cleared.')
-  end
-  follow_turns(tab)
-  if stepped_this_turn[tab] then
-    return refused(
-      'a step is shown in this turn already;'
-        .. ' show the next one in a turn of its own, once the user asks to move on'
-    )
-  end
-  local problem = walkthrough_file.problem_with(call, folders)
-  if problem then
-    return refused(problem)
-  end
+local function show(tab, call)
   local buffer = vim.fn.bufadd(call.file)
   vim.fn.bufload(buffer)
   local window = tab.homes.layout.show_file(buffer)
@@ -159,8 +156,113 @@ function M.take_step(tab, call, folders)
   })
   put_in_view(window, call.ranges[1].start)
   shown_in[tab] = buffer
-  stepped_this_turn[tab] = tab.is_busy() or nil
   return done(shown_words(call))
+end
+
+--- Whether the autocommand that shows held steps is made.
+local watching_insert_leave = false
+
+--- Shows the step `tab` held back, now that the user no longer types in its
+--- middle window; tells the user, once, when the step no longer fits the file
+--- or the layout.
+---
+---@param tab aineo.entry.WalkthroughTab
+---@param holding { call: aineo.mcp.WalkthroughCall, folders: string[] }
+local function show_held(tab, holding)
+  held[tab] = nil
+  local problem = walkthrough_file.problem_with(holding.call, holding.folders)
+  local answer = not problem and show(tab, holding.call)
+  if problem or answer.is_error then
+    vim.notify(
+      ('aineo: the walkthrough step held while you typed is not shown: %s'):format(
+        problem or answer.text:gsub('^refused: ', '')
+      ),
+      vim.log.levels.INFO
+    )
+  end
+end
+
+--- Has the steps tabs hold back shown when Insert mode is left, once the
+--- editor has settled: for each tab whose user no longer types in its middle
+--- window.
+local function show_held_steps_on_insert_leave()
+  if watching_insert_leave then
+    return
+  end
+  watching_insert_leave = true
+  vim.api.nvim_create_autocmd('InsertLeave', {
+    group = vim.api.nvim_create_augroup('aineo.entry.walkthrough', {}),
+    desc = 'aineo: show the walkthrough step held while the user typed',
+    callback = function()
+      vim.schedule(function()
+        for tab, holding in pairs(held) do
+          if not is_typing_in_the_middle_window(tab) then
+            show_held(tab, holding)
+          end
+        end
+      end)
+    end,
+  })
+end
+
+--- The words for the agent that tell a step is held back.
+---
+---@param call aineo.mcp.WalkthroughCall
+---@return string
+local function held_words(call)
+  local step = call.total and ('%d/%d'):format(call.step, call.total) or tostring(call.step)
+  return (
+    'The user is typing in the middle window: step %s, "%s" shows once they leave Insert mode.'
+    .. ' Show the next step only when the user asks to move on.'
+  ):format(step, call.title)
+end
+
+--- Shows `call`, a step of a walkthrough, for `tab`: its file in the
+--- middle window, a band above the first line of each range, in place of
+--- the bands of the step before, whichever file that showed. A call with no
+--- range ends the walkthrough: its bands are cleared, a step held back is
+--- dropped, and nothing else is checked. Refuses a step, drawing nothing and
+--- keeping what is shown, when the tab shows one already in the turn its
+--- Claude Code works in, when its file or a range is not what
+--- `aineo.entry.walkthrough_file` allows, given `folders`, the folders whose
+--- repositories are open, and when the layout has no room for the file. A
+--- turn is told only while the Claude Code is seen working.
+---
+--- While the user types in the middle window, in Insert or Replace mode, the
+--- step is held back instead, in place of one held before, and shown when
+--- Insert mode is left, checked again then: neither the buffer of the window
+--- they type in nor its cursor is changed under them.
+---
+---@param tab aineo.entry.WalkthroughTab
+---@param call aineo.mcp.WalkthroughCall
+---@param folders string[]
+---@return aineo.entry.WalkthroughAnswer
+function M.take_step(tab, call, folders)
+  if #call.ranges == 0 then
+    held[tab] = nil
+    clear_bands(tab)
+    return done('The walkthrough is ended and its bands are cleared.')
+  end
+  follow_turns(tab)
+  if stepped_this_turn[tab] then
+    return refused(
+      'a step is shown in this turn already;'
+        .. ' show the next one in a turn of its own, once the user asks to move on'
+    )
+  end
+  local problem = walkthrough_file.problem_with(call, folders)
+  if problem then
+    return refused(problem)
+  end
+  if is_typing_in_the_middle_window(tab) then
+    held[tab] = { call = call, folders = folders }
+    show_held_steps_on_insert_leave()
+    stepped_this_turn[tab] = tab.is_busy() or nil
+    return done(held_words(call))
+  end
+  local answer = show(tab, call)
+  stepped_this_turn[tab] = not answer.is_error and tab.is_busy() or nil
+  return answer
 end
 
 --- Whether `tab` shows the bands of a walkthrough step.
@@ -176,6 +278,7 @@ end
 ---
 ---@param tab aineo.entry.WalkthroughTab
 function M.clear(tab)
+  held[tab] = nil
   clear_bands(tab)
 end
 
