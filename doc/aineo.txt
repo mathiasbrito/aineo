@@ -67,10 +67,11 @@ leaving the mode you were in (|aineo-terminal-keys|).
 
 aineo answers none of Claude Code's questions: its permission prompts, its
 trust dialog and every other dialog are yours to answer, in its terminal.
-aineo allows four tools of its own without asking, the report tool,
-`announce_work`, `run_output` and `test_layout` (|aineo-report|,
-|aineo-run-tools|, |aineo-test-layout|), and nothing else: Claude Code asks
-you before every run or stop of a process.
+aineo allows five tools of its own without asking, the report tool,
+`announce_work`, `run_output`, `test_layout` and `walkthrough_step`
+(|aineo-report|, |aineo-run-tools|, |aineo-test-layout|,
+|aineo-walkthrough|), and nothing else: Claude Code asks you before every run
+or stop of a process.
 
 ==============================================================================
 2. REQUIREMENTS AND INSTALLATION                               *aineo-install*
@@ -1967,9 +1968,9 @@ Visual mode they ask about the lines selected. When it finds none, you are
 told once: `aineo: no potential issues found`. Issues show as explanations do,
 in a namespace of their own and in the look of |hl-AineoExplainIssue|, the
 accent being the foreground of |hl-DiagnosticWarn|, `#e5c07b` without one, and
-the label `issue`. Since `\v` starts `\vi`, `\vm` and `\vc`, `\V` starts
+the label `issue`. Since `\v` starts `\vi`, `\vm`, `\vc`, `\vn`, `\vp` and `\vq`, `\V` starts
 `\VI`, `\VV` and `\Vf`, and `\VV` starts `\VVI` and `\VVf`, Neovim waits
-'timeoutlen' for a following `i`, `m` or `c` before it runs `\v`, for a
+'timeoutlen' for a following `i`, `m`, `c`, `n`, `p` or `q` before it runs `\v`, for a
 following `I`, `V` or `f` before it runs `\V`, and for a following `I` or `f`
 before it runs `\VV`.
 
@@ -2409,8 +2410,10 @@ word for them.
 once: it stops every request that runs for it, so that no answer of theirs is
 shown later; closes the float steering a request for it, or asking for a
 request of code; rejects the fix or the written code it shows, applying
-nothing; removes every explanation and issue, with their marks, and the fix
-explanations; gives every window back the 'conceallevel' and
+nothing; removes every explanation and issue, with their marks, the fix
+explanations and the bands of a walkthrough (|aineo-walkthrough|), which it
+clears in whichever file of the tab they are, sending nothing to the agent;
+gives every window back the 'conceallevel' and
 'concealcursor' a fix set, and the buffer its 'modifiable'; takes back the
 keys aineo mapped for the buffer (`]v`, `[v`, `\Va`, `\Vr`, `\Vd`, `\Wa`,
 `\Wr`, `\Wd`, `\WA`, `\WR`, `]w`, `[w`) and the
@@ -2421,6 +2424,62 @@ float, which is not the buffer's, stays. You are told `aineo: explanations
 cleaned from this buffer`, also when there was nothing to clean. `:Aineo
 explain clear` does the same, and |<Plug>(aineo-explain-clean)| is the key's
 mapping.
+
+                                                         *aineo-walkthrough*
+`walkthrough_step` is how an agent walks you through code, after an
+implementation, say: you ask Claude Code for a walkthrough of the new code,
+it plans one, tells you the plan is done and asks whether to start, and
+shows the first step only once you say yes. A step opens one file in the
+middle window of the tab whose Claude Code called, replacing the buffer
+shown there, which stays listed, and puts an explanation above each of up to
+16 ranges of lines, in the look of `\v` (|aineo-explain|) under the label
+`walk`, with the heading `<step>/<total> · <title>` (`<step> · <title>`
+when it gives no total) on the first. The first range is in view, three
+lines of the file above it, and the cursor of that window is on its first
+line; the window you are in is not moved. The bands are in highlight groups
+of their own, `AineoWalk`, `AineoWalkGutter`, `AineoWalkGutterFill` and
+`AineoWalkNr`, which follow `DiagnosticInfo` as `\v` does, and `]v` and
+`[v` jump between them (|aineo-explain-jump|). The tool is allowed without
+asking, and its answer says what it showed or why it refused. Its arguments:
+- `file`, `title` and `step`, required: the absolute path of the file, what
+  the step is about (at most 200 bytes, on one line) and its number from 1;
+- `total`, how many steps there will be, not below `step`;
+- `ranges`, each `{ start, end, text, first_line? }`: the first and last
+  line the explanation is about, from 1, its Markdown (at most 8 KiB, and
+  32 KiB for all of them; shown as the text it is, wrapped), and the
+  expected text of line `start`, compared with the spaces around both left
+  out: a mismatch refuses the call and nothing is shown. A call with no
+  `ranges` ends the walkthrough and clears its bands, and needs no `file`
+  that is there.
+The file must be on disk, a regular file of at most 1 MiB, inside a checkout
+of a repository this editor has open (the folder it started in, the working
+folder of each tab page and window, the folder each tab's Claude Code started
+in) or of a worktree the tab's agents reported (|aineo-changes-reported|),
+below no `.git` and through no link that leaves the checkout, as the test
+layout guards the paths an agent gives it (|aineo-test-layout|). A branch no
+worktree has checked out has no file on disk: walk through checked-out work.
+A step is refused in a turn of the agent in which it showed one already: aineo
+tells a turn by the tab's Claude Code being seen working, so with an agent
+never seen working two steps may show. The instructions appended to the system
+prompt and the description of the tool both say to show one step per call,
+only after you ask to move, and to plan the way the solution is built: a
+concept (a type, a module, a data shape, a rule) is introduced in a step
+before any step whose code relies on it, starting from what the rest stands
+on and following the flow, and a step that cannot keep that order says so and
+names the step that explains it. aineo checks none of that order.
+
+The agent moves only when you ask. `\vn` sends `Next walkthrough step`,
+`\vp` `Previous walkthrough step` and `\vq` `End the walkthrough`, which
+also clears the bands at once, to the Claude Code of the tab you are in, as
+a message of yours, as Send sends Input (|aineo-send|). They act only while
+the tab shows a step; otherwise you are told `aineo: no walkthrough step is
+shown in this tab`. While the agent is working the message waits, and goes
+when its turn ends; one waits at most, and the last key replaces it. Closing
+the buffer is no signal. A claim of another session refuses them, as it
+refuses Send. `\vc` clears the bands too, without sending anything
+(|aineo-explain-clean|). Your own explanations are never touched by a step.
+The keys are |<Plug>(aineo-walk-next)|, |<Plug>(aineo-walk-previous)| and
+|<Plug>(aineo-walk-end)|; `:Aineo` has no word for them.
 
                                                           *aineo-explain-jump*
 `]v` and `[v` move the cursor to the line of the next and the previous
@@ -2557,6 +2616,16 @@ AineoFixWhyGutter	As |hl-AineoExplainGutter|, for the fix explanation.
                                                    *hl-AineoFixWhyGutterFill*
 AineoFixWhyGutterFill	As |hl-AineoExplainGutterFill|, for the fix
 			explanation.
+                                                                *hl-AineoWalk*
+AineoWalk		As |hl-AineoExplain|, for the bands of a walkthrough
+			step (|aineo-walkthrough|), the accent being the
+			foreground of |hl-DiagnosticInfo| too.
+                                                          *hl-AineoWalkGutter*
+AineoWalkGutter		As |hl-AineoExplainGutter|, for a walkthrough.
+                                                      *hl-AineoWalkGutterFill*
+AineoWalkGutterFill	As |hl-AineoExplainGutterFill|, for a walkthrough.
+                                                              *hl-AineoWalkNr*
+AineoWalkNr		As |hl-AineoExplainNr|, for a walkthrough.
                                                                *hl-AineoWrite*
 AineoWrite		As |hl-AineoExplain|, for the row that names the
 			request of written code and the line that says it is
@@ -3785,6 +3854,21 @@ you turn the prefix off, or when a prefix key is yours: >lua
 			In Normal mode, returns the current buffer to how it
 			behaved when it was opened (|aineo-explain-clean|).
 
+                                                   *<Plug>(aineo-walk-next)*
+<Plug>(aineo-walk-next)
+			In Normal mode, asks the agent of the tab you are in
+			for the next step of its walkthrough, as a message of
+			yours (|aineo-walkthrough|).
+
+                                                *<Plug>(aineo-walk-previous)*
+<Plug>(aineo-walk-previous)
+			In Normal mode, asks for the previous step.
+
+                                                     *<Plug>(aineo-walk-end)*
+<Plug>(aineo-walk-end)
+			In Normal mode, ends the walkthrough: clears its bands
+			and tells the agent so.
+
                                                          *<Plug>(aineo-write)*
 <Plug>(aineo-write)
 			In Normal mode, opens the float in which you type a
@@ -4021,6 +4105,12 @@ which has none, and those of a fix shown, whose keys are local to its buffer
 \Wn		|<Plug>(aineo-test-next)|
                                                                    *aineo-\vc*
 \vc		|<Plug>(aineo-explain-clean)|
+                                                                   *aineo-\vn*
+\vn		|<Plug>(aineo-walk-next)|
+                                                                   *aineo-\vp*
+\vp		|<Plug>(aineo-walk-previous)|
+                                                                   *aineo-\vq*
+\vq		|<Plug>(aineo-walk-end)|
                                                                   *aineo-v_\s*
 \s		|<Plug>(aineo-send)| in Visual mode (|aineo-send|)
                                                                   *aineo-v_\v*
@@ -4598,12 +4688,13 @@ aineo starts Claude Code with five additions of its own:
 - instructions appended to its system prompt, telling Claude when to call
   the report tool and how to write a report (below), then, after a blank
   line each, one paragraph on `announce_work` (below), one on the run
-  tools (|aineo-run-tools|) and one sentence on `test_layout`
-  (|aineo-test-layout|);
+  tools (|aineo-run-tools|), one sentence on `test_layout`
+  (|aineo-test-layout|) and one paragraph on `walkthrough_step`
+  (|aineo-walkthrough|);
 - aineo's MCP server, which Claude Code runs as a headless `nvim`, given
-  through `--mcp-config`, with six tools: `report`, `announce_work`, `run`,
-  `run_output` and `run_stop` (|aineo-run-tools|), and `test_layout`
-  (|aineo-test-layout|);
+  through `--mcp-config`, with seven tools: `report`, `announce_work`, `run`,
+  `run_output` and `run_stop` (|aineo-run-tools|), `test_layout`
+  (|aineo-test-layout|) and `walkthrough_step` (|aineo-walkthrough|);
 - a `SessionStart` and a `SessionEnd` hook, which Claude Code also runs as
   a headless `nvim`, given through `--settings`: they tell the editor when
   Claude Code switches session (|aineo-claude-session|). Claude Code
@@ -4620,9 +4711,10 @@ aineo starts Claude Code with five additions of its own:
   aineo puts nothing else in `--settings`, and adds them after the hooks
   of a `--settings` in `claude.cmd`, passing the two together in a file
   only you can read (|aineo-config-claude.cmd|);
-- four tools allowed without asking: `--allowedTools mcp__aineo__report
+- five tools allowed without asking: `--allowedTools mcp__aineo__report
   mcp__aineo__announce_work mcp__aineo__run_output
-  mcp__aineo__test_layout`. `run` and `run_stop` are not, and carry a
+  mcp__aineo__test_layout mcp__aineo__walkthrough_step`. `run` and
+  `run_stop` are not, and carry a
   marker that makes Claude Code ask you for each call in every mode
   (|aineo-run-tools|).
 

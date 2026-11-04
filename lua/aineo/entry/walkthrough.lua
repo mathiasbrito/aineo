@@ -163,4 +163,20 @@ function M.take_step(tab, call, folders)
   return done(shown_words(call))
 end
 
+--- Whether `tab` shows the bands of a walkthrough step.
+---
+---@param tab aineo.entry.WalkthroughTab
+---@return boolean
+function M.is_shown(tab)
+  local buffer = shown_in[tab]
+  return buffer ~= nil and require('aineo.explain').is_walkthrough_shown(buffer)
+end
+
+--- Removes the bands `tab` shows, in whichever file.
+---
+---@param tab aineo.entry.WalkthroughTab
+function M.clear(tab)
+  clear_bands(tab)
+end
+
 return M
