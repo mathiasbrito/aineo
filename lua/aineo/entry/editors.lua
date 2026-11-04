@@ -1,7 +1,7 @@
 --- The handlers this Neovim's entries in the list of running editors need,
 --- and those of what other processes tell this editor — a switch of a
 --- session it follows, the work an agent of a tab's Claude Code announced, a
---- call of a run tool — made once for every tab.
+--- call of a run tool, a step of a walkthrough — made once for every tab.
 
 local places = require('aineo.entry.places')
 local registry = require('aineo.entry.registry')
@@ -142,6 +142,36 @@ local function open_folders()
   return folders
 end
 
+--- The folders whose repositories a step of `tab`'s walkthrough may show
+--- files of: those the editor has open (`open_folders()`) and the worktrees
+--- the tab's agents reported (`aineo.changes.Home`'s
+--- `reported_worktree_tops()`).
+---
+---@param tab aineo.entry.Tab
+---@return string[]
+local function walkthrough_folders(tab)
+  return vim.list_extend(open_folders(), tab.homes.changes.reported_worktree_tops())
+end
+
+--- Takes `step`, a call of the walkthrough tool a relay offers with the
+--- start token `start_token`, for the tab whose Claude Code has that token,
+--- whichever tab is current (`routing.lua`'s `tab_for_work()`), and answers
+--- at once with the words for the agent and whether they are an error: with
+--- no such tab, false; else what that tab shows (`aineo.entry.walkthrough`'s
+--- `take_step()`), of files in the repositories the editor has open and the
+--- worktrees the tab's agents reported (`walkthrough_folders()`).
+---
+---@param step aineo.mcp.WalkthroughCall
+---@param start_token string
+---@return aineo.entry.WalkthroughAnswer|false
+local function take_walkthrough_step(step, start_token)
+  local tab = type(start_token) == 'string' and routing.tab_for_work(start_token)
+  if not tab then
+    return false
+  end
+  return require('aineo.entry.walkthrough').take_step(tab, step, walkthrough_folders(tab))
+end
+
 --- Makes, once, the handlers this Neovim's entries in the list of running
 --- editors need: `FocusGained` writes the entry of the tab used last again,
 --- marking it used; `TabEnter` writes the entry of an aineo tab entered;
@@ -150,7 +180,8 @@ end
 --- followed by each tab it concerns (`aineo.entry.Tab`'s
 --- `follow_told_switch()`); and work an agent announced goes to the tab
 --- whose Claude Code has its start token (`take_announced_work()`), and so
---- does a call of a run tool (`take_run_call()`); a call of the test layout
+--- do a call of a run tool (`take_run_call()`) and a step of a walkthrough
+--- (`take_walkthrough_step()`); a call of the test layout
 --- tool is kept for its repository, whichever tab's Claude Code made it,
 --- when that repository is one of a folder the editor has open
 --- (`open_folders()`, `aineo.test_layout`'s `declare()`). Made at the
@@ -203,6 +234,7 @@ local function make_editor_handlers()
   end)
   require('aineo.mcp').on_work_announced(take_announced_work)
   require('aineo.mcp').on_run_called(take_run_call)
+  require('aineo.mcp').on_walkthrough_stepped(take_walkthrough_step)
   require('aineo.mcp').on_test_layout_declared(function(call)
     return require('aineo.test_layout').declare(call, open_folders())
   end)

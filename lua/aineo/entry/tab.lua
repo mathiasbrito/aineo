@@ -181,6 +181,7 @@ end
 ---@field own_session fun(): string? the tab's own session: the one its Claude Code follows, or, while Claude's window is attached to a claimed session, the one it resumes when the claim ends; nil before it has started
 ---@field session_name fun(): string? the name of the session the tab's Claude terminal shows (`b:aineo_session_name`), nil before it has one
 ---@field is_busy fun(): boolean whether the Claude Code on the tab's terminal is busy
+---@field on_busy_change fun(listener: fun(busy: boolean)) has `listener` called with whether the Claude Code on the tab's terminal is busy, whenever that changes, `false` once the terminal is gone; the listeners are kept for the tab's life
 ---@field page fun(): integer? the tab page the tab is in, nil before its layout opens
 ---@field is_bound fun(): boolean whether the tab page it is in still exists
 ---@field release fun() lets the tab's homes go as its tab page closes, at once
@@ -723,14 +724,23 @@ local function make_tab(homes, key, callbacks)
       and vim.b[claude_terminal].aineo_session_busy == true
   end
 
+  --- What is told, by `on_busy_change()`, whenever the Claude Code on the
+  --- tab's terminal starts or stops being busy.
+  ---@type fun(busy: boolean)[]
+  local busy_listeners = {}
+
   --- Tells the tabs home whether the tab's Claude Code is busy, for the tab
   --- page the tab is in; nothing before the tab is in one, which
-  --- `callbacks.on_bound` answers by telling it again.
+  --- `callbacks.on_bound` answers by telling it again. Tells the listeners
+  --- of `on_busy_change()` too.
   ---
   ---@param busy boolean
   local function tell_tabs_home_busy(busy)
     if bound_page then
       require('aineo.tabs').set_busy(bound_page, busy)
+    end
+    for _, listener in ipairs(busy_listeners) do
+      listener(busy)
     end
   end
 
@@ -2132,6 +2142,9 @@ local function make_tab(homes, key, callbacks)
     end
   end
   tab.is_busy = is_busy
+  tab.on_busy_change = function(listener)
+    table.insert(busy_listeners, listener)
+  end
   tab.page = function()
     return bound_page
   end
