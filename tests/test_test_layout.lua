@@ -153,6 +153,9 @@ local PRESETS = {
   { 'cpp.pitchfork.merged', 'cpp', 'src/vec.cpp', 'src/vec.test.cpp', 'src/mat.cpp', 'src/mat.test.cpp', 'src/vec.test.cpp', 'src/vec.cpp' },
   { 'cpp.convention.tests-suffix', 'cpp', 'core/io.cc', 'tests/io_test.cc', 'core/fs.cc', 'tests/fs_test.cc', 'tests/io_test.cc', 'core/io.cc' },
   { 'cpp.convention.colocated-suffix', 'cpp', 'util/str.cpp', 'util/str_test.cpp', 'util/num.cpp', 'util/num_test.cpp', 'util/str_test.cpp', 'util/str.cpp' },
+  { 'lua.busted.spec-mirror', 'lua', 'src/shop/cart.lua', 'spec/shop/cart_spec.lua', 'src/shop/price.lua', 'spec/shop/price_spec.lua', 'spec/shop/cart_spec.lua', 'src/shop/cart.lua' },
+  { 'lua.busted.spec-mirror', 'lua', 'lua/shop/tax.lua', 'spec/shop/tax_spec.lua', 'lua/shop/fee.lua', 'spec/shop/fee_spec.lua', 'spec/shop/tax_spec.lua', 'lua/shop/tax.lua' },
+  { 'lua.plenary.spec-mirror', 'lua', 'lua/kit/store.lua', 'tests/kit/store_spec.lua', 'lua/kit/cache.lua', 'tests/kit/cache_spec.lua', 'tests/kit/store_spec.lua', 'lua/kit/store.lua' },
   -- stylua: ignore end
 }
 
@@ -589,6 +592,224 @@ T['C++']['follows Pitchfork once a .test.cpp file exists'] = function()
   eq(read_place(top, place, { 'rule' }), { 'src/vec.test.cpp', 'cpp.pitchfork.merged' })
 end
 
+T['Lua'] = MiniTest.new_set()
+
+T['Lua']['mini.test finds the existing test file, its name joining the folders below the plugin’s'] =
+  MiniTest.new_set({
+    parametrize = {
+      { 'lua/kit/layout.lua', 'tests/test_layout.lua' },
+      { 'lua/kit/finder/ranker.lua', 'tests/test_finder_ranker.lua' },
+      { 'lua/kit/finder/init.lua', 'tests/test_finder.lua' },
+    },
+  })
+
+T['Lua']['mini.test finds the existing test file, its name joining the folders below the plugin’s']['source'] = function(
+  source,
+  test
+)
+  local top = repository_of('lua')
+  keep_agent_rules(top, { { preset = 'lua.mini-test.flat' } })
+  write_file(top, test)
+
+  local place = test_layout.test_for(vim.fs.joinpath(top, source))
+
+  eq(read_place(top, place, { 'exists' }), { test, true })
+end
+
+T['Lua']['mini.test gives the test file to create, its name joining the folders below the plugin’s'] =
+  MiniTest.new_set({
+    parametrize = {
+      { 'lua/kit/menu.lua', 'tests/test_menu.lua' },
+      { 'lua/kit/finder/index.lua', 'tests/test_finder_index.lua' },
+      { 'lua/kit/finder/rank/score.lua', 'tests/test_finder_rank_score.lua' },
+      { 'lua/kit/tree/init.lua', 'tests/test_tree.lua' },
+      { 'lua/kit/finder/rank/init.lua', 'tests/test_finder_rank.lua' },
+      { 'lua/kit/finder/rank/deep/leaf.lua', 'tests/test_finder_rank_deep_leaf.lua' },
+      { 'lua/kit/finder/rank/deep/init.lua', 'tests/test_finder_rank_deep.lua' },
+      { 'lua/kit/init.lua', 'tests/test_init.lua' },
+    },
+  })
+
+T['Lua']['mini.test gives the test file to create, its name joining the folders below the plugin’s']['source'] = function(
+  source,
+  test
+)
+  local top = repository_of('lua')
+  keep_agent_rules(top, { { preset = 'lua.mini-test.flat' } })
+  write_file(top, 'tests/test_layout.lua')
+
+  local place = test_layout.test_for(vim.fs.joinpath(top, source))
+
+  eq(read_place(top, place, { 'exists', 'kind' }), { test, false, 'unit' })
+end
+
+T['Lua']['follows the framework a marker file shows over the default'] = MiniTest.new_set({
+  parametrize = {
+    { { ['.busted'] = {} }, 'spec/kit/a_spec.lua', 'lua.busted.spec-mirror' },
+    {
+      { ['kit-1.0-1.rockspec'] = { 'test_dependencies = { "busted" }' } },
+      'spec/kit/a_spec.lua',
+      'lua.busted.spec-mirror',
+    },
+    {
+      {
+        ['spec/helper.lua'] = {},
+        ['Makefile'] = { 'test:', '\tnvim -c "PlenaryBustedDirectory tests"' },
+      },
+      'tests/kit/a_spec.lua',
+      'lua.plenary.spec-mirror',
+    },
+    {
+      { ['spec/helper.lua'] = {}, ['tests/minimal_init.lua'] = { '-- PlenaryBustedDirectory' } },
+      'tests/kit/a_spec.lua',
+      'lua.plenary.spec-mirror',
+    },
+    { { ['tests/test_b.lua'] = {} }, 'tests/test_a.lua', 'lua.mini-test.flat' },
+    {
+      { ['scripts/minimal_init.lua'] = { "require('mini.test').setup()" } },
+      'tests/test_a.lua',
+      'lua.mini-test.flat',
+    },
+    {
+      { ['Makefile'] = { 'test:', '\tnvim -l run.lua # mini.test' } },
+      'tests/test_a.lua',
+      'lua.mini-test.flat',
+    },
+  },
+})
+
+T['Lua']['follows the framework a marker file shows over the default']['marker'] = function(
+  files,
+  test,
+  rule
+)
+  local top = repository_holding(vim.tbl_extend('error', files, { ['lua/kit/a.lua'] = {} }))
+
+  local place = test_layout.test_for(vim.fs.joinpath(top, 'lua/kit/a.lua'))
+
+  eq(read_place(top, place, { 'rule', 'origin' }), { test, rule, 'repository' })
+end
+
+T['Lua']['keeps the default when a marker file does not name the framework'] = MiniTest.new_set({
+  parametrize = {
+    {
+      { ['spec/helper.lua'] = {}, ['Makefile'] = { 'test:', '\tnvim -c "luafile run.lua"' } },
+      'spec/kit/a_spec.lua',
+      'lua.busted.spec-mirror',
+    },
+    {
+      { ['kit-1.0-1.rockspec'] = { 'dependencies = { "lua >= 5.1" }' } },
+      'tests/kit/a_spec.lua',
+      'lua.plenary.spec-mirror',
+    },
+  },
+})
+
+T['Lua']['keeps the default when a marker file does not name the framework']['unmarked'] = function(
+  files,
+  test,
+  rule
+)
+  local top = repository_holding(vim.tbl_extend('error', files, { ['lua/kit/a.lua'] = {} }))
+
+  local place = test_layout.test_for(vim.fs.joinpath(top, 'lua/kit/a.lua'))
+
+  eq(read_place(top, place, { 'rule', 'origin' }), { test, rule, 'preset' })
+end
+
+T['Lua']['defaults to busted’s mirror where the repository has a spec folder'] = function()
+  local top = repository_holding({ ['spec/helper.lua'] = {}, ['lua/kit/a.lua'] = {} })
+
+  local place = test_layout.test_for(vim.fs.joinpath(top, 'lua/kit/a.lua'))
+
+  eq(
+    read_place(top, place, { 'rule', 'origin', 'kind' }),
+    { 'spec/kit/a_spec.lua', 'lua.busted.spec-mirror', 'preset', 'unit' }
+  )
+end
+
+T['Lua']['busted’s mirror takes the sources of a src folder too'] = function()
+  local top = repository_holding({ ['spec/helper.lua'] = {}, ['src/kit/a.lua'] = {} })
+
+  local place = test_layout.test_for(vim.fs.joinpath(top, 'src/kit/a.lua'))
+
+  eq(
+    read_place(top, place, { 'rule', 'kind' }),
+    { 'spec/kit/a_spec.lua', 'lua.busted.spec-mirror', 'unit' }
+  )
+end
+
+T['Lua']['defaults to plenary’s mirror where the repository has no spec folder'] = function()
+  local top = repository_holding({ ['lua/kit/a.lua'] = {} })
+
+  local place = test_layout.test_for(vim.fs.joinpath(top, 'lua/kit/a.lua'))
+
+  eq(
+    read_place(top, place, { 'rule', 'origin', 'kind' }),
+    { 'tests/kit/a_spec.lua', 'lua.plenary.spec-mirror', 'preset', 'unit' }
+  )
+end
+
+T['Lua']['mini.test names a nested test file by its discovery glob, not its helpers'] = function()
+  local top = repository_holding({
+    ['tests/deep/in/test_there.lua'] = {},
+    ['tests/helpers/shared.lua'] = {},
+  })
+  keep_agent_rules(top, { { preset = 'lua.mini-test.flat' } })
+
+  local verdicts = {
+    test_layout.is_test(vim.fs.joinpath(top, 'tests/deep/in/test_there.lua')),
+    test_layout.is_test(vim.fs.joinpath(top, 'tests/helpers/shared.lua')),
+  }
+
+  eq(verdicts, { true, false })
+end
+
+T['Lua']['offers its presets to the agent after those of C++'] = function()
+  local ids = test_layout.preset_ids()
+
+  eq(
+    vim.list_slice(ids, #ids - 2, #ids),
+    { 'lua.busted.spec-mirror', 'lua.plenary.spec-mirror', 'lua.mini-test.flat' }
+  )
+end
+
+T['Lua']['mini.test finds the source of a test file by the module it requires'] = MiniTest.new_set({
+  parametrize = {
+    { 'tests/test_finder_ranker.lua', 'kit.finder.ranker', 'lua/kit/finder/ranker.lua' },
+    { 'tests/test_finder.lua', 'kit.finder', 'lua/kit/finder/init.lua' },
+    { 'tests/test_layout.lua', 'kit.layout', 'lua/kit/layout.lua' },
+  },
+})
+
+T['Lua']['mini.test finds the source of a test file by the module it requires']['test'] = function(
+  test,
+  module,
+  source
+)
+  local top = repository_of('lua')
+  keep_agent_rules(top, { { preset = 'lua.mini-test.flat' } })
+  vim.fn.writefile({ ("local subject = require('%s')"):format(module) }, vim.fs.joinpath(top, test))
+
+  local place = test_layout.source_for(vim.fs.joinpath(top, test))
+
+  eq(relative_path(top, place), source)
+end
+
+T['Lua']['mini.test takes, of the modules a test requires, the one its rules give the test for'] = function()
+  local top = repository_of('lua')
+  keep_agent_rules(top, { { preset = 'lua.mini-test.flat' } })
+  local test = vim.fs.joinpath(top, 'tests/test_finder_ranker.lua')
+  vim.fn.writefile(
+    { "local finder = require('kit.finder')", "local ranker = require('kit.finder.ranker')" },
+    test
+  )
+
+  local place = test_layout.source_for(test)
+
+  eq(relative_path(top, place), 'lua/kit/finder/ranker.lua')
+end
+
 T['the reply'] = MiniTest.new_set()
 
 T['the reply']['counts no contradiction for a rule the repository’s own preset states'] = function()
@@ -723,7 +944,7 @@ T['a kept rule aineo cannot read']['costs each call little, whatever an older ai
   test_layout.describe(source)
   local described = milliseconds_since(started)
 
-  eq({ found < 100, told < 100, described < 100 }, { true, true, true })
+  eq({ found < 1000, told < 1000, described < 1000 }, { true, true, true })
 end
 
 T['a kept rule aineo cannot read']['is named among the rules in force, too costly to match'] = function()

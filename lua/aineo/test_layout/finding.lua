@@ -556,8 +556,9 @@ end
 --- reverse, with the rule whose test template matches it (A681): first the
 --- files whose stem is the `{name}` that template binds, of the test's
 --- language (`modules.family()`), then the files the test imports
---- (`modules.imported()`), each shortest path first; none when no rule's
---- test template matches it.
+--- (`modules.imported()`): first those some rule gives this very test file
+--- for, then the others, each group shortest path first; none when no
+--- rule's test template matches it.
 ---
 ---@param rules aineo.test_layout.Rule[]
 ---@param view aineo.test_layout.View
@@ -574,14 +575,22 @@ local function way_back(rules, view, test)
     local stem, extension = vim.fs.basename(file):match('^(.+)%.([^.]+)$')
     return stem ~= nil and stem == bindings.name and family[extension] == true
   end)
-  local imported = modules.imported(test, view.read(test) or '')
+  local imported = modules.imported(test, view.read(test) or '', M.unit_of(view, test))
   local by_import = sources_where(rules, view, test, function(file)
     return not vim.tbl_contains(by_stem, file)
       and vim.iter(imported):any(function(source)
-        return modules.is_imported(file, source)
+        return modules.is_imported_source(file, source)
       end)
   end)
-  return vim.list_extend(by_stem, by_import), rule
+  local given_back = vim.tbl_filter(function(file)
+    return vim.iter(rules):any(function(candidate)
+      return vim.tbl_contains(M.tests_of(view, candidate, file), test)
+    end)
+  end, by_import)
+  local others = vim.tbl_filter(function(file)
+    return not vim.tbl_contains(given_back, file)
+  end, by_import)
+  return vim.list_extend(vim.list_extend(by_stem, given_back), others), rule
 end
 
 --- Where the source of `test`, a test file relative to `view`'s root, is

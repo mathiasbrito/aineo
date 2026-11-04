@@ -40,11 +40,26 @@ local function split_extension(path)
   return without, extension
 end
 
+--- The name `require` takes for the Lua source `path`, relative to the
+--- root of its unit: its path below `lua/` or `src/`, without the
+--- extension and with dots for slashes, a folder's `init.lua` by the
+--- folder's name; nil when that leaves no name.
+---
+---@param path string
+---@return string?
+local function lua_module_name(path)
+  local below = (path:match('^lua/(.*)$') or path:match('^src/(.*)$') or path)
+    :gsub('%.lua$', '')
+    :gsub('/init$', '')
+  return below ~= 'init' and (below:gsub('/', '.')) or nil
+end
+
 --- The fixed strings to search for the test files that may import `path`,
 --- a source relative to the root of its unit, by language: the stem for
 --- Python, Java, JavaScript and TypeScript, the end of a Go import path
---- (`<package folder>"`), the stem's headers for C and C++; none for
---- another language. Each file found is then read by `imports()`.
+--- (`<package folder>"`), the stem's headers for C and C++, the name
+--- `require` takes for Lua; none for another language. Each file found is
+--- then read by `imports()`.
 ---
 ---@param path string
 ---@return string[]
@@ -62,6 +77,10 @@ function M.patterns(path)
   end
   if C_FAMILY[extension] then
     return { stem .. '.h', stem .. '.hpp', stem .. '.hh' }
+  end
+  if extension == 'lua' then
+    local name = lua_module_name(path)
+    return name and { name } or {}
   end
   return {}
 end
@@ -92,6 +111,8 @@ end
 ---@field included? string the path a quoted `#include` names, without its extension
 ---@field resolved? string that path from the test's folder, without its extension
 ---@field extensions? table<string, true>
+---@field lua_module? string a Lua module's path, `a/b/c`: the source's path ends with `a/b/c.lua` or `a/b/c/init.lua`
+---@field outside? string a top folder whose files are not the source, such as the folder of the tests
 
 --- The modules a Python test imports: `import a.b, c` names `a/b.py` and
 --- `c.py`; `from m import x, y` names `m.py`, `m/x.py` and `m/y.py`; a
@@ -224,16 +245,185 @@ local function script_imports(test, text)
   return found
 end
 
---- The sources `text`, the text of the test file at `test` (relative to
---- the repository's root), imports, as its language writes an import:
---- Python's modules, Go's packages, Java's classes, the headers C and C++
---- include in quotes, the relative imports of JavaScript and TypeScript;
---- none for another language.
+--- Where the long bracket opened at `position` of `text` (`[[`, `[=[`…)
+--- ends: the position after its closer, or after the text when it is not
+--- closed, with its content; nil when none opens there.
+---
+---@param text string
+---@param position integer
+---@return integer? after
+---@return string? content
+local function long_bracket_end(text, position)
+  local level = text:match('^%[(=*)%[', position)
+  if not level then
+    return nil
+  end
+  local opened = position + #level + 2
+  local closer = text:find(']' .. level .. ']', opened, true)
+  if not closer then
+    return #text + 1, text:sub(opened)
+  end
+  return closer + #level + 2, text:sub(opened, closer - 1)
+end
+
+--- Where the quoted string opened at `position` of `text` ends: the
+--- position after its closing quote, or at the end of its line when it is
+--- not closed there; with its content.
+---
+---@param text string
+---@param position integer
+---@return integer after
+---@return string content
+local function quoted_end(text, position)
+  local quote = text:sub(position, position)
+  local at = position + 1
+  while true do
+    local stop = text:find('[\\\r\n' .. quote .. ']', at)
+    if not stop or text:sub(stop, stop):find('[\r\n]') then
+      local after = stop or #text + 1
+      return after, text:sub(position + 1, after - 1)
+    end
+    if text:sub(stop, stop) == quote then
+      return stop + 1, text:sub(position + 1, stop - 1)
+    end
+    at = stop + 2
+  end
+end
+
+--- Where a Lua string literal begins at `position` of `text`: its content
+--- and the position after it; nil when no string begins there.
+---
+---@param text string
+---@param position integer
+---@return string? content
+---@return integer? after
+local function string_literal_at(text, position)
+  local first = text:sub(position, position)
+  if first == '"' or first == "'" then
+    local after, content = quoted_end(text, position)
+    return content, after
+  end
+  local after, content = long_bracket_end(text, position)
+  return content, after
+end
+
+--- The module name written as a string literal at `position` of `text`
+--- and the position after it; nil when what is there is no literal, or the
+--- name is no module path.
+---
+---@param text string
+---@param position integer
+---@return string? name
+---@return integer? after
+local function module_literal_at(text, position)
+  local name, after = string_literal_at(text, position)
+  if name and name:match('^[%w_%-]+[%w_%-%.]*$') then
+    return name, after
+  end
+  return nil
+end
+
+--- Whether the first character of `text` from `position` on that is no
+--- blank is `)`.
+---
+---@param text string
+---@param position integer
+---@return boolean
+local function closes_at(text, position)
+  return text:sub(text:find('%S', position) or #text + 1):sub(1, 1) == ')'
+end
+
+--- The literal module name `require` takes when `position` follows the
+--- word in `text`: `require 'a.b'`, `require("a.b")`, `require [[a.b]]`,
+--- with a literal alone between the parentheses; nil for any other
+--- argument or a name that is no module path.
+---
+---@param text string
+---@param position integer
+---@return string?
+local function required_name_at(text, position)
+  local at = text:find('%S', position) or #text + 1
+  local parenthesised = text:sub(at, at) == '('
+  if parenthesised then
+    at = text:find('%S', at + 1) or #text + 1
+  end
+  local name, after = module_literal_at(text, at)
+  if not name or (parenthesised and not closes_at(text, after)) then
+    return nil
+  end
+  return name
+end
+
+--- The literal module name of `pcall(require, 'a.b')` when `position`
+--- follows the word `pcall` in `text`; nil for any other call.
+---
+---@param text string
+---@param position integer
+---@return string?
+local function pcalled_name_at(text, position)
+  local at = text:match('^%s*%(%s*require%s*,%s*()', position)
+  local name, after = module_literal_at(text, at or #text + 1)
+  return name and closes_at(text, after) and name or nil
+end
+
+--- The modules a Lua test at `test` requires by a literal name, with
+--- `require` or `pcall(require, …)`, each as the path the source's path
+--- ends with, as a file (`a/b/c.lua`) or as a folder's `init.lua`
+--- (`lua_module`), with the top folder of the test's unit it sits in
+--- (`outside`); a `require` in a comment or a string, called as a field or
+--- a method, or with any other argument, names none. A line ends with
+--- `\r` or `\n`.
 ---
 ---@param test string
 ---@param text string
+---@param unit string the folder of the unit the test belongs to, `''` for the repository's root
 ---@return aineo.test_layout.Imported[]
-function M.imported(test, text)
+local function lua_imports(test, text, unit)
+  local found = {}
+  local in_unit = unit == '' and test or test:sub(#unit + 2)
+  local top = in_unit:match('^([^/]+)/')
+  top = top and (unit == '' and top or unit .. '/' .. top)
+  local position = 1
+  while position <= #text do
+    local word_start, word_end = text:find('^[%a_][%w_]*', position)
+    local first = text:sub(position, position)
+    if text:find('^%-%-', position) then
+      position = long_bracket_end(text, position + 2)
+        or (text:find('[\r\n]', position) or #text) + 1
+    elseif first == '"' or first == "'" then
+      position = quoted_end(text, position)
+    elseif long_bracket_end(text, position) then
+      position = long_bracket_end(text, position)
+    elseif word_start then
+      local before = text:sub(position - 1, position - 1)
+      local word = text:sub(word_start, word_end)
+      local name = before ~= '.'
+        and before ~= ':'
+        and (
+          (word == 'require' and required_name_at(text, word_end + 1))
+          or (word == 'pcall' and pcalled_name_at(text, word_end + 1))
+        )
+      if name then
+        table.insert(found, { lua_module = (name:gsub('%.', '/')), outside = top })
+      end
+      position = word_end + 1
+    else
+      position = position + 1
+    end
+  end
+  return found
+end
+
+--- Every source `text`, the text of the test file at `test`, imports, as
+--- its language writes an import, in the order of the text, except that
+--- JavaScript and TypeScript give every `from`, then every `require`, then
+--- every `import()`; a Python `from m import a, b` gives three.
+---
+---@param test string
+---@param text string
+---@param unit string
+---@return aineo.test_layout.Imported[]
+local function read_imports(test, text, unit)
   local extension = test:match('%.([^./]+)$') or ''
   if extension == 'py' then
     return python_imports(text)
@@ -250,11 +440,69 @@ function M.imported(test, text)
   if SCRIPT_FAMILY[extension] then
     return script_imports(test, text)
   end
+  if extension == 'lua' then
+    return lua_imports(test, text, unit)
+  end
   return {}
 end
 
+--- The most distinct imports of one test file that are read.
+local MOST_IMPORTS = 64
+
+--- What tells two imports apart: the path, folder or module each names.
+---
+---@param imported aineo.test_layout.Imported
+---@return string
+local function import_key(imported)
+  return table.concat({
+    imported.ends_with or '',
+    imported.lua_module or '',
+    imported.folder or '',
+    imported.without_extension or '',
+    imported.included or '',
+    imported.resolved or '',
+  }, '\0')
+end
+
+--- The first `most` of `imports` that differ from every one before them.
+---
+---@param imports aineo.test_layout.Imported[]
+---@param most integer
+---@return aineo.test_layout.Imported[]
+local function first_distinct(imports, most)
+  local kept, seen = {}, {}
+  for _, imported in ipairs(imports) do
+    local key = import_key(imported)
+    if not seen[key] then
+      seen[key] = true
+      table.insert(kept, imported)
+      if #kept == most then
+        break
+      end
+    end
+  end
+  return kept
+end
+
+--- The sources `text`, the text of the test file at `test` (relative to
+--- the repository's root), imports, as its language writes an import:
+--- Python's modules, Go's packages, Java's classes, the headers C and C++
+--- include in quotes, the relative imports of JavaScript and TypeScript,
+--- the literal `require` of Lua; none for another language. Each differs
+--- from the others, and only the first 64 are given, so that a crafted
+--- test file cannot make the search for its sources run long.
+---
+---@param test string
+---@param text string
+---@param unit? string the folder of the unit the test belongs to, `''` (the default) for the repository's root
+---@return aineo.test_layout.Imported[]
+function M.imported(test, text, unit)
+  return first_distinct(read_imports(test, text, unit or ''), MOST_IMPORTS)
+end
+
 --- Whether `path`, a file relative to the repository's root, is the source
---- `imported` names: its path ends with the path named; or it is of the
+--- `imported` names: its path ends with the path named, or with the
+--- Lua module's path as a file or as a folder's `init.lua`; or it is of the
 --- extensions named and is in the folder named, is the path named without
 --- its extension or that folder's `index`, or is the header included,
 --- resolved from the test's folder or ending the source's path.
@@ -263,6 +511,14 @@ end
 ---@param imported aineo.test_layout.Imported
 ---@return boolean
 function M.is_imported(path, imported)
+  if imported.lua_module then
+    local file = imported.lua_module .. '.lua'
+    local folder_init = imported.lua_module .. '/init.lua'
+    return path == file
+      or path == folder_init
+      or vim.endswith(path, '/' .. file)
+      or vim.endswith(path, '/' .. folder_init)
+  end
   if imported.ends_with then
     return path == imported.ends_with or vim.endswith(path, '/' .. imported.ends_with)
   end
@@ -279,6 +535,19 @@ function M.is_imported(path, imported)
       or vim.endswith(without, '/' .. imported.included)
   end
   return without == imported.without_extension or without == imported.without_extension .. '/index'
+end
+
+--- Whether `path`, a file relative to the repository's root, is the source
+--- `imported` names (`is_imported()`) and no file of the top folder of the
+--- unit the test sits in (`outside`, `tests` for `tests/unit/test_x.lua`):
+--- a helper the test requires is not the code under test.
+---
+---@param path string
+---@param imported aineo.test_layout.Imported
+---@return boolean
+function M.is_imported_source(path, imported)
+  local in_tests_folder = imported.outside ~= nil and vim.startswith(path, imported.outside .. '/')
+  return not in_tests_folder and M.is_imported(path, imported)
 end
 
 --- Whether the test file at `test`, of text `text`, imports `source`, both
