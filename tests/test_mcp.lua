@@ -6,6 +6,14 @@ local expect = MiniTest.expect
 
 local T = MiniTest.new_set()
 
+--- Expects `text` to hold `part` as it is written.
+---
+---@param text string
+---@param part string
+local function contains(text, part)
+  eq({ part = part, found = text:find(part, 1, true) ~= nil }, { part = part, found = true })
+end
+
 T['mcp_servers()'] = MiniTest.new_set()
 
 T['mcp_servers()']['describes the report server the way Claude Code starts a stdio server'] = function()
@@ -53,7 +61,7 @@ end
 
 T['allowed_mcp_tools()'] = MiniTest.new_set()
 
-T['allowed_mcp_tools()']['pre-allows the report tool, the announcement tool, the reading of output and the test layout, and nothing else'] = function()
+T['allowed_mcp_tools()']['pre-allows the report tool, the announcement tool, the reading of output, the test layout and the walkthrough step, and nothing else'] = function()
   local tools = mcp.allowed_mcp_tools()
 
   eq(tools, {
@@ -61,7 +69,73 @@ T['allowed_mcp_tools()']['pre-allows the report tool, the announcement tool, the
     'mcp__aineo__announce_work',
     'mcp__aineo__run_output',
     'mcp__aineo__test_layout',
+    'mcp__aineo__walkthrough_step',
   })
+end
+
+T['walkthrough_instructions()'] = MiniTest.new_set()
+
+T['walkthrough_instructions()']['name the tool and tell the agent to show one step per call, only after the user asks to move'] = function()
+  local paragraph = mcp.walkthrough_instructions()
+
+  contains(paragraph, '`mcp__aineo__walkthrough_step`')
+  contains(
+    paragraph,
+    'Show one step per call, only after the user asks to move; never two steps in one turn.'
+  )
+end
+
+T['walkthrough_instructions()']['tell the agent to plan the walkthrough the way the solution is built'] = function()
+  local paragraph = mcp.walkthrough_instructions()
+
+  contains(
+    paragraph,
+    'introduce a concept (a type, a module, a data shape, a rule) in a step before any step whose code relies on it;'
+      .. ' start from what the rest stands on, then follow the flow;'
+      .. " when that order cannot hold (a cycle, a forward use), say so in that step's explanation"
+      .. ' in a sentence and name the step that explains it.'
+  )
+end
+
+T['walkthrough_instructions()']['tell the agent to ask the user whether to start once the plan is done'] = function()
+  local paragraph = mcp.walkthrough_instructions()
+
+  contains(paragraph, 'tell the user the plan is done and ask whether to start')
+end
+
+T['the walkthrough tool'] = MiniTest.new_set()
+
+T['the walkthrough tool']['is named as Claude Code names it'] = function()
+  eq(mcp.walkthrough_tool_name(), 'mcp__aineo__walkthrough_step')
+end
+
+T['the walkthrough tool']['tells the agent to walk through checked-out work only, in a repository the editor has open or a worktree reported'] = function()
+  local description = require('aineo.mcp.walkthrough_tool').tool().description
+
+  contains(
+    description,
+    'inside a repository the editor has open or a worktree an agent reported with announce_work'
+  )
+  contains(
+    description,
+    'Walk through checked-out work only: a branch no worktree has checked out has no file on disk.'
+  )
+end
+
+T['the walkthrough tool']['describes the pace and the order of the plan, as the instructions do'] = function()
+  local description = require('aineo.mcp.walkthrough_tool').tool().description
+
+  contains(
+    description,
+    'Show one step per call, only after the user asks to move; never two steps in one turn.'
+  )
+  contains(
+    description,
+    'introduce a concept (a type, a module, a data shape, a rule) in a step before any step whose code relies on it;'
+      .. ' start from what the rest stands on, then follow the flow;'
+      .. " when that order cannot hold (a cycle, a forward use), say so in that step's explanation"
+      .. ' in a sentence and name the step that explains it.'
+  )
 end
 
 T['test_layout_instructions()'] = MiniTest.new_set()

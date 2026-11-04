@@ -5,6 +5,7 @@ local names = require('aineo.mcp.names')
 local report = require('aineo.report')
 local run_tools = require('aineo.mcp.run_tools')
 local test_layout_tool = require('aineo.mcp.test_layout_tool')
+local walkthrough_tool = require('aineo.mcp.walkthrough_tool')
 local work = require('aineo.mcp.work')
 
 local M = {}
@@ -62,12 +63,17 @@ end
 --- for Claude that answer it, and whether they are an error.
 ---@alias aineo.mcp.DeliverTestLayout fun(call: aineo.mcp.TestLayoutCall): string, boolean
 
+--- How the server hands a valid call of the walkthrough tool on: the words
+--- for Claude that answer it, and whether they are an error.
+---@alias aineo.mcp.DeliverWalkthroughStep fun(call: aineo.mcp.WalkthroughCall): string, boolean
+
 --- What the server hands each valid call of a tool on to, by tool.
 ---@class aineo.mcp.Deliverers
 ---@field report aineo.mcp.DeliverReport
 ---@field announcement aineo.mcp.DeliverAnnouncement
 ---@field run_call aineo.mcp.DeliverRunCall
 ---@field test_layout aineo.mcp.DeliverTestLayout
+---@field walkthrough aineo.mcp.DeliverWalkthroughStep
 
 --- The result of a `tools/call` of the report tool: a report whose
 --- arguments are valid is delivered; a delivery the editor did not confirm
@@ -143,9 +149,24 @@ local function call_test_layout(arguments, deliver_test_layout)
   return tool_result(deliver_test_layout(valid_call))
 end
 
+--- The result of a `tools/call` of the walkthrough tool: a valid call is
+--- handed on, and answered with the words the deliverer gives; refused
+--- arguments are a tool error naming the field.
+---
+---@param arguments any
+---@param deliver_walkthrough aineo.mcp.DeliverWalkthroughStep
+---@return table result
+local function call_walkthrough(arguments, deliver_walkthrough)
+  local valid_call, refusal = walkthrough_tool.validate(arguments)
+  if not valid_call then
+    return tool_result('aineo refused the walkthrough step: ' .. refusal, true)
+  end
+  return tool_result(deliver_walkthrough(valid_call))
+end
+
 --- The result of a `tools/call`, by the tool it names (`call_report()`,
---- `call_announcement()`, `call_run_tool()`, `call_test_layout()`); any
---- other tool is an error -32602.
+--- `call_announcement()`, `call_run_tool()`, `call_test_layout()`,
+--- `call_walkthrough()`); any other tool is an error -32602.
 ---
 ---@param params table
 ---@param deliverers aineo.mcp.Deliverers
@@ -163,6 +184,9 @@ local function call_tool(params, deliverers)
   end
   if params.name == names.TEST_LAYOUT_TOOL then
     return call_test_layout(params.arguments, deliverers.test_layout)
+  end
+  if params.name == names.WALKTHROUGH_TOOL then
+    return call_walkthrough(params.arguments, deliverers.walkthrough)
   end
   return nil, { code = INVALID_PARAMS, message = 'Unknown tool: ' .. tostring(params.name) }
 end
@@ -184,6 +208,7 @@ local RESULTS = {
   ['tools/list'] = function()
     local tools = vim.list_extend({ report_tool(), work.announce_tool() }, run_tools.tools())
     table.insert(tools, test_layout_tool.tool())
+    table.insert(tools, walkthrough_tool.tool())
     return { tools = tools }
   end,
   ['tools/call'] = call_tool,
@@ -245,12 +270,13 @@ end
 --- `id`; JSON that is not an object, and a request whose `id` is null (MCP
 --- 2025-11-25 forbids a null id), with error -32600 and no `id`; a method the
 --- server does not have with error -32601; a `tools/call` of a
---- tool other than `report`, `announce_work`, the run tools and `test_layout` with error -32602; a call
+--- tool other than `report`, `announce_work`, the run tools, `test_layout` and `walkthrough_step` with error -32602; a call
 --- whose arguments are refused with a tool error naming the field; and a
 --- valid `report` is handed to `deliverers.report`, a valid `announce_work`
 --- to `deliverers.announcement`, and a valid call of a run tool to
 --- `deliverers.run_call`, and a valid call of `test_layout` to
---- `deliverers.test_layout`. `params` that are not an object count as none.
+--- `deliverers.test_layout`, and one of `walkthrough_step` to
+--- `deliverers.walkthrough`. `params` that are not an object count as none.
 ---
 --- `initialize` is answered with the protocol version the server speaks,
 --- 2025-11-25, whatever the client asks for: a client that cannot speak it

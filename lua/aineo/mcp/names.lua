@@ -26,6 +26,9 @@ M.RUN_STOP_TOOL = 'run_stop'
 --- its tests.
 M.TEST_LAYOUT_TOOL = 'test_layout'
 
+--- The name of the server's tool that shows one step of a code walkthrough.
+M.WALKTHROUGH_TOOL = 'walkthrough_step'
+
 --- The environment variable that tells the relay which editor to deliver to.
 M.EDITOR_ADDRESS_VARIABLE = 'AINEO_EDITOR_ADDRESS'
 
