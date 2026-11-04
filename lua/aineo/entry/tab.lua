@@ -181,6 +181,7 @@ end
 ---@field own_session fun(): string? the tab's own session: the one its Claude Code follows, or, while Claude's window is attached to a claimed session, the one it resumes when the claim ends; nil before it has started
 ---@field session_name fun(): string? the name of the session the tab's Claude terminal shows (`b:aineo_session_name`), nil before it has one
 ---@field is_busy fun(): boolean whether the Claude Code on the tab's terminal is busy
+---@field submit fun(text: string): boolean sends `text` to the tab's Claude Code as the user's message, as Send sends Input, and tells the user why when it cannot: no Claude Code ready for input, or a claim of another session holding (`refuses_send_while_claimed()`); returns whether it sent
 ---@field on_busy_change fun(listener: fun(busy: boolean)) has `listener` called with whether the Claude Code on the tab's terminal is busy, whenever that changes, `false` once the terminal is gone; the listeners are kept for the tab's life
 ---@field page fun(): integer? the tab page the tab is in, nil before its layout opens
 ---@field is_bound fun(): boolean whether the tab page it is in still exists
@@ -2142,6 +2143,9 @@ local function make_tab(homes, key, callbacks)
     end
   end
   tab.is_busy = is_busy
+  tab.submit = function(text)
+    return not refuses_send_while_claimed() and require('aineo.send').submit(text, send_target())
+  end
   tab.on_busy_change = function(listener)
     table.insert(busy_listeners, listener)
   end

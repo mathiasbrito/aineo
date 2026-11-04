@@ -39,6 +39,7 @@ local GROUPS = {
       { id = 'fix_shown', title = 'While a proposal shows' },
       { id = 'steer', title = 'In the steering float' },
       { id = 'clean', title = 'Clean' },
+      { id = 'walkthrough', title = 'Walkthrough' },
     },
   },
   { id = 'office', title = 'Office and zoom' },
@@ -393,6 +394,30 @@ local ROWS = vim.list_extend(
         'explain clear',
         'clean the explanations from the buffer'
       )
+    ),
+    in_section(
+      'walkthrough',
+      global(
+        'explain',
+        'vn',
+        'walk-next',
+        nil,
+        'ask the agent for the next step of the walkthrough'
+      )
+    ),
+    in_section(
+      'walkthrough',
+      global(
+        'explain',
+        'vp',
+        'walk-previous',
+        nil,
+        'ask the agent for the previous step of the walkthrough'
+      )
+    ),
+    in_section(
+      'walkthrough',
+      global('explain', 'vq', 'walk-end', nil, 'end the walkthrough and clear its bands')
     ),
     listing_again('explain', 'issues', 'send', 'send the marked issues to Claude'),
     in_section(
