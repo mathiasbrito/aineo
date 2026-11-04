@@ -192,6 +192,36 @@ local function stays_inside(root, path)
   return not (file and file.type == 'link') or is_inside(vim.uv.fs_realpath(path))
 end
 
+M.stays_inside = stays_inside
+
+--- The folder of the worktree that holds `directory`, when it is a checkout
+--- of a repository the editor has open: one of `open_folders`, the folders
+--- of the editor's tabs and of the work agents reported, shares its common
+--- folder. Else nil and why: `'not_a_checkout'` for a folder in no
+--- worktree, `'not_open'` for a checkout of a repository none of
+--- `open_folders` is one of.
+---
+---@param directory string
+---@param open_folders string[]
+---@return string? root
+---@return 'not_a_checkout'|'not_open'|nil why
+function M.open_checkout_of(directory, open_folders)
+  local folder = vim.uv.fs_realpath(directory)
+  local root = folder and repository.worktree_of(folder)
+  if not root then
+    return nil, 'not_a_checkout'
+  end
+  local common = repository.common_folder_of(root)
+  local opened = vim.iter(open_folders):any(function(open)
+    local real = vim.uv.fs_realpath(open)
+    return real ~= nil and repository.common_folder_of(real) == common
+  end)
+  if not opened then
+    return nil, 'not_open'
+  end
+  return root
+end
+
 --- `place`, as finding gave it for a file of the worktree at `root`,
 --- checked against the file system: the candidates that lead out of the
 --- worktree left out (`stays_inside()`), the place's path the best of
@@ -419,17 +449,11 @@ end
 ---@param open_folders string[]
 ---@return { text: string, is_error: boolean }
 function M.declare(declaration, open_folders)
-  local folder = vim.uv.fs_realpath(declaration.worktree)
-  local root = folder and repository.worktree_of(folder)
-  if not root then
+  local root, why = M.open_checkout_of(declaration.worktree, open_folders)
+  if why == 'not_a_checkout' then
     return refused(('worktree: %s is not a git checkout'):format(declaration.worktree))
   end
-  local common = repository.common_folder_of(root)
-  local opened = vim.iter(open_folders):any(function(open)
-    local real = vim.uv.fs_realpath(open)
-    return real ~= nil and repository.common_folder_of(real) == common
-  end)
-  if not opened then
+  if why == 'not_open' then
     return refused(
       ('worktree: %s is no checkout of a repository the editor has open'):format(
         declaration.worktree
