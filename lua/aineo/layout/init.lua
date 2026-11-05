@@ -69,6 +69,7 @@ local zoom = require('aineo.layout.zoom')
 ---@field show_pane fun(pane: aineo.layout.Pane, arrangement: aineo.layout.Arrangement|fun(): aineo.layout.Arrangement)
 ---@field focus_pane fun(pane: aineo.layout.Pane, arrangement: aineo.layout.Arrangement|fun(): aineo.layout.Arrangement)
 ---@field shown_pane fun(): aineo.layout.Pane
+---@field can_show_pane_in_place fun(pane: aineo.layout.Pane): boolean
 ---@field show_diff fun(diff: integer): integer|nil
 ---@field show_file fun(file: integer): integer|nil
 ---@field is_file_column_window fun(window: integer): boolean
@@ -1714,6 +1715,16 @@ local function make_layout(input_name, group_name)
         and buffer ~= nil
         and vim.api.nvim_buf_is_loaded(buffer)
     end)
+  end
+
+  --- Whether the layout can show `pane` in place now, opening nothing: the
+  --- windows of the right column it shows exist, and the buffers it shows in
+  --- them were handed and are loaded (`can_show_in_place()`).
+  ---
+  ---@param pane aineo.layout.Pane
+  ---@return boolean
+  function M.can_show_pane_in_place(pane)
+    return can_show_in_place(pane)
   end
 
   --- Forgets the shell the layout was handed: the terminal pane has no buffer

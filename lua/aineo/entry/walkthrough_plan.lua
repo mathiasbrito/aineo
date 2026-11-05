@@ -104,6 +104,9 @@ end
 ---@return string
 local function winbar(pane)
   local steps = #pane.plan.steps
+  if pane.shown and pane.shown > steps then
+    return (' %%#Title#Walkthrough%%* · step %d'):format(pane.shown)
+  end
   if pane.shown then
     return (' %%#Title#Walkthrough%%* · step %d of %d'):format(pane.shown, steps)
   end
@@ -217,15 +220,22 @@ local function make_pane(tab)
   return pane
 end
 
---- The pane of `tab`, made the first time.
+--- The pane of `tab`, made the first time and again when its buffer was wiped,
+--- the plan and the step on show carried over.
 ---
 ---@param tab aineo.entry.WalkthroughPlanTab
 ---@return aineo.entry.WalkthroughPane
 local function pane_of(tab)
-  if not panes[tab] then
-    panes[tab] = make_pane(tab)
+  local pane = panes[tab]
+  if pane and vim.api.nvim_buf_is_valid(pane.buffer) then
+    return pane
   end
-  return panes[tab]
+  local made = make_pane(tab)
+  if pane then
+    made.plan, made.shown = pane.plan, pane.shown
+  end
+  panes[tab] = made
+  return made
 end
 
 --- The buffer of `tab`'s walkthrough pane, for the layout's arrangement; nil
@@ -249,6 +259,39 @@ local function show_pane_or_tell(tab, pane)
   if not shown then
     vim.notify(CANNOT_SHOW:format(failure), vim.log.levels.WARN)
   end
+end
+
+--- What the user is told when a plan arrives that the pane does not show by
+--- itself: how to show it.
+---
+---@return string
+local function plan_ready()
+  local prefix = settings.resolved().prefix
+  return 'aineo: walkthrough plan ready: '
+    .. (prefix and prefix .. 'pw' or ':Aineo pane walkthrough')
+end
+
+--- Shows the walkthrough pane of `tab` for the plan that arrived, only where
+--- that swaps nothing the user chose and rebuilds nothing: while the layout
+--- shows the agent pane with its two windows and buffers in place, which the
+--- pane then takes over without moving the cursor. A pane shown already,
+--- with its buffer, is left as it is (`redraw()` drew the plan). In any other
+--- case — another pane chosen, a window of the layout closed, the pane's
+--- buffer wiped — nothing is swapped, opened or moved, and the user is told
+--- how to show the plan (`plan_ready()`).
+---
+---@param tab aineo.entry.WalkthroughPlanTab
+local function show_by_itself_or_say_how(tab)
+  local layout = tab.homes.layout
+  local shown = layout.shown_pane()
+  if shown == 'walkthrough' and layout.can_show_pane_in_place('walkthrough') then
+    return
+  end
+  if shown == 'agent' and layout.can_show_pane_in_place('agent') then
+    show_pane_or_tell(tab, 'walkthrough')
+    return
+  end
+  vim.notify(plan_ready(), vim.log.levels.INFO)
 end
 
 --- The words for the agent that tell a plan is shown.
@@ -279,8 +322,9 @@ end
 ---@return string? problem
 local function plan_to_show(call, folders)
   local steps = {}
+  local roots = {}
   for position, step in ipairs(call.steps) do
-    local problem, name = walkthrough_file.problem_with_file(step.file, folders)
+    local problem, name = walkthrough_file.problem_with_file(step.file, folders, roots)
     if problem then
       return nil, ('steps[%d].%s'):format(position, problem)
     end
@@ -306,12 +350,11 @@ function M.take_plan(tab, call, folders)
   if not plan then
     return { text = 'refused: ' .. problem, is_error = true }
   end
+  walkthrough.follow_turns_of(tab)
   local pane = pane_of(tab)
   pane.plan, pane.shown = plan, steps_on_show[tab]
   redraw(pane)
-  if tab.is_bound() then
-    show_pane_or_tell(tab, 'walkthrough')
-  end
+  show_by_itself_or_say_how(tab)
   return { text = shown_words(call, pane.shown), is_error = false }
 end
 
@@ -325,6 +368,8 @@ function M.focus(tab)
     vim.notify(NO_PLAN, vim.log.levels.INFO)
     return
   end
+  pane = pane_of(tab)
+  redraw(pane)
   tab.focus_pane('walkthrough')
 end
 
@@ -349,7 +394,7 @@ end
 ---@param tab aineo.entry.WalkthroughPlanTab
 function M.let_go(tab)
   local pane = panes[tab]
-  panes[tab] = nil
+  panes[tab], steps_on_show[tab] = nil, nil
   if pane and vim.api.nvim_buf_is_valid(pane.buffer) then
     vim.api.nvim_buf_delete(pane.buffer, { force = true })
   end
@@ -359,6 +404,7 @@ walkthrough.on_step_shown(function(tab, call)
   steps_on_show[tab] = call.step
   local pane = panes[tab]
   if pane and pane.plan then
+    pane = pane_of(tab)
     pane.shown = call.step
     redraw(pane)
   end

@@ -76,9 +76,10 @@ end
 ---@param child table
 ---@param name string the case's own name for its files
 ---@param settings? table more of `vim.g.aineo`
+---@param fake_environment? table<string, string> more of the fake `claude`'s environment
 ---@return string token
-function M.open_layout(child, name, settings)
-  local fake = claude_session.fake(name, 'ready')
+function M.open_layout(child, name, settings, fake_environment)
+  local fake = claude_session.fake(name, 'ready', fake_environment)
   entry.use_fake(child, fake, settings)
   child.cmd('Aineo open')
   claude_session.wait_for_start(fake)
@@ -144,21 +145,22 @@ function M.offer(child, receiver, token, call)
   return answered and answer or { raised = tostring(answer) }
 end
 
+--- The number of Claude's terminal buffer in `child`.
+---
+---@param child table
+---@return integer
+function M.terminal_buffer(child)
+  return child.lua_get([[vim.iter(vim.api.nvim_list_bufs()):find(function(number)
+    return vim.bo[number].buftype == 'terminal'
+  end)]])
+end
+
 --- Has `child`'s Claude Code count as busy, or not.
 ---
 ---@param child table
 ---@param busy boolean
 function M.be_busy(child, busy)
-  child.lua(
-    [[
-      local busy = ...
-      local terminal = vim.iter(vim.api.nvim_list_bufs()):find(function(number)
-        return vim.bo[number].buftype == 'terminal'
-      end)
-      vim.b[terminal].aineo_session_busy = busy
-    ]],
-    { busy }
-  )
+  child.lua('vim.b[...].aineo_session_busy = select(2, ...)', { M.terminal_buffer(child), busy })
 end
 
 return M

@@ -14,15 +14,39 @@ local M = {}
 --- What the agent is told of when a plan is sent.
 M.WHEN_TO_SEND = 'Once the user agrees to the plan, send it with this tool before showing step 1.'
 
+--- The longest file path a step may give, in bytes.
+local LONGEST_FILE_BYTES = 4096
+
+--- The longest title, cover item or step title a call may give, in
+--- characters.
+local LONGEST_LINE_CHARACTERS = 200
+
+--- The longest summary a call may give, in characters.
+local LONGEST_SUMMARY_CHARACTERS = 4096
+
+--- The longest name of a concept a step may introduce, in characters.
+local LONGEST_NAME_CHARACTERS = 80
+
+--- The most items `covers` has.
+local MOST_COVERS = 16
+
+--- The most steps a plan has.
+local MOST_STEPS = 64
+
+--- The most concepts a step introduces.
+local MOST_NAMES = 8
+
 --- What the tool says of itself.
 local DESCRIPTION = "Gives the plan of a code walkthrough to the user's walkthrough pane in Neovim,"
   .. ' which shows it beside the code and marks the step on show. '
   .. M.WHEN_TO_SEND
   .. ' Sending a plan again replaces the one shown. `title` names the walkthrough and `summary`'
-  .. ' says in prose what it is about; `covers` lists the features and changes it goes through'
-  .. ' (1 to 16 short items); `steps` lists its steps in order (1 to 64), each `{ title, file,'
-  .. ' introduces? }`, `file` the absolute path of the file the step shows and `introduces` the'
-  .. ' concepts the step explains for the first time (at most 8 names). '
+  .. ' says in prose what it is about; `covers` lists the features and changes it goes through;'
+  .. ' `steps` lists its steps in order, each `{ title, file, introduces? }`, `file` the absolute'
+  .. ' path of the file the step shows and `introduces` the concepts the step explains for the'
+  .. ' first time. Limits: `title`, the title of a step and each item of `covers` are at most 200'
+  .. ' characters, `summary` at most 4096 characters, `covers` 1 to 16 items, `steps` 1 to 64, a'
+  .. ' step introduces at most 8 concepts of at most 80 characters; none of them may be blank. '
   .. walkthrough_tool.PLAN_ORDER
   .. ' The tool shows the plan and nothing else: it moves nowhere. It needs no approval; if it'
   .. ' refuses, correct the call as the refusal says and call again.'
@@ -38,28 +62,38 @@ function M.tool()
     inputSchema = {
       type = 'object',
       properties = {
-        title = { type = 'string', description = 'What the walkthrough is about, in a few words.' },
+        title = {
+          type = 'string',
+          maxLength = LONGEST_LINE_CHARACTERS,
+          description = 'What the walkthrough is about, in a few words.',
+        },
         summary = {
           type = 'string',
+          maxLength = LONGEST_SUMMARY_CHARACTERS,
           description = 'What the walkthrough is about, in prose.',
         },
         covers = {
           type = 'array',
+          minItems = 1,
+          maxItems = MOST_COVERS,
           description = 'The features and changes the walkthrough goes through, 1 to 16 items.',
-          items = { type = 'string' },
+          items = { type = 'string', maxLength = LONGEST_LINE_CHARACTERS },
         },
         steps = {
           type = 'array',
+          minItems = 1,
+          maxItems = MOST_STEPS,
           description = 'The steps, in order, 1 to 64.',
           items = {
             type = 'object',
             properties = {
-              title = { type = 'string' },
+              title = { type = 'string', maxLength = LONGEST_LINE_CHARACTERS },
               file = { type = 'string', description = 'The absolute path of the file shown.' },
               introduces = {
                 type = 'array',
+                maxItems = MOST_NAMES,
                 description = 'The concepts the step introduces, at most 8.',
-                items = { type = 'string' },
+                items = { type = 'string', maxLength = LONGEST_NAME_CHARACTERS },
               },
             },
             required = { 'title', 'file' },
@@ -92,27 +126,6 @@ local FIELDS = { title = true, summary = true, covers = true, steps = true }
 --- The fields of a step.
 local STEP_FIELDS = { title = true, file = true, introduces = true }
 
---- The longest file path a step may give, in bytes.
-local LONGEST_FILE_BYTES = 4096
-
---- The longest title, cover item or step title a call may give, in bytes.
-local LONGEST_LINE_BYTES = 200
-
---- The longest summary a call may give, in bytes: 4 KiB.
-local LONGEST_SUMMARY_BYTES = 4 * 1024
-
---- The longest name of a concept a step may introduce, in bytes.
-local LONGEST_NAME_BYTES = 80
-
---- The most items `covers` has.
-local MOST_COVERS = 16
-
---- The most steps a plan has.
-local MOST_STEPS = 64
-
---- The most concepts a step introduces.
-local MOST_NAMES = 8
-
 --- Whether `value` is a JSON object: a table that is no non-empty list.
 ---
 ---@param value any
@@ -129,40 +142,49 @@ local function is_array(value)
   return type(value) == 'table' and (vim.islist(value) or next(value) == nil)
 end
 
+--- Whether `value` is a string with something in it besides white space.
+---
+---@param value any
+---@return boolean
+local function is_filled(value)
+  return type(value) == 'string' and value:find('%S') ~= nil
+end
+
 --- Why `value`, the field `field`, is no line of text of at most `longest`
---- bytes: no non-empty string, holding a NUL or a line break, or longer.
+--- characters: no string with something besides white space in it, holding a
+--- NUL or a line break, or longer.
 ---
 ---@param value any
 ---@param field string
 ---@param longest integer
 ---@return string?
 local function line_problem(value, field, longest)
-  if type(value) ~= 'string' or value == '' then
+  if not is_filled(value) then
     return field .. ': expected a non-empty string'
   end
   if value:find('[%z\n\r]') then
     return field .. ': holds a NUL or a line break'
   end
-  if #value > longest then
-    return ('%s: longer than %d bytes'):format(field, longest)
+  if vim.fn.strchars(value) > longest then
+    return ('%s: longer than %d characters'):format(field, longest)
   end
   return nil
 end
 
---- Why `summary` is refused: no non-empty string, holding a NUL, or longer
---- than 4 KiB.
+--- Why `summary` is refused: no string with something besides white space in
+--- it, holding a NUL, or longer than 4096 characters.
 ---
 ---@param summary any
 ---@return string?
 local function summary_problem(summary)
-  if type(summary) ~= 'string' or summary == '' then
+  if not is_filled(summary) then
     return 'summary: expected a non-empty string'
   end
   if summary:find('%z') then
     return 'summary: holds a NUL'
   end
-  if #summary > LONGEST_SUMMARY_BYTES then
-    return ('summary: longer than %d bytes'):format(LONGEST_SUMMARY_BYTES)
+  if vim.fn.strchars(summary) > LONGEST_SUMMARY_CHARACTERS then
+    return ('summary: longer than %d characters'):format(LONGEST_SUMMARY_CHARACTERS)
   end
   return nil
 end
@@ -230,7 +252,7 @@ local function introduces_problem(introduces, field)
     return ('%s: more than %d'):format(field, MOST_NAMES)
   end
   for position, name in ipairs(introduces) do
-    local problem = line_problem(name, ('%s[%d]'):format(field, position), LONGEST_NAME_BYTES)
+    local problem = line_problem(name, ('%s[%d]'):format(field, position), LONGEST_NAME_CHARACTERS)
     if problem then
       return problem
     end
@@ -248,7 +270,7 @@ local function step_problem(step, field)
   if not is_object(step) then
     return field .. ': expected an object'
   end
-  local problem = line_problem(step.title, field .. '.title', LONGEST_LINE_BYTES)
+  local problem = line_problem(step.title, field .. '.title', LONGEST_LINE_CHARACTERS)
     or file_problem(step.file, field .. '.file')
     or introduces_problem(step.introduces, field .. '.introduces')
   if problem then
@@ -271,10 +293,10 @@ local function refusal_of(arguments)
   if not is_object(arguments) then
     return 'arguments: expected an object'
   end
-  local problem = line_problem(arguments.title, 'title', LONGEST_LINE_BYTES)
+  local problem = line_problem(arguments.title, 'title', LONGEST_LINE_CHARACTERS)
     or summary_problem(arguments.summary)
     or list_problem(arguments.covers, 'covers', MOST_COVERS, function(item, field)
-      return line_problem(item, field, LONGEST_LINE_BYTES)
+      return line_problem(item, field, LONGEST_LINE_CHARACTERS)
     end)
     or list_problem(arguments.steps, 'steps', MOST_STEPS, step_problem)
   if problem then
