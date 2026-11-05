@@ -2550,20 +2550,31 @@ other line it tells you there is nothing to go to. `walkthrough_step` moves
 the `▸`; a plan sent again replaces the one shown, the step on show staying
 marked.
 
-The pane shows itself when a plan arrives (the cursor stays where it is), and
-`\pw` (|:Aineo-pane|) brings it back after `\pa`, `\g`, `\pt`, `\x` or `\e`
-showed another pane; the steps that follow do not bring it back. When the
-walkthrough ends — an end call, `\vq`, `\vc` or a switch of the tab's
-session — the plan is forgotten and the Report returns, if the walkthrough
-pane is the pane shown. `\pw` while the tab has no plan tells you so.
-A plan is refused, naming the step, when a file would be refused to a step
-(see above), and a plan sent to a tab whose layout is not open is kept and
-shown by the next `\pw`. The tool is allowed without asking, and the
-instructions appended to the system prompt and its description say when to
-send it and keep the order of the plan described above. The highlight groups
-of the page are |hl-AineoPaneTitle|, |hl-AineoPaneSection|,
-|hl-AineoPaneBullet|, |hl-AineoPaneDone|, |hl-AineoPaneShown|,
-|hl-AineoPaneFile| and |hl-AineoPaneStepRef|.
+The pane shows itself when a plan arrives only where that swaps nothing you
+chose and rebuilds nothing: while the right column shows the agent pane, with
+its two windows in place, the pane takes the Report's place and the cursor
+stays where it is. While you have another pane shown (`\g`, `\pt`, `\x`,
+`\e`), or a window of the layout is closed, or you wiped the pane's buffer,
+nothing is swapped, opened or moved: the plan is kept and you are told `aineo:
+walkthrough plan ready: \pw`, and `\pw` (|:Aineo-pane|) shows it. `\pw` brings
+the pane back after any other pane too; the steps that follow do not bring it
+back. The plan follows the tab's session as a step does: a switch of the
+session, a `/clear` or a resume, also before step 1, ends it and drops a
+message that waits. When the walkthrough ends — an end call, `\vq`, `\vc` or a
+switch of the tab's session — the plan is forgotten and the Report returns, if
+the walkthrough pane is the pane shown. `\pw` while the tab has no plan tells
+you so. A step past the last of the plan shows in the winbar as `step N`, with
+no total and no `▸`. A plan is refused, naming the step, when a file would be
+refused to a step (see above); the checkout of a folder is looked for once for
+the whole plan. Its limits count characters: `title`, the title of a step and
+each item of `covers` at most 200, `summary` at most 4096, a concept at most
+80, `covers` 1 to 16 items, `steps` 1 to 64, at most 8 concepts a step, none
+of them blank; the tool's description and input schema say so. The tool is
+allowed without asking, and the instructions appended to the system prompt and
+its description say when to send it and keep the order of the plan described
+above. The highlight groups of the page are |hl-AineoPaneTitle|,
+|hl-AineoPaneSection|, |hl-AineoPaneBullet|, |hl-AineoPaneDone|,
+|hl-AineoPaneShown|, |hl-AineoPaneFile| and |hl-AineoPaneStepRef|.
 
                                                           *aineo-explain-jump*
 `]v` and `[v` move the cursor to the line of the next and the previous

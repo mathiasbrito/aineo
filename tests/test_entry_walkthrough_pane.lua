@@ -1,6 +1,8 @@
 local MiniTest = require('mini.test')
+local claude_session = dofile('tests/helpers/claude_session.lua')
 local entry = dofile('tests/helpers/entry.lua')
 local explained = dofile('tests/helpers/explain_child.lua')
+local fixture = dofile('tests/helpers/fixture.lua')
 local git_repo = dofile('tests/helpers/git_repo.lua')
 local send = dofile('tests/helpers/send.lua')
 local walkthrough_session = dofile('tests/helpers/walkthrough_session.lua')
@@ -32,9 +34,15 @@ local T = MiniTest.new_set({
 ---
 ---@param name string
 ---@param settings? table more of `vim.g.aineo`
+---@param fake_environment? table<string, string> more of the fake `claude`'s environment
 ---@return string token
-local function open_layout(name, settings)
-  return walkthrough_session.open_layout(child, 'walkthrough-pane-' .. name, settings)
+local function open_layout(name, settings, fake_environment)
+  return walkthrough_session.open_layout(
+    child,
+    'walkthrough-pane-' .. name,
+    settings,
+    fake_environment
+  )
 end
 
 --- Sends the plan `call` as the agent of the Claude Code with `token` does.
@@ -251,94 +259,105 @@ T['a plan']['that is refused leaves the plan shown as it was'] = function()
   eq(pane_lines(), before)
 end
 
-T['a plan']['is kept, and not shown, by a tab whose layout is not open in a tab page'] = function()
-  open_layout('unbound')
+--- Makes, in the child, `_G.stand_in_tab(layout)`: a tab that is no tab of
+--- aineo's, whose layout is `layout` (given `shown_pane` and
+--- `can_show_pane_in_place` as it answers them, `agent` and true when not)
+--- and whose `show_pane` is `show_pane`, noted in `_G.shown_panes`, and
+--- everything else a plan asks of a tab does nothing. What the child tells
+--- the user is kept in `_G.told`.
+local STAND_IN_TAB = [[
+  _G.told, _G.shown_panes = {}, {}
+  vim.notify = function(message) table.insert(_G.told, message) end
+  _G.stand_in_tab = function(layout, show_pane)
+    return {
+      key = 'stand-in',
+      homes = {
+        layout = vim.tbl_extend('force', {
+          shown_pane = function() return 'agent' end,
+          can_show_pane_in_place = function() return true end,
+        }, layout or {}),
+      },
+      is_bound = function() return true end,
+      is_busy = function() return false end,
+      on_busy_change = function() end,
+      on_session_switch = function() end,
+      show_pane = show_pane or function(pane) table.insert(_G.shown_panes, pane) end,
+    }
+  end
+  _G.small_plan = function(project)
+    return {
+      title = 'The values',
+      summary = 'How the values are defined.',
+      covers = { 'Defining the values' },
+      steps = { { title = 'The definitions', file = project .. '/src/code.lua', introduces = {} } },
+    }
+  end
+]]
+
+T['a plan']['is kept, and not shown, by a tab whose layout cannot show the pane in place, the user told how to'] = function()
+  open_layout('cannot-in-place')
+  child.lua(STAND_IN_TAB)
 
   local outcome = child.lua(
     [[
       local project = ...
-      local shown = false
-      local tab = {
-        key = 'stand-in',
-        homes = {},
-        is_bound = function() return false end,
-        show_pane = function() shown = true end,
-      }
-      local answer = require('aineo.entry.walkthrough_plan').take_plan(tab, {
-        title = 'The values',
-        summary = 'How the values are defined.',
-        covers = { 'Defining the values' },
-        steps = { { title = 'The definitions', file = project .. '/src/code.lua', introduces = {} } },
-      }, { project })
-      return { is_error = answer.is_error, shown = shown, buffer = require('aineo.entry.walkthrough_plan').buffer_of(tab) ~= nil }
+      local tab = _G.stand_in_tab({ can_show_pane_in_place = function() return false end })
+      local plans = require('aineo.entry.walkthrough_plan')
+      local answer = plans.take_plan(tab, _G.small_plan(project), { project })
+      return { is_error = answer.is_error, shown = _G.shown_panes, buffer = plans.buffer_of(tab) ~= nil, told = _G.told }
     ]],
     { project }
   )
 
-  eq(outcome, { is_error = false, shown = false, buffer = true })
+  eq(outcome, {
+    is_error = false,
+    shown = {},
+    buffer = true,
+    told = { 'aineo: walkthrough plan ready: \\pw' },
+  })
 end
 
---- Runs, in the child, `body`, a Lua chunk given a stand-in tab whose layout
---- shows the walkthrough pane and whose `show_pane` raises `no room`, and
---- `project`; returns what the child told the user, in order.
----
----@param body string
----@return string[] told
-local function told_by_a_tab_that_cannot_show_a_pane(body)
+T['a plan']['that cannot be shown tells the user, and is kept'] = function()
+  open_layout('cannot-show')
+  child.lua(STAND_IN_TAB)
+
   child.lua(
     [[
-      local project, body = ...
-      _G.told = {}
-      vim.notify = function(message) table.insert(_G.told, message) end
-      local tab = {
-        key = 'stand-in',
-        homes = { layout = { shown_pane = function() return 'walkthrough' end } },
-        is_bound = function() return true end,
-        show_pane = function() error('no room', 0) end,
-      }
-      load(body)(tab, project)
+      local project = ...
+      local tab = _G.stand_in_tab(nil, function() error('no room', 0) end)
+      require('aineo.entry.walkthrough_plan').take_plan(tab, _G.small_plan(project), { project })
     ]],
-    { project, body }
+    { project }
   )
-  return child.lua_get('_G.told')
+
+  eq(child.lua_get('_G.told'), { 'aineo: the walkthrough pane could not be shown: no room' })
 end
 
 T['a walkthrough that ends'] = MiniTest.new_set()
 
-T['a plan']['that cannot be shown tells the user, and is kept'] = function()
-  open_layout('cannot-show')
-
-  local told = told_by_a_tab_that_cannot_show_a_pane([[
-    local tab, project = ...
-    require('aineo.entry.walkthrough_plan').take_plan(tab, {
-      title = 'The values',
-      summary = 'How the values are defined.',
-      covers = { 'Defining the values' },
-      steps = { { title = 'The definitions', file = project .. '/src/code.lua', introduces = {} } },
-    }, { project })
-  ]])
-
-  eq(told, { 'aineo: the walkthrough pane could not be shown: no room' })
-end
-
 T['a walkthrough that ends']['when the Report cannot be given back tells the user, and still ends'] = function()
   open_layout('cannot-end')
+  child.lua(STAND_IN_TAB)
 
-  local told = told_by_a_tab_that_cannot_show_a_pane([[
-    local tab, project = ...
-    local plans = require('aineo.entry.walkthrough_plan')
-    plans.take_plan(tab, {
-      title = 'The values',
-      summary = 'How the values are defined.',
-      covers = { 'Defining the values' },
-      steps = { { title = 'The definitions', file = project .. '/src/code.lua', introduces = {} } },
-    }, { project })
-    _G.told = {}
-    require('aineo.entry.walkthrough').clear(tab)
-    plans.focus(tab)
-  ]])
+  child.lua(
+    [[
+      local project = ...
+      local shown = 'agent'
+      local tab = _G.stand_in_tab({ shown_pane = function() return shown end }, function(pane)
+        shown = pane
+        if pane == 'agent' then
+          error('no room', 0)
+        end
+      end)
+      local plans = require('aineo.entry.walkthrough_plan')
+      plans.take_plan(tab, _G.small_plan(project), { project })
+      require('aineo.entry.walkthrough').clear(tab)
+      plans.focus(tab)
+    ]],
+    { project }
+  )
 
-  eq(told, {
+  eq(child.lua_get('_G.told'), {
     'aineo: the walkthrough pane could not be shown: no room',
     'aineo: no walkthrough plan is shown in this tab: the agent sends one with walkthrough_plan',
   })
@@ -541,6 +560,172 @@ local function press_enter_on(text)
   entry.press(child, '<CR>')
 end
 
+T['a plan']['is ended by a session switch before any step, and a message waiting is dropped'] = function()
+  child.lua('vim.env.XDG_STATE_HOME = ...', { fixture.directory('walkthrough-pane-switch') })
+  local token = open_layout('switch-before-step', nil, { AINEO_FAKE_CLAUDE_HOOKS = '1' })
+  plan(token)
+  send.watch_writes(child)
+  walkthrough_session.be_busy(child, true)
+  press_enter_on('   2  The result')
+
+  claude_session.press_keys(child, walkthrough_session.terminal_buffer(child), '/clear\r')
+  vim.wait(explained.PATIENCE_MS, function()
+    return shown_pane() == 'agent'
+  end, 20)
+  walkthrough_session.be_busy(child, false)
+  vim.wait(300)
+
+  eq(shown_pane(), 'agent')
+  eq(
+    vim.tbl_filter(function(bytes)
+      return bytes:find('Go to walkthrough step', 1, true) ~= nil
+    end, send.writes(child)),
+    {}
+  )
+  entry.press(child, '\\pw')
+  eq(shown_pane(), 'agent')
+end
+
+--- The panes a user may be working in when a plan arrives, with the keys
+--- that show each.
+local OTHER_PANES = {
+  { '\\g', 'changes' },
+  { '\\pt', 'terminal' },
+  { '\\e', 'explorer' },
+}
+
+T['a plan']['sent while the user has another pane shown swaps nothing, moves no cursor, and says how to show it'] =
+  MiniTest.new_set({
+    parametrize = OTHER_PANES,
+  })
+
+T['a plan']['sent while the user has another pane shown swaps nothing, moves no cursor, and says how to show it']['given'] = function(
+  keys,
+  pane
+)
+  local token = open_layout('other-pane-' .. pane)
+  entry.press(child, keys)
+  local window = child.lua_get('vim.api.nvim_get_current_win()')
+
+  plan(token)
+
+  eq(shown_pane(), pane)
+  eq(child.lua_get('vim.api.nvim_get_current_win()'), window)
+  eq(entry.messages(child), {
+    { message = 'aineo: walkthrough plan ready: \\pw', level = vim.log.levels.INFO },
+  })
+  entry.press(child, '\\pw')
+  eq(shown_pane(), 'walkthrough')
+  eq(pane_lines(), page(nil, pane_width()))
+end
+
+--- The number of windows of the child's current tab page, and the one the
+--- cursor is in.
+---
+---@return { count: integer, current: integer, buffer: integer }
+local function windows_of_the_current_page()
+  return child.lua_get([[{
+    count = #vim.api.nvim_tabpage_list_wins(0),
+    current = vim.api.nvim_get_current_win(),
+    buffer = vim.api.nvim_get_current_buf(),
+  }]])
+end
+
+T['a plan']['sent when the layout’s windows are closed rebuilds nothing, moves no cursor, and says how to show it'] = function()
+  local token = open_layout('windows-closed')
+  child.cmd('edit ' .. vim.fn.fnameescape(project .. '/src/code.lua'))
+  child.cmd('only')
+  local before = windows_of_the_current_page()
+
+  plan(token)
+
+  eq(windows_of_the_current_page(), before)
+  eq(entry.messages(child), {
+    { message = 'aineo: walkthrough plan ready: \\pw', level = vim.log.levels.INFO },
+  })
+end
+
+T['a plan']['sent while the user is in another tab page leaves that page as it is'] = function()
+  local token = open_layout('other-page')
+  child.cmd('edit ' .. vim.fn.fnameescape(project .. '/src/code.lua'))
+  child.cmd('only')
+  child.cmd('tabnew ' .. vim.fn.fnameescape(project .. '/src/other.lua'))
+  local before = windows_of_the_current_page()
+
+  plan(token)
+
+  eq(windows_of_the_current_page(), before)
+end
+
+T['a plan']['sent again while the pane shows is drawn again, with nothing said'] = function()
+  local token = open_layout('again-shown')
+  plan(token)
+
+  plan(token, walkthrough_session.plan_for(project, { title = 'Another walkthrough' }))
+
+  eq(pane_lines()[1], ' Another walkthrough')
+  eq(entry.messages(child), {})
+end
+
+T['a plan']['is taken after the user wiped the pane’s buffer, and a step is answered'] = function()
+  local token = open_layout('wiped')
+  plan(token)
+  child.cmd('bwipeout! ' .. child.lua_get(PANE_BUFFER))
+
+  local answer = step(token, 'src/code.lua', 1)
+  local again = plan(token)
+  entry.press(child, '\\pw')
+
+  eq(answer.is_error, false)
+  eq(again.is_error, false)
+  eq(shown_pane(), 'walkthrough')
+  eq(pane_lines(), page(1, pane_width()))
+  eq(entry.messages(child), {
+    { message = 'aineo: walkthrough plan ready: \\pw', level = vim.log.levels.INFO },
+  })
+end
+
+T['a plan']['checks the checkout of a folder once, however many files lie in it'] = function()
+  local token = open_layout('roots-once')
+  child.lua([[
+    local test_layout = require('aineo.test_layout')
+    local original = test_layout.open_checkout_of
+    _G.checkouts_asked = 0
+    test_layout.open_checkout_of = function(...)
+      _G.checkouts_asked = _G.checkouts_asked + 1
+      return original(...)
+    end
+  ]])
+  local steps = {}
+  for _ = 1, 3 do
+    table.insert(steps, { title = 'A step', file = project .. '/src/code.lua', introduces = {} })
+    table.insert(steps, { title = 'Another', file = project .. '/src/other.lua', introduces = {} })
+  end
+
+  local answer = plan(token, walkthrough_session.plan_for(project, { steps = steps }))
+
+  eq(answer.is_error, false)
+  eq(child.lua_get('_G.checkouts_asked'), 1)
+end
+
+T['a plan']['sent after the tab was let go marks no step of the session before'] = function()
+  local token = open_layout('after-let-go')
+  plan(token)
+  step(token, 'src/code.lua', 1)
+  child.lua(
+    [[require('aineo.entry.walkthrough_plan').let_go(require('aineo.entry.registry').tab_list[1])]]
+  )
+
+  plan(token)
+
+  eq(
+    vim.iter(pane_lines()):any(function(line)
+      return line:find('▸', 1, true) ~= nil or line:find('✓', 1, true) ~= nil
+    end),
+    false
+  )
+end
+
 T['Enter'] = MiniTest.new_set()
 
 T['Enter']['on a step sends “Go to walkthrough step N” to the session as a message of the user'] = function()
@@ -666,6 +851,38 @@ T['the pane']['draws its winbar and its hint line, and no numbers or signs'] = f
     wrap = false,
     cursorline = true,
   })
+end
+
+T['the pane']['names a step past the last one of the plan without a total, and marks none'] = function()
+  local token = open_layout('past-the-last')
+  plan(token)
+
+  walkthrough_session.offer(
+    child,
+    'receive_walkthrough_step',
+    token,
+    walkthrough_session.step_for(project, 'src/code.lua', 5, { total = 5 })
+  )
+
+  eq(
+    child.lua_get(([=[vim.wo[vim.fn.win_findbuf(%s)[1]].winbar]=]):format(PANE_BUFFER)),
+    ' %#Title#Walkthrough%* · step 5'
+  )
+  eq(
+    vim.iter(pane_lines()):any(function(line)
+      return line:find('▸', 1, true) ~= nil
+    end),
+    false
+  )
+end
+
+T['the pane']['leaves the options of the shell’s window as the user’s, when the shell shows there next'] = function()
+  local token = open_layout('options-shell')
+  plan(token)
+
+  entry.press(child, '\\pt')
+
+  eq(child.lua_get([[{ vim.wo.cursorline, vim.wo.signcolumn }]]), { false, 'auto' })
 end
 
 --- The options of the window showing the Report that the walkthrough pane
