@@ -1,8 +1,9 @@
 --- The lines the bands of a walkthrough step are about, marked so that a band
 --- and the code it explains read as one block: the band's gutter bar in the
 --- sign column, the line's number in the walkthrough's number group, and a
---- tint behind the whole row. The marks are extmarks, so they follow the
---- edits made to the buffer.
+--- tint behind the whole row. The marks are extmarks, one per line: they move
+--- with their lines, a deleted line's mark is invalid until the deletion is
+--- undone, and a line inserted inside a range gets none.
 ---
 --- The tint is drawn at each redraw rather than set on the extmarks: a
 --- background set on a line wins over the one 'cursorline' draws, so the
@@ -35,7 +36,9 @@ local function namespace()
   return vim.api.nvim_create_namespace(NAMESPACE)
 end
 
---- Whether `row`, from 0, of `buffer` is marked.
+--- Whether `row`, from 0, of `buffer` has a mark that still stands for a
+--- line: a mark whose line was deleted is invalid until the deletion is
+--- undone.
 ---
 ---@param buffer integer
 ---@param row integer
@@ -46,9 +49,11 @@ local function is_marked(buffer, row)
     namespace(),
     { row, 0 },
     { row, -1 },
-    { limit = 1 }
+    { details = true }
   )
-  return #found > 0
+  return vim.iter(found):any(function(mark)
+    return not mark[4].invalid
+  end)
 end
 
 --- Whether `window` draws its cursor line, the row of its cursor, in the
@@ -101,6 +106,7 @@ function M.mark(buffer, ranges)
         sign_text = draw.GUTTER_MARK,
         sign_hl_group = kinds.WALK.groups.gutter,
         priority = PRIORITY,
+        invalidate = true,
       })
     end
   end
