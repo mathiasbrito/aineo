@@ -187,4 +187,28 @@ T['can_show_pane_in_place()']['is false once the pane’s buffer was wiped'] = f
   eq(can_show_in_place(), false)
 end
 
+T['keep_pane_buffer()'] = MiniTest.new_set()
+
+T['keep_pane_buffer()']['lets the layout show a pane whose buffer no arrangement handed, opening nothing'] = function()
+  local buffers = open_layout(false)
+  local scratch = layout.named_scratch(child, 'aineo://walkthrough-late')
+
+  child.lua([[require('aineo.layout').keep_pane_buffer('walkthrough', ...)]], { scratch })
+
+  eq(can_show_in_place(), true)
+  eq(call('show_pane', 'walkthrough'), vim.NIL)
+  eq(right_column(buffers.claude), { scratch, buffers.input })
+end
+
+T['keep_pane_buffer()']['raises, naming the buffer, for one that does not exist'] = function()
+  open_layout(false)
+
+  local failure = child.lua([[
+      local succeeded, failure = pcall(require('aineo.layout').keep_pane_buffer, 'walkthrough', 9999)
+      return not succeeded and failure or nil
+    ]])
+
+  eq(failure:find('buffer: expected a buffer', 1, true) ~= nil, true)
+end
+
 return T
