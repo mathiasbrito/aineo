@@ -30,7 +30,7 @@ local T = MiniTest.new_set({
 
 --- Shows a step of a walkthrough in the child's current buffer and window.
 ---
----@param step { step: integer, total?: integer, title: string, ranges: { start: integer, text: string }[] }
+---@param step { step: integer, total?: integer, title: string, ranges: { start: integer, end: integer, text: string }[] }
 local function show(step)
   child.lua(
     [[
@@ -501,6 +501,92 @@ T['the tint of the explained code']['follows the lines when others are inserted 
     { background_at(4), background_at(5), background_at(6), background_at(7), background_at(8) },
     { vim.NIL, TINT, TINT, TINT, vim.NIL }
   )
+end
+
+T['the tint of the explained code']['does not move onto the line after a range whose last line is deleted'] = function()
+  show_lines_3_to_5()
+
+  child.cmd('5delete')
+
+  eq({ background_at(3), background_at(4), background_at(5) }, { TINT, TINT, vim.NIL })
+end
+
+T['the tint of the explained code']['does not move onto the line after a range that is deleted whole'] = function()
+  show_lines_3_to_5()
+
+  child.cmd('3,5delete')
+
+  eq({ background_at(2), background_at(3), background_at(4) }, { vim.NIL, vim.NIL, vim.NIL })
+end
+
+T['the tint of the explained code']['leaves no bar on the line after a range that is deleted whole'] = function()
+  child.wo.signcolumn = 'yes'
+  show_lines_3_to_5()
+
+  child.cmd('3,5delete')
+
+  eq(
+    child.lua_get([[(function()
+      vim.cmd('redraw')
+      return vim.api.nvim__inspect_cell(1, vim.fn.screenpos(0, 3, 1).row - 1, 0)[1]
+    end)()]]),
+    ' '
+  )
+end
+
+T['the tint of the explained code']['comes back with the lines when the deletion is undone'] = function()
+  show_lines_3_to_5()
+  child.cmd('3,5delete')
+
+  child.cmd('undo')
+
+  eq(
+    { background_at(3), background_at(4), background_at(5), background_at(6) },
+    { TINT, TINT, TINT, vim.NIL }
+  )
+end
+
+T['the tint of the explained code']['leaves a line inserted inside a range unmarked'] = function()
+  show_lines_3_to_5()
+
+  child.cmd("3put ='new'")
+
+  eq(
+    { background_at(3), background_at(4), background_at(5), background_at(6) },
+    { TINT, vim.NIL, TINT, TINT }
+  )
+end
+
+--- What the screen draws at the end of the row of line 3 and of line 4, in
+--- each window of the page, top to bottom, as the letters mini.test gives
+--- each distinct set of attributes; the rows are found by the line numbers
+--- the windows draw, as the bands above lines shift the rows that
+--- `screenpos()` gives.
+---
+---@return string[] attributes, line 3 then line 4 of each window
+local function attributes_of_lines_3_and_4_in_every_window()
+  child.cmd('redraw')
+  local screenshot = child.get_screenshot()
+  local found = {}
+  for row, cells in ipairs(screenshot.text) do
+    local number = vim.trim(table.concat(cells, '', 1, 5))
+    if number == '3' or number == '4' then
+      table.insert(found, screenshot.attr[row][#cells - 1])
+    end
+  end
+  return found
+end
+
+T['the tint of the explained code']['gives each window its own cursor line, whichever is current'] = function()
+  child.o.cursorline = true
+  child.cmd('3')
+  child.cmd('split')
+  child.cmd('4')
+  child.cmd('wincmd j')
+  show_lines_3_to_5()
+
+  local top_3, top_4, bottom_3, bottom_4 = unpack(attributes_of_lines_3_and_4_in_every_window())
+  eq({ top_3 == bottom_4, top_4 == bottom_3, top_3 ~= top_4 }, { true, true, true })
 end
 
 T['the tint of the explained code']['reaches the last line of the file'] = function()
