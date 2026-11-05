@@ -111,9 +111,43 @@ Each applied to the file as committed in the working tree, run on its covering f
 
 `make lint`: 0 errors, 0 warnings. Files run while working: `test_mcp_walkthrough_plan`, `test_mcp`, `test_mcp_test_layout`, `test_mcp_run_calls`, `test_mcp_walkthrough`, `test_explain_walk_pane`, `test_layout_walkthrough`, `test_layout_panes`, `test_entry_walkthrough_pane` (39 cases), `test_entry_walkthrough`, `test_entry_panes`, `test_entry`, `test_entry_cheatsheet`, `test_keys`, `test_plugin`, `test_doc`, `test_health`. The whole suite once before the push (see the pull request).
 
+## Fix round (review402, rulings A707)
+
+The review's findings and the orchestrator's rulings (A707, in the D141 row) were built test-first, each seen failing, on the head `d49ce75f`.
+
+1. **A session switch before step 1** (finding 1): `take_plan()` calls `walkthrough.follow_turns_of(tab)`, so the tab follows its turns and session switches from the plan on. The case drives the real wiring (a plan, a message waiting, `/clear`): red (`walkthrough` for `agent`), then green. The stand-in tabs of the file became one builder with `on_session_switch`, `on_busy_change` and a layout that answers `shown_pane()` and `can_show_pane_in_place()`.
+2. **No swap of what the user chose, no rebuild** (findings 2 and 3): the layout gained `can_show_pane_in_place(pane)` (its local `can_show_in_place()`, four layout cases); `show_by_itself_or_say_how()` shows the pane only while the layout shows the agent pane with its two windows and buffers in place. Red: `walkthrough` for `changes`, `terminal` and `explorer`; the buffer of the current window and the window count after the plan, with the layout's windows closed and in another tab page. Otherwise a one-line notice, `aineo: walkthrough plan ready: \pw` (the prefix of the user; `:Aineo pane walkthrough` without one). A pane shown already is only drawn again. The ruling lists `\pa` among the panes left alone; `\pa` is the Report, so it is read as the other panes.
+3. **A wiped buffer** (finding 4): `pane_of()` makes the pane again, carrying the plan and the step on show; `focus()` and the step listener go through it, and `focus()` draws it. Red: the step raised `Invalid buffer id`.
+4. **A plan checks a checkout once** (finding 5): `walkthrough_file.problem_with_file()` takes a table that remembers the checkout of each folder for the call; the case counts `open_checkout_of()` (6 for 1).
+5. **Characters, and stated** (finding 6): the limits use `vim.fn.strchars`, the refusals say `characters`, the input schema carries `maxLength`, `minItems` and `maxItems`, and the description states every limit.
+6. **Blank values** (finding 7): `is_filled()`; a title, step title, cover, concept or summary with only white space is refused by name.
+7. **A step past the last** (finding 8): the winbar says `step N`, with no total.
+8. **The pin of `vim.wo[window][0]`** (finding 9): after a plan, `\pt` shows the shell with `cursorline` off and `signcolumn` `auto`; the mutant `vim.wo[window]` gives `true` and `no`. The earlier note called that mutant equivalent; it is not.
+9. **`let_go()` clears the step on show** (finding 10): a plan sent after the tab was let go marks no step. The case was first written with a Lua pattern whose byte class matched the `•` of the bullet, so it was red for no reason; the mutant that drops the clear is what proves it.
+
+Mutants of the round, each the literal edit, applied to the file and run on its covering file (kills are assertions):
+
+| # | Edit | Result |
+|---|---|---|
+| G1 | `is_filled()` as `value ~= ''` | killed (5) |
+| G2 | `vim.fn.strchars(value)` as `#value` | killed (1) |
+| G3 | `vim.fn.strchars(summary)` as `#summary` | killed (1) |
+| G4 | the steps' `minItems = 1` left out of the schema | killed (1) |
+| G5 | the description's word `Limits:` changed | survived: only the sentences that state the limits are asserted; the label is not a claim |
+| H1 | the checkout of a folder not remembered (`roots[directory] = nil`) | killed (1) |
+| F1 | `take_plan()` without `follow_turns_of(tab)` | killed (1) |
+| F2 | auto-show with the agent pane's windows, whichever pane is shown | killed (3) |
+| F3 | auto-show whenever the agent pane is shown, windows or not | killed (3) |
+| F4 | `problem_with_file()` without the `roots` table | killed (1) |
+| F5 | `pane_of()` keeps a pane whose buffer was wiped | killed (1) |
+| F6 | the winbar always names the total | killed (1) |
+| F8 | a pane shown is left as it is without asking whether its buffer is there | survived the first case; killed (1) once the wiped-buffer case asserted the notice |
+| E32 | `vim.wo[window]` for `vim.wo[window][0]` | killed (1) by the shell's window options case |
+| L30b | `let_go()` without clearing `steps_on_show` | killed (1) |
+
 ## Open threads
 
-- `\vn`, `\vp` and `\vq` act only while a step is shown (A695), so before step 1 the hint line names keys that tell the user so; Enter on a step is the key that starts. Whether they should act on a plan alone is the user's call.
+- `\vn`, `\vp` and `\vq` act only while a step is shown (A695), so before step 1 the hint line names keys that tell the user so; Enter on a step is the key that starts. Whether they should act on a plan alone is the user's call (asked, no answer yet).
 - The shared checks of the tools' arguments (`is_object`, the file check, the line check) are now in four files of `aineo.mcp` (`work`, `test_layout_tool`, `walkthrough_tool`, `walkthrough_plan_tool`); a follow-up can move them to one module.
 - `tests/test_entry_walkthrough.lua` still carries its own copy of the child set-up that `tests/helpers/walkthrough_session.lua` now holds for the new file.
 - The zoom message ("nothing zoomed — … (the agent, changes, terminal, run and explorer panes)") does not name the walkthrough pane; left as it was.

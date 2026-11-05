@@ -94,6 +94,45 @@ local function repeated(count, text)
   return items
 end
 
+T['tools/list']['states each limit in the description and in the input schema'] = function()
+  local relay = mcp_relay.start_relay()
+
+  relay:send(mcp_messages.recorded('tools/list'))
+
+  local tools = get(decoded(relay:next_line()), 'result', 'tools')
+  local listed = tools[#tools - 1]
+  local properties = listed.inputSchema.properties
+  local step = properties.steps.items.properties
+  eq({
+    properties.title.maxLength,
+    properties.summary.maxLength,
+    properties.covers.minItems,
+    properties.covers.maxItems,
+    properties.covers.items.maxLength,
+    properties.steps.minItems,
+    properties.steps.maxItems,
+    step.title.maxLength,
+    step.introduces.maxItems,
+    step.introduces.items.maxLength,
+  }, { 200, 4096, 1, 16, 200, 1, 64, 200, 8, 80 })
+  eq(
+    listed.description:find(
+      '`title`, the title of a step and each item of `covers` are at most 200 characters',
+      1,
+      true
+    ) ~= nil,
+    true
+  )
+  eq(
+    listed.description:find(
+      '`summary` at most 4096 characters, `covers` 1 to 16 items, `steps` 1 to 64, a step introduces at most 8 concepts of at most 80 characters',
+      1,
+      true
+    ) ~= nil,
+    true
+  )
+end
+
 T['a call'] = MiniTest.new_set()
 
 T['a call']['whose arguments are refused is a tool error naming the field'] = MiniTest.new_set({
@@ -103,18 +142,22 @@ T['a call']['whose arguments are refused is a tool error naming the field'] = Mi
     { plan_with({ title = '' }), 'title: expected a non-empty string' },
     { plan_with({ title = 'one\ntwo' }), 'title: holds a NUL or a line break' },
     { plan_with({ title = 'one\0two' }), 'title: holds a NUL or a line break' },
-    { plan_with({ title = ('t'):rep(201) }), 'title: longer than 200 bytes' },
+    { plan_with({ title = ('t'):rep(201) }), 'title: longer than 200 characters' },
+    { plan_with({ title = ('日'):rep(201) }), 'title: longer than 200 characters' },
+    { plan_with({ title = '   ' }), 'title: expected a non-empty string' },
+    { plan_with({ summary = ' \t ' }), 'summary: expected a non-empty string' },
+    { plan_with({ covers = { 'fine', ' ' } }), 'covers[2]: expected a non-empty string' },
     { plan_with({ summary = vim.NIL }), 'summary: expected a non-empty string' },
     { plan_with({ summary = '' }), 'summary: expected a non-empty string' },
     { plan_with({ summary = 'one\0two' }), 'summary: holds a NUL' },
-    { plan_with({ summary = ('s'):rep(4097) }), 'summary: longer than 4096 bytes' },
+    { plan_with({ summary = ('s'):rep(4097) }), 'summary: longer than 4096 characters' },
     { plan_with({ covers = 'all' }), 'covers: expected an array of 1 to 16 items' },
     { plan_with({ covers = {} }), 'covers: expected an array of 1 to 16 items' },
     { plan_with({ covers = repeated(17, 'a feature') }), 'covers: more than 16' },
     { plan_with({ covers = { 'fine', 7 } }), 'covers[2]: expected a non-empty string' },
     { plan_with({ covers = { '' } }), 'covers[1]: expected a non-empty string' },
     { plan_with({ covers = { 'one\ntwo' } }), 'covers[1]: holds a NUL or a line break' },
-    { plan_with({ covers = { ('c'):rep(201) } }), 'covers[1]: longer than 200 bytes' },
+    { plan_with({ covers = { ('c'):rep(201) } }), 'covers[1]: longer than 200 characters' },
     { plan_with({ steps = 'all' }), 'steps: expected an array of 1 to 64 items' },
     { plan_with({ steps = {} }), 'steps: expected an array of 1 to 64 items' },
     { plan_with({ steps = vim.fn.range(65) }), 'steps: more than 64' },
@@ -128,8 +171,16 @@ T['a call']['whose arguments are refused is a tool error naming the field'] = Mi
       'steps[2].title: holds a NUL or a line break',
     },
     {
+      plan_with({ steps = { step_with({ title = '   ' }) } }),
+      'steps[1].title: expected a non-empty string',
+    },
+    {
+      plan_with({ steps = { step_with({ introduces = { ' ' } }) } }),
+      'steps[1].introduces[1]: expected a non-empty string',
+    },
+    {
       plan_with({ steps = { step_with({ title = ('t'):rep(201) }) } }),
-      'steps[1].title: longer than 200 bytes',
+      'steps[1].title: longer than 200 characters',
     },
     {
       plan_with({ steps = { step_with({ file = vim.NIL }) } }),
@@ -165,7 +216,7 @@ T['a call']['whose arguments are refused is a tool error naming the field'] = Mi
     },
     {
       plan_with({ steps = { step_with({ introduces = { ('n'):rep(81) } }) } }),
-      'steps[1].introduces[1]: longer than 80 bytes',
+      'steps[1].introduces[1]: longer than 80 characters',
     },
     {
       plan_with({ steps = { step_with({ colour = 'red' }) } }),
@@ -280,6 +331,17 @@ T['in the editor']['takes 16 covers, 64 steps and 8 names a step introduces, the
     answer_of_a_taking_editor(plan_with({ covers = repeated(16, 'a feature'), steps = steps })),
     result_of('shown', false)
   )
+end
+
+T['in the editor']['counts characters, not bytes: 200 characters of three bytes each are taken'] = function()
+  local plan = plan_with({
+    title = ('日'):rep(200),
+    summary = ('日'):rep(4096),
+    covers = { ('日'):rep(200) },
+    steps = { step_with({ title = ('日'):rep(200), introduces = { ('日'):rep(80) } }) },
+  })
+
+  eq(answer_of_a_taking_editor(plan), result_of('shown', false))
 end
 
 T['in the editor']['takes a summary of 4 KiB, and titles, covers and names at their longest'] = function()

@@ -151,4 +151,40 @@ T['the walkthrough pane']['is shown again by open() after the layout’s windows
   eq(right_column(buffers.claude), { buffers.walkthrough, buffers.input })
 end
 
+--- Whether the layout can show the walkthrough pane without opening
+--- anything, as the child's layout answers.
+---
+---@return boolean
+local function can_show_in_place()
+  return child.lua_get([[require('aineo.layout').can_show_pane_in_place('walkthrough')]])
+end
+
+T['can_show_pane_in_place()'] = MiniTest.new_set()
+
+T['can_show_pane_in_place()']['is true while the pane’s windows and buffer are there'] = function()
+  open_layout(true)
+
+  eq(can_show_in_place(), true)
+end
+
+T['can_show_pane_in_place()']['is false when no arrangement handed the pane’s buffer'] = function()
+  open_layout(false)
+
+  eq(can_show_in_place(), false)
+end
+
+T['can_show_pane_in_place()']['is false once a window of the right column was closed'] = function()
+  local buffers = open_layout(true)
+  child.lua([[vim.api.nvim_win_close(vim.fn.win_findbuf(...)[1], true)]], { buffers.input })
+
+  eq(can_show_in_place(), false)
+end
+
+T['can_show_pane_in_place()']['is false once the pane’s buffer was wiped'] = function()
+  local buffers = open_layout(true)
+  child.cmd('bwipeout! ' .. buffers.walkthrough)
+
+  eq(can_show_in_place(), false)
+end
+
 return T

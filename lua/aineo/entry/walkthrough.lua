@@ -66,6 +66,17 @@ local function follow_turns(tab)
   end)
 end
 
+--- Has the end of each turn of `tab`'s Claude Code noted, and a switch of its
+--- session end the walkthrough, as a tab that shows a step does
+--- (`follow_turns()`); once for each tab. Called by whatever starts a
+--- walkthrough for the tab before a step is shown, such as its plan
+--- (`aineo.entry.walkthrough_plan`).
+---
+---@param tab aineo.entry.WalkthroughTab
+function M.follow_turns_of(tab)
+  follow_turns(tab)
+end
+
 --- The words for the agent that tell what was done, and are no error.
 ---
 ---@param text string
