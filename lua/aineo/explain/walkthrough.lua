@@ -5,6 +5,7 @@
 
 local kinds = require('aineo.explain.kinds')
 local marks = require('aineo.explain.marks')
+local ranges = require('aineo.explain.ranges')
 
 local M = {}
 
@@ -15,7 +16,7 @@ local M = {}
 ---@field step integer the number of the step, from 1
 ---@field total? integer how many steps the walkthrough has
 ---@field title string what the step is about
----@field ranges { start: integer, text: string }[] the bands: the line each is above, from 1, and its text
+---@field ranges { start: integer, end: integer, text: string }[] the bands: the first and last line each is about, from 1, and its text
 
 --- The heading of a step: its number, the total when known, and its title.
 ---
@@ -47,17 +48,21 @@ end
 ---@param step aineo.explain.WalkthroughStep
 function M.show(step)
   marks.clear(step.buffer, kinds.WALK)
+  ranges.clear(step.buffer)
+  ranges.mark(step.buffer, step.ranges)
   marks.place(step.buffer, kinds.WALK, explanations_of(step), {
     window = step.window,
     file = vim.api.nvim_buf_get_name(step.buffer),
   })
 end
 
---- Removes the walkthrough bands `buffer` shows.
+--- Removes the walkthrough bands `buffer` shows, and the marks of the lines
+--- they are about.
 ---
 ---@param buffer integer
 function M.clear(buffer)
   marks.clear(buffer, kinds.WALK)
+  ranges.clear(buffer)
 end
 
 --- Whether `buffer` shows any walkthrough band.

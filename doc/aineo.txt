@@ -2444,7 +2444,17 @@ step replaces it, one shown drops it, an end call drops it, and one that no
 longer fits is told once and not shown). The bands are in highlight groups
 of their own, `AineoWalk`, `AineoWalkGutter`, `AineoWalkGutterFill` and
 `AineoWalkNr`, which follow `DiagnosticInfo` as `\v` does, and `]v` and
-`[v` jump between them (|aineo-explain-jump|). The tool is allowed without
+`[v` jump between them (|aineo-explain-jump|). The lines each range is about
+are marked too, so that a band and its code read as one block: the whole row
+of each line is tinted (|hl-AineoWalkRange|), its number is in
+|hl-AineoWalkNr|, and the `▎` of the band's gutter is in the sign column, so
+that the bar runs unbroken from the band down through its code (it shows
+when 'signcolumn' is not `no`). The cursor line of a window that draws one,
+a Visual selection, a search match and the signs and underlines of
+diagnostics stay in view over the tint. The marks follow the edits made to
+the buffer, go with the bands (next step, an end call, `\vq`, `\vc`, a switch
+of session), and leave your own `\v` explanations and the text alone. The
+tool is allowed without
 asking, and its answer says what it showed or why it refused. Its arguments:
 - `file`, `title` and `step`, required: the absolute path of the file, what
   the step is about (at most 200 bytes, on one line, no NUL) and its number
@@ -2640,7 +2650,15 @@ AineoWalkGutter		As |hl-AineoExplainGutter|, for a walkthrough.
                                                       *hl-AineoWalkGutterFill*
 AineoWalkGutterFill	As |hl-AineoExplainGutterFill|, for a walkthrough.
                                                               *hl-AineoWalkNr*
-AineoWalkNr		As |hl-AineoExplainNr|, for a walkthrough.
+AineoWalkNr		As |hl-AineoExplainNr|, for a walkthrough, and the
+			number of each line a step's range is about.
+                                                           *hl-AineoWalkRange*
+AineoWalkRange		The background of the lines a step's range is about:
+			the background of |hl-Normal| blended 8% toward the
+			accent, the foreground of |hl-DiagnosticInfo|
+			(`#61afef` without one). Only the true-colour
+			background is set. A group you define yourself is
+			kept, as a default too.
                                                                *hl-AineoWrite*
 AineoWrite		As |hl-AineoExplain|, for the row that names the
 			request of written code and the line that says it is
