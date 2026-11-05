@@ -81,6 +81,25 @@ Each applied to the committed file, run on the covering file, restored. All on `
 - A user whose `'signcolumn'` is `no` sees the tint and the number but no bar.
 - `\v` explanations unchanged (A702 (4)); the user is offered a change separately.
 
+## Fix round (A703, A704; review of head 76fdb9b2)
+
+Items, in the order of A704:
+
+1. **Deleted lines took their marks onto the next line** (the reviewer's measured fix, adopted red-first): the marks carry `invalidate = true`, and the provider's `is_marked()` reads them with `details` and skips an invalid one. Seen red: "does not move onto the line after a range whose last line is deleted" (`:5delete` on range 3–5: `{tint, tint, tint}` for `{tint, tint, nil}`); "does not move onto the line after a range that is deleted whole" (`:3,5delete`: the old line 6 tinted); "leaves no bar on the line after a range that is deleted whole" (`▎` for ` ` in the sign column). "comes back with the lines when the deletion is undone" arrived green (the marks restore on undo by default); killer N3, `undo_restore = false`.
+2. **Two windows, each its own cursor line** ("gives each window its own cursor line, whichever is current"): arrived green, pinning code written ahead; killer M1, `nvim_win_get_cursor(0)` (assertion). The rows are found by the line numbers each window draws and compared by mini.test's attribute letters, since the bands above lines shift the rows `screenpos()` gives.
+3. **`cursorlineopt=screenline`** left as built; one sentence in the vimdoc.
+4. **A line inserted inside a range stays unmarked** ("leaves a line inserted inside a range unmarked"): arrived green, a pin of what is built (the step's lines are a snapshot); no mutant of the code kills it.
+6. **Records:** the `show()` helper's docstring names `end`; the vimdoc says what is built (moves with the lines, loses a deleted line's mark, none for an inserted one); the module's header says the same.
+
+| # | Edit | Result |
+|---|---|---|
+| N1 | `ranges.lua` without `invalidate = true` | killed, assertions (3) |
+| N2 | `is_marked()` returning true for an invalid mark (`return true`) | killed, assertions (2); the bar case survives it, since the sign is drawn by the extmark itself and only `invalidate` takes it away |
+| N3 | `undo_restore = false` on the marks | killed, assertion (1) |
+| M1 | `nvim_win_get_cursor(0)` in `draws_cursor_line_at()` | killed, assertion (1), the reviewer's mutant |
+
+Final tree: `tests/test_explain_walk.lua` 41 cases, 0 fails; `tests/test_entry_walkthrough.lua` 72 cases, 0 fails (the marks code is exercised there too); `tests/test_doc.lua` 0 fails; `make lint` clean. No whole suite (D30).
+
 ## Commits
 
 *recorded after the merge*
