@@ -37,6 +37,7 @@ T['the groups']['are the sheet’s groups, in its order'] = function()
     'Office and zoom',
     'In the changes pane',
     'In the explorer',
+    'In the walkthrough pane',
   })
 end
 
@@ -105,6 +106,7 @@ T['the sheet']['gathers the keys by group, in the order of the groups'] = functi
     'Office and zoom',
     'In the changes pane',
     'In the explorer',
+    'In the walkthrough pane',
   })
 end
 
@@ -195,7 +197,7 @@ T['the sheet']['lists the keys of each section in the order of the ruling'] = Mi
     },
     { 'In the steering float', { '<CR>', 'q', 'R' } },
     { 'Clean', { 'vc' } },
-    { 'Walkthrough', { 'vn', 'vp', 'vq' } },
+    { 'Walkthrough', { 'pw', 'vn', 'vp', 'vq' } },
   },
 })
 

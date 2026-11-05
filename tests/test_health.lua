@@ -833,6 +833,7 @@ T['the prefix mappings']['are reported in place when aineo mapped each key'] = f
     '- ✅ OK \\Wp runs <Plug>(aineo-test-path)',
     '- ✅ OK \\Wn runs <Plug>(aineo-test-next)',
     '- ✅ OK \\vc runs <Plug>(aineo-explain-clean)',
+    '- ✅ OK \\pw runs <Plug>(aineo-pane-walkthrough)',
     '- ✅ OK \\vn runs <Plug>(aineo-walk-next)',
     '- ✅ OK \\vp runs <Plug>(aineo-walk-previous)',
     '- ✅ OK \\vq runs <Plug>(aineo-walk-end)',
@@ -858,7 +859,7 @@ T['the prefix mappings']['warn that the leader, unset and so a backslash, is the
 
   local report = health.report(child)
 
-  eq(health.section(report, 'Prefix mappings')[66], LEADER_WARNING)
+  eq(health.section(report, 'Prefix mappings')[67], LEADER_WARNING)
   eq(health.advice(report, 'Prefix mappings'), { LEADER_ADVICE })
 end
 
@@ -875,7 +876,7 @@ T['the prefix mappings']['warn that the leader, a Number, is the prefix'] = func
 
   local report = health.report(child)
 
-  eq(health.section(report, 'Prefix mappings')[66], '- ⚠️ WARNING the leader is the prefix, 1')
+  eq(health.section(report, 'Prefix mappings')[67], '- ⚠️ WARNING the leader is the prefix, 1')
 end
 
 T['the prefix mappings']['warn that a leader longer than 48 bytes, which Neovim maps as a backslash, is the prefix'] = function()
@@ -891,7 +892,7 @@ T['the prefix mappings']['warn that a leader longer than 48 bytes, which Neovim 
 
   local report = health.report(child)
 
-  eq(health.section(report, 'Prefix mappings')[66], LEADER_WARNING)
+  eq(health.section(report, 'Prefix mappings')[67], LEADER_WARNING)
 end
 
 T['the prefix mappings']['take a leader of 48 bytes as the characters Neovim maps it to'] = function()
@@ -907,7 +908,7 @@ T['the prefix mappings']['take a leader of 48 bytes as the characters Neovim map
 
   local report = health.report(child)
 
-  eq(#health.section(report, 'Prefix mappings'), 65)
+  eq(#health.section(report, 'Prefix mappings'), 66)
 end
 
 T['the prefix mappings']['warn that the leader, the same key as a prefix in key notation, is the prefix'] = function()
@@ -924,7 +925,7 @@ T['the prefix mappings']['warn that the leader, the same key as a prefix in key 
   local report = health.report(child)
 
   eq(
-    health.section(report, 'Prefix mappings')[66],
+    health.section(report, 'Prefix mappings')[67],
     '- ⚠️ WARNING the leader is the prefix, <space>'
   )
 end
@@ -942,7 +943,7 @@ T['the prefix mappings']['take a leader written in key notation as the character
 
   local report = health.report(child)
 
-  eq(#health.section(report, 'Prefix mappings'), 65)
+  eq(#health.section(report, 'Prefix mappings'), 66)
 end
 
 T['the prefix mappings']['report the keys plugin/aineo.lua mapped to aineo, no more and no fewer'] = function()
@@ -1009,6 +1010,7 @@ T['the prefix mappings']['warn that the local leader, the same key as a prefix i
     '- ✅ OK <space>Wp runs <Plug>(aineo-test-path)',
     '- ✅ OK <space>Wn runs <Plug>(aineo-test-next)',
     '- ✅ OK <space>vc runs <Plug>(aineo-explain-clean)',
+    '- ✅ OK <space>pw runs <Plug>(aineo-pane-walkthrough)',
     '- ✅ OK <space>vn runs <Plug>(aineo-walk-next)',
     '- ✅ OK <space>vp runs <Plug>(aineo-walk-previous)',
     '- ✅ OK <space>vq runs <Plug>(aineo-walk-end)',
@@ -1084,6 +1086,7 @@ T['the prefix mappings']['take a local leader written in key notation as the cha
     '- ✅ OK <Space>Wp runs <Plug>(aineo-test-path)',
     '- ✅ OK <Space>Wn runs <Plug>(aineo-test-next)',
     '- ✅ OK <Space>vc runs <Plug>(aineo-explain-clean)',
+    '- ✅ OK <Space>pw runs <Plug>(aineo-pane-walkthrough)',
     '- ✅ OK <Space>vn runs <Plug>(aineo-walk-next)',
     '- ✅ OK <Space>vp runs <Plug>(aineo-walk-previous)',
     '- ✅ OK <Space>vq runs <Plug>(aineo-walk-end)',
@@ -1115,7 +1118,7 @@ T['the prefix mappings']['warn that the local leader, a Number, is the prefix'] 
   local report = health.report(child)
 
   eq(
-    health.section(report, 'Prefix mappings')[66],
+    health.section(report, 'Prefix mappings')[67],
     '- ⚠️ WARNING the local leader is the prefix, 1'
   )
   eq(#health.section(report, 'Limits'), 1)
@@ -1135,7 +1138,7 @@ T['the prefix mappings']['warn that a List local leader, which Neovim maps as a 
   local report = health.report(child)
 
   eq(
-    health.section(report, 'Prefix mappings')[66],
+    health.section(report, 'Prefix mappings')[67],
     '- ⚠️ WARNING the local leader is the prefix, \\'
   )
   eq(#health.section(report, 'Limits'), 1)
@@ -1272,6 +1275,7 @@ T['the prefix mappings']['warn of a key the user mapped, naming what it runs'] =
     '- ✅ OK \\Wp runs <Plug>(aineo-test-path)',
     '- ✅ OK \\Wn runs <Plug>(aineo-test-next)',
     '- ✅ OK \\vc runs <Plug>(aineo-explain-clean)',
+    '- ✅ OK \\pw runs <Plug>(aineo-pane-walkthrough)',
     '- ✅ OK \\vn runs <Plug>(aineo-walk-next)',
     '- ✅ OK \\vp runs <Plug>(aineo-walk-previous)',
     '- ✅ OK \\vq runs <Plug>(aineo-walk-end)',
@@ -1311,7 +1315,7 @@ T['the prefix mappings']['warn of a Visual-mode key the user mapped, saying Visu
 
   eq({
     normal = health.section(report, 'Prefix mappings')[1],
-    visual = health.section(report, 'Prefix mappings')[53],
+    visual = health.section(report, 'Prefix mappings')[54],
   }, {
     normal = '- ✅ OK \\s runs <Plug>(aineo-send)',
     visual = '- ⚠️ WARNING \\s in Visual mode runs \':echo "mine"<CR>\', not <Plug>(aineo-send)',
@@ -1412,6 +1416,7 @@ T['the prefix mappings']['warn of each key nobody mapped, as after setup() chang
     '- ⚠️ WARNING ,Wp is not mapped',
     '- ⚠️ WARNING ,Wn is not mapped',
     '- ⚠️ WARNING ,vc is not mapped',
+    '- ⚠️ WARNING ,pw is not mapped',
     '- ⚠️ WARNING ,vn is not mapped',
     '- ⚠️ WARNING ,vp is not mapped',
     '- ⚠️ WARNING ,vq is not mapped',
@@ -1441,7 +1446,7 @@ T['the prefix mappings']['warn that the local leader, unset and so a backslash, 
   local report = health.report(child)
 
   eq(
-    health.section(report, 'Prefix mappings')[66],
+    health.section(report, 'Prefix mappings')[67],
     '- ⚠️ WARNING the local leader is the prefix, \\'
   )
   eq(health.advice(report, 'Prefix mappings'), {
@@ -1456,7 +1461,7 @@ T['the prefix mappings']['warn that the local leader, empty and so a backslash, 
   local report = health.report(child)
 
   eq(
-    health.section(report, 'Prefix mappings')[66],
+    health.section(report, 'Prefix mappings')[67],
     '- ⚠️ WARNING the local leader is the prefix, \\'
   )
 end
@@ -1467,7 +1472,7 @@ T['the prefix mappings']['warn that the local leader, set, is the prefix set'] =
   local report = health.report(child)
 
   eq(
-    health.section(report, 'Prefix mappings')[66],
+    health.section(report, 'Prefix mappings')[67],
     '- ⚠️ WARNING the local leader is the prefix, ,'
   )
 end
@@ -1556,6 +1561,8 @@ local TWIN_LINES = {
   '- ✅ OK <C-\\>Z in Insert mode runs <C-]><Esc><Plug>(aineo-zoom-full)',
   '- ✅ OK <C-\\>O in Terminal mode runs <C-\\><C-n><Plug>(aineo-office)',
   '- ✅ OK <C-\\>O in Insert mode runs <C-]><Esc><Plug>(aineo-office)',
+  '- ✅ OK <C-\\>pw in Terminal mode runs <C-\\><C-n><Plug>(aineo-pane-walkthrough)',
+  '- ✅ OK <C-\\>pw in Insert mode runs <C-]><Esc><Plug>(aineo-pane-walkthrough)',
 }
 
 T['the terminal prefix mappings']['are reported in place when aineo mapped each twin'] = function()
@@ -1654,7 +1661,7 @@ T['the terminal prefix mappings']['warn of a terminal prefix that is a single pr
   local report = health.report(child)
 
   eq(
-    health.section(report, 'Terminal prefix mappings')[59],
+    health.section(report, 'Terminal prefix mappings')[61],
     '- ⚠️ WARNING terminal_prefix is x, a printable key: typing it in Insert mode runs a twin'
   )
   eq(health.advice(report, 'Terminal prefix mappings'), {
@@ -1675,7 +1682,7 @@ T['the terminal prefix mappings']['warn of a terminal prefix that starts with a 
   local report = health.report(child)
 
   eq(
-    health.section(report, 'Terminal prefix mappings')[59],
+    health.section(report, 'Terminal prefix mappings')[61],
     ('- ⚠️ WARNING terminal_prefix %s starts with a key pair of Neovim: it waits for the next key'):format(
       prefix
     )
@@ -2092,6 +2099,7 @@ T['explaining code']['says what Claude Code explains with, and what it may use']
     '- \\vm marks the issues on a line (on each selected line in Visual mode), and \\s then sends the marked issues to the session\'s Claude Code in place of Input, after "Some issues were found in this code, can you check and propose a fix if the issue holds:" (explain.issues_prompt): :help |aineo-explain-mark|',
     '- ]v and [v jump to the next and the previous explanation or issue of a buffer that shows any, in Normal, Visual and Operator-pending mode, and are never mapped over a key of yours: :help |aineo-explain-jump|',
     '- \\vn, \\vp and \\vq ask the agent of your tab for the next step, the previous step or the end of the walkthrough it shows with walkthrough_step, as a message of yours that waits while the agent works; \\vq and \\vc clear its bands: :help |aineo-walkthrough|',
+    "- \\pw shows the walkthrough pane, the plan the agent sends with walkthrough_plan before its first step, in the Report's place over Input; Enter in it asks the agent to go to the step under the cursor, as a message of yours that waits while the agent works: :help |aineo-walkthrough-pane|",
   })
 end
 

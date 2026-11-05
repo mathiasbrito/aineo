@@ -21,6 +21,7 @@ local steer = require('aineo.explain.steer')
 local test_window = require('aineo.explain.test_window')
 local test_writing = require('aineo.explain.test_writing')
 local walkthrough = require('aineo.explain.walkthrough')
+local walkthrough_pane = require('aineo.explain.walkthrough_pane')
 local write = require('aineo.explain.write')
 
 local M = {}
@@ -661,6 +662,27 @@ end
 ---@return boolean
 function M.is_walkthrough_shown(buffer)
   return walkthrough.is_shown(buffer)
+end
+
+--- The page of the walkthrough pane for `plan`, `shown` the number of the
+--- step on show, if one is, laid out for a window `width` cells wide
+--- (`aineo.explain.walkthrough_pane`'s `render()`).
+---
+---@param plan aineo.explain.PlanToShow
+---@param shown? integer
+---@param width integer
+---@return aineo.explain.RenderedPlan
+function M.render_walkthrough_plan(plan, shown, width)
+  return walkthrough_pane.render(plan, shown, width)
+end
+
+--- Draws `rendered`, a page of `M.render_walkthrough_plan()`, in `buffer`,
+--- in place of what it held (`aineo.explain.walkthrough_pane`'s `draw()`).
+---
+---@param buffer integer
+---@param rendered aineo.explain.RenderedPlan
+function M.draw_walkthrough_plan(buffer, rendered)
+  walkthrough_pane.draw(buffer, rendered)
 end
 
 --- Opens the float in which the user types how to change the written code

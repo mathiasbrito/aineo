@@ -104,6 +104,7 @@ local REOPENS_TABS_FIRST = {
   ['pane agent'] = true,
   ['pane changes'] = true,
   ['pane explorer'] = true,
+  ['pane walkthrough'] = true,
 }
 
 --- What each of `:Aineo`'s arguments that runs an action does, by the
@@ -127,6 +128,7 @@ for _, argument in ipairs({
   'pane terminal',
   'pane run',
   'pane explorer',
+  'pane walkthrough',
   'run shell',
 }) do
   ACTIONS[argument] = function()

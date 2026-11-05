@@ -1007,6 +1007,9 @@ local function check_explain(resolved_config)
   vim.health.info(
     '\\vn, \\vp and \\vq ask the agent of your tab for the next step, the previous step or the end of the walkthrough it shows with walkthrough_step, as a message of yours that waits while the agent works; \\vq and \\vc clear its bands: :help |aineo-walkthrough|'
   )
+  vim.health.info(
+    "\\pw shows the walkthrough pane, the plan the agent sends with walkthrough_plan before its first step, in the Report's place over Input; Enter in it asks the agent to go to the step under the cursor, as a message of yours that waits while the agent works: :help |aineo-walkthrough-pane|"
+  )
 end
 
 --- Reports how `\w`, `\W` and `\WW` ask for code with `resolved_config`'s `write`

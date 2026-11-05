@@ -36,9 +36,10 @@ local held = setmetatable({}, { __mode = 'k' })
 ---@type table<aineo.entry.WalkthroughTab, boolean>
 local stepped_this_turn = setmetatable({}, { __mode = 'k' })
 
---- What is told, with the tab, when a tab shows a step, when its bands are
---- cleared, and when its walkthrough ends with a session switch.
----@type fun(tab: aineo.entry.WalkthroughTab)[], fun(tab: aineo.entry.WalkthroughTab)[], fun(tab: aineo.entry.WalkthroughTab)[]
+--- What is told, with the tab, when a tab shows a step (with the step's call),
+--- when its bands are cleared, and when its walkthrough ends with a session
+--- switch.
+---@type (fun(tab: aineo.entry.WalkthroughTab, call: aineo.mcp.WalkthroughCall))[], fun(tab: aineo.entry.WalkthroughTab)[], fun(tab: aineo.entry.WalkthroughTab)[]
 local step_shown_listeners, cleared_listeners, session_switched_listeners = {}, {}, {}
 
 --- The tabs whose turns are followed (`follow_turns()`).
@@ -166,7 +167,7 @@ local function show(tab, call)
   shown_in[tab] = buffer
   held[tab] = nil
   for _, listener in ipairs(step_shown_listeners) do
-    listener(tab)
+    listener(tab, call)
   end
   return done(shown_words(call))
 end
@@ -314,10 +315,10 @@ function M.end_for_session_switch(tab)
   end
 end
 
---- Has `listener` called with the tab whenever a tab shows a step, one held
---- back included, once it is shown.
+--- Has `listener` called with the tab and the call of the step whenever a tab
+--- shows a step, one held back included, once it is shown.
 ---
----@param listener fun(tab: aineo.entry.WalkthroughTab)
+---@param listener fun(tab: aineo.entry.WalkthroughTab, call: aineo.mcp.WalkthroughCall)
 function M.on_step_shown(listener)
   table.insert(step_shown_listeners, listener)
 end

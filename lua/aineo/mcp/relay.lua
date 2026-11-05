@@ -10,8 +10,8 @@
 --- with that token, its worktree's absolute path normalised
 --- (`aineo.mcp.announcement`); and each call of a
 --- run tool likewise (`aineo.mcp.run_calls`), and of the test layout tool
---- (`aineo.mcp.test_layout_tool`) and the walkthrough tool
---- (`aineo.mcp.walkthrough_tool`). Its Claude Code
+--- (`aineo.mcp.test_layout_tool`) and the walkthrough tools
+--- (`aineo.mcp.walkthrough_plan_tool`, `aineo.mcp.walkthrough_tool`). Its Claude Code
 --- process is its parent, and its state directory its
 --- own `stdpath('state')`, the editors'. As it starts, it records that
 --- process on its first session, unless a session hook did already
@@ -34,6 +34,7 @@ local names = require('aineo.mcp.names')
 local processes = require('aineo.mcp.processes')
 local run_calls = require('aineo.mcp.run_calls')
 local test_layout_tool = require('aineo.mcp.test_layout_tool')
+local walkthrough_plan_tool = require('aineo.mcp.walkthrough_plan_tool')
 local walkthrough_tool = require('aineo.mcp.walkthrough_tool')
 
 --- The value of the environment variable `name`, or nil when it is unset or
@@ -86,6 +87,12 @@ require('aineo.mcp.server').serve_stdio({
   end,
   test_layout = function(call)
     return test_layout_tool.offer({
+      editor_address = context.editor_address,
+      token = context.token,
+    }, call)
+  end,
+  walkthrough_plan = function(call)
+    return walkthrough_plan_tool.offer({
       editor_address = context.editor_address,
       token = context.token,
     }, call)

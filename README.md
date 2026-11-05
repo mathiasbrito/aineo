@@ -76,6 +76,10 @@ and its state:
   right column.
 - **Explorer pane.** `\e`: the folder Claude works in as a tree, folders
   first, with git's marks, over the right column's whole height.
+- **Walkthrough pane.** `\pw`: the plan of a code walkthrough Claude gives
+  you, in the Report's place, Input below it: what the walkthrough is about,
+  what it covers, its steps with the one on show marked, and the concepts each
+  step introduces. Enter on a step asks Claude to go there.
 - **Tabs.** Several Claude Code sessions in one Neovim, one in each tab page,
   each with its own panes.
 
@@ -176,6 +180,7 @@ resumes it.
 | `\Wt` | shows or hides the test window, the source's test file below it, which follows the source; in it `\Wp` corrects the test file's path and `\Wn` shows the next one found |
 | `\Ws` | while written code shows: type how to change it, and it is asked for again in place of the proposals left |
 | `\vc` | cleans the buffer of everything the `\v`, `\V` and `\w` keys added (answers, marks, a fix or written code, requests that run, kept answers), leaving its text and undo history as they were |
+| `\pw` | shows the walkthrough pane, the plan of the walkthrough Claude gave you, and moves into it (Enter there asks Claude to go to the step under the cursor) |
 | `\vn`, `\vp`, `\vq` | while a walkthrough step is shown (see What Claude tells aineo), ask the agent for the next step, the previous one, or the end, which also clears its bands; `\vc` clears them too, sending nothing |
 | `\vm` | marks the issues on the cursor's line (on each selected line in Visual mode), or unmarks them; `\s` then sends the marked issues to Claude |
 | `]v`, `[v` | jump to the next and the previous explanation or issue of the buffer |
@@ -588,10 +593,10 @@ start. `:help aineo-run` has the details.
 aineo starts Claude Code with an MCP server of its own. Its tools `report` and
 `announce_work` tell aineo what Claude does, `run`, `run_output` and
 `run_stop` give Claude the run pane, and `test_layout` tells aineo where the
-project keeps its tests, and `walkthrough_step` shows Claude's walkthrough of
-code, one step at a time. `report`, `announce_work`, `run_output`,
-`test_layout` and `walkthrough_step` are allowed without asking; `run` and
-`run_stop` are not.
+project keeps its tests, `walkthrough_plan` gives your walkthrough its pane
+and `walkthrough_step` shows Claude's walkthrough of code, one step at a time.
+`report`, `announce_work`, `run_output`, `test_layout`, `walkthrough_plan` and
+`walkthrough_step` are allowed without asking; `run` and `run_stop` are not.
 
 - **`report`.** Claude calls it to tell you what it does: a `task`, a `status`
   (`started`, `progress`, `blocked`, `done` or `failed`), a one-line `summary`
@@ -671,6 +676,19 @@ code, one step at a time. `report`, `announce_work`, `run_output`,
   to show. Claude is told to plan the way the solution is built, a concept
   introduced before any step that relies on it. `:help aineo-walkthrough` has
   the details.
+
+- **`walkthrough_plan`.** Once you say yes to the plan of a walkthrough,
+  Claude sends it before step 1: a title, a summary of what the walkthrough is
+  about, the features and changes it covers, and its steps, each with its file
+  and the concepts it introduces. The walkthrough pane shows it in the
+  Report's place, as wide as the Report's window (wrapped again when you
+  resize), with `✓` before the steps shown, `▸` and a tint on the one on show,
+  each file under its step and the concepts with the step that introduces
+  them. Enter on a step, its file or a concept asks Claude to go to that step,
+  as `Go to walkthrough step N`, waiting for the agent's turn as `\vn` does.
+  The pane shows itself when the plan arrives and gives the Report back when
+  the walkthrough ends; `\pw` brings it back. `:help aineo-walkthrough-pane`
+  has the details.
 
 aineo also gives Claude Code hooks that tell aineo when you switch session
 inside Claude Code with `/clear`, `/resume` or `/branch`, so the Report,
