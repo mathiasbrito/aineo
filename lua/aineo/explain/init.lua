@@ -639,15 +639,16 @@ function M.write_implementation(order)
 end
 
 --- Shows one step of a code walkthrough in its buffer, in place of the
---- walkthrough bands the buffer showed, and touches none of the user's own
---- explanations (`aineo.explain.walkthrough`'s `show()`).
+--- walkthrough bands and marked lines the buffer showed, and touches none of
+--- the user's own explanations (`aineo.explain.walkthrough`'s `show()`).
 ---
 ---@param step aineo.explain.WalkthroughStep
 function M.show_walkthrough_step(step)
   walkthrough.show(step)
 end
 
---- Removes the walkthrough bands `buffer` shows, and nothing else.
+--- Removes the walkthrough bands `buffer` shows, and the lines they mark, and
+--- nothing else.
 ---
 ---@param buffer integer
 function M.clear_walkthrough(buffer)

@@ -157,7 +157,55 @@ local function bands_by_file()
   )
 end
 
+--- The buffers of the child that mark lines as explained by a step, by the
+--- name of each buffer's file from the project, with the marked lines.
+---
+---@return table<string, integer[]>
+local function marked_by_file()
+  return child.lua_get(
+    [[(function(project)
+      local namespace = vim.api.nvim_get_namespaces()['aineo_explain_walk_range']
+      local found = {}
+      if not namespace then
+        return found
+      end
+      for _, buffer in ipairs(vim.api.nvim_list_bufs()) do
+        local lines = {}
+        for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(buffer, namespace, 0, -1, {})) do
+          table.insert(lines, mark[2] + 1)
+        end
+        if #lines > 0 then
+          local name = vim.api.nvim_buf_get_name(buffer)
+          found[vim.fs.relpath(project, name) or name] = lines
+        end
+      end
+      return found
+    end)(...)]],
+    { project }
+  )
+end
+
 T['a step'] = MiniTest.new_set()
+
+T['a step']['marks every line of each range in the file, from its start to its end'] = function()
+  local token = open_layout('walkthrough-marks')
+
+  walk(token, step_for('src/code.lua'))
+
+  eq(marked_by_file(), { ['src/code.lua'] = { 2, 3, 5 } })
+end
+
+T['a step']['takes the marks of the previous step with its bands, in whichever file that was'] = function()
+  local token = open_layout('walkthrough-marks-replaced')
+  walk(token, step_for('src/code.lua'))
+
+  walk(
+    token,
+    step_for('src/other.lua', { step = 2, ranges = { { start = 4, ['end'] = 6, text = 'Last.' } } })
+  )
+
+  eq(marked_by_file(), { ['src/other.lua'] = { 4, 5, 6 } })
+end
 
 T['a step']['opens the file in the middle window with a band above each range, the cursor staying where it was'] = function()
   local token = open_layout('walkthrough-opens')
@@ -305,6 +353,7 @@ T['a step']['that is refused leaves the bands of the step before as they were'][
 
   eq(answer.is_error, true)
   eq(bands_by_file(), { ['src/code.lua'] = { 2, 5 } })
+  eq(marked_by_file(), { ['src/code.lua'] = { 2, 3, 5 } })
 end
 
 T['a step']['checks first_line against the buffer the user edits, whatever the spelling of the path'] = function()
@@ -518,6 +567,7 @@ T['a step']['is refused, and shows nothing, when the layout has no room for the 
 
   eq(answer, { text = 'refused: the middle column has no room for the file', is_error = true })
   eq(bands_by_file(), {})
+  eq(marked_by_file(), {})
 end
 
 T['a step while the user types in the middle window'] = MiniTest.new_set()
@@ -710,6 +760,15 @@ T['ending the walkthrough']['clears the bands, whichever file shows them, and sa
   eq(bands_by_file(), {})
 end
 
+T['ending the walkthrough']['clears the marks of the lines too'] = function()
+  local token = open_layout('walkthrough-end-marks')
+  walk(token, step_for('src/code.lua'))
+
+  walk(token, step_for('src/code.lua', { step = 3, ranges = {} }))
+
+  eq(marked_by_file(), {})
+end
+
 T['ending the walkthrough']['needs no file that is there'] = function()
   local token = open_layout('walkthrough-end-nothing')
 
@@ -863,6 +922,7 @@ T['the keys']['\\vq sends the end of the walkthrough and clears its bands at onc
 
   eq(writes_after_waiting_for(1), { paste('End the walkthrough') })
   eq(bands_by_file(), {})
+  eq(marked_by_file(), {})
 end
 
 T['the keys']['say so, and send nothing, while no step is shown'] = MiniTest.new_set({
@@ -968,6 +1028,7 @@ T['a key while the agent works']['\\vc clears the bands and drops the message wa
   vim.wait(300)
 
   eq(bands_by_file(), {})
+  eq(marked_by_file(), {})
   eq(send.writes(child), {})
 end
 
@@ -1182,6 +1243,7 @@ T['a walkthrough and a session switch']['ends with the switch: its bands are cle
   vim.wait(300)
 
   eq(bands_by_file(), {})
+  eq(marked_by_file(), {})
   eq(
     vim.tbl_filter(function(bytes)
       return bytes:find('Next walkthrough step', 1, true) ~= nil

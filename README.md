@@ -651,7 +651,11 @@ code, one step at a time. `report`, `announce_work`, `run_output`,
   implementation, say: it plans one, tells you the plan is done and asks
   whether to start. Each step opens one file in the middle window and puts
   an explanation above up to 16 ranges of lines, in the look of `\v` under
-  the label `walk`, with the heading `<step>/<total> · <title>` on the first;
+  the label `walk`, with the heading `<step>/<total> · <title>` on the first,
+  and marks the lines each range is about (a tint behind the row, the line
+  number in the walkthrough's colour, the band's `▎` in the sign column), the
+  cursor line, a selection, a search match and diagnostics staying in view
+  over it;
   the window you are in is not moved, and while you type in the middle window
   the step waits until you stop typing. The agent moves only when you ask:
   `\vn` sends `Next walkthrough step`, `\vp` `Previous walkthrough step`

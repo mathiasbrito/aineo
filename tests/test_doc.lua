@@ -180,6 +180,7 @@ local TAGS = {
   'hl-AineoFixWhy',
   'hl-AineoFixWhyGutter',
   'hl-AineoFixWhyGutterFill',
+  'hl-AineoWalkRange',
   'hl-AineoWrite',
   'hl-AineoWriteGutter',
   'hl-AineoWriteGutterFill',
