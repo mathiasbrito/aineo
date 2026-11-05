@@ -137,9 +137,9 @@ local function is_typing_in_the_middle_window(tab)
 end
 
 --- Shows `call`, already checked, for `tab`: its file in the middle window,
---- the bands of the step before cleared, a band above each range, the first
---- range in view. Refuses it, changing nothing, when the layout has no room
---- for the file.
+--- the bands of the step before cleared, a band above each range and its lines
+--- marked, the first range in view. Refuses it, changing nothing, when the
+--- layout has no room for the file.
 ---
 ---@param tab aineo.entry.WalkthroughTab
 ---@param call aineo.mcp.WalkthroughCall
@@ -159,7 +159,7 @@ local function show(tab, call)
     total = call.total,
     title = call.title,
     ranges = vim.tbl_map(function(range)
-      return { start = range.start, text = range.text }
+      return { start = range.start, ['end'] = range['end'], text = range.text }
     end, call.ranges),
   })
   put_in_view(window, call.ranges[1].start)

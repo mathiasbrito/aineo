@@ -10,6 +10,7 @@ local M = {}
 ---@field gutter string the gutter's `▎` and label
 ---@field fill string the gutter's other columns
 ---@field number string the number of the line the kind is shown for
+---@field range? string the lines a band is about, for a kind whose bands mark them (`aineo.explain.walkthrough`)
 
 --- The highlight groups an issue is drawn with once it is marked, in place of
 --- the same groups of `aineo.explain.KindGroups`.
@@ -203,6 +204,7 @@ M.WALK = {
     gutter = 'AineoWalkGutter',
     fill = 'AineoWalkGutterFill',
     number = 'AineoWalkNr',
+    range = 'AineoWalkRange',
   },
 }
 

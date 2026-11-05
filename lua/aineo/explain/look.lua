@@ -11,6 +11,10 @@ local BAND_BLEND = 0.12
 --- How far the band behind a row of a marked issue is blended: further.
 local MARKED_BAND_BLEND = 0.25
 
+--- How far the background behind the lines a band is about is blended from
+--- the background toward the accent: less than the band's own.
+local RANGE_BLEND = 0.08
+
 --- The background `Normal` lacks, by the value of 'background'.
 local FALLBACK_BACKGROUNDS = { dark = 0x1e1e2e, light = 0xffffff }
 
@@ -64,6 +68,13 @@ local function define_group(group, definition)
   defined[group] = was_free and held_by(group) or nil
 end
 
+--- The background of `Normal`, or the one 'background' falls back to.
+---
+---@return integer
+local function normal_background()
+  return resolved('Normal').bg or FALLBACK_BACKGROUNDS[vim.o.background]
+end
+
 --- The colour `amount` of the way from `from` to `to`, each as 0xRRGGBB.
 ---
 ---@param from integer
@@ -92,7 +103,7 @@ end
 ---@param groups { text: string, gutter: string }
 ---@param blend number from 0 to 1
 local function define_band(kind, groups, blend)
-  local background = resolved('Normal').bg or FALLBACK_BACKGROUNDS[vim.o.background]
+  local background = normal_background()
   local accent_group = resolved(kind.accent_group)
   local accent = accent_group.fg or kind.accent_fallback
   local number_column = resolved('LineNr')
@@ -113,9 +124,11 @@ end
 
 --- Defines the groups of `kind`: its text and gutter (`define_band()`), the
 --- columns its gutter fills in `LineNr`'s background alone, and the number
---- of its line in the accent, bold; for a look that strikes lines through,
---- its struck group in the struck accent; and, for a kind that can be marked, the
---- text and gutter of a marked one, its band blended further.
+--- of its line in the accent, bold; for a look whose bands mark the lines
+--- they are about, the group of those lines, the background alone blended
+--- toward the accent; for a look that strikes lines through, its struck
+--- group in the struck accent; and, for a kind that can be marked, the text
+--- and gutter of a marked one, its band blended further.
 ---
 ---@param kind aineo.explain.Look
 local function define_kind(kind)
@@ -125,6 +138,9 @@ local function define_kind(kind)
   define_band(kind, kind.groups, BAND_BLEND)
   define_group(kind.groups.fill, { bg = number_column.bg, ctermbg = number_column.ctermbg })
   define_group(kind.groups.number, { fg = accent, ctermfg = accent_group.ctermfg, bold = true })
+  if kind.groups.range then
+    define_group(kind.groups.range, { bg = blended(normal_background(), accent, RANGE_BLEND) })
+  end
   if kind.struck then
     local struck_accent = resolved(kind.struck.accent_group)
     define_group(kind.struck.group, {
