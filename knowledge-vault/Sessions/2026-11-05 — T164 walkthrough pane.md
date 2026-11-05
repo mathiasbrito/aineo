@@ -145,6 +145,10 @@ Mutants of the round, each the literal edit, applied to the file and run on its 
 | E32 | `vim.wo[window]` for `vim.wo[window][0]` | killed (1) by the shell's window options case |
 | L30b | `let_go()` without clearing `steps_on_show` | killed (1) |
 
+## Second fix (remeasure402, A708)
+
+N1: the first plan still went through the layout's `open()` (the layout had no buffer for the pane), reopening a Claude window the user had closed and putting the column widths back. The layout gained `keep_pane_buffer(pane, buffer)`, which hands it the buffer without opening, resizing or moving anything; `show_by_itself_or_say_how()` calls it in the agent-pane branch, so `show_pane()` finds the pane ready and swaps the Report's buffer in place. Red first: with Claude's window closed the windows were `terminal, walkthrough, input` for `walkthrough, input`; with the Report's window narrowed to 30 the pane was 99 wide. Layout cases: the late buffer shows in place, and a missing buffer is refused by name. Mutant K1 (the call left out) is killed by both entry cases (assertions). N2 needs no change: `\pa` is the Report.
+
 ## Open threads
 
 - `\vn`, `\vp` and `\vq` act only while a step is shown (A695), so before step 1 the hint line names keys that tell the user so; Enter on a step is the key that starts. Whether they should act on a plan alone is the user's call (asked, no answer yet).

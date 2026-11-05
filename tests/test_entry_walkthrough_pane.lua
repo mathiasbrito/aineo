@@ -275,6 +275,7 @@ local STAND_IN_TAB = [[
         layout = vim.tbl_extend('force', {
           shown_pane = function() return 'agent' end,
           can_show_pane_in_place = function() return true end,
+          keep_pane_buffer = function() end,
         }, layout or {}),
       },
       is_bound = function() return true end,
@@ -643,6 +644,40 @@ T['a plan']['sent when the layout’s windows are closed rebuilds nothing, moves
   eq(entry.messages(child), {
     { message = 'aineo: walkthrough plan ready: \\pw', level = vim.log.levels.INFO },
   })
+end
+
+T['a plan']['sent while Claude’s window is closed reopens it nowhere, and takes the Report’s place'] = function()
+  local token = open_layout('claude-closed')
+  child.lua(
+    [[
+      local terminal = ...
+      vim.api.nvim_win_close(vim.fn.win_findbuf(terminal)[1], true)
+    ]],
+    { walkthrough_session.terminal_buffer(child) }
+  )
+  local before = windows_of_the_current_page()
+
+  plan(token)
+
+  eq(entry.windows(child), { 'aineo://walkthrough', 'aineo://input' })
+  eq(windows_of_the_current_page(), before)
+end
+
+T['a plan']['sent while the right column is narrowed leaves its width as it is'] = function()
+  local token = open_layout('narrowed')
+  child.lua([[
+    local report = require('aineo.entry.registry').tab_list[1].homes.report.report_buffer()
+    vim.api.nvim_win_set_width(vim.fn.win_findbuf(report)[1], 30)
+  ]])
+  local width = child.lua_get([[(function()
+    local report = require('aineo.entry.registry').tab_list[1].homes.report.report_buffer()
+    return vim.api.nvim_win_get_width(vim.fn.win_findbuf(report)[1])
+  end)()]])
+
+  plan(token)
+
+  eq(shown_pane(), 'walkthrough')
+  eq(pane_width(), width)
 end
 
 T['a plan']['sent while the user is in another tab page leaves that page as it is'] = function()
