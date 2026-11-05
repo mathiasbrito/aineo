@@ -172,6 +172,24 @@ local function take_walkthrough_step(step, start_token)
   return require('aineo.entry.walkthrough').take_step(tab, step, walkthrough_folders(tab))
 end
 
+--- Takes `plan`, a call of the walkthrough plan tool a relay offers with the
+--- start token `start_token`, for the tab whose Claude Code has that token,
+--- as `take_walkthrough_step()` takes a step: with no such tab, false; else
+--- what that tab shows of it (`aineo.entry.walkthrough_plan`'s `take_plan()`),
+--- of files in the repositories the editor has open and the worktrees the
+--- tab's agents reported (`walkthrough_folders()`).
+---
+---@param plan aineo.mcp.WalkthroughPlanCall
+---@param start_token string
+---@return aineo.entry.WalkthroughAnswer|false
+local function take_walkthrough_plan(plan, start_token)
+  local tab = type(start_token) == 'string' and routing.tab_for_work(start_token)
+  if not tab then
+    return false
+  end
+  return require('aineo.entry.walkthrough_plan').take_plan(tab, plan, walkthrough_folders(tab))
+end
+
 --- Makes, once, the handlers this Neovim's entries in the list of running
 --- editors need: `FocusGained` writes the entry of the tab used last again,
 --- marking it used; `TabEnter` writes the entry of an aineo tab entered;
@@ -181,7 +199,8 @@ end
 --- `follow_told_switch()`); and work an agent announced goes to the tab
 --- whose Claude Code has its start token (`take_announced_work()`), and so
 --- do a call of a run tool (`take_run_call()`) and a step of a walkthrough
---- (`take_walkthrough_step()`); a call of the test layout
+--- (`take_walkthrough_step()`), and a plan of one (`take_walkthrough_plan()`);
+--- a call of the test layout
 --- tool is kept for its repository, whichever tab's Claude Code made it,
 --- when that repository is one of a folder the editor has open
 --- (`open_folders()`, `aineo.test_layout`'s `declare()`). Made at the
@@ -235,6 +254,7 @@ local function make_editor_handlers()
   require('aineo.mcp').on_work_announced(take_announced_work)
   require('aineo.mcp').on_run_called(take_run_call)
   require('aineo.mcp').on_walkthrough_stepped(take_walkthrough_step)
+  require('aineo.mcp').on_walkthrough_planned(take_walkthrough_plan)
   require('aineo.mcp').on_test_layout_declared(function(call)
     return require('aineo.test_layout').declare(call, open_folders())
   end)

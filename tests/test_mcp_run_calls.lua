@@ -140,7 +140,7 @@ end
 
 T['tools/list'] = MiniTest.new_set()
 
-T['tools/list']['lists the three run tools after report and announce_work, then test_layout and walkthrough_step'] = function()
+T['tools/list']['lists the three run tools after report and announce_work, then test_layout, walkthrough_plan and walkthrough_step'] = function()
   local relay = mcp_relay.start_relay()
 
   relay:send(mcp_messages.recorded('tools/list'))
@@ -156,6 +156,7 @@ T['tools/list']['lists the three run tools after report and announce_work, then 
       'run_output',
       'run_stop',
       'test_layout',
+      'walkthrough_plan',
       'walkthrough_step',
     }
   )

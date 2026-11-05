@@ -41,11 +41,13 @@ end
 --- followed) of at most 1 MiB, inside a checkout of a repository one of
 --- `folders` is a checkout of, below no `.git` and through no link that
 --- leaves the checkout (`aineo.test_layout`'s `open_checkout_of()` and
---- `stays_inside()`).
+--- `stays_inside()`). When it may, also the file's name from the root of that
+--- checkout.
 ---
 ---@param path string an absolute path
 ---@param folders string[] the folders whose repositories are open
----@return string?
+---@return string? problem
+---@return string? name
 local function file_problem(path, folders)
   local stat = vim.uv.fs_stat(path)
   if not stat then
@@ -69,10 +71,11 @@ local function file_problem(path, folders)
   if not root then
     return ('file: %s is in no repository the editor has open'):format(path)
   end
-  if not test_layout.stays_inside(root, vim.fs.joinpath(directory, vim.fs.basename(path))) then
+  local resolved = vim.fs.joinpath(directory, vim.fs.basename(path))
+  if not test_layout.stays_inside(root, resolved) then
     return leaves
   end
-  return nil
+  return nil, vim.fs.relpath(root, resolved) or path
 end
 
 --- Why the range numbered `position` may not be shown over `lines`: it
@@ -102,6 +105,18 @@ local function range_problem(range, position, lines)
     )
   end
   return nil
+end
+
+--- Why the file at `path` may not be shown (`file_problem()`), and, when it
+--- may, its name from the root of the checkout it is in. Used for a file a
+--- plan lists, which is shown by name and not opened.
+---
+---@param path string an absolute path
+---@param folders string[] the folders whose repositories are open
+---@return string? problem
+---@return string? name
+function M.problem_with_file(path, folders)
+  return file_problem(path, folders)
 end
 
 --- Why the step `call` may not be shown, in words for the agent that name

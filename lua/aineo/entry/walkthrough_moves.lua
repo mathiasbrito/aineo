@@ -25,6 +25,9 @@ local MESSAGES = {
   ['end'] = 'End the walkthrough',
 }
 
+--- What the agent is asked to go to a step of the plan with: the step's number.
+local GO_TO_STEP = 'Go to walkthrough step %d'
+
 --- What the user is told when a move is asked while no step is shown.
 local NOTHING_SHOWN = 'aineo: no walkthrough step is shown in this tab'
 
@@ -128,25 +131,14 @@ walkthrough.on_session_switched(function(tab)
   awaiting[tab] = nil
 end)
 
---- Asks `tab`'s agent for `move`: sends its message to the tab's session
---- now, unless the agent is working or has not answered what was sent
---- before, when it is held back until its turn ends or a step is shown, in
---- place of the one held back before, and the user is told so. `end` also
---- clears the bands at once, since they are no longer wanted whatever the
---- agent does. Tells the user, and does nothing else, when the tab shows no
---- walkthrough step.
+--- Sends `message` to the session of `tab` now, unless the agent is working
+--- or has not answered what was sent before, when it is held back until its
+--- turn ends or a step is shown, in place of the one held back before, and
+--- the user is told so.
 ---
----@param tab aineo.entry.WalkthroughMovingTab? the tab the user is in, nil outside the tabs of aineo
----@param move aineo.entry.WalkthroughMove
-function M.ask(tab, move)
-  if not (tab and walkthrough.is_shown(tab)) then
-    vim.notify(NOTHING_SHOWN, vim.log.levels.INFO)
-    return
-  end
-  if move == 'end' then
-    walkthrough.clear(tab)
-  end
-  local message = MESSAGES[move]
+---@param tab aineo.entry.WalkthroughMovingTab
+---@param message string
+local function send_or_hold(tab, message)
   local is_working = tab.is_busy()
   follow_the_turns_of(tab)
   if not is_working and not awaiting[tab] then
@@ -161,6 +153,33 @@ function M.ask(tab, move)
     ):format(message),
     vim.log.levels.INFO
   )
+end
+
+--- Asks `tab`'s agent for `move` (`send_or_hold()`). `end` also clears the
+--- bands at once, since they are no longer wanted whatever the agent does.
+--- Tells the user, and does nothing else, when the tab shows no walkthrough
+--- step.
+---
+---@param tab aineo.entry.WalkthroughMovingTab? the tab the user is in, nil outside the tabs of aineo
+---@param move aineo.entry.WalkthroughMove
+function M.ask(tab, move)
+  if not (tab and walkthrough.is_shown(tab)) then
+    vim.notify(NOTHING_SHOWN, vim.log.levels.INFO)
+    return
+  end
+  if move == 'end' then
+    walkthrough.clear(tab)
+  end
+  send_or_hold(tab, MESSAGES[move])
+end
+
+--- Asks `tab`'s agent to go to the step `number` of the plan the tab shows
+--- (`send_or_hold()`), whether or not a step is shown yet.
+---
+---@param tab aineo.entry.WalkthroughMovingTab
+---@param number integer
+function M.go_to_step(tab, number)
+  send_or_hold(tab, GO_TO_STEP:format(number))
 end
 
 --- What the keys of a walkthrough do: asks the agent of the aineo tab the
