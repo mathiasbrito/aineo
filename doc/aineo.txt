@@ -2451,10 +2451,14 @@ of each line is tinted (|hl-AineoWalkRange|), its number is in
 that the bar runs unbroken from the band down through its code (it shows
 when 'signcolumn' is not `no`). The cursor line of a window that draws one,
 a Visual selection, a search match and the signs and underlines of
-diagnostics stay in view over the tint. The marks follow the edits made to
-the buffer, go with the bands (next step, an end call, `\vq`, `\vc`, a switch
-of session), and leave your own `\v` explanations and the text alone. The
-tool is allowed without
+diagnostics stay in view over the tint. With 'cursorlineopt' `screenline` the
+cursor line of a wrapped line leaves the whole line untinted, not only the
+screen line it draws. The marks are the step's lines as it showed them: they
+move with the lines when others are inserted or deleted around them, a
+deleted line loses its mark (undoing the deletion brings it back), and a line
+inserted inside a range gets none. They go with the bands (next step, an end
+call, `\vq`, `\vc`, a switch of session), and leave your own `\v`
+explanations and the text alone. The tool is allowed without
 asking, and its answer says what it showed or why it refused. Its arguments:
 - `file`, `title` and `step`, required: the absolute path of the file, what
   the step is about (at most 200 bytes, on one line, no NUL) and its number
