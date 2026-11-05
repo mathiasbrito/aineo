@@ -61,7 +61,7 @@ end
 
 T['allowed_mcp_tools()'] = MiniTest.new_set()
 
-T['allowed_mcp_tools()']['pre-allows the report tool, the announcement tool, the reading of output, the test layout and the walkthrough step, and nothing else'] = function()
+T['allowed_mcp_tools()']['pre-allows the report tool, the announcement tool, the reading of output, the test layout and the walkthrough plan and step, and nothing else'] = function()
   local tools = mcp.allowed_mcp_tools()
 
   eq(tools, {
@@ -69,6 +69,7 @@ T['allowed_mcp_tools()']['pre-allows the report tool, the announcement tool, the
     'mcp__aineo__announce_work',
     'mcp__aineo__run_output',
     'mcp__aineo__test_layout',
+    'mcp__aineo__walkthrough_plan',
     'mcp__aineo__walkthrough_step',
   })
 end
@@ -101,6 +102,38 @@ T['walkthrough_instructions()']['tell the agent to ask the user whether to start
   local paragraph = mcp.walkthrough_instructions()
 
   contains(paragraph, 'tell the user the plan is done and ask whether to start')
+end
+
+T['walkthrough_instructions()']['tell the agent to send the plan before step 1, with a summary of what the walkthrough is about and the features and changes it covers'] = function()
+  local paragraph = mcp.walkthrough_instructions()
+
+  contains(paragraph, 'Once the user says yes, send the plan with `mcp__aineo__walkthrough_plan`')
+  contains(paragraph, 'before step 1')
+  contains(paragraph, 'a `summary` saying what the walkthrough is about')
+  contains(paragraph, '`covers` listing the features and changes it goes through')
+end
+
+T['the walkthrough plan tool'] = MiniTest.new_set()
+
+T['the walkthrough plan tool']['is named as Claude Code names it'] = function()
+  eq(mcp.walkthrough_plan_tool_name(), 'mcp__aineo__walkthrough_plan')
+end
+
+T['the walkthrough plan tool']['tells the agent when to send the plan, and the order to build it in, as the instructions do'] = function()
+  local description = require('aineo.mcp.walkthrough_plan_tool').tool().description
+
+  contains(
+    description,
+    'Once the user agrees to the plan, send it with this tool before showing step 1.'
+  )
+  contains(description, 'Sending a plan again replaces the one shown.')
+  contains(
+    description,
+    'introduce a concept (a type, a module, a data shape, a rule) in a step before any step whose code relies on it;'
+      .. ' start from what the rest stands on, then follow the flow;'
+      .. " when that order cannot hold (a cycle, a forward use), say so in that step's explanation"
+      .. ' in a sentence and name the step that explains it.'
+  )
 end
 
 T['the walkthrough tool'] = MiniTest.new_set()

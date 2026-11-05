@@ -45,6 +45,7 @@ local GROUPS = {
   { id = 'office', title = 'Office and zoom' },
   { id = 'changes_pane', title = 'In the changes pane' },
   { id = 'explorer_pane', title = 'In the explorer' },
+  { id = 'walkthrough_pane', title = 'In the walkthrough pane' },
 }
 
 ---@class aineo.keys.Row
@@ -397,6 +398,16 @@ local ROWS = vim.list_extend(
     ),
     in_section(
       'walkthrough',
+      global_with_twin(
+        'explain',
+        'pw',
+        'pane-walkthrough',
+        'pane walkthrough',
+        'show the walkthrough pane, in the Report'
+      )
+    ),
+    in_section(
+      'walkthrough',
       global(
         'explain',
         'vn',
@@ -531,6 +542,12 @@ local ROWS = vim.list_extend(
     in_buffer('explorer_pane', 'f', nil, 'filter the files by their path'),
     in_buffer('explorer_pane', '@', nil, "paste the entry's path into Claude Code's prompt"),
     in_buffer('explorer_pane', 's', nil, 'pick the worktree or branch to show'),
+    in_buffer(
+      'walkthrough_pane',
+      '<CR>',
+      nil,
+      'ask the agent to go to the step under the cursor, or to the step that introduces the concept'
+    ),
   })
 )
 

@@ -96,7 +96,7 @@ end
 --- takes `full` (`ACTS_WITHOUT_A_WORD`), `explain` takes `EXPLAIN_WORDS`,
 --- and `write` takes `deep`, which lets Claude Code read the project.
 local SUBCOMMAND_WORDS = {
-  pane = { 'agent', 'changes', 'terminal', 'run', 'explorer' },
+  pane = { 'agent', 'changes', 'terminal', 'run', 'explorer', 'walkthrough' },
   run = { 'shell' },
   tab = { 'new', 'close', '1', '2', '3', '4', '5', '6', '7', '8', '9' },
   diff = { 'close' },
