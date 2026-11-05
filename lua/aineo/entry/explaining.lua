@@ -264,10 +264,16 @@ end
 
 --- What `\vc`, `<Plug>(aineo-explain-clean)` and `:Aineo explain clear`
 --- do: return the current buffer to how it behaved when it was opened
---- (`aineo.explain`'s `clear()`), and tell the user so, once, whether or not
---- it held anything to clean.
+--- (`aineo.explain`'s `clear()`), clear the bands of the walkthrough the
+--- current tab shows, in whichever file (`aineo.entry.walkthrough`'s
+--- `clear()`), sending nothing to its agent, and tell the user so, once,
+--- whether or not it held anything to clean.
 function M.clear_explanations()
   require('aineo.explain').clear(vim.api.nvim_get_current_buf())
+  local tab = require('aineo.entry.registry').tab_of_current_page()
+  if tab then
+    require('aineo.entry.walkthrough').clear(tab)
+  end
   vim.notify('aineo: explanations cleaned from this buffer', vim.log.levels.INFO)
 end
 

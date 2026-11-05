@@ -181,6 +181,9 @@ end
 ---@field own_session fun(): string? the tab's own session: the one its Claude Code follows, or, while Claude's window is attached to a claimed session, the one it resumes when the claim ends; nil before it has started
 ---@field session_name fun(): string? the name of the session the tab's Claude terminal shows (`b:aineo_session_name`), nil before it has one
 ---@field is_busy fun(): boolean whether the Claude Code on the tab's terminal is busy
+---@field submit fun(text: string): boolean sends `text` to the tab's Claude Code as the user's message, as Send sends Input, and tells the user why when it cannot: no Claude Code ready for input, or a claim of another session holding (`refuses_send_while_claimed()`); returns whether it sent
+---@field on_session_switch fun(listener: fun()) has `listener` called whenever the tab's Claude Code switches session, a `/clear` or a resume among them; the listeners are kept for the tab's life
+---@field on_busy_change fun(listener: fun(busy: boolean)) has `listener` called with whether the Claude Code on the tab's terminal is busy, whenever that changes, `false` once the terminal is gone; the listeners are kept for the tab's life
 ---@field page fun(): integer? the tab page the tab is in, nil before its layout opens
 ---@field is_bound fun(): boolean whether the tab page it is in still exists
 ---@field release fun() lets the tab's homes go as its tab page closes, at once
@@ -723,14 +726,28 @@ local function make_tab(homes, key, callbacks)
       and vim.b[claude_terminal].aineo_session_busy == true
   end
 
+  --- What is told, by `on_session_switch()`, whenever the tab's Claude Code
+  --- switches session.
+  ---@type fun()[]
+  local session_switch_listeners = {}
+
+  --- What is told, by `on_busy_change()`, whenever the Claude Code on the
+  --- tab's terminal starts or stops being busy.
+  ---@type fun(busy: boolean)[]
+  local busy_listeners = {}
+
   --- Tells the tabs home whether the tab's Claude Code is busy, for the tab
   --- page the tab is in; nothing before the tab is in one, which
-  --- `callbacks.on_bound` answers by telling it again.
+  --- `callbacks.on_bound` answers by telling it again. Tells the listeners
+  --- of `on_busy_change()` too.
   ---
   ---@param busy boolean
   local function tell_tabs_home_busy(busy)
     if bound_page then
       require('aineo.tabs').set_busy(bound_page, busy)
+    end
+    for _, listener in ipairs(busy_listeners) do
+      listener(busy)
     end
   end
 
@@ -806,6 +823,11 @@ local function make_tab(homes, key, callbacks)
   ---@return { on_terminal_replaced: fun(terminal: integer), on_session_switched: fun(id: string, source: string?, left: string) }
   local function replacement_callbacks(working_directory)
     local replacing_session = nil
+    local function tell_listeners_of_the_switch()
+      for _, listener in ipairs(session_switch_listeners) do
+        listener()
+      end
+    end
     return {
       on_terminal_replaced = function(terminal)
         replacing_session = homes.claude.session_id()
@@ -814,6 +836,7 @@ local function make_tab(homes, key, callbacks)
         homes.layout.follow_claude_terminal(terminal)
       end,
       on_session_switched = function(id, source, left)
+        tell_listeners_of_the_switch()
         offices.began_following(tab)
         if id == replacing_session and source == 'startup' then
           replacing_session = nil
@@ -835,7 +858,7 @@ local function make_tab(homes, key, callbacks)
   --- that need no approval allowed, the instructions — the report's, then,
   --- after a blank line each, the announcement tool's paragraph, the run
   --- tools' and the test layout tool's sentence, naming the presets
-  --- (`aineo.test_layout`) — and the subagents' context for the `SubagentStart` hook
+  --- (`aineo.test_layout`), then the walkthrough tool's — and the subagents' context for the `SubagentStart` hook
   --- (`aineo.mcp`), the state directory of `kept_places()`, the editor's
   --- address and program for the session hooks, and the callbacks that make
   --- the panes follow the session (`replacement_callbacks()`,
@@ -867,7 +890,9 @@ local function make_tab(homes, key, callbacks)
         .. '\n\n'
         .. mcp.run_instructions()
         .. '\n\n'
-        .. mcp.test_layout_instructions(require('aineo.test_layout').preset_ids()),
+        .. mcp.test_layout_instructions(require('aineo.test_layout').preset_ids())
+        .. '\n\n'
+        .. mcp.walkthrough_instructions(),
       subagent_context = mcp.subagent_announce_context(),
       state_directory = places.kept_places().state_directory,
       new_session = new_session,
@@ -2130,6 +2155,15 @@ local function make_tab(homes, key, callbacks)
     end
   end
   tab.is_busy = is_busy
+  tab.submit = function(text)
+    return not refuses_send_while_claimed() and require('aineo.send').submit(text, send_target())
+  end
+  tab.on_session_switch = function(listener)
+    table.insert(session_switch_listeners, listener)
+  end
+  tab.on_busy_change = function(listener)
+    table.insert(busy_listeners, listener)
+  end
   tab.page = function()
     return bound_page
   end

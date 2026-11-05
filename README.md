@@ -176,6 +176,7 @@ resumes it.
 | `\Wt` | shows or hides the test window, the source's test file below it, which follows the source; in it `\Wp` corrects the test file's path and `\Wn` shows the next one found |
 | `\Ws` | while written code shows: type how to change it, and it is asked for again in place of the proposals left |
 | `\vc` | cleans the buffer of everything the `\v`, `\V` and `\w` keys added (answers, marks, a fix or written code, requests that run, kept answers), leaving its text and undo history as they were |
+| `\vn`, `\vp`, `\vq` | while a walkthrough step is shown (see What Claude tells aineo), ask the agent for the next step, the previous one, or the end, which also clears its bands; `\vc` clears them too, sending nothing |
 | `\vm` | marks the issues on the cursor's line (on each selected line in Visual mode), or unmarks them; `\s` then sends the marked issues to Claude |
 | `]v`, `[v` | jump to the next and the previous explanation or issue of the buffer |
 | `\z` | zooms the window of the right column the cursor is in, and gives the heights back when pressed again |
@@ -435,7 +436,7 @@ handling gaps, security or performance risks, no remarks on style), shown the
 same way in the accent of `DiagnosticWarn` with the label `issue`. Explanations
 and issues are shown together, and each key toggles its own kind; a request of
 each kind may run at once, and a key stops the request of its own kind alone.
-Since `\v` starts `\vi`, `\vm` and `\vc`, and `\V` starts `\VI` and `\VV`, Neovim waits
+Since `\v` starts `\vi`, `\vm`, `\vc`, `\vn`, `\vp` and `\vq`, and `\V` starts `\VI` and `\VV`, Neovim waits
 `'timeoutlen'` for a following key before it runs `\v` or `\V`. `:Aineo explain [issues] [tools]` with a range does the same, and `:Aineo
 explain clear` what `\vc` does. The model is `explain.model`, `'sonnet'` by
 default, and a request is stopped after `explain.timeout_ms`. If the text of
@@ -587,8 +588,10 @@ start. `:help aineo-run` has the details.
 aineo starts Claude Code with an MCP server of its own. Its tools `report` and
 `announce_work` tell aineo what Claude does, `run`, `run_output` and
 `run_stop` give Claude the run pane, and `test_layout` tells aineo where the
-project keeps its tests. `report`, `announce_work`, `run_output` and
-`test_layout` are allowed without asking; `run` and `run_stop` are not.
+project keeps its tests, and `walkthrough_step` shows Claude's walkthrough of
+code, one step at a time. `report`, `announce_work`, `run_output`,
+`test_layout` and `walkthrough_step` are allowed without asking; `run` and
+`run_stop` are not.
 
 - **`report`.** Claude calls it to tell you what it does: a `task`, a `status`
   (`started`, `progress`, `blocked`, `done` or `failed`), a one-line `summary`
@@ -643,6 +646,27 @@ project keeps its tests. `report`, `announce_work`, `run_output` and
   in its state folder, one file per repository, shared by its worktrees; the
   health check shows the rules in force. `:help aineo-test-layout` has the
   details.
+
+- **`walkthrough_step`.** Ask Claude for a walkthrough of code, after an
+  implementation, say: it plans one, tells you the plan is done and asks
+  whether to start. Each step opens one file in the middle window and puts
+  an explanation above up to 16 ranges of lines, in the look of `\v` under
+  the label `walk`, with the heading `<step>/<total> · <title>` on the first;
+  the window you are in is not moved, and while you type in the middle window
+  the step waits until you stop typing. The agent moves only when you ask:
+  `\vn` sends `Next walkthrough step`, `\vp` `Previous walkthrough step`
+  and `\vq` `End the walkthrough`, which also clears the bands, to the Claude
+  Code of your tab; while the agent works, or has not answered the last
+  message, the next key waits (one at most, the last replacing it) and goes
+  when its turn ends or a step is shown, or after 10 s if the agent is not
+  seen working: it waits for the answer to the last, so no two are queued.
+  `\vc` drops it. A switch of the tab's session ends the walkthrough. The file must lie in a repository the editor has open or in a
+  worktree its agents reported, with the guards `test_layout` applies to its
+  paths (nothing under `.git`, also by a link, no link out), be a regular file of at most
+  1 MiB, and be checked out: a branch no worktree has checked out has no file
+  to show. Claude is told to plan the way the solution is built, a concept
+  introduced before any step that relies on it. `:help aineo-walkthrough` has
+  the details.
 
 aineo also gives Claude Code hooks that tell aineo when you switch session
 inside Claude Code with `/clear`, `/resume` or `/branch`, so the Report,

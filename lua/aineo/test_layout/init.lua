@@ -161,13 +161,26 @@ local function locate(path)
   }
 end
 
+--- Whether any segment of `real`, a real path inside the real folder
+--- `real_root`, below it, is `.git` in any letter case.
+---
+---@param real_root string
+---@param real string
+---@return boolean
+local function is_below_dot_git(real_root, real)
+  return vim.iter(vim.split(real:sub(#real_root + 2), '/', { plain = true })):any(function(segment)
+    return segment:lower() == '.git'
+  end)
+end
+
 --- Whether `path`, the absolute path of a file of the worktree at `root`
 --- (`root` followed by `/` and the file's path in it), stays inside the
 --- worktree: it holds no control character; no segment below `root` is
 --- `.git` in any letter case; the deepest of its folders that exists, as
---- the file system resolves it (links followed), is `root` or inside it;
---- and when the file itself is a link, its target exists and is inside
---- `root` — a dangling link would make a write land where it points.
+--- the file system resolves it (links followed), is `root` or inside it and
+--- below no `.git`; and when the file itself is a link, its target exists,
+--- is inside `root` and below no `.git` — a dangling link would make a
+--- write land where it points.
 ---
 ---@param root string
 ---@param path string
@@ -183,13 +196,45 @@ local function stays_inside(root, path)
   end
   local real_root = vim.uv.fs_realpath(root) or root
   local function is_inside(real)
-    return real ~= nil and (real == real_root or vim.startswith(real, real_root .. '/'))
+    return real ~= nil
+      and (real == real_root or vim.startswith(real, real_root .. '/'))
+      and not is_below_dot_git(real_root, real)
   end
   if not is_inside(existing_folder(path)) then
     return false
   end
   local file = vim.uv.fs_lstat(path)
   return not (file and file.type == 'link') or is_inside(vim.uv.fs_realpath(path))
+end
+
+M.stays_inside = stays_inside
+
+--- The folder of the worktree that holds `directory`, when it is a checkout
+--- of a repository the editor has open: one of `open_folders`, the folders
+--- of the editor's tabs and of the work agents reported, shares its common
+--- folder. Else nil and why: `'not_a_checkout'` for a folder in no
+--- worktree, `'not_open'` for a checkout of a repository none of
+--- `open_folders` is one of.
+---
+---@param directory string
+---@param open_folders string[]
+---@return string? root
+---@return 'not_a_checkout'|'not_open'|nil why
+function M.open_checkout_of(directory, open_folders)
+  local folder = vim.uv.fs_realpath(directory)
+  local root = folder and repository.worktree_of(folder)
+  if not root then
+    return nil, 'not_a_checkout'
+  end
+  local common = repository.common_folder_of(root)
+  local opened = vim.iter(open_folders):any(function(open)
+    local real = vim.uv.fs_realpath(open)
+    return real ~= nil and repository.common_folder_of(real) == common
+  end)
+  if not opened then
+    return nil, 'not_open'
+  end
+  return root
 end
 
 --- `place`, as finding gave it for a file of the worktree at `root`,
@@ -419,17 +464,11 @@ end
 ---@param open_folders string[]
 ---@return { text: string, is_error: boolean }
 function M.declare(declaration, open_folders)
-  local folder = vim.uv.fs_realpath(declaration.worktree)
-  local root = folder and repository.worktree_of(folder)
-  if not root then
+  local root, why = M.open_checkout_of(declaration.worktree, open_folders)
+  if why == 'not_a_checkout' then
     return refused(('worktree: %s is not a git checkout'):format(declaration.worktree))
   end
-  local common = repository.common_folder_of(root)
-  local opened = vim.iter(open_folders):any(function(open)
-    local real = vim.uv.fs_realpath(open)
-    return real ~= nil and repository.common_folder_of(real) == common
-  end)
-  if not opened then
+  if why == 'not_open' then
     return refused(
       ('worktree: %s is no checkout of a repository the editor has open'):format(
         declaration.worktree

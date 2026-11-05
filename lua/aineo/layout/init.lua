@@ -67,6 +67,8 @@ local zoom = require('aineo.layout.zoom')
 ---@field focus_pane fun(pane: aineo.layout.Pane, arrangement: aineo.layout.Arrangement|fun(): aineo.layout.Arrangement)
 ---@field shown_pane fun(): aineo.layout.Pane
 ---@field show_diff fun(diff: integer): integer|nil
+---@field show_file fun(file: integer): integer|nil
+---@field is_file_column_window fun(window: integer): boolean
 ---@field follow_claude_terminal fun(terminal: integer)
 ---@field toggle_claude_numbers fun()
 ---@field toggle_zoom fun()
@@ -2284,32 +2286,30 @@ local function make_layout(input_name, group_name)
     vim.api.nvim_set_current_win(state.windows[PANE_LANDING[pane]])
   end
 
-  --- Shows `diff`, a buffer that is no file — a diff the changes pane shows —
-  --- in the file column, as a file opened from one of the layout's windows is
-  --- shown there (`place_in_file_column()`), and returns its window. A file or
-  --- a diff shown in the file column later takes `diff`'s window in its turn
-  --- (`window_taking_files()`): the column keeps one window for them. The
-  --- layout's proportions are put back once `diff` is placed, as they are
-  --- once a file is (`keep_proportions()`): with a file column open, the
-  --- three columns take a third each. The cursor stays in the window it was
-  --- in. When the screen has no room for `diff` — no room above a file that
-  --- cannot leave the column's window, or for a new file column (E36) — it
-  --- shows `diff` nowhere and returns nil.
-  --- With none of the layout's windows open, `diff` opens in a window above
-  --- the current one. Raises any other error a window raises as it is made or
-  --- given `diff`.
+  --- Shows `buffer` in the file column, as a file opened from one of the
+  --- layout's windows is shown there (`place_in_file_column()`), and returns
+  --- its window. A file or a diff shown in the file column later takes its
+  --- window in its turn (`window_taking_files()`): the column keeps one
+  --- window for them. The layout's proportions are put back once `buffer`
+  --- is placed, as they are once a file is (`keep_proportions()`): with a
+  --- file column open, the three columns take a third each. The cursor stays
+  --- in the window it was in. When the screen has no room for `buffer` — no
+  --- room above a file that cannot leave the column's window, or for a new
+  --- file column (E36) — it shows `buffer` nowhere and returns nil. With none
+  --- of the layout's windows open, `buffer` opens in a window above the
+  --- current one. Raises any other error a window raises as it is made or
+  --- given `buffer`.
   ---
-  ---@param diff integer
+  ---@param buffer integer
   ---@return integer|nil window
-  function M.show_diff(diff)
-    state.diffs[diff] = true
+  local function show_in_file_column_keeping_cursor(buffer)
     local current = vim.api.nvim_get_current_win()
     local placed, window
     if has_any_window() then
       placed, window =
-        pcall(place_in_file_column, diff, right_column_window() or state.windows.claude)
+        pcall(place_in_file_column, buffer, right_column_window() or state.windows.claude)
     else
-      placed, window = pcall(open_window_above, diff, current)
+      placed, window = pcall(open_window_above, buffer, current)
     end
     vim.api.nvim_set_current_win(current)
     if placed then
@@ -2320,6 +2320,36 @@ local function make_layout(input_name, group_name)
       error(window, 0)
     end
     return nil
+  end
+
+  --- Shows `diff`, a buffer that is no file — a diff the changes pane shows —
+  --- in the file column (`show_in_file_column_keeping_cursor()`), and
+  --- returns its window.
+  ---
+  ---@param diff integer
+  ---@return integer|nil window
+  function M.show_diff(diff)
+    state.diffs[diff] = true
+    return show_in_file_column_keeping_cursor(diff)
+  end
+
+  --- Whether `window` is one of the file column's windows, where files and
+  --- diffs are shown (`file_column_windows()`).
+  ---
+  ---@param window integer
+  ---@return boolean
+  function M.is_file_column_window(window)
+    return vim.list_contains(file_column_windows(), window)
+  end
+
+  --- Shows `file`, a buffer that holds a file, in the file column
+  --- (`show_in_file_column_keeping_cursor()`), in the window of the file or
+  --- diff shown there, which stays listed, and returns its window.
+  ---
+  ---@param file integer
+  ---@return integer|nil window
+  function M.show_file(file)
+    return show_in_file_column_keeping_cursor(file)
   end
 
   --- Makes `terminal` the layout's Claude terminal from now on, in place of

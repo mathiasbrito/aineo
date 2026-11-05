@@ -220,6 +220,97 @@ T['source_for()']['finds the source of a test file by each preset, by the stem w
   eq(relative_path(top, place), source)
 end
 
+T['open_checkout_of()'] = MiniTest.new_set()
+
+T['open_checkout_of()']['gives the worktree folder of a folder inside a checkout of an open repository'] = function()
+  local top = repository_of('python')
+
+  local root, why = test_layout.open_checkout_of(vim.fs.joinpath(top, 'lib'), { top })
+
+  eq({ root, why }, { top, nil })
+end
+
+T['open_checkout_of()']['says a folder in no repository is no checkout'] = function()
+  local folder = git_repo.directory('open-checkout-none')
+
+  local root, why = test_layout.open_checkout_of(folder, { folder })
+
+  eq({ root, why }, { nil, 'not_a_checkout' })
+end
+
+T['open_checkout_of()']['says a repository none of the open folders is a checkout of is not open'] = function()
+  local top = repository_of('python')
+  local other = git_repo.create_unborn('test-layout-other-open')
+
+  local root, why = test_layout.open_checkout_of(top, { other })
+
+  eq({ root, why }, { nil, 'not_open' })
+end
+
+T['stays_inside()'] = MiniTest.new_set()
+
+--- A repository of the Python fixture holding a link `inward`, to a file
+--- inside it, `outward`, to a file outside, `dangling`, to nothing, and the
+--- folder `door`, linked to a folder outside; and the file it all stays in.
+---
+---@return string top
+local function repository_with_links()
+  local top = repository_of('python')
+  local outside = git_repo.directory('test-layout-stays-outside')
+  git_repo.write(outside, 'secret.txt', { 'secret' })
+  vim.fn.mkdir(vim.fs.joinpath(top, '.git-like'), 'p')
+  assert(vim.uv.fs_symlink(vim.fs.joinpath(top, 'lib/extra.py'), vim.fs.joinpath(top, 'inward')))
+  assert(vim.uv.fs_symlink(vim.fs.joinpath(outside, 'secret.txt'), vim.fs.joinpath(top, 'outward')))
+  assert(
+    vim.uv.fs_symlink(vim.fs.joinpath(outside, 'missing.txt'), vim.fs.joinpath(top, 'dangling'))
+  )
+  assert(vim.uv.fs_symlink(outside, vim.fs.joinpath(top, 'door')))
+  assert(vim.uv.fs_symlink(vim.fs.joinpath(top, '.git/HEAD'), vim.fs.joinpath(top, 'head')))
+  assert(vim.uv.fs_symlink(vim.fs.joinpath(top, '.git'), vim.fs.joinpath(top, 'gitdoor')))
+  return top
+end
+
+T['stays_inside()']['holds for a file of the checkout, and a link to a file inside it'] =
+  MiniTest.new_set({
+    parametrize = { { 'lib/extra.py' }, { 'inward' }, { 'not-yet-there.py' } },
+  })
+
+T['stays_inside()']['holds for a file of the checkout, and a link to a file inside it']['given'] = function(
+  path
+)
+  local top = repository_with_links()
+
+  eq(test_layout.stays_inside(top, vim.fs.joinpath(top, path)), true)
+end
+
+T['stays_inside()']['fails for a path that leaves the checkout, goes under .git or holds a control character'] =
+  MiniTest.new_set({
+    parametrize = {
+      { 'outward' },
+      { 'dangling' },
+      { 'door/secret.txt' },
+      { 'head' },
+      { 'gitdoor/config' },
+      { '.git/config' },
+      { 'lib/.GIT/config' },
+      { 'lib/a\nb.py' },
+    },
+  })
+
+T['stays_inside()']['fails for a path that leaves the checkout, goes under .git or holds a control character']['given'] = function(
+  path
+)
+  local top = repository_with_links()
+
+  eq(test_layout.stays_inside(top, vim.fs.joinpath(top, path)), false)
+end
+
+T['stays_inside()']['fails for a path beside the checkout'] = function()
+  local top = repository_with_links()
+
+  eq(test_layout.stays_inside(top, top .. '-beside/file.py'), false)
+end
+
 T['declare()'] = MiniTest.new_set()
 
 T['declare()']['keeps the agent’s rules, which then come before the presets'] = function()

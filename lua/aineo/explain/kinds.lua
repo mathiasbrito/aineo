@@ -45,7 +45,7 @@ local M = {}
 --- Its `label` names it in the gutter, on its first row, and its
 --- `marked_groups` are those of a marked one, for a kind that can be marked.
 ---@class aineo.explain.Kind : aineo.explain.Look
----@field name 'explanations'|'issues'|'fix'|'write' what a request names it
+---@field name 'explanations'|'issues'|'fix'|'write'|'walk' what a request names it
 ---@field namespace string the name of the namespace its extmarks live in
 ---@field column integer the column its extmarks are set at: a kind with a lower one shows above one with a higher on the same line
 ---@field working string what it says while its request runs
@@ -181,6 +181,31 @@ M.WRITE = {
   },
 }
 
+--- The kind of the bands of a code walkthrough (`aineo.explain.walkthrough`):
+--- the look of an explanation under the label `walk`, in a namespace and
+--- highlight groups of its own. Not one of `ALL`: it answers no request.
+---@type aineo.explain.Kind
+M.WALK = {
+  name = 'walk',
+  namespace = 'aineo_explain_walk',
+  column = 4,
+  working = 'walking…',
+  deep = {
+    label = 'walk',
+    working = 'walking…',
+    title = 'Walkthrough',
+  },
+  label = 'walk',
+  accent_group = 'DiagnosticInfo',
+  accent_fallback = 0x61afef,
+  groups = {
+    text = 'AineoWalk',
+    gutter = 'AineoWalkGutter',
+    fill = 'AineoWalkGutterFill',
+    number = 'AineoWalkNr',
+  },
+}
+
 --- The look of the fix explanation: the band that says, above each edit of
 --- a fix's preview, what the fix does and why the edit fixes the issue. Its
 --- rows are drawn with the preview's (`aineo.explain.preview`).
@@ -207,9 +232,10 @@ M.ALL = { M.EXPLANATIONS, M.ISSUES }
 M.PROPOSALS = { M.FIX, M.WRITE }
 
 --- Every look whose highlight groups the explain home defines
---- (`aineo.explain.look`): each kind's, and the fix explanation's.
+--- (`aineo.explain.look`): each kind's, the walkthrough's and the fix
+--- explanation's.
 ---@type aineo.explain.Look[]
-M.LOOKS = { M.EXPLANATIONS, M.ISSUES, M.FIX, M.WRITE, M.FIX_WHY }
+M.LOOKS = { M.EXPLANATIONS, M.ISSUES, M.FIX, M.WRITE, M.WALK, M.FIX_WHY }
 
 --- The kind a request names.
 ---
