@@ -29,6 +29,10 @@ M.TEST_LAYOUT_TOOL = 'test_layout'
 --- The name of the server's tool that shows one step of a code walkthrough.
 M.WALKTHROUGH_TOOL = 'walkthrough_step'
 
+--- The name of the server's tool that gives the plan of a code walkthrough
+--- to the pane that shows it.
+M.WALKTHROUGH_PLAN_TOOL = 'walkthrough_plan'
+
 --- The environment variable that tells the relay which editor to deliver to.
 M.EDITOR_ADDRESS_VARIABLE = 'AINEO_EDITOR_ADDRESS'
 

@@ -6,7 +6,9 @@
 --- pane, a stack of terminals taking the whole column, the first in the
 --- Report's window and each next in a window of its own below it; or the
 --- explorer pane, a tree of files in the Report's window alone, taking the
---- whole column, Input's window closed as under the terminal pane.
+--- whole column, Input's window closed as under the terminal pane; or the
+--- walkthrough pane, the plan of a code walkthrough in the Report's window
+--- with Input's window kept below it.
 ---
 --- The layout shows the Claude and Report buffers, the changes pane's, the
 --- shell's terminal, the run pane's terminals, and the diffs it is asked to
@@ -34,6 +36,7 @@ local zoom = require('aineo.layout.zoom')
 ---@field shell? integer the terminal pane's buffer, the terminal of a shell, shown alone in the right column, in the Report's window; without it the layout keeps the one it was handed last, if its shell lives
 ---@field run? aineo.layout.RunPane the run pane's terminals; without them the run pane has nothing to show, and the layout shows the agent pane in its place
 ---@field explorer? integer the explorer pane's buffer, the tree of the folder Claude works in, shown alone in the right column, in the Report's window; without it the layout keeps the one it was handed last
+---@field walkthrough? integer the walkthrough pane's buffer, the plan of a code walkthrough, shown in the Report's window above Input's; without it the layout keeps the one it was handed last
 ---@field claude_statusline? string the 'statusline' Claude's window draws for Claude's terminal; without it the layout keeps the one it was handed last, and before any, Claude's window draws the user's own
 
 ---@class aineo.layout.ChangesPane
@@ -53,7 +56,7 @@ local zoom = require('aineo.layout.zoom')
 ---@field width integer
 ---@field height integer
 
----@alias aineo.layout.Pane 'agent'|'changes'|'terminal'|'run'|'explorer'
+---@alias aineo.layout.Pane 'agent'|'changes'|'terminal'|'run'|'explorer'|'walkthrough'
 
 ---@class aineo.layout.LineNumbers
 ---@field number boolean the window's 'number'
@@ -66,6 +69,8 @@ local zoom = require('aineo.layout.zoom')
 ---@field show_pane fun(pane: aineo.layout.Pane, arrangement: aineo.layout.Arrangement|fun(): aineo.layout.Arrangement)
 ---@field focus_pane fun(pane: aineo.layout.Pane, arrangement: aineo.layout.Arrangement|fun(): aineo.layout.Arrangement)
 ---@field shown_pane fun(): aineo.layout.Pane
+---@field can_show_pane_in_place fun(pane: aineo.layout.Pane): boolean
+---@field keep_pane_buffer fun(pane: aineo.layout.Pane, buffer: integer)
 ---@field show_diff fun(diff: integer): integer|nil
 ---@field show_file fun(file: integer): integer|nil
 ---@field is_file_column_window fun(window: integer): boolean
@@ -119,7 +124,7 @@ local function make_layout(input_name, group_name)
   local state = {
     ---@type table<aineo.layout.Role, integer>
     windows = {},
-    ---@type table<aineo.layout.Role|'files'|'commits'|'shell'|'run'|'explorer', integer>
+    ---@type table<aineo.layout.Role|'files'|'commits'|'shell'|'run'|'explorer'|'walkthrough', integer>
     buffers = {},
     ---@type aineo.layout.Pane
     pane = 'agent',
@@ -187,8 +192,9 @@ local function make_layout(input_name, group_name)
   --- The buffer each pane shows in each of the right column's windows it
   --- shows, named as `state.buffers` keys them, by the window's role. The
   --- terminal, run and explorer panes show one window, the Report's, and none
-  --- for Input; the run pane opens more windows below the Report's, which
-  --- are no role of the layout.
+  --- for Input; the walkthrough pane shows its own buffer in the Report's
+  --- window and Input in Input's; the run pane opens more windows below the
+  --- Report's, which are no role of the layout.
   ---@type table<aineo.layout.Pane, table<aineo.layout.Role, string>>
   local PANE_BUFFERS = {
     agent = { report = 'report', input = 'input' },
@@ -196,6 +202,7 @@ local function make_layout(input_name, group_name)
     terminal = { report = 'shell' },
     run = { report = 'run' },
     explorer = { report = 'explorer' },
+    walkthrough = { report = 'walkthrough', input = 'input' },
   }
 
   --- The roles of the right column's windows `pane` shows, the Report's
@@ -1208,6 +1215,7 @@ local function make_layout(input_name, group_name)
     end
     state.buffers.shell = arrangement.shell or state.buffers.shell
     state.buffers.explorer = arrangement.explorer or state.buffers.explorer
+    state.buffers.walkthrough = arrangement.walkthrough or state.buffers.walkthrough
     take_run(arrangement.run)
     if state.pane == 'run' and not arrangement.run then
       state.pane = 'agent'
@@ -1258,6 +1266,7 @@ local function make_layout(input_name, group_name)
     vim.validate('arrangement.claude_statusline', arrangement.claude_statusline, 'string', true)
     vim.validate('arrangement.shell', arrangement.shell, is_buffer, true, 'a buffer')
     vim.validate('arrangement.explorer', arrangement.explorer, is_buffer, true, 'a buffer')
+    vim.validate('arrangement.walkthrough', arrangement.walkthrough, is_buffer, true, 'a buffer')
     vim.validate('arrangement.run', arrangement.run, 'table', true)
     if arrangement.run then
       vim.validate(
@@ -1709,6 +1718,35 @@ local function make_layout(input_name, group_name)
     end)
   end
 
+  --- Hands the layout `buffer`, the one `pane` shows in the Report's window, as
+  --- an arrangement's field for that pane does, but without opening, resizing
+  --- or moving anything: the layout can then show the pane in place
+  --- (`M.can_show_pane_in_place()`, `M.show_pane()`) with no arrangement.
+  --- Meant for the panes that own a buffer, such as the walkthrough pane.
+  ---
+  --- Raises an error naming `pane` when it is none of the layout's panes, and
+  --- one naming `buffer` when it is no existing buffer.
+  ---
+  ---@param pane aineo.layout.Pane
+  ---@param buffer integer
+  function M.keep_pane_buffer(pane, buffer)
+    vim.validate('pane', pane, function(value)
+      return PANE_BUFFERS[value] ~= nil
+    end, false, "'agent', 'changes', 'terminal', 'run', 'explorer' or 'walkthrough'")
+    vim.validate('buffer', buffer, is_buffer, false, 'a buffer')
+    state.buffers[PANE_BUFFERS[pane].report] = buffer
+  end
+
+  --- Whether the layout can show `pane` in place now, opening nothing: the
+  --- windows of the right column it shows exist, and the buffers it shows in
+  --- them were handed and are loaded (`can_show_in_place()`).
+  ---
+  ---@param pane aineo.layout.Pane
+  ---@return boolean
+  function M.can_show_pane_in_place(pane)
+    return can_show_in_place(pane)
+  end
+
   --- Forgets the shell the layout was handed: the terminal pane has no buffer
   --- to show until an arrangement hands another.
   local function forget_shell()
@@ -1927,6 +1965,7 @@ local function make_layout(input_name, group_name)
     terminal = "arrangement.shell: expected the shell's terminal buffer, and none was handed",
     run = "arrangement.run: expected the run pane's terminals, and none was handed",
     explorer = "arrangement.explorer: expected the explorer's buffer, and none was handed",
+    walkthrough = "arrangement.walkthrough: expected the walkthrough pane's buffer, and none was handed",
   }
 
   --- Opens the layout in the current tab: `arrangement.claude` in a column on
@@ -2198,11 +2237,13 @@ local function make_layout(input_name, group_name)
   --- is shown in the layout's own.
   ---
   --- Raises an error naming `pane` when it is none of `'agent'`,
-  --- `'changes'`, `'terminal'`, `'run'` and `'explorer'`, and one naming
-  --- `arrangement.changes` when the changes pane is asked for and no
+  --- `'changes'`, `'terminal'`, `'run'`, `'explorer'` and `'walkthrough'`, and
+  --- one naming `arrangement.changes` when the changes pane is asked for and no
   --- arrangement has handed its buffers, `arrangement.run` when the run pane
   --- is asked for with none handed, `arrangement.explorer` when the explorer
-  --- pane is asked for and no arrangement has handed its buffer, or
+  --- pane is asked for and no arrangement has handed its buffer,
+  --- `arrangement.walkthrough` when the walkthrough pane is asked for and no
+  --- arrangement has handed its buffer, or
   --- `arrangement.shell` when the terminal
   --- pane is asked for and no arrangement has handed a shell that lives (the layout forgets a shell
   --- whose process ended or whose terminal was wiped), after opening the
@@ -2215,7 +2256,7 @@ local function make_layout(input_name, group_name)
   function M.show_pane(pane, arrangement)
     vim.validate('pane', pane, function(value)
       return PANE_BUFFERS[value] ~= nil
-    end, false, "'agent', 'changes', 'terminal', 'run' or 'explorer'")
+    end, false, "'agent', 'changes', 'terminal', 'run', 'explorer' or 'walkthrough'")
     if pane == 'run' then
       if type(arrangement) == 'function' then
         arrangement = arrangement()
@@ -2255,9 +2296,9 @@ local function make_layout(input_name, group_name)
 
   --- The role of the right column's window the cursor lands in as a pane is
   --- focused (`M.focus_pane()`): the Report's window under the agent pane,
-  --- and under the terminal, run and explorer panes, which show the shell,
-  --- the first terminal and the tree; Input's, which shows the commits, under
-  --- the changes pane.
+  --- and under the terminal, run, explorer and walkthrough panes, which show
+  --- the shell, the first terminal, the tree and the plan; Input's, which
+  --- shows the commits, under the changes pane.
   ---@type table<aineo.layout.Pane, aineo.layout.Role>
   local PANE_LANDING = {
     agent = 'report',
@@ -2265,19 +2306,21 @@ local function make_layout(input_name, group_name)
     terminal = 'report',
     run = 'report',
     explorer = 'report',
+    walkthrough = 'report',
   }
 
   --- Shows `pane` as `M.show_pane()` does, then moves the cursor to the window
   --- the pane lands it in: the Report's window under the agent pane and
   --- under the terminal pane, which shows the shell there and enters no mode,
-  --- and under the run and explorer panes, the commits window under the
+  --- and under the run, explorer and walkthrough panes, which show the first
+  --- terminal, the tree and the plan there; the commits window under the
   --- changes pane. The cursor moves even when the pane was shown already, and
   --- from another tab page into the layout's own. When showing the pane
   --- raises, the cursor stays where it is.
   ---
   --- Raises the errors `M.show_pane()` raises, and an error naming `pane` when
-  --- it is none of `'agent'`, `'changes'`, `'terminal'`, `'run'` and
-  --- `'explorer'`.
+  --- it is none of `'agent'`, `'changes'`, `'terminal'`, `'run'`, `'explorer'`
+  --- and `'walkthrough'`.
   ---
   ---@param pane aineo.layout.Pane
   ---@param arrangement aineo.layout.Arrangement|fun(): aineo.layout.Arrangement

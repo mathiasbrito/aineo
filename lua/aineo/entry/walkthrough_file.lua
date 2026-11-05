@@ -41,12 +41,17 @@ end
 --- followed) of at most 1 MiB, inside a checkout of a repository one of
 --- `folders` is a checkout of, below no `.git` and through no link that
 --- leaves the checkout (`aineo.test_layout`'s `open_checkout_of()` and
---- `stays_inside()`).
+--- `stays_inside()`). When it may, also the file's name from the root of that
+--- checkout. `roots`, when given, is a table that remembers the checkout of
+--- each folder asked about, for the caller to hand to every call it makes for
+--- one plan, so that a folder's checkout is looked for once.
 ---
 ---@param path string an absolute path
 ---@param folders string[] the folders whose repositories are open
----@return string?
-local function file_problem(path, folders)
+---@param roots? table<string, string|false> the checkouts found so far, by real folder
+---@return string? problem
+---@return string? name
+local function file_problem(path, folders, roots)
   local stat = vim.uv.fs_stat(path)
   if not stat then
     return ('file: %s is not on disk'):format(path)
@@ -65,14 +70,23 @@ local function file_problem(path, folders)
   end
   local test_layout = require('aineo.test_layout')
   local directory = vim.uv.fs_realpath(vim.fs.dirname(path))
-  local root = directory and test_layout.open_checkout_of(directory, folders)
+  local root
+  if directory and roots and roots[directory] ~= nil then
+    root = roots[directory] or nil
+  else
+    root = directory and test_layout.open_checkout_of(directory, folders)
+    if directory and roots then
+      roots[directory] = root or false
+    end
+  end
   if not root then
     return ('file: %s is in no repository the editor has open'):format(path)
   end
-  if not test_layout.stays_inside(root, vim.fs.joinpath(directory, vim.fs.basename(path))) then
+  local resolved = vim.fs.joinpath(directory, vim.fs.basename(path))
+  if not test_layout.stays_inside(root, resolved) then
     return leaves
   end
-  return nil
+  return nil, vim.fs.relpath(root, resolved) or path
 end
 
 --- Why the range numbered `position` may not be shown over `lines`: it
@@ -102,6 +116,20 @@ local function range_problem(range, position, lines)
     )
   end
   return nil
+end
+
+--- Why the file at `path` may not be shown (`file_problem()`), and, when it
+--- may, its name from the root of the checkout it is in. Used for a file a
+--- plan lists, which is shown by name and not opened; `roots` is as
+--- `file_problem()` takes it.
+---
+---@param path string an absolute path
+---@param folders string[] the folders whose repositories are open
+---@param roots? table<string, string|false>
+---@return string? problem
+---@return string? name
+function M.problem_with_file(path, folders, roots)
+  return file_problem(path, folders, roots)
 end
 
 --- Why the step `call` may not be shown, in words for the agent that name

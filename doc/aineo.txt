@@ -41,8 +41,9 @@ Terminal mode (|aineo-panes|). `\x` asks for a command and runs it in the
 folder, in a terminal of the run pane, a stack of the services you run while
 you develop, and `\X` adds a shell to that stack (|aineo-run|). `\e` shows
 the explorer, a tree of the folder Claude works in, and moves into it
-(|aineo-explorer|). `\T` opens a
-tab page with a Claude Code
+(|aineo-explorer|). `\pw` shows the walkthrough pane, the plan of a code
+walkthrough the agent sends, and moves into it (|aineo-walkthrough-pane|).
+`\T` opens a tab page with a Claude Code
 session of its own, `\1` to `\9` move to the tab page of that number, and
 `\Q` closes the current tab (|aineo-tabs|). `\d` closes the diff the changes
 pane shows in the middle column, from any window of the tab (|:Aineo-diff|).
@@ -67,9 +68,9 @@ leaving the mode you were in (|aineo-terminal-keys|).
 
 aineo answers none of Claude Code's questions: its permission prompts, its
 trust dialog and every other dialog are yours to answer, in its terminal.
-aineo allows five tools of its own without asking, the report tool,
-`announce_work`, `run_output`, `test_layout` and `walkthrough_step`
-(|aineo-report|, |aineo-run-tools|, |aineo-test-layout|,
+aineo allows six tools of its own without asking, the report tool,
+`announce_work`, `run_output`, `test_layout`, `walkthrough_plan` and
+`walkthrough_step` (|aineo-report|, |aineo-run-tools|, |aineo-test-layout|,
 |aineo-walkthrough|), and nothing else: Claude Code asks you before every run
 or stop of a process.
 
@@ -118,9 +119,10 @@ pane at a time, here the agent pane, with the file column open:
     |                    |    diff of one     |       Input        |
     +--------------------+--------------------+--------------------+
 
-The right column's five panes, each behind a key and each filling the
-column; the fifth, `\e`, is the explorer, a tree of the project's folders
-(|aineo-explorer|):
+The right column's panes, each behind a key and each filling the column; the
+fifth, `\e`, is the explorer, a tree of the project's folders
+(|aineo-explorer|), and the sixth, `\pw`, the walkthrough pane, the plan of a
+code walkthrough over Input (|aineo-walkthrough-pane|):
 
      \pa  agent        \g  changes        \pt  terminal    \x  run, \X  shell
     +--------------+  +--------------+  +-------------+  +--------------+
@@ -164,11 +166,11 @@ Input; a file the current window shows stays, as the file column.
 
 Panes ~
                                                                  *aineo-panes*
-The right column shows one of five panes, each filling its whole height: the
-agent pane and the changes pane in two windows, switched in place (the same
-two windows, at the same sizes, show the other pane's buffers), the terminal
-pane and the explorer pane in one, and the run pane in one window for each
-process.
+The right column shows one of six panes, each filling its whole height: the
+agent pane, the changes pane and the walkthrough pane in two windows,
+switched in place (the same two windows, at the same sizes, show the other
+pane's buffers), the terminal pane and the explorer pane in one, and the run
+pane in one window for each process.
 
 - The agent pane: the Agent Report over Input, as the layout opens.
 - The changes pane: `aineo://changes-files` in the Report's place, over
@@ -191,10 +193,14 @@ process.
 - The explorer pane: `aineo://explorer`, the tree of the folder Claude works
   in, alone in the right column, Input's window closed as under the terminal
   pane (|aineo-explorer|).
+- The walkthrough pane: `aineo://walkthrough` in the Report's place, over
+  Input, which stays as it is; it shows once the agent has sent the plan of
+  a walkthrough (|aineo-walkthrough-pane|).
 
 `\pa` (|:Aineo-pane|) shows the agent pane, `\g` the changes pane, `\pt`
-the terminal pane, `\x` the run pane and `\e` the explorer pane, moving the
-cursor into its tree; the pane already shown stays as it
+the terminal pane, `\x` the run pane, `\e` the explorer pane, moving the
+cursor into its tree, and `\pw` the walkthrough pane, moving the cursor into
+the plan; the pane already shown stays as it
 is (the changes pane is read again, and `\g` in it switches its views,
 |aineo-changes-s|), unless one of its windows shows the other
 pane's buffer there, as a refused switch or you can leave it (the commits
@@ -318,9 +324,9 @@ Explorer pane ~
 `\e` (|:Aineo-pane|) shows the explorer in the right column, one window over
 the column's whole height, as the terminal pane shows, and moves the cursor
 into it: a tree of the folder Claude works in, `aineo://explorer`, read-only
-to you. `\pa`, `\g`, `\pt` and `\x` swap it out as they swap each other, and
-`\z` and `\Z` zoom it as any window of the column. Each tab has its own
-explorer, whose folds, toggles and filter last as long as the tab.
+to you. `\pa`, `\g`, `\pt`, `\x` and `\pw` swap it out as they swap each
+other, and `\z` and `\Z` zoom it as any window of the column. Each tab has its
+own explorer, whose folds, toggles and filter last as long as the tab.
 
     ~/project  ·  ignored hidden  ·  dotfiles shown
     ▾ • lua/
@@ -442,17 +448,16 @@ hand is outside the zoom: it neither changes the zoom nor ends it, and `\z`
 there does not zoom it.
 
 The zoom ends by itself, the windows given back the heights they had, when
-another pane shows (`\pa`, `\g`, `\pt`, `\x`, `\e`, and `\r` and `\i` when
-they show the agent pane) and when a process joins the run pane or leaves its
-stack, which changes the windows of the column. Asking for the pane already
-shown — `\pa` under the agent pane, `\x` under the run pane when it only
-moves the cursor into it — keeps the zoom; a `\x` that starts a process ends
-it, as any process joining the stack does. When you close one of the
+another pane shows (`\pa`, `\g`, `\pt`, `\x`, `\e`, `\pw`, and `\r` and `\i`
+when they show the agent pane) and when a process joins the run pane or leaves
+its stack, which changes the windows of the column. Asking for the pane
+already shown — `\pa` under the agent pane, `\x` under the run pane when it
+only moves the cursor into it — keeps the zoom; a `\x` that starts a process
+ends it, as any process joining the stack does. When you close one of the
 column's windows, the zoom ends and the layout puts its proportions back, as
 it does for any closed window. The terminal pane's one window, and the
 explorer pane's, fill the column already, so `\z` there changes nothing
-visible and tells you nothing; it still toggles, and ends as the pane
-changes.
+visible and tells you nothing; it still toggles, and ends as the pane changes.
 
 When the editor is resized, the zoom stays: the zoomed window takes the rows
 the column gains or loses, and the others stay at their least height. `\z`
@@ -707,9 +712,9 @@ cannot be made taller or its letters larger; padding makes the titles wider.
 What the actions do with tabs:
 - Every action acts on the current tab when the current tab page is an aineo
   tab. From any other tab page it acts on the aineo tab used last, and moves
-  you there: `\o`, `\r`, `\i`, `\c`, `\g`, `\pa`, `\pt`, `\x`, `\X`, `\e`,
-  `\tcn`, `\N`, `\S`, `\s`, `\d` and `:Aineo claim`. `\d` makes no tab: with
-  no aineo tab it only tells you there is no diff to close.
+  you there: `\o`, `\r`, `\i`, `\c`, `\g`, `\pa`, `\pt`, `\pw`, `\x`, `\X`,
+  `\e`, `\tcn`, `\N`, `\S`, `\s`, `\d` and `:Aineo claim`. `\d` makes no tab:
+  with no aineo tab it only tells you there is no diff to close.
 - A report goes to the tab whose Claude Code sent it. A session hook goes to
   the tab whose start it names. Each tab is listed among the running editors
   for its own session (|aineo-report-claims|). A report of no known session
@@ -2510,6 +2515,67 @@ explanations are never touched by a step.
 The keys are |<Plug>(aineo-walk-next)|, |<Plug>(aineo-walk-previous)| and
 |<Plug>(aineo-walk-end)|; `:Aineo` has no word for them.
 
+                                                    *aineo-walkthrough-pane*
+`walkthrough_plan` gives your walkthrough a pane. Once you say yes to the
+plan, the agent sends it, before step 1, as `title`, a `summary` in prose of
+what the walkthrough is about, `covers`, the features and changes it goes
+through, and `steps`, each with a `title`, the `file` it shows and the
+concepts it `introduces`. The walkthrough pane then takes the Report's place
+in the right column, Input staying below it: `aineo://walkthrough`, read-only
+to you, as wide as the Report's window and laid out again for its width
+whenever the window is resized (the summary, the covers and the step titles
+wrap to it). It shows, top to bottom:
+
+    The title, then the summary
+     Covers
+     • each feature or change
+     Steps
+     ✓ 1  a step already shown
+           lua/aineo/mcp/walkthrough_tool.lua
+     ▸ 2  the step on show        (tinted like |hl-AineoWalkRange|)
+           lua/aineo/entry/walkthrough.lua
+       3  a step still to come
+           lua/aineo/explain/walkthrough.lua
+     Introduced
+     a concept   step 2   (those of steps not shown yet are dimmed)
+
+with the winbar `Walkthrough · step N of M` and, under the page, the hint
+`Enter go to step · \vn next · \vp previous · \vq end`, written with your
+prefix (|aineo-config-prefix|); the hint is the window's status line, which
+'laststatus' 3 does not draw. Each file is shown from the root of its
+checkout. `Enter` on a step, its file, or a concept asks the agent to go to
+that step, as the message `Go to walkthrough step N`, sent as `\vn` sends its
+message: it waits for the turn of the agent, and one waits at most. On any
+other line it tells you there is nothing to go to. `walkthrough_step` moves
+the `▸`; a plan sent again replaces the one shown, the step on show staying
+marked.
+
+The pane shows itself when a plan arrives only where that swaps nothing you
+chose and rebuilds nothing: while the right column shows the agent pane, with
+its two windows in place, the pane takes the Report's place and the cursor
+stays where it is. While you have another pane shown (`\g`, `\pt`, `\x`,
+`\e`), or a window of the layout is closed, or you wiped the pane's buffer,
+nothing is swapped, opened or moved: the plan is kept and you are told `aineo:
+walkthrough plan ready: \pw`, and `\pw` (|:Aineo-pane|) shows it. `\pw` brings
+the pane back after any other pane too; the steps that follow do not bring it
+back. The plan follows the tab's session as a step does: a switch of the
+session, a `/clear` or a resume, also before step 1, ends it and drops a
+message that waits. When the walkthrough ends — an end call, `\vq`, `\vc` or a
+switch of the tab's session — the plan is forgotten and the Report returns, if
+the walkthrough pane is the pane shown. `\pw` while the tab has no plan tells
+you so. A step past the last of the plan shows in the winbar as `step N`, with
+no total and no `▸`. A plan is refused, naming the step, when a file would be
+refused to a step (see above); the checkout of a folder is looked for once for
+the whole plan. Its limits count characters: `title`, the title of a step and
+each item of `covers` at most 200, `summary` at most 4096, a concept at most
+80, `covers` 1 to 16 items, `steps` 1 to 64, at most 8 concepts a step, none
+of them blank; the tool's description and input schema say so. The tool is
+allowed without asking, and the instructions appended to the system prompt and
+its description say when to send it and keep the order of the plan described
+above. The highlight groups of the page are |hl-AineoPaneTitle|,
+|hl-AineoPaneSection|, |hl-AineoPaneBullet|, |hl-AineoPaneDone|,
+|hl-AineoPaneShown|, |hl-AineoPaneFile| and |hl-AineoPaneStepRef|.
+
                                                           *aineo-explain-jump*
 `]v` and `[v` move the cursor to the line of the next and the previous
 explanation or issue of the buffer, of either kind, after and before the
@@ -2663,6 +2729,26 @@ AineoWalkRange		The background of the lines a step's range is about:
 			(`#61afef` without one). Only the true-colour
 			background is set. A group you define yourself is
 			kept, as a default too.
+                                                           *hl-AineoPaneTitle*
+AineoPaneTitle		The title of the walkthrough pane's plan
+			(|aineo-walkthrough-pane|); linked to |hl-Title|.
+                                                         *hl-AineoPaneSection*
+AineoPaneSection	The headings `Covers`, `Steps` and `Introduced`;
+			linked to |hl-Statement|.
+                                                          *hl-AineoPaneBullet*
+AineoPaneBullet		The `•` before what the plan covers; linked to
+			|hl-Special|.
+                                                            *hl-AineoPaneDone*
+AineoPaneDone		The `✓` before a step already shown; linked to
+			|hl-DiagnosticOk|.
+                                                           *hl-AineoPaneShown*
+AineoPaneShown		The row of the step on show, to the window's edge;
+			linked to |hl-AineoWalkRange|.
+                                                            *hl-AineoPaneFile*
+AineoPaneFile		A step's file, and the concepts of steps not shown
+			yet; linked to |hl-Comment|.
+                                                         *hl-AineoPaneStepRef*
+AineoPaneStepRef	The `step N` beside a concept; linked to |hl-Number|.
                                                                *hl-AineoWrite*
 AineoWrite		As |hl-AineoExplain|, for the row that names the
 			request of written code and the line that says it is
@@ -3310,12 +3396,14 @@ only in place of a resume Claude Code has no conversation for
 
                                                                  *:Aineo-pane*
 :Aineo pane {pane}	Shows {pane} in the right column, `agent`,
-			`changes`, `terminal`, `run` or `explorer`
-			(|aineo-panes|), and moves the cursor into it: into
-			the Report for `agent`, into the commits window for
-			`changes`, into the tab's shell for `terminal`, in
-			Terminal mode, into the tree for `explorer`
-			(|aineo-explorer|).
+			`changes`, `terminal`, `run`, `explorer` or
+			`walkthrough` (|aineo-panes|), and moves the cursor
+			into it: into the Report for `agent`, into the commits
+			window for `changes`, into the tab's shell for
+			`terminal`, in Terminal mode, into the tree for
+			`explorer` (|aineo-explorer|), into the plan for
+			`walkthrough` (|aineo-walkthrough-pane|), which says
+			so, and shows nothing, while the tab has no plan.
 			`terminal` starts the shell, in the folder, when the
 			tab runs none. `run` shows the stack and moves the
 			cursor to its bottom window when processes run, and
@@ -3802,6 +3890,11 @@ you turn the prefix off, or when a prefix key is yours: >lua
 <Plug>(aineo-pane-explorer)
 			Does what `:Aineo pane explorer` does (|:Aineo-pane|).
 
+                                            *<Plug>(aineo-pane-walkthrough)*
+<Plug>(aineo-pane-walkthrough)
+			Does what `:Aineo pane walkthrough` does
+			(|:Aineo-pane|).
+
                                                      *<Plug>(aineo-run-shell)*
 <Plug>(aineo-run-shell)
 			Does what `:Aineo run shell` does (|:Aineo-run|).
@@ -4080,6 +4173,8 @@ which has none, and those of a fix shown, whose keys are local to its buffer
 \g		|<Plug>(aineo-pane-changes)|
                                                                    *aineo-\pt*
 \pt		|<Plug>(aineo-pane-terminal)|
+                                                                   *aineo-\pw*
+\pw		|<Plug>(aineo-pane-walkthrough)|
                                                                     *aineo-\x*
 \x		|<Plug>(aineo-pane-run)|
                                                                     *aineo-\e*
@@ -4238,6 +4333,8 @@ twin's keys.
 <C-\>g		|<Plug>(aineo-pane-changes)|
                                                                *aineo-<C-\>pt*
 <C-\>pt		|<Plug>(aineo-pane-terminal)|
+                                                               *aineo-<C-\>pw*
+<C-\>pw		|<Plug>(aineo-pane-walkthrough)|
                                                                 *aineo-<C-\>x*
 <C-\>x		|<Plug>(aineo-pane-run)|
                                                                 *aineo-<C-\>e*
@@ -4726,12 +4823,13 @@ aineo starts Claude Code with five additions of its own:
   the report tool and how to write a report (below), then, after a blank
   line each, one paragraph on `announce_work` (below), one on the run
   tools (|aineo-run-tools|), one sentence on `test_layout`
-  (|aineo-test-layout|) and one paragraph on `walkthrough_step`
-  (|aineo-walkthrough|);
+  (|aineo-test-layout|) and one paragraph on `walkthrough_plan` and
+  `walkthrough_step` (|aineo-walkthrough|);
 - aineo's MCP server, which Claude Code runs as a headless `nvim`, given
-  through `--mcp-config`, with seven tools: `report`, `announce_work`, `run`,
+  through `--mcp-config`, with eight tools: `report`, `announce_work`, `run`,
   `run_output` and `run_stop` (|aineo-run-tools|), `test_layout`
-  (|aineo-test-layout|) and `walkthrough_step` (|aineo-walkthrough|);
+  (|aineo-test-layout|), `walkthrough_plan` and `walkthrough_step`
+  (|aineo-walkthrough|);
 - a `SessionStart` and a `SessionEnd` hook, which Claude Code also runs as
   a headless `nvim`, given through `--settings`: they tell the editor when
   Claude Code switches session (|aineo-claude-session|). Claude Code
@@ -4748,9 +4846,10 @@ aineo starts Claude Code with five additions of its own:
   aineo puts nothing else in `--settings`, and adds them after the hooks
   of a `--settings` in `claude.cmd`, passing the two together in a file
   only you can read (|aineo-config-claude.cmd|);
-- five tools allowed without asking: `--allowedTools mcp__aineo__report
+- six tools allowed without asking: `--allowedTools mcp__aineo__report
   mcp__aineo__announce_work mcp__aineo__run_output
-  mcp__aineo__test_layout mcp__aineo__walkthrough_step`. `run` and
+  mcp__aineo__test_layout mcp__aineo__walkthrough_plan
+  mcp__aineo__walkthrough_step`. `run` and
   `run_stop` are not, and carry a
   marker that makes Claude Code ask you for each call in every mode
   (|aineo-run-tools|).

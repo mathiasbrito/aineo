@@ -16,6 +16,7 @@ local places = require('aineo.entry.places')
 local prompt = require('aineo.entry.prompt')
 local registry = require('aineo.entry.registry')
 local run_pane = require('aineo.entry.run_pane')
+local walkthrough_plans = require('aineo.entry.walkthrough_plan')
 
 local M = {}
 
@@ -162,6 +163,8 @@ end
 ---@field homes aineo.entry.Homes
 ---@field running_processes fun(): string[] the names of the processes the tab's run pane runs, the oldest first
 ---@field start_in_run_stack fun(command: string, options: { name: string, directory: string? }): integer starts `command` at the bottom of the tab's run stack as a call of a run tool asks, the run pane shown when the tab page is the current one, the cursor staying where it is (`aineo.entry.run_pane`'s `start_in_stack()`)
+---@field show_pane fun(pane: aineo.layout.Pane) shows `pane` in the layout's right column, the cursor staying where it is (`aineo.layout`'s `show_pane()`), the layout opened first when it must
+---@field focus_pane fun(pane: aineo.layout.Pane) shows `pane` and moves the cursor into it (`aineo.layout`'s `focus_pane()`)
 ---@field actions table<string, fun(origin: integer)> what each of `:Aineo`'s arguments that acts on a tab does, by the argument, given the buffer the key was pressed in
 ---@field send_selection fun() what Send does in Visual mode
 ---@field claim_session fun(id: string) what `:Aineo claim {id}` does
@@ -1079,7 +1082,9 @@ local function make_tab(homes, key, callbacks)
   --- otherwise; the terminals of the tab's run pane, with the winbar that
   --- names each process (`aineo.run`'s `buffers()`, `WINBAR`), none while it
   --- runs nothing; the explorer's buffer once it was made
-  --- (`aineo.explorer`'s `made_buffer()`), none before; with the Report's
+  --- (`aineo.explorer`'s `made_buffer()`), none before; the walkthrough
+  --- pane's once the tab was sent a plan (`aineo.entry.walkthrough_plan`'s
+  --- `buffer_of()`), none before; with the Report's
   --- share from `config`, and the status line
   --- of Claude's window, which draws the session's name and folder
   --- (`aineo.claude`'s `session_statusline()`).
@@ -1097,6 +1102,7 @@ local function make_tab(homes, key, callbacks)
       shell = homes.shell.shell_buffer(),
       run = run_stack(),
       explorer = homes.explorer.made_buffer(),
+      walkthrough = walkthrough_plans.buffer_of(tab),
       claude_statusline = require('aineo.claude').session_statusline(),
     }
   end
@@ -1952,6 +1958,9 @@ local function make_tab(homes, key, callbacks)
       homes.explorer.buffer()
       focus_pane('explorer')
     end,
+    ['pane walkthrough'] = function()
+      walkthrough_plans.focus(tab)
+    end,
     ['run shell'] = run.run_shell,
     ['diff close'] = function()
       homes.changes.close_shown_diff()
@@ -2031,6 +2040,9 @@ local function make_tab(homes, key, callbacks)
       function()
         offices.let_go(tab)
       end,
+      function()
+        walkthrough_plans.let_go(tab)
+      end,
       homes.draft.let_go or leave_as_it_is,
       homes.layout.let_go or leave_as_it_is,
       homes.shell.let_go or leave_as_it_is,
@@ -2108,6 +2120,8 @@ local function make_tab(homes, key, callbacks)
       return bound_page
     end,
   })
+  tab.show_pane = show_pane
+  tab.focus_pane = focus_pane
   tab.actions = actions
   tab.running_processes = homes.run.running
   tab.start_in_run_stack = run.start_in_stack
