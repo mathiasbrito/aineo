@@ -438,6 +438,33 @@ T['the tint of the explained code']['gives way to the cursor line where the wind
   eq({ background_at(3), background_at(4), background_at(5) }, { TINT, 0xff0000, TINT })
 end
 
+T['the tint of the explained code']['gives way to the cursor line as every option that draws it says'] =
+  MiniTest.new_set({
+    parametrize = { { 'both' }, { 'line' }, { 'screenline' }, { 'number,line' } },
+  })
+
+T['the tint of the explained code']['gives way to the cursor line as every option that draws it says']['for'] = function(
+  option
+)
+  child.o.cursorline = true
+  child.o.cursorlineopt = option
+  child.cmd('4')
+
+  show_lines_3_to_5()
+
+  eq(background_at(4), 0xff0000)
+end
+
+T['the tint of the explained code']['tints the cursor line when the window draws only its number'] = function()
+  child.o.cursorline = true
+  child.o.cursorlineopt = 'number'
+  child.cmd('4')
+
+  show_lines_3_to_5()
+
+  eq(background_at(4), TINT)
+end
+
 T['the tint of the explained code']['tints the cursor line when the window draws none'] = function()
   child.o.cursorline = false
   child.cmd('4')
@@ -507,6 +534,42 @@ T['the tint of the explained code']['draws the bar of the band in the sign colum
     end)()]]),
     { ' ', '▎', '▎', '▎', ' ' }
   )
+end
+
+--- The first character drawn in the sign column of line 4 of the current
+--- buffer when a sign with the text `sign` and the priority `priority` was set
+--- on it, in a namespace of its own, before the step marked lines 3 to 5.
+---
+---@param sign string
+---@param priority integer
+---@return string
+local function sign_drawn_on_line_4_set_before_the_step(sign, priority)
+  child.lua(
+    [[
+    local sign, priority = ...
+    local other = vim.api.nvim_create_namespace('walk-test-other-sign')
+    vim.api.nvim_buf_set_extmark(0, other, 3, 0, { sign_text = sign, priority = priority })
+  ]],
+    { sign, priority }
+  )
+  show_lines_3_to_5()
+  return child.lua_get([[(function()
+    vim.cmd('redraw')
+    local row = vim.fn.screenpos(0, 4, 1).row
+    return vim.api.nvim__inspect_cell(1, row - 1, 0)[1]
+  end)()]])
+end
+
+T['the tint of the explained code']['keeps its bar over the sign a changed line shows by default (priority 6)'] = function()
+  child.wo.signcolumn = 'yes:1'
+
+  eq(sign_drawn_on_line_4_set_before_the_step('+', 6), '▎')
+end
+
+T['the tint of the explained code']['leaves the sign of a diagnostic (priority 10) over its bar'] = function()
+  child.wo.signcolumn = 'yes:1'
+
+  eq(sign_drawn_on_line_4_set_before_the_step('E', 10), 'E')
 end
 
 T['the tint of the explained code']['is gone with the walkthrough'] = function()

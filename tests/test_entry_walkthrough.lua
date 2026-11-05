@@ -353,6 +353,7 @@ T['a step']['that is refused leaves the bands of the step before as they were'][
 
   eq(answer.is_error, true)
   eq(bands_by_file(), { ['src/code.lua'] = { 2, 5 } })
+  eq(marked_by_file(), { ['src/code.lua'] = { 2, 3, 5 } })
 end
 
 T['a step']['checks first_line against the buffer the user edits, whatever the spelling of the path'] = function()
@@ -566,6 +567,7 @@ T['a step']['is refused, and shows nothing, when the layout has no room for the 
 
   eq(answer, { text = 'refused: the middle column has no room for the file', is_error = true })
   eq(bands_by_file(), {})
+  eq(marked_by_file(), {})
 end
 
 T['a step while the user types in the middle window'] = MiniTest.new_set()
