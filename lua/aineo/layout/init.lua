@@ -70,6 +70,7 @@ local zoom = require('aineo.layout.zoom')
 ---@field focus_pane fun(pane: aineo.layout.Pane, arrangement: aineo.layout.Arrangement|fun(): aineo.layout.Arrangement)
 ---@field shown_pane fun(): aineo.layout.Pane
 ---@field can_show_pane_in_place fun(pane: aineo.layout.Pane): boolean
+---@field keep_pane_buffer fun(pane: aineo.layout.Pane, buffer: integer)
 ---@field show_diff fun(diff: integer): integer|nil
 ---@field show_file fun(file: integer): integer|nil
 ---@field is_file_column_window fun(window: integer): boolean
@@ -1715,6 +1716,25 @@ local function make_layout(input_name, group_name)
         and buffer ~= nil
         and vim.api.nvim_buf_is_loaded(buffer)
     end)
+  end
+
+  --- Hands the layout `buffer`, the one `pane` shows in the Report's window, as
+  --- an arrangement's field for that pane does, but without opening, resizing
+  --- or moving anything: the layout can then show the pane in place
+  --- (`M.can_show_pane_in_place()`, `M.show_pane()`) with no arrangement.
+  --- Meant for the panes that own a buffer, such as the walkthrough pane.
+  ---
+  --- Raises an error naming `pane` when it is none of the layout's panes, and
+  --- one naming `buffer` when it is no existing buffer.
+  ---
+  ---@param pane aineo.layout.Pane
+  ---@param buffer integer
+  function M.keep_pane_buffer(pane, buffer)
+    vim.validate('pane', pane, function(value)
+      return PANE_BUFFERS[value] ~= nil
+    end, false, "'agent', 'changes', 'terminal', 'run', 'explorer' or 'walkthrough'")
+    vim.validate('buffer', buffer, is_buffer, false, 'a buffer')
+    state.buffers[PANE_BUFFERS[pane].report] = buffer
   end
 
   --- Whether the layout can show `pane` in place now, opening nothing: the

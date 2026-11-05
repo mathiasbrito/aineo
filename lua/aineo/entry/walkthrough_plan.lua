@@ -274,20 +274,24 @@ end
 --- Shows the walkthrough pane of `tab` for the plan that arrived, only where
 --- that swaps nothing the user chose and rebuilds nothing: while the layout
 --- shows the agent pane with its two windows and buffers in place, which the
---- pane then takes over without moving the cursor. A pane shown already,
+--- pane then takes over without moving the cursor, opening or resizing
+--- anything: the layout is handed the pane's buffer first
+--- (`aineo.layout`'s `keep_pane_buffer()`), so that it shows it in place. A pane shown already,
 --- with its buffer, is left as it is (`redraw()` drew the plan). In any other
 --- case — another pane chosen, a window of the layout closed, the pane's
 --- buffer wiped — nothing is swapped, opened or moved, and the user is told
 --- how to show the plan (`plan_ready()`).
 ---
 ---@param tab aineo.entry.WalkthroughPlanTab
-local function show_by_itself_or_say_how(tab)
+---@param buffer integer the pane's buffer, handed to the layout when it shows the pane
+local function show_by_itself_or_say_how(tab, buffer)
   local layout = tab.homes.layout
   local shown = layout.shown_pane()
   if shown == 'walkthrough' and layout.can_show_pane_in_place('walkthrough') then
     return
   end
   if shown == 'agent' and layout.can_show_pane_in_place('agent') then
+    layout.keep_pane_buffer('walkthrough', buffer)
     show_pane_or_tell(tab, 'walkthrough')
     return
   end
@@ -354,7 +358,7 @@ function M.take_plan(tab, call, folders)
   local pane = pane_of(tab)
   pane.plan, pane.shown = plan, steps_on_show[tab]
   redraw(pane)
-  show_by_itself_or_say_how(tab)
+  show_by_itself_or_say_how(tab, pane.buffer)
   return { text = shown_words(call, pane.shown), is_error = false }
 end
 
