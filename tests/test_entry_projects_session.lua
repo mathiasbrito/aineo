@@ -615,4 +615,70 @@ T['a forked session']['is no clear: a cleared session carries nothing'] = functi
   expect_tab_line('')
 end
 
+T['a forked session']['named for another session carries nothing into a session that is not that one (N1)'] = function()
+  local here = open('projects-session-fork-stale', true)
+  local other_session = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+
+  child.lua(
+    [[
+      local projects = require('aineo.entry.projects')
+      local tab = require('aineo.entry.registry').tab_list[1]
+      projects.fork_of(tab, ..., 'cccccccc-cccc-4ccc-8ccc-cccccccccccc')
+      projects.follow_session(tab, select(2, ...))
+    ]],
+    { here.session, other_session }
+  )
+
+  expect_tab_line('')
+end
+
+T['a forked session']['named while another session was followed still carries when it is followed'] = function()
+  local here = open('projects-session-fork-late', true)
+  local fork = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+  child.lua(
+    [[
+      local projects = require('aineo.entry.projects')
+      local tab = require('aineo.entry.registry').tab_list[1]
+      projects.fork_of(tab, ..., select(2, ...))
+      projects.follow_session(tab, 'dddddddd-dddd-4ddd-8ddd-dddddddddddd')
+      projects.follow_session(tab, select(2, ...))
+    ]],
+    { here.session, fork }
+  )
+
+  expect_tab_line(TWO_TABS)
+end
+
+T['a session']['that a continued-in line of the session before names carries its projects and their bases'] = function()
+  local here = open('projects-session-continued-carry', true)
+  local next_session = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'
+  fake_transcript.append(here.transcript, {
+    vim.json.encode({
+      type = 'continued-in',
+      timestamp = os.date('!%Y-%m-%dT%H:%M:%S.000Z', os.time() + 5),
+      sessionId = here.session,
+      continuedInSessionId = next_session,
+    }),
+  })
+  vim.wait(1500)
+
+  child.lua(
+    [[require('aineo.entry.projects').follow_session(require('aineo.entry.registry').tab_list[1], ...)]],
+    { next_session }
+  )
+
+  expect_tab_line(TWO_TABS)
+end
+
+T['a session']['no fork or continued-in line names carries nothing, as a resume elsewhere does'] = function()
+  open('projects-session-plain-elsewhere', true)
+
+  child.lua(
+    [[require('aineo.entry.projects').follow_session(require('aineo.entry.registry').tab_list[1], ...)]],
+    { 'ffffffff-ffff-4fff-8fff-ffffffffffff' }
+  )
+
+  expect_tab_line('')
+end
+
 return T

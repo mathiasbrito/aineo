@@ -153,6 +153,24 @@ function M.edit_line(file)
   return edit_transcript.edit(file, calls_written)
 end
 
+--- Appends to the transcript `path` an `Edit` call of the file `file`,
+--- stamped `stamped`.
+---
+---@param path string
+---@param file string
+---@param stamped string
+function M.edit_stamped(path, file, stamped)
+  calls_written = calls_written + 1
+  fake_transcript.append(path, {
+    edit_transcript.call(
+      'Edit',
+      { file_path = file, old_string = 'one', new_string = 'two' },
+      calls_written,
+      stamped
+    ),
+  })
+end
+
 --- Appends to the transcript `path` an `Edit` call of the file `file`.
 ---
 ---@param path string

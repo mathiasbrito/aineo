@@ -25,7 +25,8 @@ local RECEIVE_WORK = [[
 --- Code, and to no other, with the token of that start
 --- (`editor.offer_report()`, bounded), its worktree's path normalised
 --- (`work.with_normalised_worktree()`), and says how it went: `'taken'`
---- when a tab of the editor took it; `'refused'`, with the editor's words,
+--- when a tab of the editor took it, with the note it gave for the agent, if
+--- any; `'refused'`, with the editor's words,
 --- when the tab refused it — a base git cannot resolve, say; `'declined'`
 --- otherwise — no tab whose Claude Code has the token, no handler, an aineo
 --- older than the relay, an editor that cannot be reached, closes the
@@ -35,7 +36,7 @@ local RECEIVE_WORK = [[
 ---@param context aineo.mcp.AnnouncementContext
 ---@param announced aineo.mcp.Work
 ---@return 'taken'|'refused'|'declined' outcome
----@return string? refusal the editor's words, for `'refused'`
+---@return string? words the editor's words: its refusal for `'refused'`, its note for `'taken'`
 function M.announce(context, announced)
   if not (context.editor_address and context.token) then
     return 'declined'
@@ -47,6 +48,9 @@ function M.announce(context, announced)
   )
   if kind == 'taken' and type(answer) == 'string' then
     return 'refused', answer
+  end
+  if kind == 'taken' and type(answer) == 'table' and type(answer.note) == 'string' then
+    return 'taken', answer.note
   end
   return kind == 'taken' and 'taken' or 'declined'
 end

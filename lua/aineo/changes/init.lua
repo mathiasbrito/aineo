@@ -89,6 +89,11 @@ M.move_kept_session = kept.move_kept
 --- (`aineo.changes.kept`'s `copy_kept()`).
 M.copy_kept_session = kept.copy_kept
 
+--- Keeps the base and the saves kept for the Claude Code session `id` as
+--- those of another checkout of the same repository, whose top is given
+--- (`aineo.changes.kept`'s `retop_kept()`).
+M.retop_kept_session = kept.retop_kept
+
 --- A path as a buffer line can hold it and a reader can tell it whole,
 --- quoted and escaped when it holds a control character, a double quote or
 --- a backslash, as the files window shows it (`aineo.changes.lines`'

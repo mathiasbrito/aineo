@@ -11,7 +11,7 @@ local FORGET_NEGATIVE_AFTER_MS = 30000
 ---@class aineo.projects.Checkouts
 ---@field lookup fun(path: string, done: fun(project: aineo.projects.Project|nil)) finds the repository the file at the absolute `path` is in, asking git in the nearest folder above it that exists, and calls `done` once with the project of its checkout, nil when the folder is in no repository or no folder above `path` exists; a repository found is remembered for the folder, and a folder in no repository, or git's failure, for 30 seconds
 ---@field lookup_folder fun(directory: string, done: fun(project: aineo.projects.Project|nil)) as `lookup()` for the absolute path of a folder: asks in the folder itself, or in the nearest one above it that exists
----@field lookup_checkout fun(directory: string, done: fun(project: aineo.projects.Project|nil)) calls `done` once with the project of the checkout whose top is the folder at the absolute path `directory`; nil when the folder is not there, is not a checkout's top, or is in no repository. It asks git again whatever was remembered
+---@field lookup_checkout fun(directory: string, done: fun(project: aineo.projects.Project|nil, enclosing: aineo.projects.Project|nil)) calls `done` once with the project of the checkout whose top is the folder at the absolute path `directory`; nil when the folder is not there, is not a checkout's top, or is in no repository, and then, as `enclosing`, the project of the checkout the folder is inside when it is inside one. It asks git again whatever was remembered
 
 --- Calls `done` with the nearest folder at or above `directory` that
 --- exists, nil when none does, having asked the file system off the main
@@ -98,11 +98,11 @@ function M.new_checkouts(find_repository, now)
   ---@param done fun(project: aineo.projects.Project|nil)
   ---@param afresh boolean
   local function project_of_folder(directory, done, afresh)
-    if found[directory] then
+    if not afresh and found[directory] then
       done(found[directory])
       return
     end
-    if is_remembered_empty(directory) and not afresh then
+    if not afresh and is_remembered_empty(directory) then
       done(nil)
       return
     end
@@ -141,7 +141,8 @@ function M.new_checkouts(find_repository, now)
           return
         end
         project_of_folder(directory, function(project)
-          done(project and project.top == real and project or nil)
+          local is_top = project ~= nil and project.top == real
+          done(is_top and project or nil, project ~= nil and not is_top and project or nil)
         end, true)
       end)
     end)

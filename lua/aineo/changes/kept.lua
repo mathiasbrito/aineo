@@ -516,6 +516,22 @@ function M.copy_kept(state_directory, from, to)
   return nil
 end
 
+--- Keeps, for the session `id`, the base and the saves it has kept as those of
+--- the checkout at `top`, in place of the checkout they were kept for, so
+--- that a home reading `top` takes them. Does nothing when none is kept.
+---
+---@param state_directory string
+---@param id string
+---@param top string the top level of the checkout the base is now for
+---@return string? failure why it could not be kept, naming the file; nil once kept, or when nothing was kept
+function M.retop_kept(state_directory, id, top)
+  local base = M.read_kept_base(state_directory, id)
+  if not base then
+    return nil
+  end
+  return M.keep_base(state_directory, id, { top = top, base = base.base, saved = base.saved })
+end
+
 --- Moves what is kept for the session `from` (its base and saves, and its
 --- view) to the session `to`, under `state_directory`, for each of them that
 --- `to` has none of and `from` has (`M.move_kept_base()`, `M.move_kept_view()`).
