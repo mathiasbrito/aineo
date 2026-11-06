@@ -13,6 +13,7 @@ local M = {}
 ---@class aineo.changes.DiffSource
 ---@field repository aineo.git.Repository the editor's repository
 ---@field base string|nil the session's base
+---@field base_words? string what the base is called in the sides of a comparison; `session start` when not given
 ---@field landed? aineo.changes.Landed what the commits window last read of the working branch
 ---@field branch? aineo.changes.BranchSection what the commits window last read of the local branch shown alone
 ---@field options? aineo.git.Options how the git home runs git

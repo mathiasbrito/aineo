@@ -47,6 +47,8 @@ local DESCRIPTION = "Gives the plan of a code walkthrough to the user's walkthro
   .. ' first time. Limits: `title`, the title of a step and each item of `covers` are at most 200'
   .. ' characters, `summary` at most 4096 characters, `covers` 1 to 16 items, `steps` 1 to 64, a'
   .. ' step introduces at most 8 concepts of at most 80 characters; none of them may be blank. '
+  .. walkthrough_tool.announce_first('listed')
+  .. ' '
   .. walkthrough_tool.PLAN_ORDER
   .. ' The tool shows the plan and nothing else: it moves nowhere. It needs no approval; if it'
   .. ' refuses, correct the call as the refusal says and call again.'

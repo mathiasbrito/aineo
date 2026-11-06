@@ -13,6 +13,7 @@ local links = require('aineo.entry.links')
 local cheatsheets = require('aineo.entry.cheatsheet')
 local offices = require('aineo.entry.office')
 local places = require('aineo.entry.places')
+local projects = require('aineo.entry.projects')
 local prompt = require('aineo.entry.prompt')
 local registry = require('aineo.entry.registry')
 local run_pane = require('aineo.entry.run_pane')
@@ -301,6 +302,7 @@ local function make_tab(homes, key, callbacks)
       id = id,
       state_directory = places.kept_places().state_directory,
     })
+    projects.follow_session(tab, id)
   end
 
   --- The session the panes follow, as `follow_session()` was last told it
@@ -694,6 +696,7 @@ local function make_tab(homes, key, callbacks)
       to = fresh,
       state_directory = places.kept_places().state_directory,
     })
+    projects.hand_over(tab, dead, fresh)
     if claimed == dead then
       release_claim()
     end
@@ -907,6 +910,7 @@ local function make_tab(homes, key, callbacks)
       on_session_elsewhere = follow_session_elsewhere,
       on_transcript = function(session_id, path)
         offices.note_transcript(tab, session_id, path)
+        projects.transcript_named(tab)
         offices.session_started(tab, session_id)
       end,
       on_session_ended = function(session_id)
@@ -974,6 +978,7 @@ local function make_tab(homes, key, callbacks)
       edit_file_key = config.prefix and config.prefix .. '<CR>' or nil,
       show_changes_pane = show_changes_pane,
     })
+    projects.began(tab, working_directory)
     return claude_terminal
   end
 
@@ -1049,17 +1054,17 @@ local function make_tab(homes, key, callbacks)
     return started_claude_terminal(config)
   end
 
-  --- The changes pane's two buffers, from the changes home (`aineo.changes`'s
-  --- `pane_buffers()`), which lists the session's files and commits there.
-  --- While either is shown in a window, as when `\o` restores the layout with
-  --- the changes pane shown, the home reads both lists again first
+  --- The changes pane's two buffers: those of the home of the project that is
+  --- chosen in the tab (`aineo.entry.projects`'s `pane_of()`), which lists
+  --- the project's files and commits there. The session's own project is the
+  --- tab's changes home (`aineo.changes`'s `pane_buffers()`). While either is
+  --- shown in a window, as when `\o` restores the layout with the changes
+  --- pane shown, the home reads both lists again first
   --- (`refresh_shown_pane()`).
   ---
   ---@return aineo.layout.ChangesPane
   local function changes_pane()
-    local changes = homes.changes
-    changes.refresh_shown_pane()
-    return changes.pane_buffers()
+    return projects.pane_of(tab)
   end
 
   --- The run pane's terminals for the layout: the tab's processes, the oldest
@@ -2050,6 +2055,9 @@ local function make_tab(homes, key, callbacks)
       key == nil and leave_as_it_is or function()
         pcall(vim.api.nvim_del_augroup_by_name, run_group)
         pcall(vim.api.nvim_del_augroup_by_name, explorer_group)
+      end,
+      function()
+        projects.let_go(tab)
       end,
       homes.changes.let_go or leave_as_it_is,
       homes.report.let_go or leave_as_it_is,
