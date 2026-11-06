@@ -210,4 +210,29 @@ T['a project']['has its tab drawn in the tab line’s colours unless the user ch
   eq(links, { 'TabLineSel', 'TabLine' })
 end
 
+T['a project']['joins in the order its edits were made, whichever repository git answers first'] = function()
+  local here = open_two_repositories('projects-join-order')
+  local third = projects.repository('projects-join-order', 'site-docs', { ['f.md'] = { 'one' } })
+  child.lua([[
+    local git = require('aineo.git')
+    local find = git.find_repository
+    git.find_repository = function(directory, done, options)
+      if directory:find('notes-api', 1, true) then
+        vim.defer_fn(function()
+          find(directory, done, options)
+        end, 600)
+      else
+        find(directory, done, options)
+      end
+    end
+  ]])
+
+  projects.edit(here.transcript, vim.fs.joinpath(here.other, 'search.py'))
+  projects.edit(here.transcript, vim.fs.joinpath(third, 'f.md'))
+
+  expect_tab_line(
+    CHOSEN .. ' aineo 0 %* ' .. OTHER .. ' notes-api 0 %* ' .. OTHER .. ' site-docs 0 %*'
+  )
+end
+
 return T

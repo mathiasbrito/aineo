@@ -304,10 +304,13 @@ Every part takes its colour from your colour scheme, through the
   count the files of its Session work). A repository joins when the session's
   transcript shows an `Edit`, `Write` or `NotebookEdit` of a file in a
   checkout of it, or when an agent reports a worktree of it with a branch
-  (`announce_work`); aineo says so and leaves the view where it is. `<Tab>`
-  and `<S-Tab>` choose a project, `X` closes one other than the session's;
-  at most 8 are held, kept with the session, and a walkthrough may show any
-  file of a project, changed or not. The base of a project is `HEAD` when it
+  (`announce_work`; a report with no branch for a checkout of a repository
+  that is not a project is refused, saying a branch must be listed); aineo
+  says so and leaves the view where it is. `<Tab>` and `<S-Tab>` choose a
+  project, `X` closes one other than the session's; at most 8 are held, kept
+  with the session (a fork carries them too), and a walkthrough may show any
+  file of a project, changed or not, a file of another project shown as
+  `<project>: <path>` in the plan. The base of a project is `HEAD` when it
   joined, which the `Against:` line calls `first touched`.
   `:help aineo-changes-projects` has the details.
 - **Look at a change.** Enter on a file shows its diff in the file column,

@@ -20,6 +20,51 @@ local SETTLE_MS = 500
 ---@class aineo.transcript.Watch
 ---@field stop fun() ends the watch; nothing is delivered after it
 
+--- One timer that looks for every watch that has none of its own to look with.
+---@class aineo.transcript.Poller
+---@field add fun(look: fun()): fun() has `look` called every period while it is added, one timer for all, and returns what removes it; the timer is closed once none is added
+
+--- Makes a poller that calls what is added to it every `period_ms`, on a
+--- timer of its own, which runs only while something is added. Watches handed
+--- it (`M.watch()`) look for a path that is not there with it, so that
+--- several share one timer and look less often than `POLL_MS`.
+---
+---@param period_ms integer
+---@return aineo.transcript.Poller
+function M.new_poller(period_ms)
+  local ticker = nil
+  local looks = {}
+  return {
+    add = function(look)
+      local entry = { look = look }
+      table.insert(looks, entry)
+      if not ticker then
+        ticker = assert(vim.uv.new_timer())
+        ticker:start(period_ms, period_ms, function()
+          for _, each in ipairs(vim.list_slice(looks)) do
+            each.look()
+          end
+        end)
+      end
+      return function()
+        for position, each in ipairs(looks) do
+          if each == entry then
+            table.remove(looks, position)
+            break
+          end
+        end
+        if #looks == 0 and ticker then
+          ticker:stop()
+          if not ticker:is_closing() then
+            ticker:close()
+          end
+          ticker = nil
+        end
+      end
+    end,
+  }
+end
+
 --- Who the file or folder `stat` describes: a name that changes when another
 --- file takes the path, as a replacement by rename does. `nil` for no stat.
 ---
@@ -57,18 +102,25 @@ end
 ---
 --- `on_change` is called from the editor's main loop, never from a fast event.
 ---
+--- With a `poller`, the looks that would be every `POLL_MS` are the poller's,
+--- every period it was made with, and share its timer.
+---
 ---@param path string
 ---@param on_change fun()
+---@param poller? aineo.transcript.Poller
 ---@return aineo.transcript.Watch
-function M.watch(path, on_change)
+function M.watch(path, on_change, poller)
   vim.validate('path', path, 'string')
   vim.validate('on_change', on_change, 'function')
+  vim.validate('poller', poller, 'table', true)
 
   local stopped = false
   local check_pending = false
   local events = nil
   local ticker = nil
   local settle = nil
+  --- What takes this watch off its poller; nil while it is not on one.
+  local leave_poller = nil
   --- The identity of what the path named when the watch last armed; nil when
   --- it named nothing.
   local armed_identity = nil
@@ -102,6 +154,10 @@ function M.watch(path, on_change)
 
   --- Starts looking every `POLL_MS` unless it does already.
   local function poll()
+    if poller then
+      leave_poller = leave_poller or poller.add(check_soon)
+      return
+    end
     if ticker then
       return
     end
@@ -124,6 +180,10 @@ function M.watch(path, on_change)
         events = handle
         close_handle(ticker)
         ticker = nil
+        if leave_poller then
+          leave_poller()
+          leave_poller = nil
+        end
         settle_soon()
         return
       end
@@ -147,6 +207,10 @@ function M.watch(path, on_change)
       close_handle(events)
       close_handle(ticker)
       close_handle(settle)
+      if leave_poller then
+        leave_poller()
+        leave_poller = nil
+      end
     end,
   }
 end

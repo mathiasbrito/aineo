@@ -5,6 +5,7 @@ local consumer = require('aineo.transcript.consumer')
 local continuation = require('aineo.transcript.continuation')
 local file_follower = require('aineo.transcript.file_follower')
 local signals = require('aineo.transcript.signals')
+local watching = require('aineo.transcript.watching')
 local subagents = require('aineo.transcript.subagents')
 
 local M = {}
@@ -16,6 +17,7 @@ local M = {}
 ---@field path string the session's transcript file, which need not exist yet
 ---@field on_signal fun(signal: aineo.transcript.Signal) called for each signal, with the editor's API usable; a raise in it is caught and told once (`consumer.protect()`)
 ---@field on_unreadable_line? fun(length: integer) called with the length in bytes of each line that is not JSON or is too long, never with its text
+---@field poll_ms? integer how often, in milliseconds, to look for the transcript and the subagents' folder while they are not there, one timer for both; every 500 ms for each when not given
 ---@field since? number when the tab began following the session, in seconds since 1970; with it, a transcript that says the session was continued in another, in a line stamped at or after it, is followed to that one (`continuation.resolve()`); without it the transcript is followed as it is
 
 --- The folder in which Claude Code writes the subagents' transcripts of the
@@ -44,6 +46,8 @@ function M.follow(options)
   vim.validate('options.on_signal', options.on_signal, 'function')
   vim.validate('options.on_unreadable_line', options.on_unreadable_line, 'function', true)
   vim.validate('options.since', options.since, 'number', true)
+  vim.validate('options.poll_ms', options.poll_ms, 'number', true)
+  local poller = options.poll_ms and watching.new_poller(options.poll_ms) or nil
 
   local on_signal = consumer.protect(options.on_signal)
   local path, sessions = continuation.resolve(options.path, options.since)
@@ -52,11 +56,13 @@ function M.follow(options)
     agent = signals.MAIN_AGENT,
     on_signal = on_signal,
     on_unreadable_line = options.on_unreadable_line,
+    poller = poller,
   })
   local subagents_followed = subagents.follow_subagents({
     folder = subagents_folder(path),
     on_signal = on_signal,
     on_unreadable_line = options.on_unreadable_line,
+    poller = poller,
   })
 
   local resolved_again = continuation.resolve(options.path, options.since)

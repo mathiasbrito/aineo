@@ -155,7 +155,8 @@ function M.walkthrough_instructions()
     .. ' Then call `%s` to show a step: it opens a file in the middle window with an explanation'
     .. ' above the lines it is about, and needs no approval. %s %s'
     .. " A file of a repository other than the session's is shown only once you have called `%s`"
-    .. ' for its checkout, also for code you only read and want to explain.'
+    .. ' for its checkout with the branch checked out there, also for code you only read and want'
+    .. ' to explain.'
   ):format(
     M.walkthrough_plan_tool_name(),
     M.walkthrough_tool_name(),

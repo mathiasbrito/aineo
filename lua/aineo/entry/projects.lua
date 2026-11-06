@@ -8,10 +8,12 @@
 --- in place of the others', with a line of tabs over the commits window,
 --- `<Tab>` and `<S-Tab>` choosing a project and `X` closing one.
 ---
---- The projects of a tab are kept for the Claude Code session it follows,
---- and begin again with the session's repository alone as the session
---- changes. Loading it loads no other home: `aineo.projects` and
---- `aineo.changes` are required when a tab first needs them.
+--- The projects of a tab are kept for the Claude Code session it follows:
+--- a resume brings them back, a fork of the session carries them, and the
+--- projects begin again with the session's repository alone as the session
+--- changes otherwise (`/clear`). Loading it loads no other home:
+--- `aineo.projects` and `aineo.changes` are required when a tab first needs
+--- them.
 
 local office = require('aineo.entry.office')
 local places = require('aineo.entry.places')
@@ -38,8 +40,14 @@ local BASE_WORDS = 'first touched'
 local RECOUNT_DELAY_MS = 700
 
 --- How long a report waits for the checkout of its folder to be found, in
---- milliseconds.
+--- milliseconds. With the wait for its branches' bases (`editors.lua`'s
+--- `BASE_WAIT_MS`, 3000) it keeps inside the 5 s the report server waits for
+--- the editor.
 local LOOKUP_WAIT_MS = 1500
+
+--- How often, in milliseconds, the follower of the transcript looks for the
+--- transcript and the subagents' folder while they are not there.
+local TRANSCRIPT_POLL_MS = 2000
 
 --- The state of one tab's projects.
 ---@class aineo.entry.TabProjects
@@ -55,6 +63,9 @@ local LOOKUP_WAIT_MS = 1500
 ---@field full_told boolean whether the user was told the tab holds as many projects as it can
 ---@field bar_drawn boolean whether a line of tabs was drawn and not yet cleared
 ---@field listens_to_session_home boolean whether the session's home was asked to tell of the changes it sees
+---@field edits_waiting string[] the files of edits the transcript told of whose checkouts are not looked up yet, in the order told
+---@field looking_up_edit boolean whether the checkout of an edit's file is being looked up
+---@field fork_of? string the session the next session followed is a fork of
 ---@field generation integer what tells the answers asked for before the list was last built from the ones asked for since
 
 --- The state of each tab that has a project to follow.
@@ -78,6 +89,8 @@ local function state_of(tab)
       full_told = false,
       bar_drawn = false,
       listens_to_session_home = false,
+      edits_waiting = {},
+      looking_up_edit = false,
       generation = 0,
     }
   end
@@ -115,7 +128,7 @@ local function chosen_home(tab, state)
   return home_of(tab, state, state.list.chosen().key) or tab.homes.changes
 end
 
---- The projects other than the session's, for keeping.
+--- The projects the tab holds, the session's among them, for keeping.
 ---
 ---@param state aineo.entry.TabProjects
 ---@return aineo.projects.Project[]
@@ -152,10 +165,11 @@ local function draw_tab_line(tab, state)
   if line == '' and not state.bar_drawn then
     return
   end
-  state.bar_drawn = line ~= ''
   require('aineo.projects').define_colours()
   local commits = chosen_home(tab, state).pane_buffers().commits
-  for _, window in ipairs(vim.fn.win_findbuf(commits)) do
+  local windows = vim.fn.win_findbuf(commits)
+  state.bar_drawn = line ~= '' or #windows == 0
+  for _, window in ipairs(windows) do
     vim.api.nvim_set_option_value('winbar', line, { scope = 'local', win = window })
   end
 end
@@ -168,7 +182,7 @@ end
 ---@param key string
 local function recount(tab, state, key)
   local home = home_of(tab, state, key)
-  if not home then
+  if not home or #state.list.entries() < 2 then
     return
   end
   local generation = state.generation
@@ -424,11 +438,82 @@ local function join(tab, state, met, quiet)
   return home
 end
 
---- Takes in the edit a signal of the session's transcript tells of: the
---- project of the checkout the file is in joins when it is another
---- repository's, and a project's count is read again soon. A signal replayed
---- from the transcript's tail as the follower starts is nothing new: the
---- projects kept for the session already hold what it told.
+--- The project of the repository `key` names, as the list holds it.
+---
+---@param state aineo.entry.TabProjects
+---@param key string
+---@return aineo.projects.Project|nil
+local function held_project(state, key)
+  return vim.iter(state.list.entries()):find(function(each)
+    return each.key == key
+  end)
+end
+
+--- Takes the checkout `met`, one that was just found to be there, for the
+--- project of its repository when the checkout the project was first met in
+--- is gone, as a worktree is when its work is done: the project keeps its
+--- place, its joining and its base, and its home reads the checkout that is
+--- there. Does nothing for the session's own project, for a project whose
+--- checkout is there, or for a repository the tab does not hold.
+---
+---@param tab aineo.entry.Tab
+---@param state aineo.entry.TabProjects
+---@param met aineo.projects.Project
+local function take_live_checkout(tab, state, met)
+  local held = held_project(state, met.key)
+  local is_session_project = state.session_project.key == met.key
+  if not held or is_session_project or held.top == met.top or vim.uv.fs_stat(held.top) then
+    return
+  end
+  local left = chosen_home(tab, state)
+  local gone = state.homes[met.key]
+  state.list.retop(met.key, met.top)
+  state.homes[met.key] = nil
+  local home = make_home(tab, state, vim.tbl_extend('force', held, { top = met.top }))
+  prepare_pane(tab, home.pane_buffers())
+  show_chosen_project(tab, state, left)
+  keep_projects(state)
+  if gone then
+    gone.let_go()
+  end
+end
+
+--- Looks up the checkout of the file of the oldest edit waiting
+--- (`state.edits_waiting`) and takes the edit in: the project of the checkout
+--- joins when it is another repository's, and a project's count is read
+--- again soon; then the next edit waiting is taken. One edit at a time, so
+--- that projects join in the order the edits were made, not the order git
+--- answers.
+---
+---@param tab aineo.entry.Tab
+---@param state aineo.entry.TabProjects
+local function take_next_edit(tab, state)
+  local path = table.remove(state.edits_waiting, 1)
+  if not path then
+    state.looking_up_edit = false
+    return
+  end
+  state.looking_up_edit = true
+  local generation = state.generation
+  state.checkouts.lookup(path, function(project)
+    if project and states[tab] == state and state.generation == generation and state.list then
+      if not state.list.has(project.key) then
+        join(tab, state, project)
+      else
+        take_live_checkout(tab, state, project)
+      end
+      recount_soon(tab, state, project.key)
+    end
+    if states[tab] == state then
+      take_next_edit(tab, state)
+    end
+  end)
+end
+
+--- Takes in the edit a signal of the session's transcript tells of
+--- (`take_next_edit()`), after those told before it. A signal replayed from
+--- the transcript's tail as the follower starts is nothing new: the projects
+--- kept for the session already hold what it told.
 ---
 ---@param tab aineo.entry.Tab
 ---@param state aineo.entry.TabProjects
@@ -438,16 +523,10 @@ local function take_edit(tab, state, signal)
   if not path then
     return
   end
-  local generation = state.generation
-  state.checkouts.lookup(path, function(project)
-    if not (project and states[tab] == state and state.generation == generation and state.list) then
-      return
-    end
-    if not state.list.has(project.key) then
-      join(tab, state, project)
-    end
-    recount_soon(tab, state, project.key)
-  end)
+  table.insert(state.edits_waiting, path)
+  if not state.looking_up_edit then
+    take_next_edit(tab, state)
+  end
 end
 
 --- Stops following the session's transcript, when one is followed.
@@ -460,13 +539,19 @@ local function stop_following_transcript(state)
   end
 end
 
+--- Defined below, with the follower it starts.
+---@type fun(tab: aineo.entry.Tab, state: aineo.entry.TabProjects)
+local follow_transcript
+
 --- Follows the transcript of the session the tab's panes follow, and takes
 --- in the edits it tells of (`take_edit()`), in place of the transcript
---- followed before.
+--- followed before; when the transcript says Claude Code went on in another
+--- session, it follows that one, as the office does. Looks for a transcript
+--- that is not there yet no oftener than every `TRANSCRIPT_POLL_MS`.
 ---
 ---@param tab aineo.entry.Tab
 ---@param state aineo.entry.TabProjects
-local function follow_transcript(tab, state)
+function follow_transcript(tab, state)
   stop_following_transcript(state)
   local path = state.id and office.transcript_for_session(tab, state.id)
   if not path then
@@ -475,7 +560,18 @@ local function follow_transcript(tab, state)
   state.follower = require('aineo.transcript').follow({
     path = path,
     since = office.following_since(tab),
+    poll_ms = TRANSCRIPT_POLL_MS,
     on_signal = function(signal)
+      if signal.kind == 'session_continued' then
+        if not signal.replayed then
+          vim.schedule(function()
+            if states[tab] == state and state.list then
+              follow_transcript(tab, state)
+            end
+          end)
+        end
+        return
+      end
       if states[tab] == state and state.list then
         take_edit(tab, state, signal)
       end
@@ -508,6 +604,7 @@ local function rebuild(tab, state)
     return
   end
   state.generation = state.generation + 1
+  state.edits_waiting = {}
   if state.list and state.list.chosen().key ~= state.session_project.key then
     tab.homes.layout.replace_changes_pane(tab.homes.changes.pane_buffers())
   end
@@ -556,6 +653,28 @@ function M.began(tab, directory)
   end)
 end
 
+--- Copies the projects kept for the session `from`, and each one's base and
+--- view, to the session `to`, where `to` has none kept.
+---
+---@param from string
+---@param to string
+local function carry_projects(from, to)
+  local projects = require('aineo.projects')
+  local state_directory = places.kept_places().state_directory
+  local kept = projects.read_kept(state_directory, from)
+  if not kept or projects.read_kept(state_directory, to) then
+    return
+  end
+  projects.keep(state_directory, to, kept)
+  for _, project in ipairs(kept) do
+    require('aineo.changes').copy_kept_session(
+      state_directory,
+      projects.followed_id(from, project),
+      projects.followed_id(to, project)
+    )
+  end
+end
+
 --- Tells the tab's projects the Claude Code session its panes follow is
 --- `id`: the projects kept for it are the tab's from then on, the session's
 --- repository alone when none were kept. Does nothing for the session
@@ -567,6 +686,11 @@ function M.follow_session(tab, id)
   local state = state_of(tab)
   if state.id == id then
     return
+  end
+  local parent = state.fork_of
+  state.fork_of = nil
+  if parent and parent ~= id then
+    carry_projects(parent, id)
   end
   state.id = id
   rebuild(tab, state)
@@ -584,8 +708,9 @@ function M.transcript_named(tab)
 end
 
 --- Hands what is kept for the session `from` over to `to`, which took its
---- place: the projects kept, and the base and saves of each project's home
---- when the tab followed `from`, which it follows as `to` from then on.
+--- place: the projects kept, and the base, the saves and the view of each
+--- project, whether or not the tab follows `from`; a tab that follows `from`
+--- follows `to` from then on.
 ---
 ---@param tab aineo.entry.Tab
 ---@param from string
@@ -593,11 +718,18 @@ end
 function M.hand_over(tab, from, to)
   local state = states[tab]
   local state_directory = places.kept_places().state_directory
+  local projects = require('aineo.projects')
   if not (state and state.list and state.id == from) then
-    require('aineo.projects').move_kept(state_directory, from, to)
+    for _, project in ipairs(projects.read_kept(state_directory, from) or {}) do
+      require('aineo.changes').move_kept_session(
+        state_directory,
+        projects.followed_id(from, project),
+        projects.followed_id(to, project)
+      )
+    end
+    projects.move_kept(state_directory, from, to)
     return
   end
-  local projects = require('aineo.projects')
   for key, home in pairs(state.homes) do
     local project = vim.iter(state.list.entries()):find(function(each)
       return each.key == key
@@ -610,6 +742,26 @@ function M.hand_over(tab, from, to)
   end
   projects.move_kept(state_directory, from, to)
   state.id = to
+end
+
+--- The changes home of the project that is chosen in `tab`, the tab's own
+--- home while the tab holds one project.
+---
+---@param tab aineo.entry.Tab
+---@return aineo.changes.Home
+function M.chosen_changes(tab)
+  local state = states[tab]
+  return state and state.list and chosen_home(tab, state) or tab.homes.changes
+end
+
+--- Tells the tab's projects that the next session its panes follow is a
+--- fork of `parent`: the projects kept for `parent`, and each one's base, are
+--- the fork's too, as a resume's are, when it has none of its own.
+---
+---@param tab aineo.entry.Tab
+---@param parent string
+function M.fork_of(tab, parent)
+  state_of(tab).fork_of = parent
 end
 
 --- The pane the layout shows in the changes pane for `tab`: the buffers of
@@ -628,8 +780,21 @@ function M.pane_of(tab)
   return pane
 end
 
---- The folders of the tab's projects, and of the worktrees reported in them,
---- whose files a walkthrough may show.
+--- The main checkout of the repository whose common git directory is `key`:
+--- the folder above `.git`; nil for a bare repository, which has none.
+---
+---@param key string
+---@return string|nil
+local function main_checkout_of(key)
+  if vim.fs.basename(key) == '.git' then
+    return vim.fs.dirname(key)
+  end
+  return nil
+end
+
+--- The folders of the tab's projects, whose files a walkthrough may show:
+--- each project's checkout, the main checkout of its repository, and the
+--- worktrees reported in it that git still lists.
 ---
 ---@param tab aineo.entry.Tab
 ---@return string[]
@@ -641,6 +806,10 @@ function M.folders(tab)
   local folders = {}
   for _, project in ipairs(state.list.entries()) do
     table.insert(folders, project.top)
+    local main = main_checkout_of(project.key)
+    if main then
+      table.insert(folders, main)
+    end
     local home = home_of(tab, state, project.key)
     if home then
       vim.list_extend(folders, home.reported_worktree_tops())
@@ -672,20 +841,27 @@ function M.name_of_root(tab, root)
   if not found or found.key == state.session_project.key then
     return nil
   end
-  local listed = vim.iter(state.list.entries()):find(function(each)
-    return each.key == found.key
-  end)
-  return listed and name_of(listed) or nil
+  local entries = state.list.entries()
+  local names = require('aineo.projects').names(entries)
+  for position, each in ipairs(entries) do
+    if each.key == found.key then
+      return names[position]
+    end
+  end
+  return nil
 end
 
 --- The changes home a report of the worktree `work` names goes to: the
---- session's, unless the worktree is a checkout of another repository and
---- the report lists a branch, when it is that repository's project's, which
---- joins the tab if it has not, or the reason the report is refused when the
---- tab cannot hold one more. Waits for the checkout of the worktree's
---- folder to be found, at most `LOOKUP_WAIT_MS`; a folder that is no checkout
---- of any repository, and one whose checkout is not found in time, are the
---- session's.
+--- session's, unless the worktree's folder is there and is the top of a
+--- checkout of another repository. The report of a project the tab holds goes
+--- to that project's home, whatever branches it lists, a checkout that is
+--- there taking the place of one that is gone. The report of a repository the
+--- tab does not hold, listing a branch, makes it a project, joining the tab;
+--- listing none it is refused, saying a branch must be listed, as is one
+--- that would make the tab hold more projects than it can. Waits for the
+--- checkout to be found, at most `LOOKUP_WAIT_MS`, asking git afresh; a
+--- folder that is not there, one that is no checkout of any repository, and
+--- one whose checkout is not found in time, are the session's.
 ---
 ---@param tab aineo.entry.Tab
 ---@param work aineo.changes.ReportedWork
@@ -693,11 +869,11 @@ end
 ---@return string|nil refusal why the report is refused, in words for the agent
 function M.home_for_report(tab, work)
   local state = states[tab]
-  if not (state and state.list) or #work.branches == 0 then
+  if not (state and state.list) then
     return tab.homes.changes
   end
   local answered, project = false, nil
-  state.checkouts.lookup_folder(work.worktree, function(found)
+  state.checkouts.lookup_checkout(work.worktree, function(found)
     answered, project = true, found
   end)
   vim.wait(LOOKUP_WAIT_MS, function()
@@ -705,6 +881,16 @@ function M.home_for_report(tab, work)
   end, 5)
   if not project or project.key == state.session_project.key then
     return tab.homes.changes
+  end
+  if state.list.has(project.key) then
+    take_live_checkout(tab, state, project)
+    return home_of(tab, state, project.key)
+  end
+  if #work.branches == 0 then
+    return nil,
+      ('branches: list the branch checked out in %s to make its repository a project of this tab'):format(
+        work.worktree
+      )
   end
   local known = state.list.has(project.key)
   local home = join(tab, state, project, true)

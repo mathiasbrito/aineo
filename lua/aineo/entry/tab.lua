@@ -844,6 +844,9 @@ local function make_tab(homes, key, callbacks)
       on_session_switched = function(id, source, left)
         tell_listeners_of_the_switch()
         offices.began_following(tab)
+        if source == 'fork' then
+          projects.fork_of(tab, left)
+        end
         if id == replacing_session and source == 'startup' then
           replacing_session = nil
           hand_over_dead_session(left, id, working_directory)
@@ -1194,7 +1197,7 @@ local function make_tab(homes, key, callbacks)
   ---@param pane aineo.layout.Pane
   local function focus_pane(pane)
     if pane == 'changes' then
-      homes.changes.toggle_focused_view()
+      projects.chosen_changes(tab).toggle_focused_view()
     end
     with_pane_arrangement(function(make_arrangement)
       homes.layout.focus_pane(pane, make_arrangement)
@@ -1968,7 +1971,7 @@ local function make_tab(homes, key, callbacks)
     end,
     ['run shell'] = run.run_shell,
     ['diff close'] = function()
-      homes.changes.close_shown_diff()
+      projects.chosen_changes(tab).close_shown_diff()
     end,
     zoom = function()
       homes.layout.toggle_zoom()

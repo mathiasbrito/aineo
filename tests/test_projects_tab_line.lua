@@ -119,4 +119,13 @@ T['define_colours()']['leaves a group the user defined as they defined it'] = fu
   vim.api.nvim_set_hl(0, projects.CHOSEN_GROUP, {})
 end
 
+T['names()'] = MiniTest.new_set()
+
+T['names()']['are those the line of tabs shows, in the order of the projects'] = function()
+  local entries =
+    { project('/home/me/work/app'), project('/home/me/forks/app'), project('/a/docs') }
+
+  eq(projects.names(entries), { 'work/app', 'forks/app', 'docs' })
+end
+
 return T

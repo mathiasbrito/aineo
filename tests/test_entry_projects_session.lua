@@ -3,6 +3,7 @@ local claude_session = dofile('tests/helpers/claude_session.lua')
 local entry = dofile('tests/helpers/entry.lua')
 local fixture = dofile('tests/helpers/fixture.lua')
 local git_repo = dofile('tests/helpers/git_repo.lua')
+local fake_transcript = dofile('tests/helpers/fake_transcript.lua')
 local office_cells = dofile('tests/helpers/office_cells.lua')
 local projects = dofile('tests/helpers/projects_session.lua')
 local walkthrough_session = dofile('tests/helpers/walkthrough_session.lua')
@@ -57,6 +58,7 @@ local function open(name, joined)
     session = session,
     token = claude_session.start_token(fake, 1),
     state_home = state_home,
+    fake = fake,
   }
 end
 
@@ -126,6 +128,33 @@ end
 ---@return string
 local function followed_session()
   return child.lua_get([[require('aineo.claude').session_id()]])
+end
+
+--- Moves the child's Claude Code from the session `from` to `to` as a fork
+--- does: a `SessionEnd` of `from` and a `SessionStart` of `to` with the source
+--- `fork`, run as the fake's hooks; waits until the tab follows `to`.
+---
+---@param fake table
+---@param from string
+---@param to string
+local function fork_the_session(fake, from, to)
+  claude_session.run_session_hook(
+    child,
+    fake,
+    1,
+    'SessionEnd',
+    claude_session.hook_input('SessionEnd', from, 'resume')
+  )
+  claude_session.run_session_hook(
+    child,
+    fake,
+    1,
+    'SessionStart',
+    claude_session.hook_input('SessionStart', to, 'fork')
+  )
+  vim.wait(projects.PATIENCE_MS, function()
+    return followed_session() == to
+  end, 20)
 end
 
 --- Types `/clear` in the child's running Claude Code and waits until the
@@ -420,6 +449,16 @@ T['a session']['that begins again shows the session’s project, not the one tha
   eq(vim.tbl_contains(projects.shown_buffer_names(child), 'aineo://changes-commits'), true)
 end
 
+T['a session']['that begins with the pane hidden leaves no line of tabs when the pane is shown'] = function()
+  open('projects-session-clear-hidden', true)
+  child.lua([[require('aineo.entry.registry').tab_list[1].show_pane('agent')]])
+
+  clear_the_session()
+  projects.show_changes_pane(child)
+
+  expect_tab_line('')
+end
+
 T['a session']['that begins again lets a project of the session before join again'] = function()
   local here = open('projects-session-clear-rejoin', true)
   clear_the_session()
@@ -449,6 +488,131 @@ T['a tab']['closed leaves no project home, no file watch of the transcript and n
   end)
   eq(office_cells.open_handles(child, 'fs_event') < watches_before, true)
   eq(office_cells.open_handles(child, 'timer') <= timers_before, true)
+end
+
+T['the transcript'] = MiniTest.new_set()
+
+T['the transcript']['followed to the session it says Claude Code went on in joins a project for an edit made there'] = function()
+  local here = open('projects-session-continued', false)
+  local continued_in = '22222222-2222-4222-8222-222222222222'
+  local continuation = vim.fs.joinpath(vim.fs.dirname(here.transcript), continued_in .. '.jsonl')
+  fake_transcript.append_text(continuation, '')
+
+  fake_transcript.append(here.transcript, {
+    vim.json.encode({
+      type = 'continued-in',
+      timestamp = os.date('!%Y-%m-%dT%H:%M:%S.000Z', os.time() + 5),
+      sessionId = here.session,
+      continuedInSessionId = continued_in,
+    }),
+  })
+  vim.wait(1500)
+  projects.edit(continuation, vim.fs.joinpath(here.other, 'src/code.lua'))
+
+  expect_tab_line(TWO_TABS)
+end
+
+T['the transcript']['of a tab not yet written looks for its file and its subagents folder with one timer every 2 seconds'] = function()
+  open('projects-session-polling', false)
+
+  eq({
+    office_cells.open_handles(child, 'timer') >= 1,
+    child.lua_get([[(function()
+        local count = 0
+        vim.uv.walk(function(handle)
+          if handle:get_type() == 'timer' and not handle:is_closing() and handle:get_repeat() == 500 then
+            count = count + 1
+          end
+        end)
+        return count
+      end)()]]),
+  }, { true, 0 })
+end
+
+T['a handed-over session'] = MiniTest.new_set()
+
+T['a handed-over session']['takes the kept projects and each project’s kept base with it, though the tab does not follow it'] = function()
+  local here = open('projects-session-hand-over', true)
+  local from, to = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+  local state = vim.fs.joinpath(here.state_home, 'nvim')
+  local ready = child.lua_get(
+    [[(function(state, from, other, to)
+      local projects = require('aineo.projects')
+      local project = { key = other .. '/.git', top = other, joined = 5 }
+      projects.keep(state, from, { project })
+      require('aineo.changes.kept').keep_base(
+        state,
+        projects.followed_id(from, project),
+        { top = other, base = 'abc', saved = {} }
+      )
+      require('aineo.entry.projects').hand_over(
+        require('aineo.entry.registry').tab_list[1],
+        from,
+        to
+      )
+      return projects.followed_id(from, project)
+    end)(...)]],
+    { state, from, here.other, to }
+  )
+
+  eq(ready ~= nil, true)
+  eq(
+    child.lua_get(
+      [[(function(state, from, to, other)
+        local projects = require('aineo.projects')
+        local kept = require('aineo.changes.kept')
+        local project = { key = other .. '/.git', top = other, joined = 5 }
+        return {
+          projects.read_kept(state, from) == nil,
+          projects.read_kept(state, to) ~= nil,
+          kept.read_kept_base(state, projects.followed_id(from, project)) == nil,
+          kept.read_kept_base(state, projects.followed_id(to, project)) ~= nil,
+        }
+      end)(...)]],
+      { state, from, to, here.other }
+    ),
+    { true, true, true, true }
+  )
+end
+
+T['a forked session'] = MiniTest.new_set()
+
+T['a forked session']['carries the projects of the session it forks and their bases, as a resume does'] = function()
+  local here = open('projects-session-fork', true)
+  local fork = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+  local base = git_repo.git(here.other, { 'rev-parse', 'HEAD' })
+  git_repo.write(here.other, 'later.txt', { 'later' })
+  git_repo.commit_all(here.other, 'Later')
+
+  fork_the_session(here.fake, here.session, fork)
+
+  expect_tab_line(CHOSEN .. ' aineo 0 %* ' .. OTHER .. ' notes-api 1 %*')
+  projects.enter_commits_window(child)
+  child.type_keys('<Tab>')
+  projects.wait_until('the project’s base is the one it had before the fork', function()
+    return (projects.files_lines(child)[2] or ''):find(base:sub(1, 7), 1, true) ~= nil
+  end)
+end
+
+T['a forked session']['carries no replayed edit: a project closed before the fork stays closed'] = function()
+  local here = open('projects-session-fork-closed', true)
+  local fork = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+  projects.enter_commits_window(child)
+  child.type_keys('<Tab>X')
+  expect_tab_line('')
+
+  fork_the_session(here.fake, here.session, fork)
+
+  vim.wait(projects.QUIET_MS)
+  eq(projects.tab_line(child), '')
+end
+
+T['a forked session']['is no clear: a cleared session carries nothing'] = function()
+  open('projects-session-clear-nothing', true)
+
+  clear_the_session()
+
+  expect_tab_line('')
 end
 
 return T
