@@ -311,56 +311,57 @@ T['the watch']['is not started by a showing that was pending when the watch was 
   eq(child.lua_get('_G.watches'), { started = 1, stopped = 1 })
 end
 
+--- Keeps, in the child, a base for the session `id` by following it, and
+--- waits until it is kept.
+---
+---@param id string
+local function keep_a_base_for(id)
+  child.lua(
+    [[_G.home.follow_changes_session({ id = ..., state_directory = vim.fn.stdpath('state') })]],
+    { id }
+  )
+  git_repo.wait_until('a base is kept for ' .. id, function()
+    return child.lua_get(
+      [[require('aineo.changes.kept').read_kept_base(vim.fn.stdpath('state'), ...) ~= nil]],
+      { id }
+    )
+  end)
+end
+
+--- Whether the child has a base kept for the session `id`.
+---
+---@param id string
+---@return boolean
+local function has_a_base_kept_for(id)
+  return child.lua_get(
+    [[require('aineo.changes.kept').read_kept_base(vim.fn.stdpath('state'), ...) ~= nil]],
+    { id }
+  )
+end
+
 T['kept session files']['are moved to another session with move_kept_session()'] = function()
   local top = git_repo.create('project-home-move-kept', { ['a.txt'] = { 'one' } })
   begin_and_show(top)
-  child.lua(
-    [[_G.home.follow_changes_session({ id = 'first', state_directory = vim.fn.stdpath('state') })]]
-  )
-  git_repo.wait_until('a base is kept for the session', function()
-    return child.lua_get(
-      [[require('aineo.changes.kept').read_kept_base(vim.fn.stdpath('state'), 'first') ~= nil]]
-    )
-  end)
+  keep_a_base_for('moved-from')
 
   child.lua(
-    [[require('aineo.changes').move_kept_session(vim.fn.stdpath('state'), 'first', 'second')]]
+    [[require('aineo.changes').move_kept_session(vim.fn.stdpath('state'), 'moved-from', 'moved-to')]]
   )
 
-  eq(
-    child.lua_get([[{
-      require('aineo.changes.kept').read_kept_base(vim.fn.stdpath('state'), 'first') == nil,
-      require('aineo.changes.kept').read_kept_base(vim.fn.stdpath('state'), 'second') ~= nil,
-    }]]),
-    { true, true }
-  )
+  eq({ has_a_base_kept_for('moved-from'), has_a_base_kept_for('moved-to') }, { false, true })
 end
 
 T['kept session files']['are copied to another session with copy_kept_session(), the first keeping them'] = function()
   local top = git_repo.create('project-home-copy-kept', { ['a.txt'] = { 'one' } })
   begin_and_show(top)
-  child.lua(
-    [[_G.home.follow_changes_session({ id = 'first', state_directory = vim.fn.stdpath('state') })]]
-  )
-  git_repo.wait_until('a base is kept for the session', function()
-    return child.lua_get(
-      [[require('aineo.changes.kept').read_kept_base(vim.fn.stdpath('state'), 'first') ~= nil]]
-    )
-  end)
+  keep_a_base_for('copied-from')
+  eq(has_a_base_kept_for('copied-to'), false)
 
   child.lua(
-    [[require('aineo.changes').copy_kept_session(vim.fn.stdpath('state'), 'first', 'second')]]
+    [[require('aineo.changes').copy_kept_session(vim.fn.stdpath('state'), 'copied-from', 'copied-to')]]
   )
 
-  eq(
-    child.lua_get([[(function()
-      local kept = require('aineo.changes.kept')
-      local first = kept.read_kept_base(vim.fn.stdpath('state'), 'first')
-      local second = kept.read_kept_base(vim.fn.stdpath('state'), 'second')
-      return first ~= nil and second ~= nil and first.base == second.base
-    end)()]]),
-    true
-  )
+  eq({ has_a_base_kept_for('copied-from'), has_a_base_kept_for('copied-to') }, { true, true })
 end
 
 T['kept session files']['are not copied over what the other session has kept'] = function()
@@ -369,16 +370,33 @@ T['kept session files']['are not copied over what the other session has kept'] =
   child.lua([[
     local kept = require('aineo.changes.kept')
     local state = vim.fn.stdpath('state')
-    kept.keep_base(state, 'first', { top = '/x', base = 'aaa', saved = {} })
-    kept.keep_base(state, 'second', { top = '/x', base = 'bbb', saved = {} })
-    require('aineo.changes').copy_kept_session(state, 'first', 'second')
+    kept.keep_base(state, 'over-from', { top = '/x', base = 'aaa', saved = {} })
+    kept.keep_base(state, 'over-to', { top = '/x', base = 'bbb', saved = {} })
+    require('aineo.changes').copy_kept_session(state, 'over-from', 'over-to')
   ]])
 
   eq(
     child.lua_get(
-      [[require('aineo.changes.kept').read_kept_base(vim.fn.stdpath('state'), 'second').base]]
+      [[require('aineo.changes.kept').read_kept_base(vim.fn.stdpath('state'), 'over-to').base]]
     ),
     'bbb'
+  )
+end
+
+T['kept session files']['have their base taken to another checkout with retop_kept_session()'] = function()
+  local top = git_repo.create('project-home-retop-kept', { ['a.txt'] = { 'one' } })
+  begin_and_show(top)
+  keep_a_base_for('retopped')
+
+  child.lua(
+    [[require('aineo.changes').retop_kept_session(vim.fn.stdpath('state'), 'retopped', '/elsewhere')]]
+  )
+
+  eq(
+    child.lua_get(
+      [[require('aineo.changes.kept').read_kept_base(vim.fn.stdpath('state'), 'retopped').top]]
+    ),
+    '/elsewhere'
   )
 end
 

@@ -102,7 +102,8 @@ local function call_report(arguments, deliver_report)
 end
 
 --- The result of a `tools/call` of the announcement tool: a valid
---- announcement is handed on, and answered `ok` when taken, a tool error in
+--- announcement is handed on, and answered `ok` when taken (`ok. ` and the
+--- editor's note when it gave one), a tool error in
 --- the editor's words when it refused it, a tool error `not taken` when not,
 --- nothing more; refused arguments are a tool error naming the field.
 ---
@@ -114,12 +115,12 @@ local function call_announcement(arguments, deliver_announcement)
   if not valid_work then
     return tool_result('aineo refused the announcement: ' .. refusal, true)
   end
-  local outcome, editor_refusal = deliver_announcement(valid_work)
+  local outcome, editor_words = deliver_announcement(valid_work)
   if outcome == 'taken' then
-    return tool_result('ok', false)
+    return tool_result(editor_words and ('ok. ' .. editor_words) or 'ok', false)
   end
   if outcome == 'refused' then
-    return tool_result('aineo refused the announcement: ' .. editor_refusal, true)
+    return tool_result('aineo refused the announcement: ' .. editor_words, true)
   end
   return tool_result('not taken', true)
 end

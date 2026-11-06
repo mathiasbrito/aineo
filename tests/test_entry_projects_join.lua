@@ -235,4 +235,16 @@ T['a project']['joins in the order its edits were made, whichever repository git
   )
 end
 
+T['a project']['does not join for an edit stamped before the session was followed'] = function()
+  local here = open_two_repositories('projects-join-old-stamp')
+
+  projects.edit_stamped(
+    here.transcript,
+    vim.fs.joinpath(here.other, 'search.py'),
+    '2026-01-01T00:00:00.000Z'
+  )
+
+  eq(tab_line_after_a_while(), '')
+end
+
 return T

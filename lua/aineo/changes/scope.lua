@@ -291,6 +291,7 @@ end
 ---@field label? string the agent's short name for the task; nil in a report of aineo's own hook
 ---@field branches aineo.changes.ReportedWorkBranch[] none when the agent is done with the worktree
 ---@field by_hook? boolean whether aineo's own hook made the report, rather than the agent's call
+---@field found? aineo.git.Repository|false set by `resolve_reported_work()` on a report that lists branches: the repository git found for the worktree's folder, false when it found none
 
 --- The words that tell the user the reported work the focused view showed
 --- is gone, all of it.

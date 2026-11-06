@@ -161,13 +161,14 @@ T['a report']['of a checkout of another repository leaves the view and the curso
   eq(child.lua_get([[{ vim.api.nvim_get_current_buf(), vim.api.nvim_win_get_cursor(0) }]]), before)
 end
 
-T['a report']['listing no branch, for a checkout of a repository that is no project, is refused saying a branch must be listed'] = function()
+T['a report']['listing no branch, for a checkout of a repository that is no project, is taken with a note that no project joined'] = function()
   local here = open_with_a_worktree_of_another_repository('projects-report-no-branch')
 
   local answer = announce(report_for(here.worktree, {}), here.token)
 
-  eq(type(answer), 'string')
-  eq(answer:find('list the branch checked out', 1, true) ~= nil, true)
+  eq(type(answer), 'table')
+  eq(answer.note:find('no project joined', 1, true) ~= nil, true)
+  eq(answer.note:find('needs a branch', 1, true) ~= nil, true)
   eq(tab_line_after_a_while(), '')
 end
 
@@ -217,24 +218,35 @@ T['a report']['of a folder that is not there joins no repository above it'] = fu
   eq(tab_line_after_a_while(), '')
 end
 
-T['a report']['of a folder inside a checkout, not its top, joins nothing'] = function()
+T['a report']['of a folder inside a checkout of another repository, not its top, is refused saying the checkout’s top is needed'] = function()
   local here = open_with_a_worktree_of_another_repository('projects-report-inside')
   vim.fn.mkdir(vim.fs.joinpath(here.other, 'src'), 'p')
 
-  announce(
+  local answer = announce(
     report_for(vim.fs.joinpath(here.other, 'src'), { { name = 'main', base = 'HEAD' } }),
     here.token
   )
 
+  eq(type(answer), 'string')
+  eq(answer:find('top', 1, true) ~= nil, true)
   eq(tab_line_after_a_while(), '')
 end
 
-T['a report']['of the main checkout takes the place of a worktree of the project that is gone'] = function()
+T['a report']['of the main checkout takes the place of a worktree of the project that is gone, the project keeping its base'] = function()
   local here = open_with_a_worktree_of_another_repository('projects-report-retop')
+  local base = git_repo.git(here.worktree, { 'rev-parse', 'HEAD' })
   announce(report_for(here.worktree, { { name = 'feature', base = 'HEAD~1' } }), here.token)
   projects.show_changes_pane(child)
   projects.wait_until('the project has its tab', function()
     return projects.tab_line(child) == CHOSEN .. ' aineo 0 %* ' .. OTHER .. ' notes-feature 0 %*'
+  end)
+  git_repo.wait_until('the project’s base is kept', function()
+    local kept = vim.fn.glob(
+      vim.fs.joinpath(child.lua_get('vim.fn.stdpath("state")'), 'aineo', 'changes-sessions', '*'),
+      true,
+      true
+    )
+    return #kept >= 2
   end)
   git_repo.git(here.other, { 'worktree', 'remove', '--force', here.worktree })
 
@@ -242,6 +254,11 @@ T['a report']['of the main checkout takes the place of a worktree of the project
 
   projects.wait_until('the project is the main checkout', function()
     return projects.tab_line(child) == CHOSEN .. ' aineo 0 %* ' .. OTHER .. ' notes-api 0 %*'
+  end)
+  projects.enter_commits_window(child)
+  child.type_keys('<Tab>')
+  projects.wait_until('the project’s base is the commit it had when it joined', function()
+    return (projects.files_lines(child)[2] or ''):find(base:sub(1, 7), 1, true) ~= nil
   end)
 end
 
@@ -309,7 +326,7 @@ T['a report']['of a project already in the tab adds no second tab and no second 
   end, told()), 1)
 end
 
-T['a report']['whose checkout is not found in 1.5 seconds is taken by the session’s home, the whole answer in under 4.5'] = function()
+T['a report']['carries the first lookup of its folder: a slow second one cannot lose the project'] = function()
   local here = open_with_a_worktree_of_another_repository('projects-report-slow-lookup')
   child.lua([[
     local realpath = vim.uv.fs_realpath
@@ -320,15 +337,39 @@ T['a report']['whose checkout is not found in 1.5 seconds is taken by the sessio
       return realpath(path, callback)
     end
   ]])
+
+  local answer =
+    announce(report_for(here.worktree, { { name = 'main', base = 'HEAD' } }), here.token)
+
+  eq(answer, true)
+  projects.show_changes_pane(child)
+  projects.wait_until('the project joined', function()
+    return (projects.tab_line(child) or ''):find('notes-feature', 1, true) ~= nil
+  end)
+end
+
+T['a report']['to a git that answers in 0.6 seconds each time is taken and joins, the answer in under 5'] = function()
+  local here = open_with_a_worktree_of_another_repository('projects-report-slow-git')
+  child.lua([[
+    local git = require('aineo.git')
+    local find = git.find_repository
+    git.find_repository = function(directory, done, options)
+      vim.defer_fn(function()
+        find(directory, done, options)
+      end, 600)
+    end
+  ]])
   local started = vim.uv.hrtime()
 
   local answer =
     announce(report_for(here.worktree, { { name = 'main', base = 'HEAD' } }), here.token)
 
-  local elapsed_ms = (vim.uv.hrtime() - started) / 1e6
   eq(answer, true)
-  eq(elapsed_ms >= 1400 and elapsed_ms < 4500, true)
-  eq(tab_line_after_a_while(), '')
+  eq((vim.uv.hrtime() - started) / 1e6 < 5000, true)
+  projects.show_changes_pane(child)
+  projects.wait_until('the project joined', function()
+    return (projects.tab_line(child) or ''):find('notes-feature', 1, true) ~= nil
+  end)
 end
 
 return T

@@ -298,4 +298,37 @@ T['a lookup of a checkout']['asks again for a folder remembered to be in no repo
   eq(project, { key = top .. '/.git', top = vim.uv.fs_realpath(top) })
 end
 
+T['a lookup of a checkout']['asks again for a folder remembered to hold a repository, and answers what it holds now'] = function()
+  local top = fixture.directory('projects_checkouts_checkout_remade')
+  local real = vim.uv.fs_realpath(top)
+  local repositories = { [top] = repository_at(real, top .. '/.git') }
+  local find, asked = fake_find(repositories)
+  local checkouts = projects.new_checkouts(find)
+  looked_up(checkouts, vim.fs.joinpath(top, 'a.lua'))
+  repositories[top] = repository_at(real, top .. '/other/.git')
+
+  local project = looked_up(checkouts, top, 'lookup_checkout')
+
+  eq(asked, { top, top })
+  eq(project, { key = top .. '/other/.git', top = real })
+end
+
+T['a lookup of a checkout']['tells the checkout a folder is inside when it is not the top'] = function()
+  local top = fixture.directory('projects_checkouts_checkout_enclosing')
+  vim.fn.mkdir(vim.fs.joinpath(top, 'src'), 'p')
+  local inside = vim.fs.joinpath(top, 'src')
+  local find = fake_find({ [inside] = repository_at(vim.uv.fs_realpath(top), top .. '/.git') })
+  local checkouts = projects.new_checkouts(find)
+  local answered, project, enclosing = false, nil, nil
+
+  checkouts.lookup_checkout(inside, function(found, within)
+    answered, project, enclosing = true, found, within
+  end)
+  vim.wait(PATIENCE_MS, function()
+    return answered
+  end, 5)
+
+  eq({ project, enclosing }, { nil, { key = top .. '/.git', top = vim.uv.fs_realpath(top) } })
+end
+
 return T

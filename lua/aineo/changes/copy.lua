@@ -110,6 +110,7 @@ end
 ---@field focused_work fun(): aineo.changes.FocusedWork|nil what the focused view shows alone, nil for the default view
 ---@field watch_focused_work fun(watcher: fun()) calls `watcher` each time what `focused_work()` gives changes
 ---@field count_session_work fun(done: fun(count: integer|nil)) calls `done` once, on the main loop, with how many files differ from the session's base — the files *Session work* lists — or nil when no repository was found, the base is not read yet or the read fails
+---@field has_shown_diff fun(): boolean whether a window of the current tab page shows a diff the home showed
 ---@field stop_watching fun() stops the watch of the repository and that of the worktree whose *Uncommitted* is chosen; the next showing of the pane starts them again
 ---@field on_repository_change fun(listener: fun()) calls `listener` each time the home finds the repository, takes the base of a session, or the watch of the repository sees a change in it
 ---@field offer_scopes fun() what `s` does in the pane: offers the worktrees, branches and reported work to show alone
@@ -2809,6 +2810,13 @@ function M.new(label)
   --- What the user is told when there is no diff to close.
   local NO_DIFF_TO_CLOSE = 'aineo: no diff to close'
 
+  --- Whether a window of the current tab page shows a diff the home showed.
+  ---
+  ---@return boolean
+  function home.has_shown_diff()
+    return #windows_showing_a_diff() > 0
+  end
+
   --- Closes the windows of the current tab page that show a diff the home
   --- showed (`windows_showing_a_diff()`), the diff buffer with each, wiped once
   --- hidden, and no other window; the cursor stays where it was, unless it was
@@ -3767,6 +3775,7 @@ function M.new(label)
           return
         end
         done(vim.tbl_extend('force', work, {
+          found = found or false,
           branches = vim
             .iter(ipairs(work.branches))
             :map(function(index, listed)

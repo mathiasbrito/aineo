@@ -16,11 +16,11 @@ local editor_handlers_made = false
 
 --- How long the editor waits for a report's branches to be resolved before
 --- it refuses the announcement: above the limit the changes home gives git
---- for each run, so that git's own answer comes first. With the 1.5 s the
---- report may wait to find the checkout of its folder
---- (`aineo.entry.projects`' `home_for_report()`) it keeps inside the 5 s the
---- report server waits for the editor, at 4.5 s.
-local BASE_WAIT_MS = 3000
+--- for each run, so that git's own answer comes first, and inside the 5 s
+--- the report server waits for the editor. The repository git finds for the
+--- folder is carried in the resolved report, so that the tab asks no more
+--- of git for it (`aineo.entry.projects`' `home_for_report()`).
+local BASE_WAIT_MS = 4000
 
 --- `work` with each branch checked to be a local branch and its base
 --- resolved to its full id, in the worktree's own folder, else in the
@@ -76,7 +76,7 @@ end
 ---
 ---@param work aineo.changes.ReportedWork
 ---@param start_token string
----@return boolean|string taken `true` when taken, or the words of its refusal
+---@return boolean|string|{ note: string } taken `true` when taken, `{ note }` when taken with a note for the agent, or the words of its refusal
 local function take_announced_work(work, start_token)
   local tab = type(start_token) == 'string' and routing.tab_for_work(start_token)
   if not (tab and is_worktree_report(work)) then
@@ -87,11 +87,15 @@ local function take_announced_work(work, start_token)
   if not resolved then
     return refusal
   end
-  local home, why = projects.home_for_report(tab, resolved)
+  local home, why, note = projects.home_for_report(tab, resolved)
   if not home then
     return why
   end
-  return home.add_reported_work(resolved, tellers.for_tab(tab)) == true
+  local taken = home.add_reported_work(resolved, tellers.for_tab(tab)) == true
+  if taken and note then
+    return { note = note }
+  end
+  return taken
 end
 
 --- Takes `run_call`, a call of a run tool a relay offers with the start token
