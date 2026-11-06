@@ -119,7 +119,7 @@ T['walkthrough_instructions()']['tell the agent to call announce_work for the ch
   contains(
     paragraph,
     "A file of a repository other than the session's is shown only once you have called `mcp__aineo__announce_work`"
-      .. ' for its checkout, also for code you only read and want to explain.'
+      .. ' for its checkout with the branch checked out there, also for code you only read and want to explain.'
   )
 end
 
@@ -171,7 +171,7 @@ T['the walkthrough tool']['tells the agent to call announce_work for the checkou
   contains(
     description,
     "A file of a repository other than the session's is shown only once you have called announce_work"
-      .. ' for its checkout, also for code you only read and want to explain.'
+      .. ' for its checkout with the branch checked out there, also for code you only read and want to explain.'
   )
 end
 
@@ -181,7 +181,7 @@ T['the walkthrough plan tool']['tells the agent to call announce_work for the ch
   contains(
     description,
     "A file of a repository other than the session's is listed only once you have called announce_work"
-      .. ' for its checkout, also for code you only read and want to explain.'
+      .. ' for its checkout with the branch checked out there, also for code you only read and want to explain.'
   )
 end
 

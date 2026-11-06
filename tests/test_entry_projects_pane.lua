@@ -300,4 +300,93 @@ T['the watch']['is not started for a project that was never shown'] = function()
   eq(child.lua_get('_G.watches'), { started = 1, stopped = 0 })
 end
 
+T['a session of one project'] = MiniTest.new_set()
+
+T['a session of one project']['reads no count of files, however often the repository changes'] = function()
+  local main = projects.repository('projects-pane-single', 'aineo', { ['a.txt'] = { 'one' } })
+  projects.open_in(child, 'projects-pane-single', main)
+  projects.show_changes_pane(child)
+  child.lua([[
+    local home = require('aineo.entry.registry').tab_list[1].homes.changes
+    local count = home.count_session_work
+    _G.counted = 0
+    home.count_session_work = function(...)
+      _G.counted = _G.counted + 1
+      return count(...)
+    end
+  ]])
+
+  for number = 1, 5 do
+    git_repo.write(main, 'f' .. number .. '.txt', { 'x' })
+    vim.wait(150)
+  end
+  vim.wait(projects.QUIET_MS)
+
+  eq(child.lua_get('_G.counted'), 0)
+end
+
+T['the actions of the pane'] = MiniTest.new_set()
+
+T['the actions of the pane']['\\g in the pane of a project reads that project’s pane, as it does the session’s'] = function()
+  open_with_projects('projects-pane-g', { 'notes-api' })
+  projects.enter_commits_window(child)
+  child.type_keys('<Tab>')
+  child.lua([[
+    local tab = require('aineo.entry.registry').tab_list[1]
+    local home = require('aineo.entry.projects').chosen_changes(tab)
+    _G.toggled = { project = 0, session = 0 }
+    local toggle = home.toggle_focused_view
+    home.toggle_focused_view = function()
+      _G.toggled.project = _G.toggled.project + 1
+      return toggle()
+    end
+    local session = tab.homes.changes.toggle_focused_view
+    tab.homes.changes.toggle_focused_view = function()
+      _G.toggled.session = _G.toggled.session + 1
+      return session()
+    end
+  ]])
+
+  entry.press(child, '\\g')
+
+  eq(child.lua_get('_G.toggled'), { project = 1, session = 0 })
+end
+
+T['the actions of the pane']['`:Aineo diff close` closes a diff the project shown opened'] = function()
+  local here = open_with_projects('projects-pane-diff-close', { 'notes-api' })
+  git_repo.write(here.others[1], 'f.txt', { 'two' })
+  projects.enter_commits_window(child)
+  child.type_keys('<Tab>')
+  projects.wait_until('the project lists its changed file', function()
+    return (projects.files_lines(child)[3] or ''):find('f.txt', 1, true) ~= nil
+  end)
+  projects.enter_files_window(child)
+  child.lua('vim.api.nvim_win_set_cursor(0, { 3, 0 })')
+  local windows_before = #entry.windows(child)
+  child.type_keys('<CR>')
+  projects.wait_until('a diff is open', function()
+    return #entry.windows(child) > windows_before
+  end)
+
+  entry.command(child, 'Aineo diff close')
+
+  projects.wait_until('the diff is closed', function()
+    return #entry.windows(child) == windows_before
+  end)
+end
+
+T['the watch']['is one live watch after two <Tab>s typed before the first is handled'] = function()
+  child.lua(COUNT_WATCHES)
+  open_with_projects('projects-pane-two-tabs', { 'notes-api', 'site-docs' })
+  git_repo.wait_until('the session’s project is watched', function()
+    return child.lua_get('_G.watches.started') == 1
+  end)
+  projects.enter_commits_window(child)
+
+  child.lua([[vim.api.nvim_feedkeys(vim.keycode('<Tab><Tab>'), 'x', false)]])
+  vim.wait(projects.QUIET_MS)
+
+  eq(child.lua_get('_G.watches.started - _G.watches.stopped'), 1)
+end
+
 return T

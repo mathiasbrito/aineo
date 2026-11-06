@@ -44,8 +44,9 @@ local function open_with_a_second_project(name)
   projects.edit(transcript, vim.fs.joinpath(other, 'src/edited.lua'))
   projects.wait_until('notes-api is a project of the tab', function()
     return child.lua_get(
-      [[#require('aineo.entry.projects').folders(require('aineo.entry.registry').tab_list[1]) ]]
-    ) >= 2
+      [[vim.tbl_contains(require('aineo.entry.projects').folders(require('aineo.entry.registry').tab_list[1]), ...)]],
+      { vim.uv.fs_realpath(other) }
+    )
   end)
   return { main = main, other = other, token = claude_session.start_token(fake, 1) }
 end
@@ -204,12 +205,25 @@ T['a plan over two repositories']['is refused for a file of a repository that is
   eq(answer.is_error, true)
   eq(
     answer.text:find(
-      'call announce_work for its checkout first, also for code you only read',
+      'call announce_work for its checkout with the branch checked out there first, also for code you only read',
       1,
       true
     ) ~= nil,
     true
   )
+end
+
+T['a plan over two repositories']['is refused for a file in no repository without advice to report it'] = function()
+  local here = open_with_a_second_project('projects-walk-no-repository')
+  local folder = vim.fs.joinpath(vim.fs.dirname(here.main), 'plain-folder')
+  vim.fn.mkdir(folder, 'p')
+  vim.fn.writefile({ 'x' }, vim.fs.joinpath(folder, 'x.lua'))
+
+  local answer = offer('receive_walkthrough_plan', here.token, plan_over({ folder .. '/x.lua' }))
+
+  eq(answer.is_error, true)
+  eq(answer.text:find('is in no git repository, so aineo cannot show it', 1, true) ~= nil, true)
+  eq(answer.text:find('announce_work', 1, true), nil)
 end
 
 T['a step in the second repository'] = MiniTest.new_set()
@@ -273,7 +287,7 @@ T['moving across the repositories']['goes on to a step in the second with Enter 
   eq(writes_after_waiting_for(1), { paste('Go to walkthrough step 2') })
 end
 
-T['moving across the repositories']['asks for the next and the previous step with \\vn and \\vp from a step in the second'] = function()
+T['moving across the repositories']['asks for the previous step with \\vp from a step in the second'] = function()
   local here = open_with_a_second_project('projects-walk-keys')
   offer('receive_walkthrough_plan', here.token, plan_across(here))
   offer(
@@ -308,6 +322,57 @@ T['moving across the repositories']['shows the step in the first after the one i
   eq(answer.is_error, false)
   eq(lines_in('aineo_explain_walk', first), { 2 })
   eq(lines_in('aineo_explain_walk', second), {})
+end
+
+T['a plan over two repositories']['names a project with the name its tab shows, the parent folder added when two are alike'] = function()
+  local main = projects.repository('projects-walk-same-a', 'app', { ['src/main.lua'] = CODE })
+  local other = projects.repository('projects-walk-same-b', 'app', { ['src/code.lua'] = CODE })
+  local fake, session = projects.open_in(child, 'projects-walk-same', main)
+  projects.edit(projects.name_transcript(child, session), vim.fs.joinpath(other, 'src/code.lua'))
+  projects.wait_until('the second app is a project of the tab', function()
+    return child.lua_get(
+      [[vim.tbl_contains(require('aineo.entry.projects').folders(require('aineo.entry.registry').tab_list[1]), ...)]],
+      { vim.uv.fs_realpath(other) }
+    )
+  end)
+
+  offer(
+    'receive_walkthrough_plan',
+    claude_session.start_token(fake, 1),
+    plan_over({ vim.fs.joinpath(other, 'src/code.lua') })
+  )
+
+  eq(pane_has('git-projects-walk-same-b-app/app: src/code.lua'), true)
+end
+
+T['moving across the repositories']['asks for the next step with \\vn from a step in the first repository'] = function()
+  local here = open_with_a_second_project('projects-walk-next')
+  offer('receive_walkthrough_plan', here.token, plan_across(here))
+  offer(
+    'receive_walkthrough_step',
+    here.token,
+    walkthrough_session.step_for(here.main, 'src/main.lua', 1)
+  )
+  send.watch_writes(child)
+
+  entry.press(child, '\\vn')
+
+  eq(writes_after_waiting_for(1), { paste('Next walkthrough step') })
+end
+
+T['moving across the repositories']['asks for the next step with \\vn from a step in the second repository'] = function()
+  local here = open_with_a_second_project('projects-walk-next-second')
+  offer('receive_walkthrough_plan', here.token, plan_across(here))
+  offer(
+    'receive_walkthrough_step',
+    here.token,
+    walkthrough_session.step_for(here.other, 'src/code.lua', 2)
+  )
+  send.watch_writes(child)
+
+  entry.press(child, '\\vn')
+
+  eq(writes_after_waiting_for(1), { paste('Next walkthrough step') })
 end
 
 return T

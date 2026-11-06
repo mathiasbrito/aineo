@@ -16,9 +16,11 @@ local editor_handlers_made = false
 
 --- How long the editor waits for a report's branches to be resolved before
 --- it refuses the announcement: above the limit the changes home gives git
---- for each run, so that git's own answer comes first, and inside the 5 s
---- the report server waits for the editor.
-local BASE_WAIT_MS = 4000
+--- for each run, so that git's own answer comes first. With the 1.5 s the
+--- report may wait to find the checkout of its folder
+--- (`aineo.entry.projects`' `home_for_report()`) it keeps inside the 5 s the
+--- report server waits for the editor, at 4.5 s.
+local BASE_WAIT_MS = 3000
 
 --- `work` with each branch checked to be a local branch and its base
 --- resolved to its full id, in the worktree's own folder, else in the

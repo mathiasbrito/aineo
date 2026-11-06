@@ -38,7 +38,7 @@ end
 ---
 ---@param projects aineo.projects.Project[]
 ---@return string[]
-local function names_of(projects)
+function M.names_of(projects)
   local seen = {}
   for _, project in ipairs(projects) do
     local name = folder_name(project.top)
@@ -71,7 +71,7 @@ function M.tab_line(projects, chosen_key, counts)
   if #projects < FEWEST_FOR_A_LINE then
     return ''
   end
-  local names = names_of(projects)
+  local names = M.names_of(projects)
   local tabs = {}
   for position, project in ipairs(projects) do
     local group = project.key == chosen_key and M.CHOSEN_GROUP or M.OTHER_GROUP

@@ -64,6 +64,16 @@ Pure units (`edits`, `list`, `tab_line`, `kept`, `checkouts`) and the home, layo
 - Counts of a project not shown are read after an edit the transcript shows (700 ms) and when its home hears of a change; an edit made through a shell command leaves its count as it was until the project is shown.
 - The tests' Edit/Write/NotebookEdit lines are the recorded `Bash` line of the 2.1.308 recording with the tool's name and input replaced; no recording of an `Edit` call exists yet.
 
+## Fix round — review404 (A712)
+
+All sixteen rulings, each test first. Seen red before its code: the order of edits (`test_entry_projects_join`, with `find_repository` delayed for the first repository), the hidden-pane line of tabs, the single-project count reads, the checkouts memo and `lookup_checkout` (`test_projects_checkouts`), the report cases (no branch, gone folder, folder inside a checkout, main checkout replacing a gone worktree, a step after the worktree is gone), the refusal and tool texts, `retop` and `names`, the pending-showing watch and the `move`/`copy` of kept session files (`test_changes_project_home`), the poller (`test_transcript_poll`), and the `<project>: <path>` names. Written after their code, so pinned by mutant instead (each killed by assertion): `session_continued` (11), the hand-over of an unfollowed session (12), `fork_of` in `tab.lua` (16), `poll_ms` (6), `:Aineo diff close` and `\g` on the chosen home (7), `shown = false` in `stop_watching()` (10, two cases), the tab line's name (13), the hidden-pane bar (5), the single-project guard (6), `take_live_checkout` (2), serial edits (1), the report to a held project (4).
+
+Finding 1: `tests/test_entry_projects_pane.lua` run five times after it, 5 of 5 green.
+
+Decisions within A712, none ruled on by the user: a poller shared by the file's and the subagents' watches (`aineo.transcript.watching`'s `new_poller()`, `poll_ms` on `follow()`), the office's followers unchanged; the checkout lookup for a report is `lookup_checkout()` (the folder must exist and be the top of the checkout it is in); a refused ninth project in a report is words for the agent; the follower's restart on `session_continued` re-resolves the continuation as the office does; `aineo.changes` gains `move_kept_session()` and `copy_kept_session()` for sessions no home follows; a fork is told by `on_session_switched`'s source `fork`; `BASE_WAIT_MS` is 3000 (was 4000) so the two waits add to 4.5 s.
+
+Not re-run: the 16-minute whole suite is run once on the tree pushed (see the pull request).
+
 ## Commits
 
 *Recorded after the merge.*

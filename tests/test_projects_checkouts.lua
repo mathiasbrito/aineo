@@ -47,7 +47,7 @@ end
 ---
 ---@param checkouts aineo.projects.Checkouts
 ---@param path string
----@param method? 'lookup'|'lookup_folder' `'lookup'` when not given
+---@param method? 'lookup'|'lookup_folder'|'lookup_checkout' `'lookup'` when not given
 ---@return aineo.projects.Project|nil
 local function looked_up(checkouts, path, method)
   local answered, project = false, nil
@@ -109,15 +109,59 @@ T['a lookup']['asks git once for a folder however many files of it are looked up
   eq(asked, { top })
 end
 
-T['a lookup']['remembers a folder that is in no repository'] = function()
+--- A clock a case moves by hand, in milliseconds.
+---
+---@return fun(): integer now
+---@return fun(milliseconds: integer) advance
+local function hand_clock()
+  local now = 1000
+  return function()
+    return now
+  end, function(milliseconds)
+    now = now + milliseconds
+  end
+end
+
+T['a lookup']['remembers a folder that is in no repository for a while'] = function()
   local folder = fixture.directory('projects_checkouts_remembered_none')
   local find, asked = fake_find({})
-  local checkouts = projects.new_checkouts(find)
+  local now, advance = hand_clock()
+  local checkouts = projects.new_checkouts(find, now)
 
   looked_up(checkouts, vim.fs.joinpath(folder, 'a.lua'))
+  advance(29000)
   looked_up(checkouts, vim.fs.joinpath(folder, 'b.lua'))
 
   eq(asked, { folder })
+end
+
+T['a lookup']['asks again for a folder that was in no repository once 30 seconds have passed'] = function()
+  local folder = fixture.directory('projects_checkouts_forgotten_none')
+  local repositories = {}
+  local find, asked = fake_find(repositories)
+  local now, advance = hand_clock()
+  local checkouts = projects.new_checkouts(find, now)
+  looked_up(checkouts, vim.fs.joinpath(folder, 'a.lua'))
+  repositories[folder] = repository_at(folder, folder .. '/.git')
+
+  advance(30000)
+  local project = looked_up(checkouts, vim.fs.joinpath(folder, 'b.lua'))
+
+  eq(asked, { folder, folder })
+  eq(project, { key = folder .. '/.git', top = folder })
+end
+
+T['a lookup']['remembers a repository found, however long ago'] = function()
+  local top = fixture.directory('projects_checkouts_remembered_found')
+  local find, asked = fake_find({ [top] = repository_at(top, top .. '/.git') })
+  local now, advance = hand_clock()
+  local checkouts = projects.new_checkouts(find, now)
+  looked_up(checkouts, vim.fs.joinpath(top, 'a.lua'))
+
+  advance(3600000)
+  looked_up(checkouts, vim.fs.joinpath(top, 'b.lua'))
+
+  eq(asked, { top })
 end
 
 T['a lookup']['asks git once for a folder when files of it are looked up before the first answer'] = function()
@@ -204,6 +248,54 @@ T['a lookup of a folder']['asks in the nearest folder above it that exists when 
   looked_up(checkouts, vim.fs.joinpath(top, 'removed-worktree'), 'lookup_folder')
 
   eq(asked, { top })
+end
+
+T['a lookup of a checkout'] = MiniTest.new_set()
+
+T['a lookup of a checkout']['answers the project when the folder is the top of a checkout'] = function()
+  local top = fixture.directory('projects_checkouts_checkout')
+  local find = fake_find({ [top] = repository_at(vim.uv.fs_realpath(top), top .. '/.git') })
+  local checkouts = projects.new_checkouts(find)
+
+  local project = looked_up(checkouts, top, 'lookup_checkout')
+
+  eq(project, { key = top .. '/.git', top = vim.uv.fs_realpath(top) })
+end
+
+T['a lookup of a checkout']['answers nil for a folder that is not there, without walking up'] = function()
+  local top = fixture.directory('projects_checkouts_checkout_gone')
+  local find, asked = fake_find({ [top] = repository_at(top, top .. '/.git') })
+  local checkouts = projects.new_checkouts(find)
+
+  local project = looked_up(checkouts, vim.fs.joinpath(top, 'removed'), 'lookup_checkout')
+
+  eq(project, nil)
+  eq(asked, {})
+end
+
+T['a lookup of a checkout']['answers nil for a folder inside a checkout that is not its top'] = function()
+  local top = fixture.directory('projects_checkouts_checkout_inside')
+  vim.fn.mkdir(vim.fs.joinpath(top, 'src'), 'p')
+  local inside = vim.fs.joinpath(top, 'src')
+  local find = fake_find({ [inside] = repository_at(vim.uv.fs_realpath(top), top .. '/.git') })
+  local checkouts = projects.new_checkouts(find)
+
+  eq(looked_up(checkouts, inside, 'lookup_checkout'), nil)
+end
+
+T['a lookup of a checkout']['asks again for a folder remembered to be in no repository'] = function()
+  local top = fixture.directory('projects_checkouts_checkout_again')
+  local repositories = {}
+  local find, asked = fake_find(repositories)
+  local now = hand_clock()
+  local checkouts = projects.new_checkouts(find, now)
+  looked_up(checkouts, vim.fs.joinpath(top, 'a.lua'))
+  repositories[top] = repository_at(vim.uv.fs_realpath(top), top .. '/.git')
+
+  local project = looked_up(checkouts, top, 'lookup_checkout')
+
+  eq(asked, { top, top })
+  eq(project, { key = top .. '/.git', top = vim.uv.fs_realpath(top) })
 end
 
 return T
