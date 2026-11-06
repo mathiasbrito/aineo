@@ -1737,6 +1737,30 @@ local function make_layout(input_name, group_name)
     state.buffers[PANE_BUFFERS[pane].report] = buffer
   end
 
+  --- Hands the layout `changes`, the buffers the changes pane shows from now
+  --- on in place of those it was handed: shown in place in the pane's two
+  --- windows at once while the changes pane is the pane shown, each buffer
+  --- leaving keeping its view for when it is shown again
+  --- (`show_in_place()`); otherwise the next showing of the pane shows them.
+  --- Opens, resizes and moves nothing, and the cursor stays in the window it
+  --- was in.
+  ---
+  --- Raises an error naming `changes.files` or `changes.commits` when it is
+  --- no existing buffer, before anything changes, and what a window raises as
+  --- it is given its buffer.
+  ---
+  ---@param changes aineo.layout.ChangesPane
+  function M.replace_changes_pane(changes)
+    vim.validate('changes', changes, 'table')
+    vim.validate('changes.files', changes.files, is_buffer, false, 'a buffer')
+    vim.validate('changes.commits', changes.commits, is_buffer, false, 'a buffer')
+    state.buffers.files = changes.files
+    state.buffers.commits = changes.commits
+    if state.pane == 'changes' then
+      show_buffers_of('changes')
+    end
+  end
+
   --- Whether the layout can show `pane` in place now, opening nothing: the
   --- windows of the right column it shows exist, and the buffers it shows in
   --- them were handed and are loaded (`can_show_in_place()`).

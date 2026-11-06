@@ -10,6 +10,7 @@ local editors = require('aineo.mcp.editors')
 local names = require('aineo.mcp.names')
 local processes = require('aineo.mcp.processes')
 local walkthrough_tool = require('aineo.mcp.walkthrough_tool')
+local work_tool = require('aineo.mcp.work')
 
 local M = {}
 
@@ -153,11 +154,14 @@ function M.walkthrough_instructions()
     .. " and changes it goes through, and its `steps`; the user's walkthrough pane shows it."
     .. ' Then call `%s` to show a step: it opens a file in the middle window with an explanation'
     .. ' above the lines it is about, and needs no approval. %s %s'
+    .. " A file of a repository other than the session's is shown only once you have called `%s`"
+    .. ' for its checkout, also for code you only read and want to explain.'
   ):format(
     M.walkthrough_plan_tool_name(),
     M.walkthrough_tool_name(),
     walkthrough_tool.PACE,
-    walkthrough_tool.PLAN_ORDER
+    walkthrough_tool.PLAN_ORDER,
+    M.announce_tool_name()
   )
 end
 
@@ -210,6 +214,7 @@ function M.announce_instructions()
     .. " branches you are working on there changes, with the absolute path of the worktree's"
     .. ' folder, a short label,'
     .. ' and every branch you are working on there with the commit it was created from.'
+    .. work_tool.OTHER_REPOSITORY_RULE
     .. ' It only informs aineo: if it refuses, correct the call as the refusal says and call again;'
     .. ' otherwise do not act on its reply.'
   ):format(M.announce_tool_name())
