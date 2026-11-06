@@ -20,6 +20,7 @@ M.move_kept = kept.move_kept
 M.kept_file = kept.kept_file
 M.followed_id = kept.followed_id
 M.tab_line = tab_line.tab_line
+M.names = tab_line.names_of
 M.CHOSEN_GROUP = tab_line.CHOSEN_GROUP
 M.OTHER_GROUP = tab_line.OTHER_GROUP
 M.edited_path = edits.edited_path

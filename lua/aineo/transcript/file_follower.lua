@@ -79,6 +79,7 @@ end
 ---@field agent string 'main', or the id of the subagent whose transcript the file is
 ---@field on_signal fun(signal: aineo.transcript.Signal) called for each signal, with the editor's API usable
 ---@field on_unreadable_line? fun(length: integer) called with the length in bytes of each line that is not JSON or is too long, never with its text
+---@field poller? aineo.transcript.Poller what looks for a file that is not there, in place of a timer of its own
 ---@field replay_existing? boolean whether to replay the tail of a file that exists already, as the past (the default), or to read all of it as news
 
 ---@class aineo.transcript.Follower
@@ -286,7 +287,7 @@ function M.follow_file(options)
     end
   end
 
-  local watch = watching.watch(options.path, read_appended)
+  local watch = watching.watch(options.path, read_appended, options.poller)
 
   return {
     read_to_end = function()

@@ -20,6 +20,7 @@ M.MOST = 8
 ---@field has fun(key: string): boolean whether a project of the repository `key` names is held
 ---@field join fun(project: aineo.projects.Project): 'joined'|'known'|'full' takes `project` after the others, the chosen one unchanged; `'known'` when its repository is held already, `'full'` when `M.MOST` projects are held
 ---@field close fun(key: string): boolean drops the project of the repository `key` names unless it is the session's; whether it did; the project before it is chosen when it was the chosen one
+---@field retop fun(key: string, top: string): boolean takes another checkout, at `top`, for the project of the repository `key` names, its place, its joining and whether it is chosen unchanged; whether it did: never for the session's project, nor for one it does not hold
 ---@field choose fun(key: string): boolean chooses the project of the repository `key` names; whether it holds one
 ---@field choose_next fun() chooses the project after the chosen one, the first after the last
 ---@field choose_previous fun() chooses the project before the chosen one, the last before the first
@@ -94,6 +95,15 @@ function M.new_list(session_project, kept)
     elseif chosen_position > position then
       chosen_position = chosen_position - 1
     end
+    return true
+  end
+
+  function list.retop(key, top)
+    local position = position_of(key)
+    if not position or position == 1 then
+      return false
+    end
+    held[position].top = top
     return true
   end
 

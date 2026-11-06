@@ -1502,16 +1502,35 @@ linked worktrees of one repository are one project. A repository joins when
  - the session's transcript, its subagents' included, shows a call of
    `Edit`, `Write` or `NotebookEdit` on a file whose absolute path is in a
    checkout of it (files only read do not count, nor do changes made through
-   a shell command), or
+   a shell command); the calls are taken in the order the transcript tells
+   them, so that projects join in the order they were edited, or
  - an agent reports a worktree of it that lists at least one branch
    (|aineo-changes-reported|): a report of a checkout of another repository
    is validated and read in that repository, from the bases it gives, and
-   goes to that project's Reported section. A report that lists no branch
-   adds no project. A folder that is a checkout of no repository stays what
-   it was: looked for, and said once not to be listed.
+   goes to that project's Reported section. The folder must be there and be
+   the top of a checkout. A report that lists no branch adds no project:
+   for a checkout of a repository that is not a project of the tab it is
+   refused, saying a branch must be listed (`announce_work` never answers
+   `ok` for a checkout of another repository that joined nothing), and for a
+   project of the tab it goes to that project's home, so that "none once you
+   are done with it" empties its Reported section. A folder that is a
+   checkout of no repository stays what it was: looked for, and said once
+   not to be listed.
 A transcript is followed for edits from the moment the tab follows the
 session; what it already held then does not join anything, since the
-projects kept for the session already hold it.
+projects kept for the session already hold it. When it says Claude Code went
+on in another session, the follower goes on in that one, as the office does.
+It looks for a transcript, or a folder of subagents, that is not there yet no
+oftener than every 2 seconds, with one timer.
+What aineo learnt of a folder is kept for the tab: a repository found for
+good, a folder found in no repository (or git failing there) for 30 seconds;
+a report always asks again.
+A project is its repository: the folders a walkthrough may show files of
+(|aineo-walkthrough|) are its checkout, the main checkout of its repository
+and the worktrees reported in it that git still lists, so that the project
+outlives the worktree it was first met in; a live checkout met by an edit or
+a report takes the place of one that is gone, the project keeping its place
+and its base.
 Each project has the whole changes pane (|aineo-changes|) of its own:
 Uncommitted, Session work, commits, Reported, files and diffs. A project
 other than the session's has as its base `HEAD` when it joined, which the
@@ -1523,7 +1542,8 @@ commits: ` name count ` for each project, the count the files of its
 Session work and the name its checkout folder's, with the parent folder's
 before it when two have the same. The tab of the project shown is drawn in
 `AineoChangesProjectChosen` and the others in `AineoChangesProject`, linked
-by default to `TabLineSel` and `TabLine`. In both windows of the pane:
+by default to `TabLineSel` and `TabLine`. In both windows of the pane
+(`<Tab>` there is not the jump list's `CTRL-I`):
     `<Tab>`      shows the next project, the first after the last
     `<S-Tab>`    shows the previous one, the last before the first
     `X`          closes the project shown, unless it is the session's; the
@@ -1533,11 +1553,17 @@ As a project joins, aineo says "aineo: Claude Code changed <name>; it's now
 a tab in \g" (or "reported work in <name>" for a report), naming the key
 of the changes pane (|<Plug>(aineo-pane-changes)|); the view and the cursor
 stay.
+`:Aineo diff close` and `\g` in the pane act on the project shown.
 The projects are kept for the Claude Code session, with each project's base,
 under the editor's state directory: a resumed session has them back, a
 session switch shows that session's, and `/clear` begins with the session's
-repository alone. A walkthrough (|aineo-walkthrough|) may show any file of a
-project's checkout, changed or not, while the project is in the tab.
+repository alone. A fork of a session (a background copy of the conversation)
+carries the projects of the session it forks, and their bases, as a resume
+does; the transcript of a fork holds its history, which joins nothing. When
+Claude Code finds no conversation for a session it resumes and starts a new
+one in its place, the projects, and their bases, are the new session's. A
+walkthrough (|aineo-walkthrough|) may show any file of a project's checkout,
+changed or not, while the project is in the tab.
 
                                                    *aineo-changes-reported*
 Claude Code and its subagents tell aineo, through aineo's tool
@@ -2539,11 +2565,13 @@ checkout, as the test layout guards the paths an agent gives it
 (|aineo-test-layout|).
 A branch no worktree has checked out has no file on disk: walk through
 checked-out work. A file of another repository than the session's is refused
-until the agent has called `announce_work` for its checkout, also for code it
-only reads and wants to explain: the refusal, the descriptions of the
-walkthrough tools and the instructions appended to the system prompt say so.
+until the agent has called `announce_work` for its checkout with the branch
+checked out there, also for code it only reads and wants to explain: the
+refusal, the descriptions of the walkthrough tools and the instructions
+appended to the system prompt say so.
 In the pane a plan shows, a step's file of a project other than the session's
-reads `<project>: <path>`. One plan may mix projects.
+reads `<project>: <path>`, the project named as its tab is. One plan may mix
+projects. A file in no git repository is refused without that advice.
 A step is refused in a turn of the agent in which it showed one already: aineo
 tells a turn by the tab's Claude Code being seen working, so with an agent
 never seen working two steps may show. The instructions appended to the system
@@ -4936,26 +4964,32 @@ calls before reported: an agent with several worktrees calls once for
 each. The server offers it to the editor that started Claude Code alone,
 with the token of that start; the tab checks each branch is a local branch and
 resolves its base to a full id in the worktree's folder, else in its
-session's repository (|aineo-changes-reported|), waiting at most 4 seconds
-for git. The tool only informs, and answers one of four things, nothing
-more: `ok` when a tab took it; `not taken`, as an error, when none did — no
-tab of that editor runs this Claude Code, the editor cannot be reached or
-does not answer within 5 seconds, or that tab already waits for 32 other
-folders git does not list yet (|aineo-changes-reported|); `aineo refused the
-announcement: branches[<n>].base: <base> names no commit in <folder>`,
-followed by `, nor in <repository>` when the worktree's folder was tried
-first, or `aineo refused the announcement: branches[<n>].name: <name> is no
-local branch in <folder>`, as an error, and nothing is recorded; or `aineo
-refused the announcement: ` and the field, as an error, for arguments it
-refuses. The paragraph appended to the system prompt reads "Required for
-every agent and subagent: call `mcp__aineo__announce_work` once per
-worktree you work in, right after you create the worktree or a branch in
-it, and again whenever the set of branches you are working on there
-changes, with the absolute path of the worktree's folder, a short label,
-and every branch you are working on there with the commit it was created
-from. It only informs
-aineo: if it refuses, correct the call as the refusal says and call again;
-otherwise do not act on its reply."
+session's repository (|aineo-changes-reported|), waiting at most 3 seconds
+for git, and at most 1.5 more to find the checkout of the folder
+(|aineo-changes-projects|). The tool only informs, and answers one of four
+things, nothing more: `ok` when a tab took it; `not taken`, as an error, when
+none did — no tab of that editor runs this Claude Code, the editor cannot be
+reached or does not answer within 5 seconds, or that tab already waits for 32
+other folders git does not list yet (|aineo-changes-reported|); `aineo
+refused the announcement: branches[<n>].base: <base> names no commit in
+<folder>`, followed by `, nor in <repository>` when the worktree's folder was
+tried first, or `aineo refused the announcement: branches[<n>].name: <name>
+is no local branch in <folder>`, as an error, and nothing is recorded; `aineo
+refused the announcement: branches: list the branch checked out in <folder> to
+make its repository a project of this tab`, as an error, for a report that
+lists no branch of a checkout of a repository the tab does not hold
+(|aineo-changes-projects|); or `aineo refused the announcement: ` and the
+field, as an error, for arguments it refuses. The paragraph appended to the
+system prompt reads "Required for every agent and subagent: call
+`mcp__aineo__announce_work` once per worktree you work in, right after you
+create the worktree or a branch in it, and again whenever the set of branches
+you are working on there changes, with the absolute path of the worktree's
+folder, a short label, and every branch you are working on there with the
+commit it was created from. Before your first change in a repository other
+than the session's, call it for that checkout's absolute folder, with a label
+and the branch checked out there with its current commit as base. It only
+informs aineo: if it refuses, correct the call as the refusal says and call
+again; otherwise do not act on its reply."
 The server and the hooks are given this editor's address, |v:servername|,
 and a token of this start of Claude Code; the hooks are also given the
 directory Claude Code runs in and its process id, which the shell that runs

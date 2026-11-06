@@ -3,6 +3,7 @@ local claude_session = dofile('tests/helpers/claude_session.lua')
 local entry = dofile('tests/helpers/entry.lua')
 local git_repo = dofile('tests/helpers/git_repo.lua')
 local projects = dofile('tests/helpers/projects_session.lua')
+local walkthrough_session = dofile('tests/helpers/walkthrough_session.lua')
 
 local eq = MiniTest.expect.equality
 
@@ -160,13 +161,107 @@ T['a report']['of a checkout of another repository leaves the view and the curso
   eq(child.lua_get([[{ vim.api.nvim_get_current_buf(), vim.api.nvim_win_get_cursor(0) }]]), before)
 end
 
-T['a report']['listing no branch adds no project'] = function()
+T['a report']['listing no branch, for a checkout of a repository that is no project, is refused saying a branch must be listed'] = function()
   local here = open_with_a_worktree_of_another_repository('projects-report-no-branch')
+
+  local answer = announce(report_for(here.worktree, {}), here.token)
+
+  eq(type(answer), 'string')
+  eq(answer:find('list the branch checked out', 1, true) ~= nil, true)
+  eq(tab_line_after_a_while(), '')
+end
+
+T['a report']['listing no branch, for a folder that is gone, is taken and adds no project'] = function()
+  local here = open_with_a_worktree_of_another_repository('projects-report-gone')
+  git_repo.git(here.other, { 'worktree', 'remove', '--force', here.worktree })
 
   local answer = announce(report_for(here.worktree, {}), here.token)
 
   eq(answer, true)
   eq(tab_line_after_a_while(), '')
+end
+
+T['a report']['listing no branch, for a project of the tab, empties that project’s Reported section'] = function()
+  local here = open_with_a_worktree_of_another_repository('projects-report-done')
+  announce(report_for(here.worktree, { { name = 'feature', base = 'HEAD~1' } }), here.token)
+  projects.show_changes_pane(child)
+  projects.wait_until('the project has its tab', function()
+    return (projects.tab_line(child) or ''):find('notes-feature', 1, true) ~= nil
+  end)
+  projects.enter_commits_window(child)
+  child.type_keys('<Tab>')
+  projects.wait_until('the project lists the report', function()
+    return vim.iter(projects.commits_lines(child)):any(function(line)
+      return line:find('T166', 1, true) ~= nil
+    end)
+  end)
+
+  local answer = announce(report_for(here.worktree, {}), here.token)
+
+  eq(answer, true)
+  projects.wait_until('the project’s Reported section is empty', function()
+    return not vim.iter(projects.commits_lines(child)):any(function(line)
+      return line:find('T166', 1, true) ~= nil
+    end)
+  end)
+end
+
+T['a report']['of a folder that is not there joins no repository above it'] = function()
+  local here = open_with_a_worktree_of_another_repository('projects-report-missing')
+
+  announce(
+    report_for(vim.fs.joinpath(here.other, 'not-made-yet'), { { name = 'main', base = 'HEAD' } }),
+    here.token
+  )
+
+  eq(tab_line_after_a_while(), '')
+end
+
+T['a report']['of a folder inside a checkout, not its top, joins nothing'] = function()
+  local here = open_with_a_worktree_of_another_repository('projects-report-inside')
+  vim.fn.mkdir(vim.fs.joinpath(here.other, 'src'), 'p')
+
+  announce(
+    report_for(vim.fs.joinpath(here.other, 'src'), { { name = 'main', base = 'HEAD' } }),
+    here.token
+  )
+
+  eq(tab_line_after_a_while(), '')
+end
+
+T['a report']['of the main checkout takes the place of a worktree of the project that is gone'] = function()
+  local here = open_with_a_worktree_of_another_repository('projects-report-retop')
+  announce(report_for(here.worktree, { { name = 'feature', base = 'HEAD~1' } }), here.token)
+  projects.show_changes_pane(child)
+  projects.wait_until('the project has its tab', function()
+    return projects.tab_line(child) == CHOSEN .. ' aineo 0 %* ' .. OTHER .. ' notes-feature 0 %*'
+  end)
+  git_repo.git(here.other, { 'worktree', 'remove', '--force', here.worktree })
+
+  announce(report_for(here.other, { { name = 'main', base = 'HEAD' } }), here.token)
+
+  projects.wait_until('the project is the main checkout', function()
+    return projects.tab_line(child) == CHOSEN .. ' aineo 0 %* ' .. OTHER .. ' notes-api 0 %*'
+  end)
+end
+
+T['a report']['of a worktree of a project, once it is gone, leaves the repository’s files open to a walkthrough'] = function()
+  local here = open_with_a_worktree_of_another_repository('projects-report-reachable')
+  announce(report_for(here.worktree, { { name = 'feature', base = 'HEAD~1' } }), here.token)
+  projects.wait_until('the project has its tab', function()
+    return was_told('reported work in notes-feature')
+  end)
+  git_repo.git(here.other, { 'worktree', 'remove', '--force', here.worktree })
+
+  local answer = walkthrough_session.offer(child, 'receive_walkthrough_step', here.token, {
+    file = vim.fs.joinpath(here.other, 'search.py'),
+    title = 'The search',
+    step = 1,
+    total = 1,
+    ranges = { { start = 1, ['end'] = 1, text = 'One line.' } },
+  })
+
+  eq(answer.is_error, false)
 end
 
 T['a report']['of a checkout of the session’s own repository adds no project'] = function()
@@ -212,6 +307,28 @@ T['a report']['of a project already in the tab adds no second tab and no second 
   eq(#vim.tbl_filter(function(message)
     return message:find('reported work in notes-feature', 1, true) ~= nil
   end, told()), 1)
+end
+
+T['a report']['whose checkout is not found in 1.5 seconds is taken by the session’s home, the whole answer in under 4.5'] = function()
+  local here = open_with_a_worktree_of_another_repository('projects-report-slow-lookup')
+  child.lua([[
+    local realpath = vim.uv.fs_realpath
+    vim.uv.fs_realpath = function(path, callback)
+      if callback and path:find('notes-feature', 1, true) then
+        return
+      end
+      return realpath(path, callback)
+    end
+  ]])
+  local started = vim.uv.hrtime()
+
+  local answer =
+    announce(report_for(here.worktree, { { name = 'main', base = 'HEAD' } }), here.token)
+
+  local elapsed_ms = (vim.uv.hrtime() - started) / 1e6
+  eq(answer, true)
+  eq(elapsed_ms >= 1400 and elapsed_ms < 4500, true)
+  eq(tab_line_after_a_while(), '')
 end
 
 return T

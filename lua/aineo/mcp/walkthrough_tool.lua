@@ -30,8 +30,8 @@ M.PACE = 'Show one step per call, only after the user asks to move; never two st
 function M.announce_first(verb)
   return "A file of a repository other than the session's is "
     .. verb
-    .. ' only once you have called announce_work for its checkout,'
-    .. ' also for code you only read and want to explain.'
+    .. ' only once you have called announce_work for its checkout with the branch checked out'
+    .. ' there, also for code you only read and want to explain.'
 end
 
 --- What the tool says of itself.

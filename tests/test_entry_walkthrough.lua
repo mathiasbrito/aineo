@@ -455,7 +455,7 @@ T['a step']['is refused for a file of a repository the editor does not have open
   local answer = walk(token, step_for('src/code.lua', { file = other .. '/a.lua' }))
 
   eq(answer, {
-    text = ('refused: file: %s/a.lua is in no repository the editor has open; call announce_work for its checkout first, also for code you only read'):format(
+    text = ('refused: file: %s/a.lua is in no repository the editor has open; call announce_work for its checkout with the branch checked out there first, also for code you only read'):format(
       other
     ),
     is_error = true,

@@ -201,4 +201,23 @@ T['a list']['leaves out of the kept projects the session’s, repeats and what t
   eq(list.entries()[2].top, '/work/b')
 end
 
+T['a list']['takes another checkout for a project, its place, its joining and the chosen project unchanged'] = function()
+  local joined = { key = '/work/b/.git', top = '/work/b', joined = 77 }
+  local list = projects.new_list(project('a'), { joined })
+  list.choose(joined.key)
+
+  eq(list.retop(joined.key, '/work/b-main'), true)
+
+  eq(list.entries()[2], { key = '/work/b/.git', top = '/work/b-main', joined = 77 })
+  eq(list.chosen().top, '/work/b-main')
+end
+
+T['a list']['does not take another checkout for the session’s project, nor for one it does not hold'] = function()
+  local list = projects.new_list(project('a'))
+
+  eq(list.retop(project('a').key, '/elsewhere'), false)
+  eq(list.retop('/nowhere/.git', '/elsewhere'), false)
+  eq(list.entries()[1].top, '/work/a')
+end
+
 return T

@@ -4423,12 +4423,15 @@ function M.new(label)
   end
 
   --- Stops the watch of the repository and that of the worktree whose
-  --- *Uncommitted* is chosen, when they run; the next showing of the pane
-  --- starts them again (`follow_repository()`).
+  --- *Uncommitted* is chosen, when they run, and notes that the pane is no
+  --- longer shown, so that a showing already asked for (`pane_shown()`) starts
+  --- no watch; the next showing of the pane starts them again
+  --- (`follow_repository()`).
   function home.stop_watching()
     if not session then
       return
     end
+    session.shown = false
     if session.watch then
       session.watch.stop()
       session.watch = nil
