@@ -20,13 +20,15 @@ local RECORDED_CALL = vim
 ---@param tool string
 ---@param input table
 ---@param number integer
+---@param stamped? string the time the line is stamped with, as Claude Code writes it; now when not given
 ---@return string line
-function M.call(tool, input, number)
+function M.call(tool, input, number, stamped)
   local record = vim.json.decode(RECORDED_CALL)
   local block = record.message.content[1]
   block.id = 'toolu_edit' .. number
   block.name = tool
   block.input = input
+  record.timestamp = stamped or os.date('!%Y-%m-%dT%H:%M:%S.000Z')
   return vim.json.encode(record)
 end
 

@@ -389,4 +389,29 @@ T['the watch']['is one live watch after two <Tab>s typed before the first is han
   eq(child.lua_get('_G.watches.started - _G.watches.stopped'), 1)
 end
 
+T['the actions of the pane']['`:Aineo diff close` closes a diff of a project that is no longer shown'] = function()
+  local here = open_with_projects('projects-pane-diff-close-away', { 'notes-api' })
+  git_repo.write(here.others[1], 'f.txt', { 'two' })
+  projects.enter_commits_window(child)
+  child.type_keys('<Tab>')
+  projects.wait_until('the project lists its changed file', function()
+    return (projects.files_lines(child)[3] or ''):find('f.txt', 1, true) ~= nil
+  end)
+  projects.enter_files_window(child)
+  child.lua('vim.api.nvim_win_set_cursor(0, { 3, 0 })')
+  local windows_before = #entry.windows(child)
+  child.type_keys('<CR>')
+  projects.wait_until('a diff is open', function()
+    return #entry.windows(child) > windows_before
+  end)
+  projects.enter_commits_window(child)
+  child.type_keys('<S-Tab>')
+
+  entry.command(child, 'Aineo diff close')
+
+  projects.wait_until('the diff is closed', function()
+    return #entry.windows(child) == windows_before
+  end)
+end
+
 return T

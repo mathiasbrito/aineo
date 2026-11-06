@@ -384,6 +384,21 @@ T['in the editor']['an announcement reaches the handler aineo.mcp registered, wh
   eq(editor.lua_get('_G.announced'), { work_in('/projects/alpha-wt'), TOKEN })
 end
 
+T['in the editor']['an announcement the handler takes with a note is answered ok with the note, no error'] = function()
+  children.restart(editor)
+  editor.lua([[require('aineo.mcp').on_work_announced(function()
+    return { note = 'no project joined: list a branch' }
+  end)]])
+  local relay = relay_for(editor.job.address)
+
+  relay:send(announce(work_in('/projects/alpha-wt')))
+
+  eq(
+    get(decoded(relay:next_line()), 'result'),
+    result_of('ok. no project joined: list a branch', false)
+  )
+end
+
 T['in the editor']['an announcement the handler declines is not taken'] = function()
   children.restart(editor)
   editor.lua([[require('aineo.mcp').on_work_announced(function()

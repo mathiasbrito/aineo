@@ -349,7 +349,7 @@ end
 
 --- The handler `on_work_announced()` registered, called with each
 --- announcement a relay offers this editor.
----@type fun(work: aineo.mcp.Work, start_token: string): boolean|string|nil
+---@type fun(work: aineo.mcp.Work, start_token: string): boolean|string|{ note: string }|nil
 local work_announced_handler
 
 --- Registers `handler`, in place of any before, as what this editor does
@@ -358,11 +358,12 @@ local work_announced_handler
 --- hook in that Claude Code (`receive_work_announcement()`):
 --- `handler(work, start_token)`, with the announcement — its folder normalised —
 --- and the token of the start of Claude Code whose agent made it, returns
---- whether it took it, or why it refuses it, in words for the agent. Its
+--- whether it took it, possibly with a note in words for the agent
+--- (`{ note = string }`), or why it refuses it, in words for the agent. Its
 --- strategy is the composition root's: plain dependency inversion, bound
 --- once at start.
 ---
----@param handler fun(work: aineo.mcp.Work, start_token: string): boolean|string
+---@param handler fun(work: aineo.mcp.Work, start_token: string): boolean|string|{ note: string }
 function M.on_work_announced(handler)
   work_announced_handler = handler
 end
@@ -370,13 +371,13 @@ end
 --- Takes an announcement a relay offers, `work` of the start `start_token`,
 --- and answers whether this editor took it, or why it refuses it: what the
 --- handler `on_work_announced()` registered answers — a string is the
---- refusal, `true` taken, anything else not; false with no handler
---- registered. Called in the RPC request that offers it, so the handler
+--- refusal, `true` taken, a table with a `note` taken with that note for the
+--- agent, anything else not; false with no handler registered. Called in the RPC request that offers it, so the handler
 --- answers without waiting on the relay; it may wait a bounded time on git.
 ---
 ---@param work aineo.mcp.Work
 ---@param start_token string
----@return boolean|string taken `true` when taken, or the words of its refusal
+---@return boolean|string|{ note: string } taken `true` when taken, `{ note }` when taken with a note, or the words of its refusal
 function M.receive_work_announcement(work, start_token)
   if not work_announced_handler then
     return false
@@ -384,6 +385,9 @@ function M.receive_work_announcement(work, start_token)
   local answer = work_announced_handler(work, start_token)
   if type(answer) == 'string' then
     return answer
+  end
+  if type(answer) == 'table' and type(answer.note) == 'string' then
+    return { note = answer.note }
   end
   return answer == true
 end

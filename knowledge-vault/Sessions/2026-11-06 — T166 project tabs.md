@@ -74,6 +74,14 @@ Decisions within A712, none ruled on by the user: a poller shared by the file's 
 
 Not re-run: the 16-minute whole suite is run once on the tree pushed (see the pull request).
 
+## Second fix round — remeasure404 (A713)
+
+All rulings applied. Seen red before their code: 16.3 (an edit stamped long before the follow joined), N1 (a fork named for another session carried into an unrelated one), 16.1 (a `continued-in` line naming the session carries), N2 (a replaced checkout kept the wrong base), N3 (the first lookup carried; the case that pinned a slow `true` became "a slow second lookup cannot lose the project"), the folder inside a checkout (refused, top needed), N6 (a report with no branch is taken with a note), N7 and the enclosing project in `lookup_checkout` (`test_projects_checkouts`), the `note` answer in `test_mcp_announce`, `retop_kept_session` (`test_changes_project_home`), N5 (a diff of a project not shown is closed). Arrived green: the case that a session with no fork or continuation named carries nothing (by nature), and the 0.6 s git case (the stub delays `find_repository` only, so the old code already managed it; the reviewer's shim delayed every git run). N4: the three kept-file cases now use ids of their own, and the `do return nil end` mutant of `copy_kept()` fails the copy case.
+
+Mutants run (all killed by assertion): `copy_kept()` made a no-op, `found[directory]` answered before `afresh`, `fork_of` kept after any follow (the stale case needed a "followed later still carries" case, added), `found = found or false` removed, the kept-base retop removed, the stamp filter removed, the `continued_in` carry removed, `close_shown_diff` trying the chosen home only.
+
+Decisions: a taken announcement may carry a note (`{ note = ... }` from the editor, `ok. <note>` as the tool's non-error answer); the refusal for a folder inside a checkout names the top; 16.2 means no copy of the session's own base at a fork. Not run: the whole suite (the orchestrator runs it on the head).
+
 ## Commits
 
 *Recorded after the merge.*

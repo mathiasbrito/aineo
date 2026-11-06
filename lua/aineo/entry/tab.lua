@@ -845,7 +845,7 @@ local function make_tab(homes, key, callbacks)
         tell_listeners_of_the_switch()
         offices.began_following(tab)
         if source == 'fork' then
-          projects.fork_of(tab, left)
+          projects.fork_of(tab, left, id)
         end
         if id == replacing_session and source == 'startup' then
           replacing_session = nil
@@ -1971,7 +1971,7 @@ local function make_tab(homes, key, callbacks)
     end,
     ['run shell'] = run.run_shell,
     ['diff close'] = function()
-      projects.chosen_changes(tab).close_shown_diff()
+      projects.close_shown_diff(tab)
     end,
     zoom = function()
       homes.layout.toggle_zoom()
