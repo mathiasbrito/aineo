@@ -173,7 +173,7 @@ end
 local ENTER_SIDES = {
   session_work = function(_, source)
     return {
-      left = base_side(source.base, ORIGIN_WORDS.session_start),
+      left = base_side(source.base, source.base_words or ORIGIN_WORDS.session_start),
       right = working_tree(),
     }
   end,
@@ -245,7 +245,7 @@ HEAD_SIDES.worktree = head_to_working_tree
 --- The diff of a file, or of the whole, listed under `listed`, a filter: what
 --- `Enter` shows, or, where `against_head`, the diff against `HEAD` that
 --- `h` shows. `source` holds what the session knows (`aineo.changes`'
---- `DiffSource`: `base`, `landed`, `branch`); `resolved`, what git told of the
+--- `DiffSource`: `base`, `base_words`, `landed`, `branch`); `resolved`, what git told of the
 --- commits it cannot know (`aineo.changes.Resolved`). A side not yet told is
 --- its words alone; a local branch the home has not read yet has no sides at
 --- all: nil.

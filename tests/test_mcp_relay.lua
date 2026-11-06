@@ -168,7 +168,9 @@ T['tools/list']['starts with report, whose input schema is the report format, th
         .. ' right after you create the worktree or a branch in it, and again whenever the set of'
         .. " branches you are working on there changes, with the absolute path of the worktree's"
         .. ' folder, a short label,'
-        .. ' and every branch you are working on there with the commit it was created from.',
+        .. ' and every branch you are working on there with the commit it was created from.'
+        .. " Before your first change in a repository other than the session's, call it for that checkout's absolute folder,"
+        .. ' with a label and the branch checked out there with its current commit as base.',
       inputSchema = {
         type = 'object',
         properties = {

@@ -1492,6 +1492,53 @@ lines, over the worktrees last listed. When aineo's watch of the repository
 fails, both windows say so until the pane is shown again, which starts it
 again.
 
+                                                   *aineo-changes-projects*
+A Claude Code session sometimes works in a repository other than the one it
+started in. Each tab keeps a list of projects: the session's repository
+first, then the others in the order they joined, at most 8 (a repository
+that would be the ninth is not taken, and aineo says so once). A project is
+a repository, told by its common git directory, so that the checkouts and
+linked worktrees of one repository are one project. A repository joins when
+ - the session's transcript, its subagents' included, shows a call of
+   `Edit`, `Write` or `NotebookEdit` on a file whose absolute path is in a
+   checkout of it (files only read do not count, nor do changes made through
+   a shell command), or
+ - an agent reports a worktree of it that lists at least one branch
+   (|aineo-changes-reported|): a report of a checkout of another repository
+   is validated and read in that repository, from the bases it gives, and
+   goes to that project's Reported section. A report that lists no branch
+   adds no project. A folder that is a checkout of no repository stays what
+   it was: looked for, and said once not to be listed.
+A transcript is followed for edits from the moment the tab follows the
+session; what it already held then does not join anything, since the
+projects kept for the session already hold it.
+Each project has the whole changes pane (|aineo-changes|) of its own:
+Uncommitted, Session work, commits, Reported, files and diffs. A project
+other than the session's has as its base `HEAD` when it joined, which the
+`Against:` line and the bar of a diff call `first touched` where the
+session's own says `session start`. Only the project shown watches its
+repository; another is read when it is shown.
+With two or more projects the commits window shows a line of tabs over its
+commits: ` name count ` for each project, the count the files of its
+Session work and the name its checkout folder's, with the parent folder's
+before it when two have the same. The tab of the project shown is drawn in
+`AineoChangesProjectChosen` and the others in `AineoChangesProject`, linked
+by default to `TabLineSel` and `TabLine`. In both windows of the pane:
+    `<Tab>`      shows the next project, the first after the last
+    `<S-Tab>`    shows the previous one, the last before the first
+    `X`          closes the project shown, unless it is the session's; the
+                 previous project is shown, and the project may join again
+                 later, its base then `HEAD` again
+As a project joins, aineo says "aineo: Claude Code changed <name>; it's now
+a tab in \g" (or "reported work in <name>" for a report), naming the key
+of the changes pane (|<Plug>(aineo-pane-changes)|); the view and the cursor
+stay.
+The projects are kept for the Claude Code session, with each project's base,
+under the editor's state directory: a resumed session has them back, a
+session switch shows that session's, and `/clear` begins with the session's
+repository alone. A walkthrough (|aineo-walkthrough|) may show any file of a
+project's checkout, changed or not, while the project is in the tab.
+
                                                    *aineo-changes-reported*
 Claude Code and its subagents tell aineo, through aineo's tool
 `announce_work` (|aineo-report|), of each git worktree they work in: the
@@ -1499,7 +1546,11 @@ absolute path of its folder, a short label for their task, and every
 branch they are working on there, each with the commit it was made from;
 every agent and subagent
 must, once per worktree, right after it makes the worktree or a branch in
-it, and again whenever the set of branches it works on there changes. An
+it, and again whenever the set of branches it works on there changes; and,
+before its first change in a repository other than the session's, for that
+checkout, with the branch checked out there and its current commit as base,
+so that the repository joins the tab (|aineo-changes-projects|) before any
+edit, also for code it only reads and wants to explain in a walkthrough. An
 agent with several worktrees calls once for each. aineo's own hook tells it
 too, after a command of Claude Code's `Bash` tool that makes a worktree or
 a branch (|aineo-changes-hook|). A report goes to the tab whose Claude Code
@@ -2481,11 +2532,18 @@ asking, and its answer says what it showed or why it refused. Its arguments:
 The file must be on disk, a regular file of at most 1 MiB, inside a checkout
 of a repository this editor has open (the folder it started in, the working
 folder of each tab page and window, the folder each tab's Claude Code started
-in) or of a worktree the tab's agents reported (|aineo-changes-reported|),
-below no `.git`, also by a link, and through no link that leaves the checkout,
-as the test layout guards the paths an agent gives it (|aineo-test-layout|).
+in), of a worktree the tab's agents reported (|aineo-changes-reported|), or
+of a project of the tab (|aineo-changes-projects|), any file of it, changed or
+not, below no `.git`, also by a link, and through no link that leaves the
+checkout, as the test layout guards the paths an agent gives it
+(|aineo-test-layout|).
 A branch no worktree has checked out has no file on disk: walk through
-checked-out work.
+checked-out work. A file of another repository than the session's is refused
+until the agent has called `announce_work` for its checkout, also for code it
+only reads and wants to explain: the refusal, the descriptions of the
+walkthrough tools and the instructions appended to the system prompt say so.
+In the pane a plan shows, a step's file of a project other than the session's
+reads `<project>: <path>`. One plan may mix projects.
 A step is refused in a turn of the agent in which it showed one already: aineo
 tells a turn by the tab's Claude Code being seen working, so with an agent
 never seen working two steps may show. The instructions appended to the system

@@ -231,6 +231,8 @@ and, in Terminal mode, `<C-\>Z` do the same.
 | `\<CR>`, `<S-CR>` | in the files window: open the file for editing, in the working tree it belongs to |
 | `F` | in a diff: reads it again with the whole file as context, and back to three lines |
 | `\d` | closes the diff, from any window of the tab |
+| `<Tab>`, `<S-Tab>` | in either window of the pane: show the next or the previous project of the tab, wrapping (a tab holds several only once Claude Code works in more than one repository) |
+| `X` | in either window of the pane: closes the project shown, unless it is the session's |
 
 ### Terminal pane
 
@@ -296,6 +298,18 @@ it is read again as the repository changes, the cursor kept on its commit.
 Every part takes its colour from your colour scheme, through the
 `AineoChangesGraph*` groups and `AineoChangesCommitId`.
 
+- **Projects.** When Claude Code works in a repository other than the one it
+  started in, that repository joins the tab as a project, with a changes pane
+  of its own and a line of tabs over the commits window (` name count `, the
+  count the files of its Session work). A repository joins when the session's
+  transcript shows an `Edit`, `Write` or `NotebookEdit` of a file in a
+  checkout of it, or when an agent reports a worktree of it with a branch
+  (`announce_work`); aineo says so and leaves the view where it is. `<Tab>`
+  and `<S-Tab>` choose a project, `X` closes one other than the session's;
+  at most 8 are held, kept with the session, and a walkthrough may show any
+  file of a project, changed or not. The base of a project is `HEAD` when it
+  joined, which the `Against:` line calls `first touched`.
+  `:help aineo-changes-projects` has the details.
 - **Look at a change.** Enter on a file shows its diff in the file column,
   and the cursor goes there; in the commits window, Enter on Uncommitted,
   Session work, a commit or the Landed heading shows the whole diff of that
@@ -606,7 +620,10 @@ and `walkthrough_step` shows Claude's walkthrough of code, one step at a time.
   A report goes to the tab whose Claude sent it.
 - **`announce_work`.** Every agent and subagent must call it once per
   worktree it works in, right after it creates the worktree or a branch in
-  it, and again whenever the set of branches it works on there changes, with
+  it, and again whenever the set of branches it works on there changes, and,
+  before its first change in a repository other than the session's, for that
+  checkout, with the branch checked out there and its current commit as base,
+  with
   the absolute path of the `worktree` folder (a relative one is refused), a
   short `label` and `branches`, every branch it is
   working on there, each a `name` and the `base` commit it was created from.

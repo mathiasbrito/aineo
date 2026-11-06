@@ -337,7 +337,7 @@ T['the words']['name the tool as Claude Code names it'] = function()
   eq(name, 'mcp__aineo__announce_work')
 end
 
-T['the words']['appended to the system prompt are one paragraph of 499 bytes, the tool’s rule and a refusal corrected'] = function()
+T['the words']['appended to the system prompt are one paragraph of 690 bytes, the tool’s rule and a refusal corrected'] = function()
   local paragraph = mcp.announce_instructions()
 
   eq(
@@ -347,13 +347,15 @@ T['the words']['appended to the system prompt are one paragraph of 499 bytes, th
       .. " branches you are working on there changes, with the absolute path of the worktree's folder,"
       .. ' a short label,'
       .. ' and every branch you are working on there with the commit it was created from.'
+      .. " Before your first change in a repository other than the session's, call it for that checkout's absolute folder,"
+      .. ' with a label and the branch checked out there with its current commit as base.'
       .. ' It only informs aineo: if it refuses, correct the call as the refusal says and call again;'
       .. ' otherwise do not act on its reply.'
   )
-  eq(#paragraph, 499)
+  eq(#paragraph, 690)
 end
 
-T['the words']['for a subagent are the paragraph and one sentence, 696 bytes'] = function()
+T['the words']['for a subagent are the paragraph and one sentence, 887 bytes'] = function()
   local context = mcp.subagent_announce_context()
 
   eq(
@@ -363,7 +365,7 @@ T['the words']['for a subagent are the paragraph and one sentence, 696 bytes'] =
       .. " with the absolute path of that worktree's folder, a short label, and the branch you are on"
       .. ' with the commit it was made from.'
   )
-  eq(#context, 696)
+  eq(#context, 887)
 end
 
 T['in the editor'] = MiniTest.new_set()

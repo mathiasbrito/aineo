@@ -16,6 +16,16 @@ M.ANNOUNCE_RULE = 'Required for every agent and subagent: call once per worktree
   .. ' folder, a short label,'
   .. ' and every branch you are working on there with the commit it was created from.'
 
+--- The rule for work in another repository than the session's, which follows
+--- `M.ANNOUNCE_RULE` in the description of the announcement tool and in the
+--- instructions aineo gives Claude Code: the call comes before the first
+--- change, so that the repository's base is its `HEAD` before any change.
+M.OTHER_REPOSITORY_RULE = " Before your first change in a repository other than the session's, call it for that"
+  .. " checkout's absolute folder, with a label and the branch checked out there with its current"
+  .. ' commit as base.'
+
+M.ANNOUNCE_RULE = M.ANNOUNCE_RULE .. M.OTHER_REPOSITORY_RULE
+
 --- The most branches one announcement may list.
 local MOST_BRANCHES = 32
 

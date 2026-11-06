@@ -1,0 +1,69 @@
+# 2026-11-06 — T166 project tabs
+
+**Author:** the repository's maintainer, with Claude — implementer agent
+**Branch:** `feature/t166-project-tabs` (from `dev` at 7e6037b5) · **Pull request:** into `dev`
+
+T166: when a Claude Code session works in a repository other than the one it started in, that repository joins the tab as a project with a changes pane of its own, and a walkthrough may show any file of it (the user, 2026-11-06, in the D142 row).
+
+## Links
+
+- [[Projects/aineo]]
+- [[Planning/aineo — v1 agent console]] — the D142 row (A709–A711 inside it) and the T166 row
+- [[Sessions/2026-11-05 — T164 walkthrough pane]] — the walkthrough pane this extends
+- `lua/aineo/projects/`, `lua/aineo/entry/projects.lua`, `lua/aineo/entry/tellers.lua`, `lua/aineo/changes/copy.lua`, `lua/aineo/layout/init.lua`, `lua/aineo/mcp/`, `doc/aineo.txt`, `README.md`
+
+## Task lines
+
+- [X] T166 Project tabs in the changes pane (D142, A709–A711): see the T166 row in the plan note.
+
+## What was built
+
+- `aineo.projects` (new home, requires no other): the list (`new_list`, cap 8), the line of tabs (`tab_line`), the kept list per session (`keep`, `read_kept`, `move_kept`, `followed_id`), the lookup of the checkout of a file or folder with a memo per folder (`new_checkouts`), the edit a signal tells of (`edited_path`), and the colours.
+- `aineo.entry.projects` (composition root, per tab): the homes of the projects, the follower of the session's transcript (a second follower beside the office's: the office follows only while it runs), `<Tab>`/`<S-Tab>`/`X`, the routing of reports, the folders and names the walkthrough needs, the notice, the counts. `aineo.entry.tellers` takes `teller_for()` out of `editors.lua`; `aineo.entry.office` exports `transcript_for_session()` and `following_since()`.
+- The changes home gained `base_words` (the Against line says `first touched`), `count_session_work()`, `stop_watching()`, `on_repository_change()`; the layout gained `replace_changes_pane()`.
+- A710: the rule in `announce_work`'s description and in the instructions (one constant, `aineo.mcp.work`'s `OTHER_REPOSITORY_RULE`). A711: the refusal, both tools' descriptions and the server instructions; `<project>: <path>` in the plan's pane.
+
+## Decisions (the implementer's, within A709–A711)
+
+1. Keys `<Tab>`, `<S-Tab>`, `X` (free in the pane).
+2. A signal the follower replays from the transcript's tail as it starts joins nothing: the kept list holds what joined, and a closed project must stay closed when the session is resumed (seen red by the resume case).
+3. `NotebookEdit`'s path is `notebook_path` in Claude Code's tool; the spec says `file_path`: both are read.
+4. Each joining has its own kept base (`followed_id` carries the joining's time), so a project closed and joined again begins at `HEAD` again.
+5. A report that would be the ninth project is refused with words for the agent; an edit that would be the ninth is told once.
+6. The persistence of the list is its own small module (`aineo.projects.kept`) rather than `aineo.changes.kept`, which would have needed a wider surface; its file-writing mirrors `changes.kept`'s. A follow-up could share them.
+7. The home's `on_repository_change()` also fires when the repository is found and when a session's base is taken, so a joined project's count appears without a watch.
+
+## Spec conflicts and edges to raise
+
+- `aineo.projects` is a new home: `.claude/skills/modularity` §1 lists homes and the direction table by hand, so the table needs a row (`aineo.projects`: no aineo home; `aineo.entry` may require it) on an `ai/` branch. Not done here (`.claude/` is outside the packet).
+- The brief says `aineo.changes.new(label)`; `new()` takes no label (it counts its own), and it is used as it is.
+
+## Seen red / arrived green
+
+Pure units (`edits`, `list`, `tab_line`, `kept`, `checkouts`) and the home, layout and entry cases each first ran against a missing function or module (reds are "attempt to call a nil value" or a failed expectation). Honest account: `aineo.entry.projects` and its wiring were written before the entry cases that pin them, so those cases arrived green and were pinned by mutants; the A710/A711 cases (texts, refusal, `<project>: <path>`, Enter) were each seen red first. Cases seen red by name: `tests/test_mcp.lua` (three), `tests/test_mcp_announce.lua` (two), `tests/test_entry_walkthrough.lua` and `tests/test_entry_walkthrough_pane.lua` (the refusal), `tests/test_entry_projects_walkthrough.lua` (names, Enter on the second repository's file), `tests/test_changes_project_home.lua` (found, session base), `tests/test_entry_projects_join.lua` (colours, replayed), `tests/test_entry_projects_session.lua` (resume).
+
+## Mutants (each run on the file that covers it, restored after)
+
+| Edit | Killed by |
+|---|---|
+| `list.lua`: `#held >= M.MOST` → `>` | assertion, test_projects_list (2) |
+| `tab_line.lua`: `FEWEST_FOR_A_LINE = 2` → `1` | assertion, test_projects_tab_line |
+| `edits.lua`: `NotebookEdit` entry removed | assertion, test_projects_edits (2) |
+| `kept.lua`: the joining left out of `followed_id` | assertion, test_projects_kept |
+| `entry/projects.lua`: replayed signals joined | assertion, test_entry_projects_join |
+| `entry/projects.lua`: `left.stop_watching()` removed | assertion, test_entry_projects_pane |
+| `entry/projects.lua`: `home.let_go()` removed from closing | assertion, test_entry_projects_session |
+| `entry/projects.lua`: every report to the session's home | assertion, test_entry_projects_report (5) |
+| `walkthrough_plan.lua`: `<project>: ` dropped | assertion, test_entry_projects_walkthrough (2) |
+| `mcp/work.lua`: other-repository rule left out of the description | assertion, test_mcp_relay |
+| `copy.lua`: no tell when the repository is found | assertion, test_changes_project_home |
+| `layout/init.lua`: no `show_buffers_of` in `replace_changes_pane()` | assertion, test_layout_changes_swap (2) |
+
+## Open threads
+
+- Counts of a project not shown are read after an edit the transcript shows (700 ms) and when its home hears of a change; an edit made through a shell command leaves its count as it was until the project is shown.
+- The tests' Edit/Write/NotebookEdit lines are the recorded `Bash` line of the 2.1.308 recording with the tool's name and input replaced; no recording of an `Edit` call exists yet.
+
+## Commits
+
+*Recorded after the merge.*
