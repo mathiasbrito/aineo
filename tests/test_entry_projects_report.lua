@@ -372,4 +372,45 @@ T['a report']['to a git that answers in 0.6 seconds each time is taken and joins
   end)
 end
 
+T['a report']['of a folder inside a checkout of another repository, listing no branch, is taken with a note, not refused'] = function()
+  local here = open_with_a_worktree_of_another_repository('projects-report-inside-none')
+  vim.fn.mkdir(vim.fs.joinpath(here.other, 'src'), 'p')
+
+  local answer = announce(report_for(vim.fs.joinpath(here.other, 'src'), {}), here.token)
+
+  eq(type(answer), 'table')
+  eq(answer.note:find('no project joined', 1, true) ~= nil, true)
+  eq(tab_line_after_a_while(), '')
+end
+
+T['a report']['whose first look at its folder timed out is refused saying so, and remembers nothing'] = function()
+  local here = open_with_a_worktree_of_another_repository('projects-report-timed-out')
+  child.lua([[
+    local git = require('aineo.git')
+    local find = git.find_repository
+    _G.timing_out = true
+    git.find_repository = function(directory, done, options)
+      if _G.timing_out and directory:find('notes-feature', 1, true) then
+        vim.schedule(function()
+          done({ reason = 'timed_out', message = 'git ran past its limit of 900 ms: git' })
+        end)
+        return
+      end
+      find(directory, done, options)
+    end
+  ]])
+
+  local answer =
+    announce(report_for(here.worktree, { { name = 'main', base = 'HEAD' } }), here.token)
+
+  eq(type(answer), 'string')
+  eq(answer:find('past its limit', 1, true) ~= nil, true)
+  eq(tab_line_after_a_while(), '')
+  child.lua('_G.timing_out = false')
+  eq(announce(report_for(here.worktree, { { name = 'main', base = 'HEAD' } }), here.token), true)
+  projects.wait_until('the project joined once git answers', function()
+    return (projects.tab_line(child) or ''):find('notes-feature', 1, true) ~= nil
+  end)
+end
+
 return T
