@@ -681,4 +681,30 @@ T['a session']['no fork or continued-in line names carries nothing, as a resume 
   expect_tab_line('')
 end
 
+T['a session']['a continued-in line named for a session before the last switch carries nothing to it'] = function()
+  local here = open('projects-session-continued-stale', true)
+  local named = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'
+  local third =
+    projects.repository('projects-session-continued-stale', 'site-docs', { ['f.md'] = { 'one' } })
+  fake_transcript.append(here.transcript, {
+    vim.json.encode({
+      type = 'continued-in',
+      timestamp = os.date('!%Y-%m-%dT%H:%M:%S.000Z', os.time() + 5),
+      sessionId = here.session,
+      continuedInSessionId = named,
+    }),
+  })
+  vim.wait(1500)
+  local cleared = clear_the_session()
+  projects.edit(projects.name_transcript(child, cleared), vim.fs.joinpath(third, 'f.md'))
+  expect_tab_line(CHOSEN .. ' aineo 0 %* ' .. OTHER .. ' site-docs 0 %*')
+
+  child.lua(
+    [[require('aineo.entry.projects').follow_session(require('aineo.entry.registry').tab_list[1], ...)]],
+    { named }
+  )
+
+  expect_tab_line('')
+end
+
 return T

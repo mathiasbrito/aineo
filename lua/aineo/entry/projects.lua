@@ -618,6 +618,7 @@ local function rebuild(tab, state)
   end
   state.generation = state.generation + 1
   state.edits_waiting = {}
+  state.continued_in = nil
   if state.list and state.list.chosen().key ~= state.session_project.key then
     tab.homes.layout.replace_changes_pane(tab.homes.changes.pane_buffers())
   end
@@ -908,8 +909,9 @@ end
 --- listing none it goes to the session's home, with a note that no project
 --- joined, which the agent is told and is no refusal. A report of a folder
 --- inside a checkout of another repository, not its top, is refused saying
---- the top is needed, as is one that would make the tab hold more projects
---- than it can. The checkout is the one `work.found` carries when
+--- the top is needed when it lists a branch, and taken with the same note as
+--- any report of no branch when it lists none; one that would make the tab
+--- hold more projects than it can is refused. The checkout is the one `work.found` carries when
 --- `resolve_reported_work()` found it, else it is looked up, at most
 --- `LOOKUP_WAIT_MS`, asking git afresh; a folder that is not there, one that
 --- is no checkout of any repository, and one whose checkout is not found in
@@ -946,6 +948,13 @@ function M.home_for_report(tab, work)
   end, 5)
   if not project then
     if enclosing and enclosing.key ~= state.session_project.key then
+      if #work.branches == 0 then
+        return tab.homes.changes,
+          nil,
+          ('no project joined: a report needs a branch to join one; report the top of %s'):format(
+            enclosing.top
+          )
+      end
       return nil,
         ("worktree: %s is inside the checkout %s of another repository; report the checkout's top folder"):format(
           work.worktree,

@@ -82,6 +82,10 @@ Mutants run (all killed by assertion): `copy_kept()` made a no-op, `found[direct
 
 Decisions: a taken announcement may carry a note (`{ note = ... }` from the editor, `ok. <note>` as the tool's non-error answer); the refusal for a folder inside a checkout names the top; 16.2 means no copy of the session's own base at a fork. Not run: the whole suite (the orchestrator runs it on the head).
 
+## Last fixes — remeasure404b (A714)
+
+Each seen red first: (1) `continued_in` cleared in `rebuild()` (a `continued-in` line of an earlier session no longer carries a later session's projects into the session it names); (2) a `find_repository()` timeout while resolving a report refuses it with git's words and remembers nothing (a second report, once git answers, joins); (3) a no-branch report for a folder inside a checkout is taken with the note, not refused. The vimdoc says (2) and (3).
+
 ## Commits
 
 *Recorded after the merge.*

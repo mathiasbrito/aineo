@@ -3795,8 +3795,9 @@ function M.new(label)
   --- with `work`, each branch's base its full id, or `done(nil, refusal)`
   --- with why it is refused, in words for the agent that name the first
   --- item at fault: also with no session yet, no repository found for it,
-  --- or the local branches git cannot list. A report of no branch is given
-  --- back as it is.
+  --- the local branches git cannot list, or git running past its limit
+  --- while it looks for the worktree's repository (which is no "no
+  --- repository"). A report of no branch is given back as it is.
   ---
   ---@param work aineo.changes.ReportedWork
   ---@param done fun(resolved: aineo.changes.ReportedWork|nil, refusal: string|nil)
@@ -3813,6 +3814,10 @@ function M.new(label)
       limit_ms = BASE_RESOLUTION_LIMIT_MS,
     })
     git.find_repository(work.worktree, function(failure, found)
+      if failure and failure.reason == 'timed_out' then
+        done(nil, 'worktree: ' .. lines.words_of(failure))
+        return
+      end
       local found_repository = not failure and found or nil
       local listed_in = found_repository or session.repository
       git.list_branches(listed_in, function(list_failure, branches)

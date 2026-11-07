@@ -1509,8 +1509,11 @@ linked worktrees of one repository are one project. A repository joins when
    is validated and read in that repository, from the bases it gives, and
    goes to that project's Reported section. The folder must be there and be
    the top of a checkout: a folder inside a checkout of another repository
-   is refused, saying the checkout's top folder is needed. A report that
-   lists no branch adds no project: it is never refused, and for a checkout
+   that lists a branch is refused, saying the checkout's top folder is
+   needed, and git running past its limit while the folder's repository is
+   looked for refuses the report, saying so, and leaves nothing remembered.
+   A report that lists no branch adds no project: it is never refused (a
+   folder inside a checkout included), and for a checkout
    of a repository that is not a project of the tab the answer says no
    project joined and a report needs a branch to join one, so that an agent
    saying it is done with a project the user closed does not open it again;
