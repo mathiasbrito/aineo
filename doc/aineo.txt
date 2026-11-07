@@ -2977,7 +2977,16 @@ opens a file from the changes pane, whether it lies in the project or not;
 a file is text when its first 8 KiB hold no NUL byte. Anything else goes to
 your system, through |vim.ui.open()|: a file that is not text, such as an
 image or a PDF, a directory, and a web address. A link that names nothing
-that exists opens nothing, and you are told so once. A double-click on no
+that exists opens nothing, and you are told so once. A path Claude Code
+wrapped across rows of its terminal is followed whole, from any row it lies
+on: a link that ends a row, with at most a dot, colon, semicolon,
+exclamation mark or question mark after it, goes on with the first word of
+the row below, which Claude Code may have indented, over at most four rows.
+The longest such join that names a file or a directory that exists is the
+link; when none does, the link is the one on the row you clicked, as above.
+A link that ends a row by chance can join the text below it when the result
+names a file or a folder: a line number, a folder. A web address is never
+joined. A double-click on no
 link does what Neovim's own does: in Normal mode it selects the word, and
 in Terminal mode it reaches Claude Code. A ⌘-click is not aineo's: see
 |aineo-limits|.
