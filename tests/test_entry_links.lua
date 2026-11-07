@@ -27,6 +27,10 @@ local PROJECT_FILES = {
   ['nul-after.txt'] = { string.rep('a', TEXT_SAMPLE_BYTES) .. '\n' .. 'tail' },
   ['a/~b.txt'] = { 'tilde inside' },
   ['~user/x.txt'] = { 'named user' },
+  ['wrap/chain/part/file.txt'] = { 'wrapped over rows' },
+  ['wrap/chain/.part/file.txt'] = { 'behind a dot' },
+  ['q1/q2/q3/q4/f.txt'] = { 'wrapped over five rows' },
+  ['https:/example.com/a/b.lua'] = { 'a file that looks like a web address' },
 }
 
 --- The Lua that keeps, in the child, every target `vim.ui.open()` is given,
@@ -610,6 +614,193 @@ T["a path wrapped across rows of Claude's terminal"]['is followed whole by a dou
     { followed = what_followed(), line = cursor_line() },
     { followed = opened_in_file_column(vim.fs.joinpath(top, 'lua/x.lua')), line = 1 }
   )
+end
+
+T["a path wrapped across rows of Claude's terminal"]['over three rows is followed whole by a double-click on its middle row'] = function()
+  local top = open_layout_in_project('links-wrapped-middle')
+  show_rows_in_claude_terminal({
+    'Opening a path too long for its row: wrap/',
+    'chain/',
+    'part/file.txt now',
+  })
+
+  double_click(cell_of(CLAUDE_TERMINAL, 'chain/', 2))
+
+  wait_until_current_file_is(vim.fs.joinpath(top, 'wrap/chain/part/file.txt'))
+  eq(
+    { followed = what_followed(), line = cursor_line() },
+    { followed = opened_in_file_column(vim.fs.joinpath(top, 'wrap/chain/part/file.txt')), line = 1 }
+  )
+end
+
+T["a path wrapped across rows of Claude's terminal"]['over five rows is followed over its first four only'] = function()
+  local top = open_layout_in_project('links-wrapped-five')
+  show_rows_in_claude_terminal({
+    'Opening a path too long for its row: q1/',
+    'q2/',
+    'q3/',
+    'q4/',
+    'f.txt now',
+  })
+
+  double_click(cell_of(CLAUDE_TERMINAL, 'q1/', 1))
+
+  wait_until_settled()
+  eq(
+    what_followed(),
+    handed_to_the_system_from_the_terminal({ vim.fs.joinpath(top, 'q1/q2/q3/q4/') })
+  )
+end
+
+T["a path wrapped across rows of Claude's terminal"]['is followed whole when the second row is indented'] = function()
+  local top = open_layout_in_project('links-wrapped-indented')
+  show_rows_in_claude_terminal({ 'Opening a path too long for its row: lua/', '      x.lua now' })
+
+  double_click(cell_of(CLAUDE_TERMINAL, 'x.lua now', 2))
+
+  wait_until_current_file_is(vim.fs.joinpath(top, 'lua/x.lua'))
+  eq(
+    { followed = what_followed(), line = cursor_line() },
+    { followed = opened_in_file_column(vim.fs.joinpath(top, 'lua/x.lua')), line = 1 }
+  )
+end
+
+T["a path wrapped across rows of Claude's terminal"]['is followed at the line its second row names'] = function()
+  local top = open_layout_in_project('links-wrapped-line')
+  show_rows_in_claude_terminal({ 'Opening a path too long for its row: lua/', 'x.lua:3 now' })
+
+  double_click(cell_of(CLAUDE_TERMINAL, 'lua/', 1))
+
+  wait_until_current_file_is(vim.fs.joinpath(top, 'lua/x.lua'))
+  eq(
+    { followed = what_followed(), line = cursor_line() },
+    { followed = opened_in_file_column(vim.fs.joinpath(top, 'lua/x.lua')), line = 3 }
+  )
+end
+
+T["a path wrapped across rows of Claude's terminal"]['is followed by gx on its first row'] = function()
+  local top = open_layout_in_project('links-wrapped-gx-first')
+  show_rows_in_claude_terminal({ 'Opening a path too long for its row: lua/', 'x.lua:2 now' })
+  local cell = cell_of(CLAUDE_TERMINAL, 'lua/', 1)
+  child.cmd('stopinsert')
+  child.api.nvim_win_set_cursor(0, { cell.line, cell.byte })
+
+  entry.press(child, 'gx')
+
+  wait_until_current_file_is(vim.fs.joinpath(top, 'lua/x.lua'))
+  eq(
+    { followed = what_followed(), line = cursor_line() },
+    { followed = opened_in_file_column(vim.fs.joinpath(top, 'lua/x.lua')), line = 2 }
+  )
+end
+
+T["a path wrapped across rows of Claude's terminal"]['is followed by gx on its second row'] = function()
+  local top = open_layout_in_project('links-wrapped-gx-second')
+  show_rows_in_claude_terminal({ 'Opening a path too long for its row: lua/', 'x.lua:2 now' })
+  local cell = cell_of(CLAUDE_TERMINAL, 'x.lua:2 now', 1)
+  child.cmd('stopinsert')
+  child.api.nvim_win_set_cursor(0, { cell.line, cell.byte })
+
+  entry.press(child, 'gx')
+
+  wait_until_current_file_is(vim.fs.joinpath(top, 'lua/x.lua'))
+  eq(
+    { followed = what_followed(), line = cursor_line() },
+    { followed = opened_in_file_column(vim.fs.joinpath(top, 'lua/x.lua')), line = 2 }
+  )
+end
+
+T["a path wrapped across rows of Claude's terminal"]["whose join names nothing leaves the first row's own link followed"] = function()
+  local top = open_layout_in_project('links-wrapped-nothing-first')
+  show_rows_in_claude_terminal({ 'Opening a path too long for its row: notes.txt', 'tail now' })
+
+  double_click(cell_of(CLAUDE_TERMINAL, 'notes.txt', 1))
+
+  wait_until_current_file_is(vim.fs.joinpath(top, 'notes.txt'))
+  eq(
+    { followed = what_followed(), line = cursor_line() },
+    { followed = opened_in_file_column(vim.fs.joinpath(top, 'notes.txt')), line = 1 }
+  )
+end
+
+T["a path wrapped across rows of Claude's terminal"]["whose join names nothing leaves the second row's own link followed"] = function()
+  open_layout_in_project('links-wrapped-nothing-second')
+  show_rows_in_claude_terminal({ 'Opening a path too long for its row: lua/', 'gone.lua now' })
+
+  double_click(cell_of(CLAUDE_TERMINAL, 'gone.lua', 1))
+
+  wait_until_settled()
+  eq(what_followed(), {
+    windows = LAYOUT_ALONE,
+    current = 'terminal',
+    external = {},
+    told = { { message = 'aineo: gone.lua names no file', level = vim.log.levels.WARN } },
+  })
+end
+
+T["a path wrapped across rows of Claude's terminal"]['is not joined further than a row that goes on with other words'] = function()
+  local top = open_layout_in_project('links-wrapped-words')
+  show_rows_in_claude_terminal({
+    'Opening a path too long for its row: wrap/',
+    'chain/ and more',
+    'part/file.txt now',
+  })
+
+  double_click(cell_of(CLAUDE_TERMINAL, 'wrap/', 1))
+
+  wait_until_settled()
+  eq(
+    what_followed(),
+    handed_to_the_system_from_the_terminal({ vim.fs.joinpath(top, 'wrap/chain/') })
+  )
+end
+
+T["a path wrapped across rows of Claude's terminal"]['is not joined further than a row whose link leaves punctuation out'] = function()
+  local top = open_layout_in_project('links-wrapped-punctuation')
+  show_rows_in_claude_terminal({
+    'Opening a path too long for its row: wrap/',
+    'chain/.',
+    'part/file.txt now',
+  })
+
+  double_click(cell_of(CLAUDE_TERMINAL, 'wrap/', 1))
+
+  wait_until_settled()
+  eq(
+    what_followed(),
+    handed_to_the_system_from_the_terminal({ vim.fs.joinpath(top, 'wrap/chain/') })
+  )
+end
+
+T["a path wrapped across rows of Claude's terminal"]['that is a file address is followed whole'] = function()
+  local top = open_layout_in_project('links-wrapped-address')
+  local address = vim.uri_from_fname(vim.fs.joinpath(top, 'lua/x.lua'))
+  local cut = #address - #'x.lua'
+  show_rows_in_claude_terminal({
+    'Opening a path too long for its row: ' .. address:sub(1, cut),
+    address:sub(cut + 1) .. ' now',
+  })
+
+  double_click(cell_of(CLAUDE_TERMINAL, address:sub(cut - 3, cut), 1))
+
+  wait_until_current_file_is(vim.fs.joinpath(top, 'lua/x.lua'))
+  eq(
+    { followed = what_followed(), line = cursor_line() },
+    { followed = opened_in_file_column(vim.fs.joinpath(top, 'lua/x.lua')), line = 1 }
+  )
+end
+
+T["a path wrapped across rows of Claude's terminal"]['that is a web address is not joined'] = function()
+  open_layout_in_project('links-wrapped-web')
+  show_rows_in_claude_terminal({
+    'Opening a path too long for its row: https://example.com/a/',
+    'b.lua now',
+  })
+
+  double_click(cell_of(CLAUDE_TERMINAL, 'https://example.com/a/', 8))
+
+  wait_until_settled()
+  eq(what_followed(), handed_to_the_system_from_the_terminal({ 'https://example.com/a/' }))
 end
 
 return T
