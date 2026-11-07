@@ -1,9 +1,10 @@
 --- The links Claude Code wrapped across rows of its terminal. A terminal
 --- buffer holds one line per screen row, so a path that did not fit a row
 --- lies on several, and `aineo.report`'s `find_path_candidates()`, which reads
---- one line, finds only a piece of it. A link whose last character is the
---- last non-blank character of its row continues with the first run of
---- non-blank characters of the next row, which Claude Code may have indented.
+--- one line, finds only a piece of it. A link that ends its row
+--- (nothing follows it but the punctuation links leave out) continues with
+--- the first run of non-blank characters of the next row, which Claude Code
+--- may have indented.
 --- Whether a join names a file is for the caller to decide.
 
 local M = {}
@@ -30,14 +31,28 @@ local function without_trailing_blanks(text)
   return (text:gsub('%s+$', ''))
 end
 
---- The link of the row `text` that ends at its last non-blank character, or nil.
+--- Whether nothing but the punctuation a link leaves out
+--- (`aineo.report`'s `find_path_candidates()`: a dot, a colon, a semicolon, an
+--- exclamation mark or a question mark) follows byte `end_column`, from 0, of
+--- `text`.
+---
+---@param text string
+---@param end_column integer
+---@return boolean
+local function leaves_only_punctuation(text, end_column)
+  return text:sub(end_column + 1):match('^[.:;!?]*$') ~= nil
+end
+
+--- The link of the row `text` that ends the row: no non-blank character
+--- follows it but the punctuation a link leaves out, which a path broken
+--- after its dot or its colon has at its end. Or nil.
 ---
 ---@param text string
 ---@return aineo.report.PathCandidate?
 local function link_ending_the_row(text)
-  local last = #without_trailing_blanks(text)
-  return vim.iter(require('aineo.report').find_path_candidates(text)):find(function(candidate)
-    return candidate.end_column == last
+  local row = without_trailing_blanks(text)
+  return vim.iter(require('aineo.report').find_path_candidates(row)):find(function(candidate)
+    return leaves_only_punctuation(row, candidate.end_column)
   end)
 end
 
@@ -53,7 +68,8 @@ end
 
 --- The joins that start with the link ending row `first_row`, each one row
 --- longer than the one before, shortest first. A join goes on to the next row
---- when the run it took there is that row's last, and the link took it whole.
+--- when the run it took there is that row's last, and the link took it whole
+--- but for the punctuation it leaves out.
 ---
 ---@param row_text fun(row: integer): string
 ---@param first_row integer
@@ -64,9 +80,9 @@ local function joins_starting_at(row_text, first_row)
   if not head then
     return {}
   end
-  local written = text:sub(head.first_column + 1, head.end_column)
-  local parts =
-    { { row = first_row, first_column = head.first_column, end_column = head.end_column } }
+  local row_end = #without_trailing_blanks(text)
+  local written = text:sub(head.first_column + 1, row_end)
+  local parts = { { row = first_row, first_column = head.first_column, end_column = row_end } }
   local joins = {}
   for row = first_row + 1, first_row + MAX_ROWS - 1 do
     local below = row_text(row)
@@ -90,7 +106,10 @@ local function joins_starting_at(row_text, first_row)
       joins,
       { path = link.path, line = link.line, length = link.end_column, parts = parts }
     )
-    if link.end_column < #joined or run_last < #without_trailing_blanks(below) then
+    if
+      not leaves_only_punctuation(joined, link.end_column)
+      or run_last < #without_trailing_blanks(below)
+    then
       break
     end
     written = joined
