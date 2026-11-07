@@ -52,7 +52,8 @@ local function link_starting(text)
 end
 
 --- The joins that start with the link ending row `first_row`, each one row
---- longer than the one before, shortest first.
+--- longer than the one before, shortest first. A join goes on to the next row
+--- when the run it took there is that row's last, and the link took it whole.
 ---
 ---@param row_text fun(row: integer): string
 ---@param first_row integer
@@ -67,25 +68,33 @@ local function joins_starting_at(row_text, first_row)
   local parts =
     { { row = first_row, first_column = head.first_column, end_column = head.end_column } }
   local joins = {}
-  local below = row_text(first_row + 1)
-  local run_first, run_last = below:find('%S+')
-  if not run_first then
-    return joins
+  for row = first_row + 1, first_row + MAX_ROWS - 1 do
+    local below = row_text(row)
+    local run_first, run_last = below:find('%S+')
+    if not run_first then
+      break
+    end
+    local joined = written .. below:sub(run_first, run_last)
+    local link = link_starting(joined)
+    if not link or link.end_column <= #written then
+      break
+    end
+    parts = vim.list_extend(vim.deepcopy(parts), {
+      {
+        row = row,
+        first_column = run_first - 1,
+        end_column = run_first - 1 + link.end_column - #written,
+      },
+    })
+    table.insert(
+      joins,
+      { path = link.path, line = link.line, length = link.end_column, parts = parts }
+    )
+    if link.end_column < #joined or run_last < #without_trailing_blanks(below) then
+      break
+    end
+    written = joined
   end
-  local joined = written .. below:sub(run_first, run_last)
-  local link = link_starting(joined)
-  if not link or link.end_column <= #written then
-    return joins
-  end
-  table.insert(parts, {
-    row = first_row + 1,
-    first_column = run_first - 1,
-    end_column = run_first - 1 + link.end_column - #written,
-  })
-  table.insert(
-    joins,
-    { path = link.path, line = link.line, length = link.end_column, parts = parts }
-  )
   return joins
 end
 
