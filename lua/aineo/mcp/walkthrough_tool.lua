@@ -21,6 +21,19 @@ M.PLAN_ORDER = 'Plan the walkthrough the way the solution is built: introduce a 
 --- What the agent is told of when a step is shown.
 M.PACE = 'Show one step per call, only after the user asks to move; never two steps in one turn.'
 
+--- What a tool that shows files says of a file of a repository other than the
+--- session's: the checkout must have been announced first. The server's
+--- instructions say it too, with the tool's full name.
+---
+---@param verb string what the tool does with the file: `shown`, `listed`
+---@return string
+function M.announce_first(verb)
+  return "A file of a repository other than the session's is "
+    .. verb
+    .. ' only once you have called announce_work for its checkout with the branch checked out'
+    .. ' there, also for code you only read and want to explain.'
+end
+
 --- What the tool says of itself.
 local DESCRIPTION = "Shows one step of a code walkthrough in the user's editor: opens `file` in the"
   .. ' middle window and puts an explanation above each of `ranges`, in the look of the explanations'
@@ -31,7 +44,9 @@ local DESCRIPTION = "Shows one step of a code walkthrough in the user's editor: 
   .. ' `file` is an absolute path to a regular file of at most 1 MiB inside a repository the editor'
   .. ' has open or a worktree an agent reported with announce_work, no link leading out of it and'
   .. ' nothing under `.git`. Walk through checked-out work only: a branch no worktree has checked'
-  .. ' out has no file on disk. `title` names the step, `step`'
+  .. ' out has no file on disk. '
+  .. M.announce_first('shown')
+  .. ' `title` names the step, `step`'
   .. ' is its number from 1 and `total` how many steps there will be. `ranges` holds 1 to 16 of'
   .. ' `{ start, end, text, first_line? }`: `start` and `end` the first and last line the explanation'
   .. ' is about, from 1; `text` its Markdown, at most 8 KiB, and 32 KiB in all; `first_line` the'

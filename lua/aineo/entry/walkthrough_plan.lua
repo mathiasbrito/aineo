@@ -317,22 +317,33 @@ local function shown_words(plan, shown)
 end
 
 --- The plan `call` is, its steps' files named from the root of their
---- checkouts, or why a file may not be shown: in words for the agent that
---- name the step's field.
+--- checkouts, `<project>: <name>` for a checkout `project_of_root` names, or
+--- why a file may not be shown: in words for the agent that name the step's
+--- field.
 ---
 ---@param call aineo.mcp.WalkthroughPlanCall
 ---@param folders string[]
+---@param project_of_root? fun(root: string): string|nil the name of the project a checkout belongs to when it is not the session's
 ---@return aineo.explain.PlanToShow? plan
 ---@return string? problem
-local function plan_to_show(call, folders)
+local function plan_to_show(call, folders, project_of_root)
   local steps = {}
   local roots = {}
+  local projects_by_root = {}
   for position, step in ipairs(call.steps) do
-    local problem, name = walkthrough_file.problem_with_file(step.file, folders, roots)
+    local problem, name, root = walkthrough_file.problem_with_file(step.file, folders, roots)
     if problem then
       return nil, ('steps[%d].%s'):format(position, problem)
     end
-    table.insert(steps, { title = step.title, file = name, introduces = step.introduces })
+    if project_of_root and projects_by_root[root] == nil then
+      projects_by_root[root] = project_of_root(root) or false
+    end
+    local project = projects_by_root[root]
+    table.insert(steps, {
+      title = step.title,
+      file = project and (project .. ': ' .. name) or name,
+      introduces = step.introduces,
+    })
   end
   return { title = call.title, summary = call.summary, covers = call.covers, steps = steps }
 end
@@ -340,7 +351,8 @@ end
 --- Takes `call`, a plan the agent of `tab` sends, in place of the plan shown:
 --- its files are checked as a step's are, given `folders`, the folders whose
 --- repositories are open, and a plan with a file that may not be shown is
---- refused, naming the step, and changes nothing. A plan taken is drawn in the
+--- refused, naming the step, and changes nothing. A step's file in a checkout
+--- `project_of_root` names a project of is shown as `<project>: <path>`. A plan taken is drawn in the
 --- tab's walkthrough pane, which takes the Report's place in the right column
 --- while the tab's layout is open, the cursor staying where it is; the step on
 --- show stays marked.
@@ -348,9 +360,10 @@ end
 ---@param tab aineo.entry.WalkthroughPlanTab
 ---@param call aineo.mcp.WalkthroughPlanCall
 ---@param folders string[]
+---@param project_of_root? fun(root: string): string|nil
 ---@return aineo.entry.WalkthroughAnswer
-function M.take_plan(tab, call, folders)
-  local plan, problem = plan_to_show(call, folders)
+function M.take_plan(tab, call, folders, project_of_root)
+  local plan, problem = plan_to_show(call, folders, project_of_root)
   if not plan then
     return { text = 'refused: ' .. problem, is_error = true }
   end

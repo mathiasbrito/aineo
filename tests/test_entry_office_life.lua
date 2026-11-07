@@ -180,19 +180,16 @@ T['the office of a tab']['loads none of the office’s engine until the office f
 
   local before =
     child.lua_get([[vim.tbl_filter(function(name) return package.loaded[name] ~= nil end, {
-      'aineo.office', 'aineo.office_scene', 'aineo.office_states', 'aineo.office_pack', 'aineo.transcript',
+      'aineo.office', 'aineo.office_scene', 'aineo.office_states', 'aineo.office_pack',
     })]])
   entry.command(child, 'Aineo office')
   local after =
     child.lua_get([[vim.tbl_filter(function(name) return package.loaded[name] ~= nil end, {
-      'aineo.office_scene', 'aineo.office_states', 'aineo.office_pack', 'aineo.transcript',
+      'aineo.office_scene', 'aineo.office_states', 'aineo.office_pack',
     })]])
 
   eq(before, { 'aineo.office' })
-  eq(
-    after,
-    { 'aineo.office_scene', 'aineo.office_states', 'aineo.office_pack', 'aineo.transcript' }
-  )
+  eq(after, { 'aineo.office_scene', 'aineo.office_states', 'aineo.office_pack' })
 end
 
 --- The session the child's tab runs, as `write_transcript()` names its file.

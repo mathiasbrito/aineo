@@ -27,6 +27,7 @@ local MAX_META_BYTES = 64 * 1024
 ---@field folder string the session's `subagents` folder, which need not exist yet
 ---@field on_signal fun(signal: aineo.transcript.Signal) called for each signal, with the editor's API usable
 ---@field on_unreadable_line? fun(length: integer) called with the length in bytes of each line that is not JSON or is too long, never with its text
+---@field poller? aineo.transcript.Poller what looks for the folder, and for a subagent's transcript that is not there, in place of a timer of its own
 
 --- The ids of the subagents whose transcripts the folder holds, sorted.
 ---
@@ -153,6 +154,7 @@ function M.follow_subagents(options)
       agent = id,
       on_signal = options.on_signal,
       on_unreadable_line = options.on_unreadable_line,
+      poller = options.poller,
       replay_existing = past,
     })
   end
@@ -202,7 +204,7 @@ function M.follow_subagents(options)
 
   local watch = watching.watch(options.folder, function()
     look(false)
-  end)
+  end, options.poller)
 
   return {
     stop = function()

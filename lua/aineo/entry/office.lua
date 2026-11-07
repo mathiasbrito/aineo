@@ -50,6 +50,19 @@ local function transcript_found_for(session_id)
   return places.folder_transcript(session_id)
 end
 
+--- The transcript of the session `session_id` of `tab`: the path its
+--- `SessionStart` hook named (`M.note_transcript()`), else the one found by
+--- Claude Code's folder rule (`transcript_found_for()`); `nil` when there is
+--- no session.
+---
+---@param tab aineo.entry.Tab
+---@param session_id string|nil
+---@return string|nil path
+function M.transcript_for_session(tab, session_id)
+  local named = session_id and named_transcripts[tab] and named_transcripts[tab][session_id]
+  return named or transcript_found_for(session_id)
+end
+
 --- The transcript of the session `tab` shows: the session its panes follow,
 --- which is another than its own Claude Code's while the tab claims one, else
 --- its own. The path its `SessionStart` hook named (`M.note_transcript()`),
@@ -59,9 +72,7 @@ end
 ---@param tab aineo.entry.Tab
 ---@return string|nil path
 local function transcript_of(tab)
-  local session_id = tab.panes_session() or tab.session_id()
-  local named = session_id and named_transcripts[tab] and named_transcripts[tab][session_id]
-  return named or transcript_found_for(session_id)
+  return M.transcript_for_session(tab, tab.panes_session() or tab.session_id())
 end
 
 --- The pack `:Aineo office pack` chose for this Neovim, which stands in
@@ -94,6 +105,15 @@ end
 --- continuation. It looks for the one the tab's own resume wrote from then on.
 ---@type table<aineo.entry.Tab, number>
 local began_following_at = setmetatable({}, { __mode = 'k' })
+
+--- When `tab` began following the session it shows, in seconds since 1970;
+--- nil before the first start (`M.began_following()`).
+---
+---@param tab aineo.entry.Tab
+---@return number|nil
+function M.following_since(tab)
+  return began_following_at[tab]
+end
 
 --- Notes that `tab` begins following the session it shows now: its Claude Code
 --- is about to start, or has switched session.

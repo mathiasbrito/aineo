@@ -4,33 +4,22 @@
 --- call of a run tool, a step of a walkthrough — made once for every tab.
 
 local places = require('aineo.entry.places')
+local projects = require('aineo.entry.projects')
 local registry = require('aineo.entry.registry')
 local routing = require('aineo.entry.routing')
+local tellers = require('aineo.entry.tellers')
 
 local M = {}
 
 --- Whether the editor's handlers have been made (`make_editor_handlers()`).
 local editor_handlers_made = false
 
---- What tells the user `message`, at `INFO`, for `tab`: `tab <n>: ` before
---- it, `n` the tab's place among the tab pages, while that tab is not the
---- current one when it is told.
----
----@param tab aineo.entry.Tab
----@return fun(message: string)
-local function teller_for(tab)
-  return function(message)
-    if registry.tab_of_current_page() ~= tab and tab.is_bound() then
-      message = ('tab %d: %s'):format(registry.tab_number(tab), message)
-    end
-    vim.notify(message, vim.log.levels.INFO)
-  end
-end
-
 --- How long the editor waits for a report's branches to be resolved before
 --- it refuses the announcement: above the limit the changes home gives git
 --- for each run, so that git's own answer comes first, and inside the 5 s
---- the report server waits for the editor.
+--- the report server waits for the editor. The repository git finds for the
+--- folder is carried in the resolved report, so that the tab asks no more
+--- of git for it (`aineo.entry.projects`' `home_for_report()`).
 local BASE_WAIT_MS = 4000
 
 --- `work` with each branch checked to be a local branch and its base
@@ -77,14 +66,17 @@ end
 --- is checked to be a local branch and its base resolved to its full id in
 --- the worktree's own folder, else in that tab's session's repository
 --- (`resolved_work()`) — a branch git does not have, or a base that cannot
---- be resolved, is refused, and nothing is recorded — and the tab's changes
---- home is handed the work, with what tells the user for that tab
---- (`teller_for()`), and answers, starting its git reads without waiting on
---- them (`aineo.changes.Home`'s `add_reported_work()`).
+--- be resolved, is refused, and nothing is recorded — and the work is handed,
+--- with what tells the user for that tab (`aineo.entry.tellers`' `for_tab()`),
+--- to the changes home it belongs to, which answers, starting its git reads
+--- without waiting on them (`aineo.changes.Home`'s `add_reported_work()`): the
+--- tab's own, unless the worktree is a checkout of another repository and the
+--- report lists a branch, when it is that repository's project's
+--- (`aineo.entry.projects`' `home_for_report()`).
 ---
 ---@param work aineo.changes.ReportedWork
 ---@param start_token string
----@return boolean|string taken `true` when taken, or the words of its refusal
+---@return boolean|string|{ note: string } taken `true` when taken, `{ note }` when taken with a note for the agent, or the words of its refusal
 local function take_announced_work(work, start_token)
   local tab = type(start_token) == 'string' and routing.tab_for_work(start_token)
   if not (tab and is_worktree_report(work)) then
@@ -95,8 +87,15 @@ local function take_announced_work(work, start_token)
   if not resolved then
     return refusal
   end
-  work = resolved
-  return changes.add_reported_work(work, teller_for(tab)) == true
+  local home, why, note = projects.home_for_report(tab, resolved)
+  if not home then
+    return why
+  end
+  local taken = home.add_reported_work(resolved, tellers.for_tab(tab)) == true
+  if taken and note then
+    return { note = note }
+  end
+  return taken
 end
 
 --- Takes `run_call`, a call of a run tool a relay offers with the start token
@@ -105,7 +104,7 @@ end
 --- the words for the agent and whether they are an error: with no such tab,
 --- false; else what that tab's run pane does (`aineo.entry.run_tools`'s
 --- `call()`), in the project folder, telling the user for that tab
---- (`teller_for()`).
+--- (`aineo.entry.tellers`' `for_tab()`).
 ---
 ---@param run_call aineo.mcp.RunCall
 ---@param start_token string
@@ -117,7 +116,7 @@ local function take_run_call(run_call, start_token)
   end
   return require('aineo.entry.run_tools').call(tab, run_call, {
     folder = places.kept_places().working_directory,
-    tell = teller_for(tab),
+    tell = tellers.for_tab(tab),
   })
 end
 
@@ -150,7 +149,8 @@ end
 ---@param tab aineo.entry.Tab
 ---@return string[]
 local function walkthrough_folders(tab)
-  return vim.list_extend(open_folders(), tab.homes.changes.reported_worktree_tops())
+  local folders = vim.list_extend(open_folders(), tab.homes.changes.reported_worktree_tops())
+  return vim.list_extend(folders, projects.folders(tab))
 end
 
 --- Takes `step`, a call of the walkthrough tool a relay offers with the
@@ -187,7 +187,14 @@ local function take_walkthrough_plan(plan, start_token)
   if not tab then
     return false
   end
-  return require('aineo.entry.walkthrough_plan').take_plan(tab, plan, walkthrough_folders(tab))
+  return require('aineo.entry.walkthrough_plan').take_plan(
+    tab,
+    plan,
+    walkthrough_folders(tab),
+    function(root)
+      return projects.name_of_root(tab, root)
+    end
+  )
 end
 
 --- Makes, once, the handlers this Neovim's entries in the list of running

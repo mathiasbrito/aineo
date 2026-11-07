@@ -240,7 +240,7 @@ T['a plan']['is refused for a file of a repository the editor does not have open
   local answer = plan(token, walkthrough_session.plan_for(project, { steps = steps }))
 
   eq(answer, {
-    text = ('refused: steps[1].file: %s/a.lua is in no repository the editor has open'):format(
+    text = ('refused: steps[1].file: %s/a.lua is in no repository the editor has open; call announce_work for its checkout with the branch checked out there first, also for code you only read'):format(
       other
     ),
     is_error = true,

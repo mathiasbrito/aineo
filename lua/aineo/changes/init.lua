@@ -55,6 +55,7 @@
 
 local colours = require('aineo.changes.colours')
 local copy = require('aineo.changes.copy')
+local kept = require('aineo.changes.kept')
 local lines = require('aineo.changes.lines')
 local open_file = require('aineo.changes.open_file')
 
@@ -76,6 +77,22 @@ M.kind_groups = colours.KIND_GROUPS
 --- (`aineo.changes.colours`' `define_changes_colours()`), so that another
 --- pane may show in them before this one has been shown.
 M.define_colours = colours.define_changes_colours
+
+--- Moves the base, the saves and the view kept for the Claude Code session
+--- `from` to the session `to`, under the editor's state directory, where `to`
+--- has none (`aineo.changes.kept`'s `move_kept()`), for a session no home
+--- follows.
+M.move_kept_session = kept.move_kept
+
+--- Copies the base, the saves and the view kept for the Claude Code session
+--- `from` to the session `to`, where `to` has none, `from` keeping its own
+--- (`aineo.changes.kept`'s `copy_kept()`).
+M.copy_kept_session = kept.copy_kept
+
+--- Keeps the base and the saves kept for the Claude Code session `id` as
+--- those of another checkout of the same repository, whose top is given
+--- (`aineo.changes.kept`'s `retop_kept()`).
+M.retop_kept_session = kept.retop_kept
 
 --- A path as a buffer line can hold it and a reader can tell it whole,
 --- quoted and escaped when it holds a control character, a double quote or

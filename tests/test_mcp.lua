@@ -113,6 +113,16 @@ T['walkthrough_instructions()']['tell the agent to send the plan before step 1, 
   contains(paragraph, '`covers` listing the features and changes it goes through')
 end
 
+T['walkthrough_instructions()']['tell the agent to call announce_work for the checkout of another repository first, also for code it only reads'] = function()
+  local paragraph = mcp.walkthrough_instructions()
+
+  contains(
+    paragraph,
+    "A file of a repository other than the session's is shown only once you have called `mcp__aineo__announce_work`"
+      .. ' for its checkout with the branch checked out there, also for code you only read and want to explain.'
+  )
+end
+
 T['the walkthrough plan tool'] = MiniTest.new_set()
 
 T['the walkthrough plan tool']['is named as Claude Code names it'] = function()
@@ -152,6 +162,26 @@ T['the walkthrough tool']['tells the agent to walk through checked-out work only
   contains(
     description,
     'Walk through checked-out work only: a branch no worktree has checked out has no file on disk.'
+  )
+end
+
+T['the walkthrough tool']['tells the agent to call announce_work for the checkout of another repository first, also for code it only reads'] = function()
+  local description = require('aineo.mcp.walkthrough_tool').tool().description
+
+  contains(
+    description,
+    "A file of a repository other than the session's is shown only once you have called announce_work"
+      .. ' for its checkout with the branch checked out there, also for code you only read and want to explain.'
+  )
+end
+
+T['the walkthrough plan tool']['tells the agent to call announce_work for the checkout of another repository first, also for code it only reads'] = function()
+  local description = require('aineo.mcp.walkthrough_plan_tool').tool().description
+
+  contains(
+    description,
+    "A file of a repository other than the session's is listed only once you have called announce_work"
+      .. ' for its checkout with the branch checked out there, also for code you only read and want to explain.'
   )
 end
 

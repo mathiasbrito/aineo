@@ -48,9 +48,10 @@ end
 ---
 ---@param path string an absolute path
 ---@param folders string[] the folders whose repositories are open
----@param roots? table<string, string|false> the checkouts found so far, by real folder
+---@param roots? table<string, { root: string|nil, why: string|nil }> the checkouts found so far, by real folder, and why none was found
 ---@return string? problem
 ---@return string? name
+---@return string? root the top of the checkout, when the file may be shown
 local function file_problem(path, folders, roots)
   local stat = vim.uv.fs_stat(path)
   if not stat then
@@ -70,23 +71,30 @@ local function file_problem(path, folders, roots)
   end
   local test_layout = require('aineo.test_layout')
   local directory = vim.uv.fs_realpath(vim.fs.dirname(path))
-  local root
-  if directory and roots and roots[directory] ~= nil then
-    root = roots[directory] or nil
-  else
-    root = directory and test_layout.open_checkout_of(directory, folders)
+  local found = directory and roots and roots[directory]
+  if not found then
+    local checkout, why = test_layout.open_checkout_of(directory or path, folders)
+    found = { root = checkout, why = why }
     if directory and roots then
-      roots[directory] = root or false
+      roots[directory] = found
     end
   end
+  local root = found.root
+  if found.why == 'not_a_checkout' then
+    return ('file: %s is in no git repository, so aineo cannot show it'):format(path)
+  end
   if not root then
-    return ('file: %s is in no repository the editor has open'):format(path)
+    return (
+      'file: %s is in no repository the editor has open;'
+      .. ' call announce_work for its checkout with the branch checked out there first,'
+      .. ' also for code you only read'
+    ):format(path)
   end
   local resolved = vim.fs.joinpath(directory, vim.fs.basename(path))
   if not test_layout.stays_inside(root, resolved) then
     return leaves
   end
-  return nil, vim.fs.relpath(root, resolved) or path
+  return nil, vim.fs.relpath(root, resolved) or path, root
 end
 
 --- Why the range numbered `position` may not be shown over `lines`: it
@@ -119,15 +127,16 @@ local function range_problem(range, position, lines)
 end
 
 --- Why the file at `path` may not be shown (`file_problem()`), and, when it
---- may, its name from the root of the checkout it is in. Used for a file a
---- plan lists, which is shown by name and not opened; `roots` is as
---- `file_problem()` takes it.
+--- may, its name from the root of the checkout it is in, and that root. Used
+--- for a file a plan lists, which is shown by name and not opened; `roots` is
+--- as `file_problem()` takes it.
 ---
 ---@param path string an absolute path
 ---@param folders string[] the folders whose repositories are open
----@param roots? table<string, string|false>
+---@param roots? table<string, { root: string|nil, why: string|nil }>
 ---@return string? problem
 ---@return string? name
+---@return string? root
 function M.problem_with_file(path, folders, roots)
   return file_problem(path, folders, roots)
 end

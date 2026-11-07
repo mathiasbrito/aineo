@@ -289,11 +289,20 @@ T['Send']['from the second tab’s Input while it claims another session is refu
     'vim.api.nvim_buf_set_lines(vim.fn.bufnr(...), 0, -1, true, { "for the first" })',
     { tabs.input_name_of_tab(child, 1) }
   )
+  child.lua([[
+    local send = vim.api.nvim_chan_send
+    vim.api.nvim_chan_send = function(job, bytes)
+      vim.defer_fn(function()
+        send(job, bytes)
+      end, 150)
+    end
+  ]])
+  local before = #claude_session.received(first)
 
   entry.press(child, '<Plug>(aineo-send)')
 
   eq(refusal:find('the draft of the claimed session ' .. CLAIMED_ID, 1, true) ~= nil, true)
-  local written = claude_session.wait_for_received_after(first, 0, #pasted('for the first'))
+  local written = claude_session.wait_for_received_after(first, before, #pasted('for the first'))
   eq(written:find(pasted('for the first'), 1, true) ~= nil, true)
   eq(claude_session.received(second):find('for the claimed', 1, true), nil)
 end

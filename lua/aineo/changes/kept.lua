@@ -493,4 +493,55 @@ function M.move_kept_view(state_directory, from, to)
   return move_file(M.kept_view_file(state_directory, from), M.kept_view_file(state_directory, to))
 end
 
+--- Copies what is kept for the session `from` (its base and saves, and its
+--- view) to the session `to`, under `state_directory`, for each of them that
+--- `to` has none of and `from` has. `from` keeps its own.
+---
+---@param state_directory string
+---@param from string
+---@param to string
+---@return string? failure why a copy could not be kept, naming the file; nil once copied, or when there was nothing to copy
+function M.copy_kept(state_directory, from, to)
+  local base = M.read_kept_base(state_directory, from)
+  if base and not M.read_kept_base(state_directory, to) then
+    local failure = M.keep_base(state_directory, to, base)
+    if failure then
+      return failure
+    end
+  end
+  local view = M.read_kept_view(state_directory, from)
+  if view and not M.read_kept_view(state_directory, to) then
+    return M.keep_view(state_directory, to, view)
+  end
+  return nil
+end
+
+--- Keeps, for the session `id`, the base and the saves it has kept as those of
+--- the checkout at `top`, in place of the checkout they were kept for, so
+--- that a home reading `top` takes them. Does nothing when none is kept.
+---
+---@param state_directory string
+---@param id string
+---@param top string the top level of the checkout the base is now for
+---@return string? failure why it could not be kept, naming the file; nil once kept, or when nothing was kept
+function M.retop_kept(state_directory, id, top)
+  local base = M.read_kept_base(state_directory, id)
+  if not base then
+    return nil
+  end
+  return M.keep_base(state_directory, id, { top = top, base = base.base, saved = base.saved })
+end
+
+--- Moves what is kept for the session `from` (its base and saves, and its
+--- view) to the session `to`, under `state_directory`, for each of them that
+--- `to` has none of and `from` has (`M.move_kept_base()`, `M.move_kept_view()`).
+---
+---@param state_directory string
+---@param from string
+---@param to string
+---@return string? failure why one could not be moved, naming both files; nil once moved, or when there was nothing to move
+function M.move_kept(state_directory, from, to)
+  return M.move_kept_base(state_directory, from, to) or M.move_kept_view(state_directory, from, to)
+end
+
 return M

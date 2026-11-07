@@ -109,6 +109,10 @@ end
 ---@field close_shown_diff fun() closes the windows of the current tab page that show a diff the home showed, and tells once when none was closed
 ---@field focused_work fun(): aineo.changes.FocusedWork|nil what the focused view shows alone, nil for the default view
 ---@field watch_focused_work fun(watcher: fun()) calls `watcher` each time what `focused_work()` gives changes
+---@field count_session_work fun(done: fun(count: integer|nil)) calls `done` once, on the main loop, with how many files differ from the session's base — the files *Session work* lists — or nil when no repository was found, the base is not read yet or the read fails
+---@field has_shown_diff fun(): boolean whether a window of the current tab page shows a diff the home showed
+---@field stop_watching fun() stops the watch of the repository and that of the worktree whose *Uncommitted* is chosen; the next showing of the pane starts them again
+---@field on_repository_change fun(listener: fun()) calls `listener` each time the home finds the repository, takes the base of a session, or the watch of the repository sees a change in it
 ---@field offer_scopes fun() what `s` does in the pane: offers the worktrees, branches and reported work to show alone
 ---@field let_go? fun() only on a home `require('aineo.changes').new()` made: stops its watch, removes its handlers and wipes its buffers
 
@@ -163,6 +167,7 @@ function M.new(label)
   ---@field start_timer? fun(milliseconds: integer, act: fun()): fun() starts a timer that runs `act` once, on the main loop, after `milliseconds`, and returns what stops it; a `vim.uv` timer when not given
   ---@field now? fun(): integer the time the pane tells the ages of commits at, in seconds since the epoch; `os.time` when not given
   ---@field graph_limit? integer how many commits the commit graph draws, at least 1; `DEFAULT_GRAPH_LIMIT` when not given
+  ---@field base_words? string what the Against line and the bars of diffs call the base of *Session work*; `session start` when not given
 
   --- The session, from `begin_session()` on.
   ---@class aineo.changes.Session
@@ -305,6 +310,7 @@ function M.new(label)
     return {
       repository = session.repository,
       base = session.base,
+      base_words = session.settings.base_words,
       landed = session.landed,
       branch = branch_named(entry.filter and entry.filter.branch),
       options = session.settings.git,
@@ -1832,6 +1838,18 @@ function M.new(label)
     end, session.settings.git)
   end)
 
+  --- The functions told each time the repository may have changed what the
+  --- pane lists (`home.on_repository_change()`).
+  ---@type fun()[]
+  local repository_change_listeners = {}
+
+  --- Calls each function `home.on_repository_change()` was given.
+  local function tell_repository_changed()
+    for _, listener in ipairs(repository_change_listeners) do
+      listener()
+    end
+  end
+
   --- Reads again what `change`, a call of the watch, may have changed: the
   --- other worktrees' commits at every call, as a commit in one of them
   --- moves no branch of the editor's, and their files when the files window
@@ -1841,6 +1859,8 @@ function M.new(label)
   --- written, as a fetch does; and the commit graph, while it is shown, and
   --- the names on the files window's second heading line, when the branch
   --- moved or a reference was written (`read_graph()`, `read_against()`).
+  --- Then tells the listeners of `home.on_repository_change()`
+  --- (`tell_repository_changed()`).
   ---
   ---@param change aineo.git.RepositoryChange
   local function follow_change(change)
@@ -1850,6 +1870,7 @@ function M.new(label)
       read_graph()
       read_against()
     end
+    tell_repository_changed()
   end
 
   --- Tells both windows that `failure` stopped the watch, under the lists
@@ -2222,6 +2243,9 @@ function M.new(label)
       end
       show_files()
       show_commits()
+      if repository then
+        tell_repository_changed()
+      end
     end, session.settings.git)
   end)
 
@@ -2264,6 +2288,7 @@ function M.new(label)
       session.base = repository.head
       keep()
       read_for_new_base()
+      tell_repository_changed()
     end, session.settings.git)
   end
 
@@ -2784,6 +2809,13 @@ function M.new(label)
 
   --- What the user is told when there is no diff to close.
   local NO_DIFF_TO_CLOSE = 'aineo: no diff to close'
+
+  --- Whether a window of the current tab page shows a diff the home showed.
+  ---
+  ---@return boolean
+  function home.has_shown_diff()
+    return #windows_showing_a_diff() > 0
+  end
 
   --- Closes the windows of the current tab page that show a diff the home
   --- showed (`windows_showing_a_diff()`), the diff buffer with each, wiped once
@@ -3743,6 +3775,7 @@ function M.new(label)
           return
         end
         done(vim.tbl_extend('force', work, {
+          found = found or false,
           branches = vim
             .iter(ipairs(work.branches))
             :map(function(index, listed)
@@ -3762,8 +3795,9 @@ function M.new(label)
   --- with `work`, each branch's base its full id, or `done(nil, refusal)`
   --- with why it is refused, in words for the agent that name the first
   --- item at fault: also with no session yet, no repository found for it,
-  --- or the local branches git cannot list. A report of no branch is given
-  --- back as it is.
+  --- the local branches git cannot list, or git running past its limit
+  --- while it looks for the worktree's repository (which is no "no
+  --- repository"). A report of no branch is given back as it is.
   ---
   ---@param work aineo.changes.ReportedWork
   ---@param done fun(resolved: aineo.changes.ReportedWork|nil, refusal: string|nil)
@@ -3780,6 +3814,10 @@ function M.new(label)
       limit_ms = BASE_RESOLUTION_LIMIT_MS,
     })
     git.find_repository(work.worktree, function(failure, found)
+      if failure and failure.reason == 'timed_out' then
+        done(nil, 'worktree: ' .. lines.words_of(failure))
+        return
+      end
       local found_repository = not failure and found or nil
       local listed_in = found_repository or session.repository
       git.list_branches(listed_in, function(list_failure, branches)
@@ -3971,6 +4009,32 @@ function M.new(label)
   ---@param watcher fun()
   function home.watch_focused_work(watcher)
     table.insert(focused_work_watchers, watcher)
+  end
+
+  --- Has `listener` called each time the repository may have changed what the
+  --- pane lists: the home found the repository, took the base of a session,
+  --- or its watch saw a change in it, after the pane's lists were asked to be
+  --- read again.
+  ---
+  ---@param listener fun()
+  function home.on_repository_change(listener)
+    table.insert(repository_change_listeners, listener)
+  end
+
+  --- Calls `done` once with how many files differ from the session's base:
+  --- the files *Session work* lists, read now whatever the pane shows. Nil
+  --- while no repository was found or git looks for the base, and when the
+  --- read fails or the home was let go.
+  ---
+  ---@param done fun(count: integer|nil)
+  function home.count_session_work(done)
+    if not (session and session.repository) or session.looking_for_head or released then
+      done(nil)
+      return
+    end
+    git.changed_files(session.repository, session.base, function(failure, changes)
+      done(not failure and not released and #changes or nil)
+    end, session.settings.git)
   end
 
   --- A scratch buffer of the pane named `name` (`aineo.changes.scratch`),
@@ -4370,6 +4434,23 @@ function M.new(label)
       session.worktree_watch.watch.stop()
       session.worktree_watch = nil
     end
+  end
+
+  --- Stops the watch of the repository and that of the worktree whose
+  --- *Uncommitted* is chosen, when they run, and notes that the pane is no
+  --- longer shown, so that a showing already asked for (`pane_shown()`) starts
+  --- no watch; the next showing of the pane starts them again
+  --- (`follow_repository()`).
+  function home.stop_watching()
+    if not session then
+      return
+    end
+    session.shown = false
+    if session.watch then
+      session.watch.stop()
+      session.watch = nil
+    end
+    stop_worktree_watch()
   end
 
   --- Whether the session's own watch already sees the files of the folder
