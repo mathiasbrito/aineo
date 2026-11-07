@@ -86,6 +86,10 @@ Decisions: a taken announcement may carry a note (`{ note = ... }` from the edit
 
 Each seen red first: (1) `continued_in` cleared in `rebuild()` (a `continued-in` line of an earlier session no longer carries a later session's projects into the session it names); (2) a `find_repository()` timeout while resolving a report refuses it with git's words and remembers nothing (a second report, once git answers, joins); (3) a no-branch report for a folder inside a checkout is taken with the note, not refused. The vimdoc says (2) and (3).
 
+## The routing test that failed under load
+
+`tests/test_entry_tabs_routing.lua`, the Send case for a second tab that claims another session, failed in the whole runs and about half the runs under 8 busy loops. Cause, measured: the text is never lost or misdirected, it reaches the fake 0.07-0.1 ms after the check, because the check waited for as many bytes as the paste from byte 0 and the fake's start-up terminal replies (156 bytes) already exceed the paste (26): a race in the test. In probes under the same load the check lost it in 4 of 16 runs on dev and 2 of 16 on this branch, so no start work of this branch is shown to add to it; the 3 of 6 against 0 of 6 of the first comparison is not explained by the probes. The case now counts the bytes received before the press, and a `nvim_chan_send` delayed by 150 ms makes the old shape fail every time. Six loaded rounds of the file: 0 failures after; 1 of 6 before in the same measure. Only that test file changed.
+
 ## Commits
 
 *Recorded after the merge.*
