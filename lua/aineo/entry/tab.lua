@@ -757,14 +757,22 @@ local function make_tab(homes, key, callbacks)
     end
   end
 
+  --- The directory a relative path in Claude's terminal is in: the one the
+  --- session's Claude Code started in, else the current directory.
+  ---
+  ---@return string
+  local function link_directory()
+    return homes.claude.session_directory() or vim.fn.getcwd()
+  end
+
   --- Follows the link `text` shown in Claude's terminal, naming line `line`
-  --- when it names one (`links.open_link()`): a relative path is in the
-  --- directory the session's Claude Code started in.
+  --- when it names one (`links.open_link()`): a relative path is in
+  --- `link_directory()`.
   ---
   ---@param text string
   ---@param line integer?
   local function follow_link(text, line)
-    links.open_link(text, line, homes.claude.session_directory())
+    links.open_link(text, line, link_directory())
   end
 
   --- Follows the Claude Code on `terminal`, now the tab's own: the tab line
@@ -777,7 +785,7 @@ local function make_tab(homes, key, callbacks)
   local function follow_claude_terminal_activity(terminal)
     redraw_tab_line_when_named(terminal)
     busy_watch.tell_when_busy_changes(terminal, tell_tabs_home_busy)
-    links.map_link_keys(terminal, follow_link)
+    links.map_link_keys(terminal, follow_link, link_directory)
   end
 
   --- Makes the tab the one in the tab page the current window is in, once its
