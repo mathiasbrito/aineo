@@ -565,4 +565,51 @@ T['following the link ~ alone']['hands the home folder to the system'] = functio
   eq({ external = followed.external, told = followed.told }, { external = { home }, told = {} })
 end
 
+--- The width, in screen cells, that `show_rows_in_claude_terminal()` pads
+--- each row to with blanks: wider than anything the fake drew on the row
+--- before.
+local ROW_WIDTH = 90
+
+--- Has the fake `claude` print the strings `rows`, one on each row of its
+--- screen, from the prompt's row down, and makes Claude's terminal the
+--- current window, in Terminal mode (`show_in_claude_terminal()`). Each row is
+--- padded with blanks to `ROW_WIDTH`, so that nothing drawn there before shows
+--- after it.
+---
+---@param rows string[]
+local function show_rows_in_claude_terminal(rows)
+  local padded = vim.tbl_map(function(row)
+    return row .. string.rep(' ', ROW_WIDTH - vim.fn.strdisplaywidth(row))
+  end, rows)
+  show_in_claude_terminal(table.concat(padded, '\r'))
+end
+
+T["a path wrapped across rows of Claude's terminal"] = MiniTest.new_set()
+
+T["a path wrapped across rows of Claude's terminal"]['is followed whole by a double-click on its first row'] = function()
+  local top = open_layout_in_project('links-wrapped-first')
+  show_rows_in_claude_terminal({ 'Opening a path too long for its row: lua/', 'x.lua now' })
+
+  double_click(cell_of(CLAUDE_TERMINAL, 'lua/', 1))
+
+  wait_until_current_file_is(vim.fs.joinpath(top, 'lua/x.lua'))
+  eq(
+    { followed = what_followed(), line = cursor_line() },
+    { followed = opened_in_file_column(vim.fs.joinpath(top, 'lua/x.lua')), line = 1 }
+  )
+end
+
+T["a path wrapped across rows of Claude's terminal"]['is followed whole by a double-click on its second row'] = function()
+  local top = open_layout_in_project('links-wrapped-second')
+  show_rows_in_claude_terminal({ 'Opening a path too long for its row: lua/', 'x.lua now' })
+
+  double_click(cell_of(CLAUDE_TERMINAL, 'x.lua now', 1))
+
+  wait_until_current_file_is(vim.fs.joinpath(top, 'lua/x.lua'))
+  eq(
+    { followed = what_followed(), line = cursor_line() },
+    { followed = opened_in_file_column(vim.fs.joinpath(top, 'lua/x.lua')), line = 1 }
+  )
+end
+
 return T
