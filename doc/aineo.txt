@@ -6227,11 +6227,11 @@ The names aineo knows without any legend:
 `next_to_an_agent`	a cell beside another agent who stands still
 `next_to_the_cat`	a cell beside a cat that stands still, facing it,
 	which then keeps its pose and its place until the agent's step is over
-`a_subagents_screen`	the spots of the plan of that name that face a subagent's
-	desk (|aineo-office-desks|), the nearest on the desk's row that
-	has it in front of it: where its screen is looked at from
-`its_desks_end`	the spot of the plan of that name that faces the agent's own
-	desk, likewise: where the agent stands at its desk
+`a_subagents_screen`	the spots of the plan of that name that face a
+	subagent's desk (|aineo-office-desks|), the nearest on the desk's row
+	that has it in front of it: where its screen is looked at from
+`its_desks_end`	the spot of the plan of that name that faces the agent's
+	own desk, likewise: where the agent stands at its desk
 A thing's name	the cell where a thing of that name lies
 	(|aineo-office-things|)
 
@@ -6907,10 +6907,10 @@ which leaves the ball on the floor, `get_a_drink_at_the_water_cooler` (2),
 `play_table_tennis` (1, two players) and `pet_the_cat` (1). The main agent
 while its subagents are in the office (`waiting_for_subagents`) picks, in
 turn, among `go_through_papers`, `check_a_subagents_screen` (it walks to a
-subagent's desk and looks at its screen) and `write_the_plan_on_the_whiteboard`,
-a few seconds each; a subagent that waits (`waiting`) has none and stays at its
-desk. One that needs permission picks among
-`drum_its_fingers_and_wait` (3), `look_at_its_watch_and_wait` (2) and
+subagent's desk and looks at its screen) and
+`write_the_plan_on_the_whiteboard`, a few seconds each; a subagent that waits
+(`waiting`) has none and stays at its desk. One that needs permission picks
+among `drum_its_fingers_and_wait` (3), `look_at_its_watch_and_wait` (2) and
 `glance_at_the_door_and_wait` (2), each with the hand up. The cat's life and
 the mess are in |aineo-office-cat| and |aineo-office-things|: `mess` and
 `puddle` are the two things, each upsetting agents within 40 cells, who play
