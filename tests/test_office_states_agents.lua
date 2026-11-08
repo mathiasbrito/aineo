@@ -212,6 +212,16 @@ T['the main agent']['is idle once the subagent it waited for finished'] = functi
   eq(story.state_after(30), 'idle')
 end
 
+T['the main agent']['cheers when its turn ends while the subagent that finished still walks out'] = function()
+  local story = office_signals.tell()
+  story.hear('subagent_started', { agent = 'a1' })
+  story.hear('subagent_finished', { agent = 'a1' })
+
+  story.hear_after(5, 'turn_ended')
+
+  eq({ story.state_after(office_signals.SETTLE, 'a1'), story.state() }, { 'leaving', 'done' })
+end
+
 T['the main agent']['does not wait for a subagent that finished'] = function()
   local story = office_signals.tell()
   story.hear('subagent_started', { agent = 'a1' })

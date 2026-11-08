@@ -346,6 +346,61 @@ T['a pose']['that walks as another does not have the agent walk so after it took
   eq(cell_at_two_while_carrying_from_aside(2.44), scene.solid(scene.AGENT))
 end
 
+T['a pose']['that walks as another keeps it when the agent changes its mind on the way'] = function()
+  local pack = scene.people_pack(
+    '# plan\n \n a...s...\n',
+    { a = { spot = 'aside' }, s = { spot = 'seat' } },
+    {
+      characters = people_with({
+        taking = { art = { 'person' }, walks_as = 'carrying' },
+        carrying = { art = { 'left' } },
+      }),
+      activities = {
+        play = {
+          steps = {
+            { at = 'aside', pose = 'taking', for_seconds = 1 },
+            { at = 'seat', pose = 'standing' },
+          },
+        },
+        back = { steps = { { at = 'aside', pose = 'standing' } } },
+      },
+      states = { standing = 'back', working = 'play', resting = 'back' },
+    }
+  )
+  local stage = scene.stage_of(pack, 8, 1)
+  stage.advance(scene.agents_in('working'), 0)
+  stage.advance(scene.agents_in('working'), 1.15)
+
+  stage.advance(scene.agents_in('resting'), 1.2)
+
+  eq(scene.agent_cell(stage.picture(), 8, 1, '#ff0000') ~= 'nowhere', true)
+end
+
+--- The groups of the cells around the seat at column 4 of an aisle of eight
+--- cells for an agent that sits there facing the way `facing` says in a pose
+--- that holds the piece `arm`, one blue cell to the right of its anchor, in
+--- front.
+---
+---@param facing string
+---@return string[]
+local function cells_around_a_seat_with_a_piece_in_front(facing)
+  return cells_around_seat(
+    people_with({ holding = { art = { 'person' }, in_front = 'arm' } }),
+    'holding',
+    facing
+  )
+end
+
+T['a pose']['draws its in_front piece mirrored with the agent, on the side the agent faces'] = function()
+  eq({
+    cells_around_a_seat_with_a_piece_in_front('right'),
+    cells_around_a_seat_with_a_piece_in_front('left'),
+  }, {
+    { scene.solid(scene.FLOOR), scene.solid(scene.AGENT), scene.solid(BLUE) },
+    { scene.solid(BLUE), scene.solid(scene.AGENT), scene.solid(scene.FLOOR) },
+  })
+end
+
 --- The group of the pixel pair at the cell of the seat of an aisle in which
 --- a tall brown piece stands in the row below it, for an agent that sits at
 --- the seat in a pose of `pose_fields`.
