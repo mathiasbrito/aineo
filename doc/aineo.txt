@@ -6233,6 +6233,8 @@ The names aineo knows without any legend:
 	that has it in front of it: where its screen is looked at from
 `its_desks_end`	the spot of the plan of that name that faces the agent's
 	own desk, likewise: where the agent stands at its desk
+	A plan with no spot of either name sends the agent to the spot
+	`beside_desk` nearest to the desk.
 A thing's name	the cell where a thing of that name lies
 	(|aineo-office-things|)
 
@@ -7045,6 +7047,22 @@ pose the default agent has (`glancing`). A pack written from nothing is shown
 by the tiny pack (|aineo-office-tiny|), and the default pack is the one to
 copy from (|aineo-office-default|). Every problem `:Aineo office check` tells
 names the entry by its path and says what it must be (|aineo-office-check|).
+
+A pack based on the default that brings a floor of its own plays the default's
+coordination and coffee as they are, and may draw them its own way:
+- The main agent coordinates while its subagents are in the office with the
+  activities `go_through_papers`, `check_a_subagents_screen` and
+  `write_the_plan_on_the_whiteboard`. The first two go to the plan's spots
+  `its_desks_end` and `a_subagents_screen` (|aineo-office-spots|); a plan that
+  has none of a name sends the agent to the spot `beside_desk` nearest to the
+  desk instead, and `:Aineo office check` tells nothing.
+- The poses these and the coffee break use, which a pack that draws its own
+  characters draws its own way: `going_through_papers`, `looking_at_a_screen`,
+  `waiting_quietly` (a subagent that has said nothing for ten minutes),
+  `waiting_for_the_coffee`, `taking_the_cup` (which walks as
+  `walking_with_a_cup`) and `walking_with_a_cup`, and `sipping_coffee`, which
+  may hold a piece in front of the sofa with `in_front`
+  (|aineo-office-poses|). A pose the pack does not draw is the default's.
 
                                                         *aineo-office-sharing*
 Sharing your pack ~

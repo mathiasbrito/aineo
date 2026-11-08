@@ -14,6 +14,8 @@ local KNOWN_SPOTS = {
   anywhere = true,
   an_empty_desk = true,
   an_idle_agents_desk = true,
+  a_subagents_screen = true,
+  its_desks_end = true,
   next_to_an_agent = true,
   next_to_the_cat = true,
 }

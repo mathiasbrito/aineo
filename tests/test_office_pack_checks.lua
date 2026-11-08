@@ -160,6 +160,8 @@ T['an activity']['is not told when the spot is one aineo knows, a thing’s name
           { at = 'an_idle_agents_desk' },
           { at = 'next_to_an_agent' },
           { at = 'next_to_the_cat' },
+          { at = 'a_subagents_screen' },
+          { at = 'its_desks_end' },
           { at = 'mess' },
           { at = 'person' },
         },
