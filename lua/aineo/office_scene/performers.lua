@@ -32,6 +32,7 @@ local MOST_CATS = 4
 ---@field walks_from? string the pose it held when it last began to walk
 ---@field rests_at? aineo.office_scene.Spot the spot it has come to rest at, until it walks again
 ---@field rests_since? number when it came to rest at that spot, on the stage's clock
+---@field last_rested_at table<string, aineo.office_scene.Spot> the spot of each name it last came to rest at
 ---@field effect? string the effect its step names, shown in place of its pose's
 
 ---@class aineo.office_scene.Performer : aineo.office_scene.Character
@@ -89,6 +90,7 @@ function M.new_agent(context, agent, now)
     path = {},
     step_index = 1,
     steps_begun = 0,
+    last_rested_at = {},
   }
 end
 
@@ -115,6 +117,7 @@ function M.new_cats(context, now)
       path = {},
       step_index = 1,
       steps_begun = 0,
+      last_rested_at = {},
     }
   end
   return cats

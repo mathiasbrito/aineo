@@ -475,23 +475,27 @@ return {
       about = 'Sits at its desk with its head down, typing now and then; it stays.',
       steps = { { at = 'desk', pose = 'waiting_quietly' } },
     },
-    go_through_papers = {
-      about = 'Stands at the end of its desk, going through its papers, while its subagents work.',
-      label = 'goes through its papers',
+    coordinate = {
+      about = 'Goes through its papers at the end of its desk, looks at the screen of a subagent, writes on the whiteboard, looks at the screen of the next subagent; its subagents work.',
+      label = 'coordinates its subagents',
       during = { 'waiting_for_subagents' },
-      steps = { { at = 'its_desks_end', pose = 'going_through_papers', for_seconds = { 4, 7 } } },
+      steps = {
+        { at = 'its_desks_end', pose = 'going_through_papers', for_seconds = { 4, 7 } },
+        { at = 'a_subagents_screen', pose = 'looking_at_a_screen', for_seconds = { 4, 7 } },
+        { at = 'whiteboard', pose = 'writing', for_seconds = { 4, 7 } },
+        { at = 'a_subagents_screen', pose = 'looking_at_a_screen', for_seconds = { 4, 7 } },
+      },
     },
-    check_a_subagents_screen = {
-      about = 'Goes to a subagent\'s desk and looks at its screen.',
-      label = 'looks at a subagent\'s screen',
+    coordinate_again = {
+      about = 'The same round again, which the agent plays after the first, so that it goes on for as long as its subagents work.',
+      label = 'coordinates its subagents',
       during = { 'waiting_for_subagents' },
-      steps = { { at = 'a_subagents_screen', pose = 'looking_at_a_screen', for_seconds = { 4, 7 } } },
-    },
-    write_the_plan_on_the_whiteboard = {
-      about = 'Goes to the whiteboard and writes on it, while its subagents work; the board shows the real tasks.',
-      label = 'writes on the whiteboard',
-      during = { 'waiting_for_subagents' },
-      steps = { { at = 'whiteboard', pose = 'writing', for_seconds = { 4, 7 } } },
+      steps = {
+        { at = 'its_desks_end', pose = 'going_through_papers', for_seconds = { 4, 7 } },
+        { at = 'a_subagents_screen', pose = 'looking_at_a_screen', for_seconds = { 4, 7 } },
+        { at = 'whiteboard', pose = 'writing', for_seconds = { 4, 7 } },
+        { at = 'a_subagents_screen', pose = 'looking_at_a_screen', for_seconds = { 4, 7 } },
+      },
     },
     wait_for_permission = {
       about = 'Sits at its desk with a hand up and a "!" over its head; "y/n?" asks on the screen.',
@@ -897,7 +901,7 @@ return {
     standing = 'stand_by_the_desk',
     thinking = 'think_at_the_whiteboard',
     waiting = 'wait_quietly_at_the_desk',
-    waiting_for_subagents = 'go_through_papers',
+    waiting_for_subagents = 'coordinate',
     working = 'write_code',
     writing_code = 'write_code',
   },

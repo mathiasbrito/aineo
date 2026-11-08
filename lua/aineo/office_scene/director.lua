@@ -99,6 +99,9 @@ local function arrive(performer, step, time)
   if performer.spot ~= nil and performer.rests_at ~= performer.spot then
     performer.rests_at, performer.rests_since = performer.spot, time
   end
+  if performer.spot ~= nil then
+    performer.last_rested_at[performer.spot.name] = performer.spot
+  end
 end
 
 --- Has the performer wait for a spot of its step: it keeps the spot it stands

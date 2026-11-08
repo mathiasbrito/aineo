@@ -287,11 +287,27 @@ local function spot_facing_the_desk(world, name, desk)
   return nearest
 end
 
---- The spots named `a_subagents_screen`, each facing the desk of a subagent:
---- where the screen of a subagent's desk is looked at from.
+--- The spot after `last` among `spots`, round again; the first when `last` is
+--- none of them.
+---
+---@param spots aineo.office_scene.Spot[]
+---@param last aineo.office_scene.Spot|nil
+---@return aineo.office_scene.Spot
+local function after(spots, last)
+  for index, spot in ipairs(spots) do
+    if spot == last then
+      return spots[index % #spots + 1]
+    end
+  end
+  return spots[1]
+end
+
+--- The spot named `a_subagents_screen` facing the desk of a subagent, the one
+--- after the screen `character` last looked at, in the order of the agents:
+--- where the screens of the subagents' desks are looked at from in turn.
 ---
 ---@param world aineo.office_scene.SpotWorld
----@param character { id: string }
+---@param character { id: string, last_rested_at?: table<string, aineo.office_scene.Spot> }
 ---@return aineo.office_scene.Spot[]
 local function subagents_screens(world, character)
   local desks = world.layout.spots[OWN_DESK] or {}
@@ -306,7 +322,10 @@ local function subagents_screens(world, character)
       table.insert(found, spot)
     end
   end
-  return found
+  if #found == 0 then
+    return found
+  end
+  return { after(found, (character.last_rested_at or {}).a_subagents_screen) }
 end
 
 --- The spot named `its_desks_end` that faces the desk of `character`.
