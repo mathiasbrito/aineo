@@ -148,6 +148,24 @@ T['a subagent followed']['that says nothing for ten minutes shows that it waits'
   }, { 'thinking', 'waiting' })
 end
 
+T['a subagent followed']['inside a call of its own that says nothing for ten minutes keeps the call’s state'] = function()
+  local story = with_a_subagent_followed()
+  story.hear('tool_started', { agent = 'sub', call = 'look', tool = 'Read', input = {} })
+
+  eq({
+    story.state_after(WAITS_AFTER_SECONDS + 60, 'sub'),
+    story.state_after(QUIET_SECONDS + 1, 'sub'),
+  }, { 'reading', 'leaving' })
+end
+
+T['a subagent followed']['whose call finished and that says nothing for ten minutes shows that it waits'] = function()
+  local story = with_a_subagent_followed()
+  story.hear('tool_started', { agent = 'sub', call = 'look', tool = 'Read', input = {} })
+  story.hear('tool_finished', { agent = 'sub', call = 'look' })
+
+  eq(story.state_after(WAITS_AFTER_SECONDS + 60, 'sub'), 'waiting')
+end
+
 T['a subagent followed']['that says nothing for an hour walks out, then is gone'] = function()
   local story = with_a_subagent_followed()
 

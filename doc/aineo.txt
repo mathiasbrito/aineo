@@ -5439,8 +5439,9 @@ folder `<session id>/subagents` beside it, the transcript and the meta file of
 each subagent. The office reads the end of the transcript when it opens, and
 each line added while it shows; a subagent that runs when it opens, or starts
 while it shows, is followed until its meta file says it finished or the user
-stopped it. A subagent that writes nothing the office reads for ten minutes
-stays at its desk, shown waiting (the state `waiting`), and one quiet for an
+stopped it. A subagent with no call of its own running that writes nothing
+the office reads for ten minutes stays at its desk, shown waiting (the state
+`waiting`), one inside a call keeps that call's state, and one quiet for an
 hour is not in the office: one whose transcript was last written an hour or
 more before the office opens is left out, and one that writes nothing the
 office reads for an hour while it shows walks out, unless the session's agent
