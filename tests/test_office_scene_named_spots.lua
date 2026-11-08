@@ -216,6 +216,17 @@ T['a step that goes to a subagent’s screen']['does not go to a spot on another
   eq(scene.agent_cell(stage.picture(), 8, 2), '6,0')
 end
 
+T['a step that goes to a subagent’s screen']['goes to the spot beside the desk when the plan has none of the name'] = function()
+  local legend = vim.tbl_extend('force', DESKS_LEGEND, { b = { spot = 'beside_desk' } })
+  local stage = stage_of_a_visit('# plan\n \n a.dd.b..\n', legend, 8, 'a_subagents_screen')
+  local crew = scene.agents_in('idle', 'working')
+  stage.advance(crew, 0)
+
+  stage.advance(crew, 3)
+
+  eq(where_the_two_are(stage, 8)[1], '5,0')
+end
+
 T['a step that goes to the end of its desk'] = MiniTest.new_set()
 
 T['a step that goes to the end of its desk']['goes to the spot that faces its own desk, not the nearest'] = function()
@@ -227,6 +238,17 @@ T['a step that goes to the end of its desk']['goes to the spot that faces its ow
   stage.advance(crew, 3)
 
   eq(where_the_two_are(stage, 8)[2], '4,0')
+end
+
+T['a step that goes to the end of its desk']['goes to the spot beside the desk when the plan has none of the name'] = function()
+  local legend = vim.tbl_extend('force', DESKS_LEGEND, { b = { spot = 'beside_desk' } })
+  local stage = stage_of_a_visit('# plan\n \n a.dd.b..\n', legend, 8, 'its_desks_end')
+  local crew = scene.agents_in('working', 'idle')
+  stage.advance(crew, 0)
+
+  stage.advance(crew, 3)
+
+  eq(where_the_two_are(stage, 8)[2], '5,0')
 end
 
 T['a step that goes next to an agent'] = MiniTest.new_set()
