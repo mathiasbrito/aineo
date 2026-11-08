@@ -6230,7 +6230,9 @@ The names aineo knows without any legend:
 	which then keeps its pose and its place until the agent's step is over
 `a_subagents_screen`	the spots of the plan of that name that face a
 	subagent's desk (|aineo-office-desks|), the nearest on the desk's row
-	that has it in front of it: where its screen is looked at from
+	that has it in front of it: where its screen is looked at from; the
+	subagents' screens in turn, the one after the one the agent last
+	looked at
 `its_desks_end`	the spot of the plan of that name that faces the agent's
 	own desk, likewise: where the agent stands at its desk
 	A plan with no spot of either name sends the agent to the spot
@@ -6876,9 +6878,10 @@ takes:
                              out
     waiting                  wait_quietly_at_the_desk: desk, head down,
                              typing now and then; it stays
-    waiting_for_subagents    go_through_papers: the end of its desk, going
-                             through its papers; then the others of its
-                             random life (below)
+    waiting_for_subagents    coordinate: papers at the end of its desk, a
+                             subagent's screen, the whiteboard, the next
+                             subagent's screen; then coordinate_again, the
+                             same round, and coordinate, and so on
     needs_permission         wait_for_permission: desk; a hand up and
                              "! y/n?"
     asking_you               ask_a_question: desk; a hand up and "?"
@@ -6908,10 +6911,12 @@ by weight among `stretch` (3), `yawn` (3), `spin_in_the_chair` (2),
 which leaves the ball on the floor, `get_a_drink_at_the_water_cooler` (2),
 `doodle_on_the_whiteboard` (1), `tidy_the_desk` (2), `nap_on_the_sofa` (1),
 `play_table_tennis` (1, two players) and `pet_the_cat` (1). The main agent
-while its subagents are in the office (`waiting_for_subagents`) picks, in
-turn, among `go_through_papers`, `check_a_subagents_screen` (it walks to a
-subagent's desk and looks at its screen) and
-`write_the_plan_on_the_whiteboard`, a few seconds each; a subagent that waits
+while its subagents are in the office (`waiting_for_subagents`) goes round in
+turn: it goes through its papers at the end of its desk, walks to a subagent's
+desk and looks at its screen, writes on the whiteboard, looks at the screen of
+the next subagent (each subagent in turn), a few seconds at each, and starts
+again, `coordinate` and `coordinate_again` following one another because an
+agent never plays the activity it has just played; a subagent that waits
 (`waiting`) has none and stays at its desk. One that needs permission picks
 among `drum_its_fingers_and_wait` (3), `look_at_its_watch_and_wait` (2) and
 `glance_at_the_door_and_wait` (2), each with the hand up. The cat's life and
@@ -7051,8 +7056,8 @@ names the entry by its path and says what it must be (|aineo-office-check|).
 A pack based on the default that brings a floor of its own plays the default's
 coordination and coffee as they are, and may draw them its own way:
 - The main agent coordinates while its subagents are in the office with the
-  activities `go_through_papers`, `check_a_subagents_screen` and
-  `write_the_plan_on_the_whiteboard`. The first two go to the plan's spots
+  activities `coordinate` and `coordinate_again`, which go round its own desk,
+  the screens of the subagents and the whiteboard. They go to the plan's spots
   `its_desks_end` and `a_subagents_screen` (|aineo-office-spots|); a plan that
   has none of a name sends the agent to the spot `beside_desk` nearest to the
   desk instead, and `:Aineo office check` tells nothing.
