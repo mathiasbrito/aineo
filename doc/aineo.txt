@@ -5839,6 +5839,13 @@ Field	Default	Means ~
 `holding`	none	a prop drawn at the `hand` area of the first
 		layer that has one, mirrored with that layer
 		and as the prop's own `faces` says
+`in_front`	none	a piece drawn a second time, as the layers are, over
+		everything that stands within two cells in front of
+		the character's feet: a mug held in front of the chest
+		seen over the arm of the sofa
+`walks_as`	none	the pose the character walks in once it has taken this
+		pose, until it takes another (the character that took
+		a cup walks with it)
 `rises`	none	pixels the pose lifts the character by, one number for
 		each frame of the first layer, one after the other from
 		the moment the pose begins; negative numbers sink
@@ -6017,6 +6024,10 @@ A legend entry has:
 `walk_over`	the piece lies on the floor and is walked over (`false`)
 `in_use`	the art the piece shows in its place while a character stands
 	on the spot nearest to the piece or walks over it
+`in_use_once`	for a piece with `in_use`: the art plays once, from the moment
+	a character comes to rest at the spot, and its last frame stays
+	while the character does; a character that only walks over the
+	spot starts nothing (`false`)
 `decorations`	for a run of the letter: pieces placed left to right, as
 	many as fit, in this order of preference, each with a spot of
 	its own name on the first floor row below it
@@ -6216,6 +6227,11 @@ The names aineo knows without any legend:
 `next_to_an_agent`	a cell beside another agent who stands still
 `next_to_the_cat`	a cell beside a cat that stands still, facing it,
 	which then keeps its pose and its place until the agent's step is over
+`a_subagents_screen`	the spots of the plan of that name numbered as the
+	places of the subagents (|aineo-office-desks|): where the screen of
+	a subagent's desk is looked at from
+`its_desks_end`	the spot of the plan of that name numbered as the agent's own
+	place, at its desk
 A thing's name	the cell where a thing of that name lies
 	(|aineo-office-things|)
 
@@ -6256,7 +6272,10 @@ free spots as `players` for its first step with a spot and a spot for each
 step after, when the others that must play it are free, and, for a step that
 follows someone, when someone is on the move. An agent with nothing to pick
 keeps its last pose and looks again every second. When the agent's state
-changes, what it picked at random is dropped for what the new state asks for.
+changes, what it picked at random is dropped for what the new state asks for;
+so is what the old state asked for, unless both states rest (`done`, `idle`,
+`asleep`) and the agent has not yet reached the last step of it: it finishes
+its steps, and then plays what the new state asks for.
 
 An activity with `players = 2` is a game. It takes along another agent, picked
 at random among the free ones in a state its `during` names (not in a game,

@@ -46,6 +46,16 @@ function M.frame_after(piece, elapsed)
   return math.floor(elapsed / piece.seconds_per_frame) % #piece.frames + 1
 end
 
+--- The frame of `piece` showing `elapsed` seconds after it began to play once:
+--- the last frame stays once it is reached.
+---
+---@param piece aineo.office_pack.Piece
+---@param elapsed number
+---@return integer frame from 1
+function M.frame_played_once_after(piece, elapsed)
+  return math.min(#piece.frames, math.floor(elapsed / piece.seconds_per_frame) + 1)
+end
+
 --- The pixels of the plan: the whole of the picture but the rows of the status
 --- list, which nothing but the list is painted on.
 ---

@@ -60,7 +60,7 @@ function M.start(context, performer, step, time)
   performer.step_seconds = target and durations.seconds_of(step.for_seconds, context.random) or 0
   performer.arrived_at = time
   performer.effect = nil
-  performer.pose, performer.pose_since = walking.POSE, time
+  walking.begin(performer, time)
   performer.at_a_seat = false
 end
 
