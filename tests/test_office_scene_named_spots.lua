@@ -227,6 +227,34 @@ T['a step that goes to a subagent’s screen']['goes to the spot beside the desk
   eq(where_the_two_are(stage, 8)[1], '5,0')
 end
 
+T['a step that goes to a subagent’s screen']['goes to the screen of each subagent in turn'] = function()
+  local pack = scene.people_pack('# plan\n \n a.dmdmdm..\n', SCREENS_LEGEND, {
+    activities = {
+      stand = { steps = { { at = 'aside' } } },
+      work = { steps = { { at = 'desk', pose = 'sitting' } } },
+      visit = {
+        steps = {
+          { at = 'a_subagents_screen', for_seconds = 1 },
+          { at = 'aside', for_seconds = 1 },
+          { at = 'a_subagents_screen' },
+        },
+      },
+    },
+    states = { standing = 'stand', idle = 'visit', working = 'work' },
+  })
+  local stage = scene.stage_of(pack, 10, 1)
+  local crew = scene.agents_in('idle', 'working', 'working')
+  stage.advance(crew, 0)
+  local first = scene.group_at(stage.picture(), 5, 0)
+
+  stage.advance(crew, 6)
+
+  eq(
+    { first, scene.group_at(stage.picture(), 7, 0) },
+    { scene.solid(scene.AGENT), scene.solid(scene.AGENT) }
+  )
+end
+
 T['a step that goes to the end of its desk'] = MiniTest.new_set()
 
 T['a step that goes to the end of its desk']['goes to the spot that faces its own desk, not the nearest'] = function()
