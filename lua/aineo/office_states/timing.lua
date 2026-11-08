@@ -37,9 +37,10 @@ M.ASLEEP_AFTER_SECONDS = 600
 --- next call, during which a run of short calls keeps the agent at its work.
 M.THINKS_AT_ITS_WORK_SECONDS = 10
 
---- How long a subagent may go unheard before it shows that it waits: it stays
---- at its desk, waiting, until a line of it is heard or `QUIET_SUBAGENT_SECONDS`
---- have passed.
+--- How long a subagent with no call of its own running may go unheard before
+--- it shows that it waits: it stays at its desk, waiting, until a line of it is
+--- heard or `QUIET_SUBAGENT_SECONDS` have passed. One inside a call keeps that
+--- call's state.
 M.WAITING_SUBAGENT_SECONDS = 600
 
 --- How long a subagent may go unheard before it leaves the office: one whose

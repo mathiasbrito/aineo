@@ -123,12 +123,15 @@ end
 --- office adds `session_started` and `session_ended` for the main agent's
 --- session, and `permission_asked` for the agent that asked.
 ---
---- A subagent goes quiet when it is heard of not at all for
---- `timing.QUIET_SUBAGENT_SECONDS`, unless the main agent's call that started
---- it still runs or it waits for permission: it then leaves, and is listed no
---- more once it has walked out. A replayed subagent whose transcript was last
---- written that long ago (`options.wall_clock`) is not listed at all. Either
---- walks in again with the next signal heard of it as it happens.
+--- A subagent with no call of its own running that is heard of not at all for
+--- `timing.WAITING_SUBAGENT_SECONDS` shows that it waits, at its desk, and a
+--- subagent heard of not at all for `timing.QUIET_SUBAGENT_SECONDS` goes quiet
+--- and leaves, unless the main agent's call that started it still runs or it
+--- waits for permission; it is listed no more once it has walked out. A
+--- replayed subagent whose transcript was last written that long ago
+--- (`options.wall_clock`) is not listed at all. Either walks in again with the
+--- next signal heard of it as it happens. Subagents that wait are in the
+--- office, and the main agent waits for them as for any that runs.
 ---
 ---@param options? aineo.office_states.TrackerOptions
 ---@return aineo.office_states.Tracker tracker
@@ -306,7 +309,9 @@ function M.new_tracker(options)
   local function refresh_facts(now)
     local running_subagents = count_running_subagents(records, now)
     for _, record in ipairs(records) do
-      record.waits_at = silent_for(record, timing.WAITING_SUBAGENT_SECONDS)
+      record.waits_at = next(record.open_calls) == nil
+          and silent_for(record, timing.WAITING_SUBAGENT_SECONDS)
+        or nil
       record.quiet_at = silent_for(record, timing.QUIET_SUBAGENT_SECONDS)
       local state, activity = record_module.fact_state(record, running_subagents)
       if state ~= record.fact.state or activity ~= record.fact.activity then
