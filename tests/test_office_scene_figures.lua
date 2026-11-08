@@ -304,6 +304,81 @@ T['a pose']['draws the prop it holds at the hand of its art, on the side the age
   eq(cells_holding('left'), { prop_on_blue, scene.solid(scene.AGENT), scene.solid(scene.FLOOR) })
 end
 
+--- The group of the cell at column 2 of an aisle of eight cells, `seconds`
+--- after a working agent began: it takes the pose `taking` at `aside` for a
+--- second, stands at `seat` for a second, and goes back to `aside`. The pose
+--- `taking` walks as `carrying`, which is drawn red.
+---
+---@param seconds number
+---@return string|nil
+local function cell_at_two_while_carrying_from_aside(seconds)
+  local pack = scene.people_pack(
+    '# plan\n \n a...s...\n',
+    { a = { spot = 'aside' }, s = { spot = 'seat' } },
+    {
+      characters = people_with({
+        taking = { art = { 'person' }, walks_as = 'carrying' },
+        carrying = { art = { 'left' } },
+      }),
+      activities = {
+        play = {
+          steps = {
+            { at = 'aside', pose = 'taking', for_seconds = 1 },
+            { at = 'seat', pose = 'standing', for_seconds = 1 },
+            { at = 'aside', pose = 'standing' },
+          },
+        },
+      },
+      states = { standing = 'play', working = 'play' },
+    }
+  )
+  local stage = scene.stage_of(pack, 8, 1)
+  stage.advance(scene.agents_in('working'), 0)
+  stage.advance(scene.agents_in('working'), seconds)
+  return scene.group_at(stage.picture(), 2, 0)
+end
+
+T['a pose']['that walks as another has the agent walk in that pose until it takes another'] = function()
+  eq(cell_at_two_while_carrying_from_aside(1.15), scene.solid('#ff0000'))
+end
+
+T['a pose']['that walks as another does not have the agent walk so after it took a pose that does not'] = function()
+  eq(cell_at_two_while_carrying_from_aside(2.44), scene.solid(scene.AGENT))
+end
+
+--- The group of the pixel pair at the cell of the seat of an aisle in which
+--- a tall brown piece stands in the row below it, for an agent that sits at
+--- the seat in a pose of `pose_fields`.
+---
+---@param pose_fields table the fields of the pose the agent sits in
+---@return string|nil
+local function seat_cell_behind_a_tall_piece(pose_fields)
+  local pack = scene.people_pack(
+    '# plan\n \n ....s...\n ....F...\n',
+    { s = { spot = 'seat', sitting = true }, F = { piece = 'tall' } },
+    {
+      characters = people_with({ sitting_with_a_dot = pose_fields }),
+      activities = { play = { steps = { { at = 'seat', pose = 'sitting_with_a_dot' } } } },
+      states = { standing = 'play' },
+    },
+    { ['art/tall.txt'] = 'colours: W = brown\nanchor: 0, 3\n---\nW\nW\nW\nW\n' }
+  )
+  local stage = scene.stage_of(pack, 8, 2)
+  stage.advance(scene.agents_in('standing'), 0)
+  return scene.group_at(stage.picture(), 4, 0)
+end
+
+T['a pose']['draws its in_front piece over a piece that stands in front of the agent'] = function()
+  eq(
+    seat_cell_behind_a_tall_piece({ art = { 'person' }, sitting = true, in_front = 'dot' }),
+    'AineoOfficePixel_885500_ff0000'
+  )
+end
+
+T['a pose']['without an in_front piece leaves the agent behind a piece that stands in front of it'] = function()
+  eq(seat_cell_behind_a_tall_piece({ art = { 'person' }, sitting = true }), scene.solid('#885500'))
+end
+
 T['a seat'] = MiniTest.new_set()
 
 T['a seat']['that sits keeps an agent behind the piece in front of it, whatever the pose'] = function()

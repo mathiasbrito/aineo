@@ -9,7 +9,10 @@
 --- `anywhere` is a floor cell at random; `an_empty_desk` a desk no agent has;
 --- `an_idle_agents_desk` the desk of another agent in the state `idle`;
 --- `next_to_an_agent` a cell beside another agent who stands still,
---- `next_to_the_cat` a cell beside a cat that stands still. A thing
+--- `next_to_the_cat` a cell beside a cat that stands still;
+--- `a_subagents_screen` the plan's spots of that name numbered as the places of
+--- the subagents, and `its_desks_end` the one numbered as the agent's own
+--- place. A thing
 --- that lies on the floor is a spot of its own name. Any other name is every
 --- spot of the name, and the character may go to the ones no
 --- other character has taken.
@@ -241,13 +244,56 @@ local function cells_beside_cats(world, character)
   return cells_beside(world, character, world.cats or {}, NEXT_TO_THE_CAT)
 end
 
+--- The spots of the plan named `name` that are numbered as the places of the
+--- agents, other than `character`, that `is_wanted`.
+---
+---@param world aineo.office_scene.SpotWorld
+---@param character { id: string }
+---@param name string
+---@param is_wanted fun(agent: table): boolean
+---@return aineo.office_scene.Spot[]
+local function spots_numbered_as_places_of(world, character, name, is_wanted)
+  local numbered = world.layout.spots[name] or {}
+  local found = {}
+  for _, agent in ipairs(world.agents) do
+    if agent.id ~= character.id and is_wanted(agent) and numbered[agent.place] then
+      table.insert(found, numbered[agent.place])
+    end
+  end
+  return found
+end
+
+--- The spots named `a_subagents_screen`, numbered as the places of the
+--- subagents: where the screen of a subagent's desk is looked at from.
+---
+---@param world aineo.office_scene.SpotWorld
+---@param character { id: string }
+---@return aineo.office_scene.Spot[]
+local function subagents_screens(world, character)
+  return spots_numbered_as_places_of(world, character, 'a_subagents_screen', function(agent)
+    return roles.kind_of(agent) == 'subagent'
+  end)
+end
+
+--- The spot named `its_desks_end` numbered as the place of `character`.
+---
+---@param world aineo.office_scene.SpotWorld
+---@param character { place?: integer }
+---@return aineo.office_scene.Spot[]
+local function end_of_its_desk(world, character)
+  local own = (world.layout.spots['its_desks_end'] or {})[character.place]
+  return own and { own } or {}
+end
+
 --- The spots, besides the plan's own, that aineo knows by name, each found
 --- from the state of the office.
 ---
 ---@type table<string, fun(world: aineo.office_scene.SpotWorld, character: table): aineo.office_scene.Spot[]>
 local KNOWN_SPOTS = {
+  a_subagents_screen = subagents_screens,
   an_empty_desk = empty_desks,
   an_idle_agents_desk = idle_agents_desks,
+  its_desks_end = end_of_its_desk,
   next_to_an_agent = cells_beside_agents,
   next_to_the_cat = cells_beside_cats,
 }

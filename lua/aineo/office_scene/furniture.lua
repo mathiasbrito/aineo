@@ -26,33 +26,48 @@ local function is_on_canvas(piece, row, height)
   return top < 2 * height and top + piece.height > 0
 end
 
---- Whether a character is at the spot the placed piece is used from, standing
---- on it or walking over it.
+--- The character that uses the placed piece: one at the spot it is used from,
+--- standing on it or walking over it; for a piece used once, only one that has
+--- come to rest there.
 ---
 ---@param placed aineo.office_scene.PlacedPiece
 ---@param characters aineo.office_scene.Character[]
----@return boolean
-local function is_in_use(placed, characters)
+---@return aineo.office_scene.Character|nil
+local function user_of(placed, characters)
   local spot = placed.used_at
-  return spot ~= nil
-    and vim.iter(characters):any(function(character)
-      return items.round(character.column) == spot.column and items.round(character.row) == spot.row
-    end)
+  if not spot then
+    return nil
+  end
+  return vim.iter(characters):find(function(character)
+    return items.round(character.column) == spot.column
+      and items.round(character.row) == spot.row
+      and (not placed.in_use_once or character.rests_at ~= nil)
+  end)
 end
 
 --- The piece to draw for `placed`: its `in_use` art while it is in use, its
---- own otherwise, stretched to the width the plan draws it.
+--- own otherwise, stretched to the width the plan draws it; and the frame of
+--- it to draw: that of the pack's clock, or, for a piece used once, the one
+--- reached since the user came to rest at its spot, the last one held.
 ---
 ---@param drawing aineo.office_scene.Drawing
 ---@param placed aineo.office_scene.PlacedPiece
----@return aineo.office_pack.Piece|nil
+---@return aineo.office_pack.Piece|nil piece
+---@return integer frame
 local function piece_shown(drawing, placed)
-  local name = is_in_use(placed, drawing.characters) and placed.in_use or placed.piece
-  local piece = drawing.pack.pieces[name]
-  if piece and placed.columns then
-    return stretch.to_width(piece, placed.columns)
+  local user = user_of(placed, drawing.characters)
+  local piece = drawing.pack.pieces[user and placed.in_use or placed.piece]
+  if not piece then
+    return nil, 1
   end
-  return piece
+  local frame = items.frame_after(piece, drawing.now)
+  if user and placed.in_use_once then
+    frame = items.frame_played_once_after(piece, drawing.now - user.rests_since)
+  end
+  if placed.columns then
+    return stretch.to_width(piece, placed.columns), frame
+  end
+  return piece, frame
 end
 
 --- Paints what the pose of the agent who owns the monitor `placed` says the
@@ -94,14 +109,14 @@ end
 function M.items(canvas, drawing)
   local made = {}
   for _, placed in ipairs(drawing.layout.pieces) do
-    local piece = piece_shown(drawing, placed)
+    local piece, frame = piece_shown(drawing, placed)
     if piece and is_on_canvas(piece, placed.row, drawing.plan_height) then
       table.insert(made, {
         depth = placed.walk_over and ON_THE_FLOOR or 2 * placed.row + 1,
         rank = placed.walk_over and items.RANK.on_the_floor or items.RANK.piece,
         paint = function()
           canvas.paint_art(piece, {
-            frame = items.frame_after(piece, drawing.now),
+            frame = frame,
             column = placed.column,
             row = 2 * placed.row + 1,
             colours = drawing.pack.colours,

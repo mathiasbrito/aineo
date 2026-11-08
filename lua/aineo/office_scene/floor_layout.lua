@@ -21,6 +21,7 @@ local PLAIN_CELLS = { [WALL] = true, [FLOOR] = true, [UNWALKED_FLOOR] = true }
 ---@field columns? integer the width in cells a piece that stretches is stretched to
 ---@field walk_over? boolean whether the piece lies on the floor, under the characters
 ---@field in_use? string the piece that shows in its place while a character is at its spot
+---@field in_use_once? boolean whether the `in_use` art plays once from the moment a character comes to rest at the spot, and is not shown while a character only walks over it
 ---@field used_at? aineo.office_scene.Spot the spot nearest to a piece that has `in_use` art
 ---@field owner_place? integer for a piece with a screen area or a name plate: the place of the agent whose monitor or desk it is
 ---@field shows? string the live content drawn into the piece's area of that name
@@ -256,6 +257,7 @@ local function place_piece(layout, entry, column, row, length)
       columns = columns,
       walk_over = entry.walk_over,
       in_use = entry.in_use,
+      in_use_once = entry.in_use_once,
       shows = entry.shows,
       on_a_spot = entry.spot ~= nil,
     }
