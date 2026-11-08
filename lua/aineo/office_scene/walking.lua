@@ -14,6 +14,25 @@ M.POSE = 'walking'
 ---@field row number the cell row it is at
 ---@field facing string 'left' or 'right'
 ---@field path aineo.office_scene.Cell[] the cells it has still to walk over, the next first
+---@field pose string the pose it holds
+---@field pose_since number when it took the pose
+---@field walks_from? string the pose it held when it began to walk; none before it first walks
+---@field rests_at? aineo.office_scene.Spot the spot it has come to rest at; none while it walks
+---@field rests_since? number when it came to rest at that spot
+
+--- Has `walker` begin to walk at `time`: it takes the walking pose, and is
+--- at rest nowhere. The pose it held is kept in `walks_from` unless it was
+--- walking already.
+---
+---@param walker aineo.office_scene.Walker
+---@param time number
+function M.begin(walker, time)
+  if walker.pose ~= M.POSE then
+    walker.walks_from = walker.pose
+  end
+  walker.pose, walker.pose_since = M.POSE, time
+  walker.rests_at = nil
+end
 
 --- Moves `walker` along its path for at most `available` seconds, and turns
 --- it to face the way it goes. It stops at the end of the path.

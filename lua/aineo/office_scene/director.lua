@@ -96,6 +96,9 @@ local function arrive(performer, step, time)
   performer.arrived_at = time
   performer.pose_since = time
   performer.at_a_seat = performer.spot ~= nil and performer.spot.sitting
+  if performer.spot ~= nil and performer.rests_at ~= performer.spot then
+    performer.rests_at, performer.rests_since = performer.spot, time
+  end
 end
 
 --- Has the performer wait for a spot of its step: it keeps the spot it stands
@@ -123,7 +126,7 @@ local function step_out_of_the_way(context, performer, time)
     return
   end
   performer.path = route.path
-  performer.pose, performer.pose_since = walking.POSE, time
+  walking.begin(performer, time)
   performer.at_a_seat = false
   performer.steps_out_of_the_way = true
 end
@@ -146,7 +149,7 @@ local function start_step(context, performer, step, time)
     or draw()
   performer.effect = nil
   if #performer.path > 0 then
-    performer.pose, performer.pose_since = walking.POSE, time
+    walking.begin(performer, time)
     performer.at_a_seat = false
   else
     settle_at_spot(context, performer, step, time)
@@ -292,6 +295,33 @@ local function is_on_last_step(performer)
   return performer.activity.steps[performer.step_index + 1] == nil
 end
 
+--- Whether the performer has reached the last step of its activity: it is on
+--- it and has come to rest at its spot.
+---
+---@param performer aineo.office_scene.Performer
+---@return boolean
+local function has_reached_last_step(performer)
+  return is_on_last_step(performer)
+    and performer.arrived_at ~= nil
+    and #performer.path == 0
+    and not performer.following
+end
+
+--- Whether the performer, whose state asks for the activity `name` from now
+--- on, goes on with the activity its old state asked for until it has
+--- reached its last step: its state changed to another that rests, and it has
+--- not yet reached the last step of the activity it plays for its state.
+---
+---@param performer aineo.office_scene.Performer
+---@param previous_state string|nil the state it was in before
+---@return boolean
+local function goes_on_with_its_break(performer, previous_state)
+  return performer.playing == WANTED
+    and roles.is_resting(previous_state)
+    and roles.is_resting(performer.state)
+    and not has_reached_last_step(performer)
+end
+
 --- Has the performer play the activity `name` from `time`.
 ---
 ---@param context aineo.office_scene.DirectorContext
@@ -306,6 +336,7 @@ local function play(context, performer, name, how, time, party)
   end
   performer.activity_name, performer.activity = name, context.pack.activities[name]
   performer.playing = how
+  performer.plays_wanted_after_steps = nil
   performer.party = party
   performer.cleaning = nil
   performer.looks_for_life_at = nil
@@ -460,6 +491,9 @@ local function bring_up_to(context, performer, now)
         settle_at_spot(context, performer, performer.activity.steps[performer.step_index], clock)
       end
     end
+    if performer.plays_wanted_after_steps and has_reached_last_step(performer) then
+      play(context, performer, performer.wanted_name, WANTED, clock)
+    end
     local ends_at = step_end_before(performer, now)
     if not ends_at or performer.steps_begun >= MOST_STEPS_BEGUN_AN_UPDATE then
       break
@@ -582,11 +616,13 @@ function M.new_director(pack, layout, random)
     context.moved_in_a_row = 0
     local present = {}
     context.agents = {}
+    local previous_states = {}
     for _, agent in ipairs(agents) do
       local performer = known[agent.id] or performers.new_agent(context, agent, now)
       known[agent.id] = performer
       context.by_id[agent.id] = performer
       performer.steps_begun = 0
+      previous_states[agent.id] = performer.state
       performer.state_changed = performer.state ~= nil and performer.state ~= agent.state
       performer.state = agent.state
       present[agent.id] = true
@@ -610,7 +646,11 @@ function M.new_director(pack, layout, random)
         )
       then
         performer.wanted_name = name
-        play(context, performer, name, WANTED, performer.clock)
+        if goes_on_with_its_break(performer, previous_states[agent.id]) then
+          performer.plays_wanted_after_steps = true
+        else
+          play(context, performer, name, WANTED, performer.clock)
+        end
       end
       if performer.activity then
         bring_up_to(context, performer, now)
