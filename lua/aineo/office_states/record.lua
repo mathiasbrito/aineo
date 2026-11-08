@@ -70,7 +70,7 @@ local UNNAMED_CALL = ''
 ---@field listed_until? number a finished agent is listed until then
 ---@field heard_at? number when it was last heard of, on the caller's clock: for a subagent replayed, when its transcript was last written
 ---@field started_by? string the id of the main agent's call that started it, for a subagent whose arrival names one
----@field waits_at? number when it shows that it waits, unless it is heard of before; none for an agent that does not
+---@field waits_at? number when it shows that it waits, unless it is heard of before; none for an agent that does not, one with a call of its own running included
 ---@field quiet_at? number when it goes quiet and leaves, unless it is heard of before; none for an agent that does not
 
 --- What the tracker is told about the office, which decides what a signal means.
