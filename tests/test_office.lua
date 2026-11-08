@@ -731,7 +731,7 @@ T['what the office shows']['has the main agent walk to its desk and type when a 
   )
 end
 
-T['what the office shows']['has the main agent stand again when the turn ends while it shows'] = function()
+T['what the office shows']['has the main agent leave its desk for a coffee when the turn ends while it shows'] = function()
   local path = transcript_path()
   fake_transcript.append(path, vim.list_slice(RECORDED_TURN, 1, 5))
   open_office(path)
@@ -742,7 +742,7 @@ T['what the office shows']['has the main agent stand again when the turn ends wh
 
   eq(
     wait_until(function()
-      return not is_typing() and is_standing()
+      return not office_cells.is_at(child, 'desk')
     end),
     true
   )
@@ -785,9 +785,9 @@ T['what the office shows']['rewrites the rows an agent’s move changes'] = func
 end
 
 --- When the stories' subagents' transcripts were last written, in seconds
---- since 1970, and the wall clock of the office twenty minutes later.
+--- since 1970, and the wall clock of the office a little over an hour later.
 local WRITTEN_LONG_AGO = 1700000000
-local WALL_CLOCK_LATER = '{ wall_clock = function() return 1700001200 end }'
+local WALL_CLOCK_LATER = '{ wall_clock = function() return 1700003700 end }'
 
 --- Writes the subagent `id` of the session whose transcript is `path`, running,
 --- with the recorded subagent's lines, its transcript last written at
@@ -820,7 +820,7 @@ end
 
 T['the subagents the office brings in'] = MiniTest.new_set()
 
-T['the subagents the office brings in']['leave out one whose transcript was last written ten minutes before, by its wall clock'] = function()
+T['the subagents the office brings in']['leave out one whose transcript was last written an hour before, by its wall clock'] = function()
   local path = transcript_path()
   fake_transcript.append(path, RECORDED_TURN)
   write_running_subagent(path, 'oldhelper', WRITTEN_LONG_AGO)
