@@ -26,7 +26,9 @@ local SKY_COLOURS_OF_THE_DEFAULT_PACK = {
 --- its consoles show, which are lines of light on dark glass.
 local SHARED_WITH_THE_DEFAULT_PACK = {
   'arm_drink',
+  'arm_hold_cup',
   'arm_hold_cup_sofa',
+  'arm_hold_paper',
   'arm_marker',
   'arm_pet',
   'arm_raise_both',

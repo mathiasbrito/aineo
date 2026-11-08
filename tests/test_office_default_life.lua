@@ -273,36 +273,94 @@ end
 
 T['a waiting agent'] = MiniTest.new_set()
 
-T['a waiting agent']['plays each of the things the mock has it do while it waits for its subagents'] =
+T['a coordinating agent'] = MiniTest.new_set()
+
+--- The main agent coordinating, and two subagents at work.
+---
+---@return aineo.office_states.Agent[]
+local function coordinating_two_subagents()
+  return {
+    { id = 'main', state = 'waiting_for_subagents' },
+    { id = 'sub2', state = 'writing_code' },
+    { id = 'sub3', state = 'writing_code' },
+  }
+end
+
+T['a coordinating agent']['plays each of the three things it does while its subagents work'] =
   MiniTest.new_set({
     parametrize = {
-      { 'drum_its_fingers', 'drums its fingers' },
-      { 'look_at_its_watch', 'looks at its watch' },
-      { 'pace_beside_the_desk', 'paces beside the desk' },
-      { 'glance_at_the_door', 'glances at the door' },
-      { 'tap_a_foot', 'taps its foot' },
+      { 'go_through_papers', 'goes through its papers' },
+      { 'check_a_subagents_screen', "looks at a subagent's screen" },
+      { 'write_the_plan_on_the_whiteboard', 'writes on the whiteboard' },
     },
   })
 
-T['a waiting agent']['plays each of the things the mock has it do while it waits for its subagents']['activity and label'] = function(
+T['a coordinating agent']['plays each of the three things it does while its subagents work']['activity and label'] = function(
   name,
   label
 )
   local listed =
-    listed_over(pack_with_life({ name }), default.agents(1, 'waiting_for_subagents'), 60)
+    listed_over(pack_with_life({ 'go_through_papers', name }), coordinating_two_subagents(), 60)
 
   eq(listed:find(label, 1, true) ~= nil, true)
 end
 
-T['a waiting agent']['drums its fingers at its own desk, going no farther than beside it'] = function()
+T['a coordinating agent']['goes through its papers at the end of its own desk and looks at a subagent’s screen from beside it'] = function()
   local visited = spots_visited(
-    pack_with_life({ 'drum_its_fingers' }),
-    default.agents(1, 'waiting_for_subagents'),
+    pack_with_life({ 'go_through_papers', 'check_a_subagents_screen' }),
+    coordinating_two_subagents(),
     60,
     default.AGENT_COLOURS[1]
   )
 
-  eq(visited, { beside_desk = true, desk = true })
+  eq(visited.its_desks_end and visited.a_subagents_screen, true)
+end
+
+T['a coordinating agent']['has only the three things to do, and no coffee, sofa or sleep, while subagents are in the office'] = function()
+  local pack = default.load_pack()
+  local names = {}
+  for name, activity in pairs(pack.activities) do
+    if activity.during and vim.list_contains(activity.during, 'waiting_for_subagents') then
+      table.insert(names, name)
+    end
+  end
+  table.sort(names)
+
+  eq({ names, pack.state_activity.waiting_for_subagents }, {
+    { 'check_a_subagents_screen', 'go_through_papers', 'write_the_plan_on_the_whiteboard' },
+    'go_through_papers',
+  })
+end
+
+T['a subagent that waits'] = MiniTest.new_set()
+
+--- The name of the spot nearest to the agent drawn in `colour`, `seconds`
+--- after the agents began on a stage of the default pack without its cat.
+---
+---@param agents aineo.office_states.Agent[]
+---@param seconds number
+---@param colour string `#rrggbb`
+---@return string
+local function spot_of_agent_at(agents, seconds, colour)
+  local pack = default.load_pack()
+  pack.cat = nil
+  local spots = default.spots(pack, ROOM[1], ROOM[2] - LIST_ROWS)
+  local stage = default.stage(pack, ROOM[1], ROOM[2])
+  for step = 0, seconds * 4 do
+    stage.advance(agents, step / 4)
+  end
+  local place = default.where_is(default.pixels(stage.picture(), ROOM[1]), colour)
+  return place and default.nearest_spot(spots, place) or 'nowhere'
+end
+
+T['a subagent that waits']['stays at its own desk'] = function()
+  local crew =
+    { { id = 'main', state = 'waiting_for_subagents' }, { id = 'sub2', state = 'waiting' } }
+
+  eq({
+    spot_of_agent_at(crew, 30, default.AGENT_COLOURS[2]),
+    spot_of_agent_at(crew, 120, default.AGENT_COLOURS[2]),
+  }, { 'desk', 'desk' })
 end
 
 T['a waiting agent']['plays each of the seated things while it waits for an answer'] =
