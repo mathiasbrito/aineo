@@ -10,8 +10,12 @@ local T = MiniTest.new_set()
 --- since 1970.
 local WALL_NOW = 1700001000
 
---- Ten minutes, in seconds: how long a subagent may be silent.
-local QUIET_SECONDS = 600
+--- An hour, in seconds: how long a subagent may be silent before it leaves.
+local QUIET_SECONDS = 3600
+
+--- Ten minutes, in seconds: how long a subagent may be silent before it shows
+--- that it waits.
+local WAITS_AFTER_SECONDS = 600
 
 --- A story told to a tracker whose wall clock says `WALL_NOW`.
 ---
@@ -54,7 +58,7 @@ end
 
 T['a subagent replayed'] = MiniTest.new_set()
 
-T['a subagent replayed']['whose transcript was last written ten minutes before is not brought in'] = function()
+T['a subagent replayed']['whose transcript was last written an hour before is not brought in'] = function()
   local story = told_at_wall_now()
 
   replay_subagent(story, 'old', QUIET_SECONDS)
@@ -62,12 +66,28 @@ T['a subagent replayed']['whose transcript was last written ten minutes before i
   eq(ids_after(story, office_signals.SETTLE), { 'main' })
 end
 
-T['a subagent replayed']['whose transcript was written less than ten minutes before is brought in'] = function()
+T['a subagent replayed']['whose transcript was written less than an hour before is brought in'] = function()
   local story = told_at_wall_now()
 
   replay_subagent(story, 'recent', QUIET_SECONDS - 1)
 
   eq(ids_after(story, office_signals.SETTLE), { 'main', 'recent' })
+end
+
+T['a subagent replayed']['whose transcript was last written twenty minutes before is brought in'] = function()
+  local story = told_at_wall_now()
+
+  replay_subagent(story, 'resting', 2 * WAITS_AFTER_SECONDS)
+
+  eq(ids_after(story, office_signals.SETTLE), { 'main', 'resting' })
+end
+
+T['a subagent replayed']['whose transcript was last written twenty minutes before waits at once'] = function()
+  local story = told_at_wall_now()
+
+  replay_subagent(story, 'resting', 2 * WAITS_AFTER_SECONDS)
+
+  eq(story.state_after(office_signals.SETTLE, 'resting'), 'waiting')
 end
 
 T['a subagent replayed']['long quiet is brought in while the call that started it runs'] = function()
@@ -88,7 +108,7 @@ T['a subagent replayed']['long quiet walks in with its next line'] = function()
   eq({ story.state('old'), story.state_after(5, 'old') }, { 'arriving', 'reading' })
 end
 
-T['a subagent replayed']['goes quiet ten minutes after its transcript was written, whatever its replayed lines'] = function()
+T['a subagent replayed']['goes quiet an hour after its transcript was written, whatever its replayed lines'] = function()
   local story = told_at_wall_now()
   replay_subagent(story, 'sub', QUIET_SECONDS - 10)
 
@@ -113,17 +133,32 @@ local function with_a_subagent_followed()
   return story
 end
 
-T['a subagent followed']['that says nothing for ten minutes walks out, then is gone'] = function()
+T['a subagent followed']['that says nothing for eleven minutes is still in the office'] = function()
+  local story = with_a_subagent_followed()
+
+  eq(ids_after(story, WAITS_AFTER_SECONDS + 60), { 'main', 'sub' })
+end
+
+T['a subagent followed']['that says nothing for ten minutes shows that it waits'] = function()
+  local story = with_a_subagent_followed()
+
+  eq({
+    story.state_after(WAITS_AFTER_SECONDS - 1, 'sub'),
+    story.state_after(WAITS_AFTER_SECONDS + 1, 'sub'),
+  }, { 'thinking', 'waiting' })
+end
+
+T['a subagent followed']['that says nothing for an hour walks out, then is gone'] = function()
   local story = with_a_subagent_followed()
 
   eq(
     { story.state_after(QUIET_SECONDS - 1, 'sub'), story.state_after(QUIET_SECONDS + 1, 'sub') },
-    { 'thinking', 'leaving' }
+    { 'waiting', 'leaving' }
   )
   eq(ids_after(story, QUIET_SECONDS + 31), { 'main' })
 end
 
-T['a subagent followed']['that says something within ten minutes stays'] = function()
+T['a subagent followed']['that says something within an hour stays'] = function()
   local story = with_a_subagent_followed()
 
   story.hear_after(
@@ -132,10 +167,10 @@ T['a subagent followed']['that says something within ten minutes stays'] = funct
     { agent = 'sub', call = 'read', tool = 'Read', input = {} }
   )
 
-  eq(story.state_after(QUIET_SECONDS - 10, 'sub'), 'reading')
+  eq(story.state_after(WAITS_AFTER_SECONDS - 10, 'sub'), 'reading')
 end
 
-T['a subagent followed']['quiet for ten minutes stays while the call that started it runs'] = function()
+T['a subagent followed']['quiet for an hour stays while the call that started it runs'] = function()
   local story = told_at_wall_now()
   story.started('delegate', 'Agent')
   story.hear('subagent_started', { agent = 'sub', call = 'delegate' })
@@ -144,7 +179,7 @@ T['a subagent followed']['quiet for ten minutes stays while the call that starte
   eq(story.state_after(QUIET_SECONDS + 1, 'sub'), 'thinking')
 end
 
-T['a subagent followed']['quiet for ten minutes stays while it waits for permission'] = function()
+T['a subagent followed']['quiet for an hour stays while it waits for permission'] = function()
   local story = with_a_subagent_followed()
 
   story.hear('permission_asked', { agent = 'sub' })
@@ -230,7 +265,10 @@ T['a subagent followed']['that went quiet is waited for no more, with no other s
 
   story.hear('turn_ended')
 
-  eq({ story.state_after(QUIET_SECONDS + 40), story.state_after(1300) }, { 'idle', 'asleep' })
+  eq(
+    { story.state_after(QUIET_SECONDS + 40), story.state_after(QUIET_SECONDS + 700) },
+    { 'idle', 'asleep' }
+  )
 end
 
 T['a subagent replayed']['long quiet walks in with the call that started it, which keeps it while it runs'] = function()

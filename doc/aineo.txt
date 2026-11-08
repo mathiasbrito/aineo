@@ -5439,13 +5439,15 @@ folder `<session id>/subagents` beside it, the transcript and the meta file of
 each subagent. The office reads the end of the transcript when it opens, and
 each line added while it shows; a subagent that runs when it opens, or starts
 while it shows, is followed until its meta file says it finished or the user
-stopped it. A subagent quiet for ten minutes is not in the office: one whose
-transcript was last written ten minutes or more before the office opens is
-left out, and one that writes nothing the office reads for ten minutes while
-it shows walks out, unless the session's agent still waits on the call that
-started it or the subagent waits for your permission; either walks in again
-with its next line, one that walked out during a call of its own still in
-that call, so that the call's result shows it at that call's spot. A
+stopped it. A subagent that writes nothing the office reads for ten minutes
+stays at its desk, shown waiting (the state `waiting`), and one quiet for an
+hour is not in the office: one whose transcript was last written an hour or
+more before the office opens is left out, and one that writes nothing the
+office reads for an hour while it shows walks out, unless the session's agent
+still waits on the call that started it or the subagent waits for your
+permission; either walks in again with its next line, one that walked out
+during a call of its own still in that call, so that the call's result shows
+it at that call's spot. A
 transcript cut short or replaced by another is read again from its end.
 It calls no Claude, sends nothing to its terminal, makes
 no MCP call or network request, writes nothing and spends no token. While it
@@ -5490,9 +5492,10 @@ Each agent, the main one and every subagent, is in one state at a time. The
 state comes from what the transcript says and from the permission hook
 (|aineo-office|); what the state looks like comes from the pack
 (|aineo-office-pack-states|). There are 24 states, numbered as `:Aineo office
-states` numbers them (|:Aineo-office-states|), and four parents that are no
-state of an agent's life: `standing`, `working`, `waiting` and `resting`. A
-pack that maps no activity to a state falls back to the state named below, and
+states` numbers them (|:Aineo-office-states|), and four parents, `standing`,
+`working`, `waiting` and `resting`, that no agent is in but one: a subagent
+that has said nothing for ten minutes is `waiting`. A pack that maps no
+activity to a state falls back to the state named below, and
 that one to its own, down to `standing`, which every pack maps. A pack that
 maps the four parents therefore covers all 24. The status list says a state
 in its name with spaces for `_`, except `background_job` (running a background
@@ -5544,8 +5547,9 @@ job) and `error` (hit an error), unless the activity played has a `label`.
 12  `delegating` (falls back to `working`)
     A call of `Agent`.
 13  `waiting_for_subagents` (falls back to `waiting`)
-    The main agent only: some subagents run, and the `Agent` call is the call
-    it started last, or its turn has ended.
+    The main agent only: some subagents are in the office, those that wait
+    (|aineo-office|) among them, and the `Agent` call is the call it started
+    last, or its turn has ended.
 14  `needs_permission` (falls back to `waiting`)
     The `PermissionRequest` hook for that agent (|aineo-office-hooks|), until
     the agent's next line in its transcript that is not the start of a tool
@@ -5570,14 +5574,16 @@ job) and `error` (hit an error), unless the activity played has a `label`.
 21  `done` (falls back to `resting`)
     The end of the agent's turn: for the main agent a `turn_duration` line,
     for a subagent the text that ends its turn (`end_turn`). A subagent whose
-    meta file says it finished is `done` too. Lasts 4 seconds.
+    meta file says it finished is `done` too. Lasts 4 seconds. The main agent
+    is not `done` when its turn ends while a subagent is in the office: it
+    waits for subagents.
 22  `idle` (falls back to `resting`)
     The turn ended and `done` is over, with nothing new since.
 23  `asleep` (falls back to `idle`)
     `idle` for 10 minutes, by the clock.
 24  `leaving` (falls back to `standing`)
     A subagent: its meta file says it finished or the user stopped it,
-    after `done`; or it has been quiet for ten minutes
+    after `done`; or it has been quiet for an hour
     (|aineo-office|). It is listed for about half a minute more, to walk out.
     The main agent: the session the tab shows ended — its `SessionEnd` hook
     says so, the tab's Claude Code exits by itself, or the tab lets go of a
@@ -7141,7 +7147,7 @@ What it reads:
 - 64 subagents followed at a time, each with a file watch of its own, and a
   subagent's meta file to 64 KiB. 64 agents' waits for permission kept while
   the office is hidden (|aineo-office-hooks|).
-- A subagent quiet for ten minutes is not in the office, or leaves it
+- A subagent quiet for an hour is not in the office, or leaves it
   (|aineo-office|). A background job whose notice never comes stays until the
   session ends.
 - What Claude Code writes is not a documented format. A line the office cannot

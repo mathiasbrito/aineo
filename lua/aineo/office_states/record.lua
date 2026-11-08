@@ -70,6 +70,7 @@ local UNNAMED_CALL = ''
 ---@field listed_until? number a finished agent is listed until then
 ---@field heard_at? number when it was last heard of, on the caller's clock: for a subagent replayed, when its transcript was last written
 ---@field started_by? string the id of the main agent's call that started it, for a subagent whose arrival names one
+---@field waits_at? number when it shows that it waits, unless it is heard of before; none for an agent that does not
 ---@field quiet_at? number when it goes quiet and leaves, unless it is heard of before; none for an agent that does not
 
 --- What the tracker is told about the office, which decides what a signal means.
@@ -81,6 +82,7 @@ local UNNAMED_CALL = ''
 ---@class aineo.office_states.Hearing
 ---@field now number when it was heard, in seconds on the caller's clock
 ---@field replayed boolean whether it was read from the transcript's tail, a thing of the past
+---@field subagents_in_room integer how many subagents are in the office, ones that wait included, when it is heard
 ---@field settings aineo.office_states.Settings
 
 ---@param id string
@@ -251,7 +253,9 @@ local HEARS = {
 
   turn_ended = function(record, _, hearing)
     end_turn(record)
-    bring_event(record, hearing, 'done', timing.DONE_SECONDS)
+    if not (is_main(record) and hearing.subagents_in_room > 0) then
+      bring_event(record, hearing, 'done', timing.DONE_SECONDS)
+    end
   end,
 
   interrupted = function(record, _, hearing)
@@ -358,7 +362,7 @@ end
 ---
 ---@param record aineo.office_states.Record
 ---@param latest_call aineo.office_states.OpenCall|nil the call it started last of those still running
----@param running_subagents integer how many subagents have not finished
+---@param running_subagents integer how many subagents are in the office: neither finished nor gone quiet
 ---@return boolean
 local function waits_for_subagents(record, latest_call, running_subagents)
   if not is_main(record) or running_subagents == 0 then
@@ -378,7 +382,7 @@ end
 --- was given; idle once its turn ended; standing otherwise.
 ---
 ---@param record aineo.office_states.Record
----@param running_subagents integer how many subagents have not finished
+---@param running_subagents integer how many subagents are in the office: neither finished nor gone quiet
 ---@return string state
 ---@return string|nil activity
 function M.fact_state(record, running_subagents)
