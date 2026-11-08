@@ -86,9 +86,16 @@ Arrived green, and why: `from done to working leaves its break at once` (existin
 | `pack.lua` `in_front = 'mug_in_front'` removed | survived: the sofa test replaced the pose's field itself; assertion once it took the pack as it is |
 | `pack.lua` `walks_as = 'walking_with_a_cup',` removed | assertion, 1 |
 
+## Fix round (review408, ruling A717)
+
+- **A pack with a floor of its own** (1): `a_subagents_screen` and `its_desks_end` are known spots of the pack check, and a plan with none of a name sends the agent to the nearest `beside_desk`. Pinned by a copy of the space-station pack without the spots, in plan and legend (killed K1, K2).
+- **Coordination in a round, screens in turn** (2): `coordinate` and `coordinate_again`, the same four steps, follow one another because an agent never plays the activity it has just played; `a_subagents_screen` is the screen after the one the agent last rested at (killed R1). The three activities of the first build are gone.
+- **The reviewer's diff** (3), adopted as measured (MA MB MC ME MF MG), and two tests of mine: the in_front piece mirrored on each side (MD) and the cup kept when the agent changes its mind mid-walk (MP), both killed by assertion.
+- **A subagent inside its own call** (4, 5) keeps that call's state to the hour; the ten silent minutes are the orchestrator's ruling, and the D143 rows say so (K3).
+- Found on the way: the tracker's header still described D119 (the first docstring edit had not applied); fixed.
+
 ## Open threads
 
-- The main agent's screen visits take the subagent whose spot is nearest by walking, so with several subagents the nearest is visited more than the others; "in turn" holds among the three activities, not among the subagents.
 - The five waiting fillers' poses (`drumming`, `looking_at_the_watch`, `tapping_a_foot`, `glancing`) stay in the pack, now used by the permission waits only (`drumming`, `tapping_a_foot` by none): left, not removed.
 - Whether a main agent that `done`-cheers nothing at all when its last turn ends with a subagent in the room is what the user wants once the last subagent finishes (it then idles): D143 says so; not measured with the real Claude Code.
 
