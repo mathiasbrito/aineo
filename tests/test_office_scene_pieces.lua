@@ -116,10 +116,12 @@ local THREE_PICTURES = 'colours: R = red, G = green, B = blue\nanchor: 0, 1\nsec
 local GREEN = '#00ff00'
 
 --- The pack of the door of `DOOR_PLAN` made a piece used once, whose own art
---- is brown: it plays the three pictures once.
+--- is brown: it plays the three pictures once. An agent that stands plays
+--- `stand_steps`, one step at `aside` unless they are given.
 ---
+---@param stand_steps? table[]
 ---@return aineo.office_pack.Pack
-local function once_pack()
+local function once_pack(stand_steps)
   return scene.people_pack(
     DOOR_PLAN,
     vim.tbl_extend('force', DOOR_LEGEND, {
@@ -127,7 +129,7 @@ local function once_pack()
     }),
     {
       activities = {
-        stand = { steps = { { at = 'aside' } } },
+        stand = { steps = stand_steps or { { at = 'aside' } } },
         work = { steps = { { at = 'seat' } } },
         rest = { steps = { { at = 'end' } } },
       },
@@ -157,6 +159,20 @@ T['a piece used once']['plays its in_use art from the moment an agent comes to i
     once_piece_after(5, { 'standing' }, 5.5),
     once_piece_after(5, { 'standing' }, 6.5),
   }, { scene.solid(RED), scene.solid(GREEN) })
+end
+
+T['a piece used once']['goes on playing when the agent goes on to another step at the spot'] = function()
+  local stage = scene.stage_of(
+    once_pack({ { at = 'aside', for_seconds = 1.5 }, { at = 'aside', pose = 'standing' } }),
+    4,
+    2
+  )
+  stage.advance(scene.agents_in('working'), 5)
+  stage.advance(scene.agents_in('standing'), 5.5)
+
+  stage.advance(scene.agents_in('standing'), 6.9)
+
+  eq(scene.group_at(stage.picture(), 1, 0), scene.solid(GREEN))
 end
 
 T['a piece used once']['holds the last picture while the agent stays'] = function()

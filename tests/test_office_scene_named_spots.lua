@@ -193,6 +193,29 @@ T['a step that goes to a subagent’s screen']['goes nowhere when the office has
   eq(where_the_two_are(stage, 8)[1], '0,0')
 end
 
+T['a step that goes to a subagent’s screen']['does not go to a spot on another row, however near'] = function()
+  local legend = vim.tbl_extend(
+    'force',
+    SCREENS_LEGEND,
+    { m = { spot = 'a_subagents_screen', facing = 'left' } }
+  )
+  local pack = scene.people_pack('# plan\n \n a.dd..m.\n ....m...\n', legend, {
+    activities = {
+      stand = { steps = { { at = 'aside', for_seconds = 1 } } },
+      work = { steps = { { at = 'desk', pose = 'sitting' } } },
+      visit = { during = { 'idle' }, steps = { { at = 'a_subagents_screen' } } },
+    },
+    states = { standing = 'stand', idle = 'stand', working = 'work' },
+  })
+  local stage = scene.stage_of(pack, 8, 2, { random = scene.always(0) })
+  local crew = scene.agents_in('idle', 'working')
+  stage.advance(crew, 0)
+
+  stage.advance(crew, 3)
+
+  eq(scene.agent_cell(stage.picture(), 8, 2), '6,0')
+end
+
 T['a step that goes to the end of its desk'] = MiniTest.new_set()
 
 T['a step that goes to the end of its desk']['goes to the spot that faces its own desk, not the nearest'] = function()

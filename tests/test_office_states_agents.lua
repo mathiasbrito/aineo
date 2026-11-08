@@ -107,6 +107,16 @@ T['a subagent']['is done when it finishes, then leaves, then is gone'] = functio
   eq(ids_after(story, 100), { 'main' })
 end
 
+T['a subagent']['is done when its turn ends while another subagent is in the office'] = function()
+  local story = office_signals.tell()
+  story.hear('subagent_started', { agent = 'a1' })
+  story.hear('subagent_started', { agent = 'a2' })
+
+  story.hear('turn_ended', { agent = 'a1' })
+
+  eq(story.state('a1'), 'done')
+end
+
 T['a subagent']["that finished in the past, as the transcript's tail tells, is not listed"] = function()
   local story = office_signals.tell()
   story.hear_replayed('subagent_started', { agent = 'a1' })
