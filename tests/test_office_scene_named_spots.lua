@@ -255,6 +255,35 @@ T['a step that goes to a subagent’s screen']['goes to the screen of each subag
   )
 end
 
+T['a step that goes to a subagent’s screen']['goes beside the desk of each subagent in turn when the plan has no screen spot'] = function()
+  local legend = vim.tbl_extend('force', DESKS_LEGEND, { b = { spot = 'beside_desk' } })
+  local pack = scene.people_pack('# plan\n \n a.d.d.d..\n ..b.b.b..\n', legend, {
+    activities = {
+      stand = { steps = { { at = 'aside' } } },
+      work = { steps = { { at = 'desk', pose = 'sitting' } } },
+      visit = {
+        steps = {
+          { at = 'a_subagents_screen', for_seconds = 1 },
+          { at = 'aside', for_seconds = 1 },
+          { at = 'a_subagents_screen' },
+        },
+      },
+    },
+    states = { standing = 'stand', idle = 'visit', working = 'work' },
+  })
+  local stage = scene.stage_of(pack, 10, 2)
+  local crew = scene.agents_in('idle', 'working', 'working')
+  stage.advance(crew, 0)
+  local first = scene.group_at(stage.picture(), 4, 1)
+
+  stage.advance(crew, 6)
+
+  eq(
+    { first, scene.group_at(stage.picture(), 6, 1) },
+    { scene.solid(scene.AGENT), scene.solid(scene.AGENT) }
+  )
+end
+
 T['a step that goes to the end of its desk'] = MiniTest.new_set()
 
 T['a step that goes to the end of its desk']['goes to the spot that faces its own desk, not the nearest'] = function()
