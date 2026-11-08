@@ -155,6 +155,22 @@ return {
           art = { 'crew_seated', 'crew_visor_side', 'bean_hands_slow' },
           screen = 'screen_tests',
         },
+        going_through_papers = {
+          art = { 'crew', 'crew_visor_down', 'bean_legs_stand', 'arm_hold_paper' },
+        },
+        looking_at_a_screen = { art = { 'crew', 'crew_visor_side', 'bean_legs_stand' }, effect = 'chat' },
+        taking_the_cup = {
+          art = { 'crew', 'crew_visor_happy', 'bean_legs_stand', 'arm_hold_cup' },
+          walks_as = 'walking_with_a_cup',
+        },
+        waiting_for_the_coffee = { art = { 'crew', 'crew_visor_side', 'bean_legs_stand' } },
+        waiting_quietly = {
+          art = { 'crew_seated', 'crew_visor_down', 'bean_hands_slow' },
+          screen = 'screen_cursor',
+        },
+        walking_with_a_cup = {
+          art = { 'crew', 'crew_visor_side', 'bean_legs_walk', 'arm_hold_cup' },
+        },
         walking = { art = { 'crew', 'crew_visor_side', 'bean_legs_walk' } },
         watering = { art = { 'crew', 'crew_visor_side', 'bean_legs_stand', 'arm_water' } },
         waving = {
@@ -258,6 +274,22 @@ return {
           art = { 'bot_seated', 'bot_lens_side', 'bean_hands_slow' },
           screen = 'screen_tests',
         },
+        going_through_papers = {
+          art = { 'bot', 'bot_lens_down', 'bean_legs_stand', 'arm_hold_paper' },
+        },
+        looking_at_a_screen = { art = { 'bot', 'bot_lens_side', 'bean_legs_stand' }, effect = 'chat' },
+        taking_the_cup = {
+          art = { 'bot', 'bot_lens_happy', 'bean_legs_stand', 'arm_hold_cup' },
+          walks_as = 'walking_with_a_cup',
+        },
+        waiting_for_the_coffee = { art = { 'bot', 'bot_lens_side', 'bean_legs_stand' } },
+        waiting_quietly = {
+          art = { 'bot_seated', 'bot_lens_down', 'bean_hands_slow' },
+          screen = 'screen_cursor',
+        },
+        walking_with_a_cup = {
+          art = { 'bot', 'bot_lens_side', 'bean_legs_walk', 'arm_hold_cup' },
+        },
         walking = { art = { 'bot', 'bot_lens_side', 'bean_legs_walk' } },
         watering = { art = { 'bot', 'bot_lens_side', 'bean_legs_stand', 'arm_water' } },
         waving = {
@@ -309,6 +341,7 @@ return {
       B = { piece = 'holo_table', shows = 'plan', in_use = 'holo_table_lit' },
       C = { piece = 'cargo_crates', in_use = 'cargo_crates_open' },
       D = { piece = 'airlock_door', in_use = 'airlock_door_open' },
+      E = { spot = 'its_desks_end' },
       G = { piece = 'hydroponics_pod' },
       K = { piece = 'chronometer', shows = 'time' },
       L = { piece = 'light_column' },
@@ -316,6 +349,7 @@ return {
       N = { piece = 'recycler_chute' },
       P = { piece = 'message_terminal', shows = 'printing', in_use = 'message_terminal_active' },
       Q = { spot = 'sofa', sitting = true, facing = 'left' },
+      S = { spot = 'a_subagents_screen', facing = 'left' },
       T = { piece = 'console_desk', shows = 'name' },
       V = { piece = 'console_screen' },
       X = { piece = 'holo_game_table', in_use = 'holo_game_table_playing' },

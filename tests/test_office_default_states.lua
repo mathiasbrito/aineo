@@ -24,7 +24,7 @@ local FIRST_SPOT = {
   { 'background_job', 'desk' },
   { 'on_the_web', 'desk' },
   { 'delegating', 'beside_desk' },
-  { 'waiting_for_subagents', 'beside_desk' },
+  { 'waiting_for_subagents', 'its_desks_end' },
   { 'needs_permission', 'desk' },
   { 'asking_you', 'desk' },
   { 'reporting', 'printer' },
@@ -32,7 +32,7 @@ local FIRST_SPOT = {
   { 'compacting', 'desk' },
   { 'error', 'desk' },
   { 'interrupted', 'desk' },
-  { 'done', 'beside_desk' },
+  { 'done', 'desk' },
   { 'idle', 'sofa' },
   { 'asleep', 'sofa' },
   { 'leaving', 'beside_desk' },
@@ -115,7 +115,7 @@ local T = MiniTest.new_set()
 
 T['the states'] = MiniTest.new_set()
 
-T['the states']['that start at a spot the plan lacks in 60 columns by 24 rows are those at a desk, the sofa or the printer'] = function()
+T['the states']['that start at a spot the plan lacks in 60 columns by 24 rows are those at a desk, the end of a desk, the sofa or the printer'] = function()
   local spots = default.spots(default.load_pack(), SMALL[1], SMALL[2] - LIST_ROWS)
 
   local lacking = vim.tbl_map(
@@ -134,6 +134,7 @@ T['the states']['that start at a spot the plan lacks in 60 columns by 24 rows ar
     'running_tests',
     'background_job',
     'on_the_web',
+    'waiting_for_subagents',
     'needs_permission',
     'asking_you',
     'reporting',
@@ -141,6 +142,7 @@ T['the states']['that start at a spot the plan lacks in 60 columns by 24 rows ar
     'compacting',
     'error',
     'interrupted',
+    'done',
     'idle',
     'asleep',
   })
@@ -226,8 +228,6 @@ T['an agent']['is put at the spot its state starts at in 60 columns by 24 rows, 
       { 'reading', 'file_cabinet' },
       { 'searching', 'file_cabinet' },
       { 'delegating', 'beside_desk' },
-      { 'waiting_for_subagents', 'beside_desk' },
-      { 'done', 'beside_desk' },
       { 'leaving', 'beside_desk' },
     },
   })
@@ -262,7 +262,7 @@ T['an agent']['reaches 22 of the 24 states in turn on a pass, at the spot each e
 
   for _, pair in ipairs(LAST_SPOT) do
     local agents = default.agents(1, pair[1])
-    for _ = 1, 60 do
+    for _ = 1, 80 do
       stage.advance(agents, time)
       time = time + 0.25
     end
