@@ -3,8 +3,9 @@
 --- reading.
 ---
 --- Four parents, `standing`, `working`, `waiting` and `resting`, are no state
---- of an agent's life: a pack that draws five poses covers every state
---- through them. The 24 states are numbered; every chain of fallbacks ends at
+--- of an agent's life but one: a subagent that has said nothing for a while
+--- is `waiting`. A pack that draws five poses covers every state through
+--- them. The 24 states are numbered; every chain of fallbacks ends at
 --- `standing`.
 
 local M = {}
