@@ -10,9 +10,9 @@
 --- `an_idle_agents_desk` the desk of another agent in the state `idle`;
 --- `next_to_an_agent` a cell beside another agent who stands still,
 --- `next_to_the_cat` a cell beside a cat that stands still;
---- `a_subagents_screen` the plan's spots of that name numbered as the places of
---- the subagents, and `its_desks_end` the one numbered as the agent's own
---- place. A thing
+--- `a_subagents_screen` the plan's spots of that name that face the desks of
+--- the subagents, and `its_desks_end` the one that faces the agent's own desk.
+--- A thing
 --- that lies on the floor is a spot of its own name. Any other name is every
 --- spot of the name, and the character may go to the ones no
 --- other character has taken.
@@ -244,45 +244,59 @@ local function cells_beside_cats(world, character)
   return cells_beside(world, character, world.cats or {}, NEXT_TO_THE_CAT)
 end
 
---- The spots of the plan named `name` that are numbered as the places of the
---- agents, other than `character`, that `is_wanted`.
+--- The spot of the plan named `name` that belongs to `desk`: the nearest on
+--- the desk's row that faces it, a spot that faces left having the desk on
+--- its left and one that faces right having it on its right. Nil when the
+--- plan has none, as when the window cuts the row short of it.
 ---
 ---@param world aineo.office_scene.SpotWorld
----@param character { id: string }
 ---@param name string
----@param is_wanted fun(agent: table): boolean
----@return aineo.office_scene.Spot[]
-local function spots_numbered_as_places_of(world, character, name, is_wanted)
-  local numbered = world.layout.spots[name] or {}
-  local found = {}
-  for _, agent in ipairs(world.agents) do
-    if agent.id ~= character.id and is_wanted(agent) and numbered[agent.place] then
-      table.insert(found, numbered[agent.place])
+---@param desk aineo.office_scene.Spot
+---@return aineo.office_scene.Spot|nil
+local function spot_facing_the_desk(world, name, desk)
+  local nearest, nearest_distance = nil, math.huge
+  for _, spot in ipairs(world.layout.spots[name] or {}) do
+    local across = desk.column - spot.column
+    local faces_it = (spot.facing == 'left' and across < 0)
+      or (spot.facing == 'right' and across > 0)
+    if spot.row == desk.row and faces_it and math.abs(across) < nearest_distance then
+      nearest, nearest_distance = spot, math.abs(across)
     end
   end
-  return found
+  return nearest
 end
 
---- The spots named `a_subagents_screen`, numbered as the places of the
---- subagents: where the screen of a subagent's desk is looked at from.
+--- The spots named `a_subagents_screen`, each facing the desk of a subagent:
+--- where the screen of a subagent's desk is looked at from.
 ---
 ---@param world aineo.office_scene.SpotWorld
 ---@param character { id: string }
 ---@return aineo.office_scene.Spot[]
 local function subagents_screens(world, character)
-  return spots_numbered_as_places_of(world, character, 'a_subagents_screen', function(agent)
-    return roles.kind_of(agent) == 'subagent'
-  end)
+  local desks = world.layout.spots[OWN_DESK] or {}
+  local found = {}
+  for _, agent in ipairs(world.agents) do
+    local desk = desks[agent.place]
+    local spot = desk
+      and agent.id ~= character.id
+      and roles.kind_of(agent) == 'subagent'
+      and spot_facing_the_desk(world, 'a_subagents_screen', desk)
+    if spot then
+      table.insert(found, spot)
+    end
+  end
+  return found
 end
 
---- The spot named `its_desks_end` numbered as the place of `character`.
+--- The spot named `its_desks_end` that faces the desk of `character`.
 ---
 ---@param world aineo.office_scene.SpotWorld
 ---@param character { place?: integer }
 ---@return aineo.office_scene.Spot[]
 local function end_of_its_desk(world, character)
-  local own = (world.layout.spots['its_desks_end'] or {})[character.place]
-  return own and { own } or {}
+  local desk = (world.layout.spots[OWN_DESK] or {})[character.place]
+  local spot = desk and spot_facing_the_desk(world, 'its_desks_end', desk)
+  return spot and { spot } or {}
 end
 
 --- The spots, besides the plan's own, that aineo knows by name, each found

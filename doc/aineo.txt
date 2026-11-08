@@ -6227,11 +6227,11 @@ The names aineo knows without any legend:
 `next_to_an_agent`	a cell beside another agent who stands still
 `next_to_the_cat`	a cell beside a cat that stands still, facing it,
 	which then keeps its pose and its place until the agent's step is over
-`a_subagents_screen`	the spots of the plan of that name numbered as the
-	places of the subagents (|aineo-office-desks|): where the screen of
-	a subagent's desk is looked at from
-`its_desks_end`	the spot of the plan of that name numbered as the agent's own
-	place, at its desk
+`a_subagents_screen`	the spots of the plan of that name that face a subagent's
+	desk (|aineo-office-desks|), the nearest on the desk's row that
+	has it in front of it: where its screen is looked at from
+`its_desks_end`	the spot of the plan of that name that faces the agent's own
+	desk, likewise: where the agent stands at its desk
 A thing's name	the cell where a thing of that name lies
 	(|aineo-office-things|)
 
@@ -6839,7 +6839,7 @@ pixel wide and two tall):
                                         area plan 22 x 10
     file_cabinet            21 x 24     file_cabinet_open 23 x 24, 4 frames
     door                    10 x 24     door_open
-    coffee_machine          25 x 26     coffee_machine_brewing, 31 frames
+    coffee_machine          25 x 26     coffee_machine_brew_once, 62 frames
     printer                 14 x 14     area page 8 x 4; printed_page 8 x 4
     window                  24 x 13     area sky 22 x 10; sky_night,
                                         sky_dawn, sky_day, sky_dusk 22 x 10
@@ -6871,8 +6871,11 @@ takes:
     on_the_web               browse_the_web: desk; a browser on the monitor
     delegating               hand_a_task_over: beside_desk; holds a paper
                              out
-    waiting,                 wait_for_subagents: taps a foot beside the
-    waiting_for_subagents    desk, then sits at the desk
+    waiting                  wait_quietly_at_the_desk: desk, head down,
+                             typing now and then; it stays
+    waiting_for_subagents    go_through_papers: the end of its desk, going
+                             through its papers; then the others of its
+                             random life (below)
     needs_permission         wait_for_permission: desk; a hand up and
                              "! y/n?"
     asking_you               ask_a_question: desk; a hand up and "?"
@@ -6883,9 +6886,12 @@ takes:
     error                    hit_an_error: desk; scratching its head, the
                              screen red
     interrupted              get_interrupted: desk; jumps up, papers fly
-    done                     finish_up: stretches, gets a cup at the coffee
-                             machine, goes to the sofa
-    resting, idle            rest_on_the_sofa: sofa; a cup, chatting
+    done                     finish_up: desk, then the coffee machine, which
+                             brews a cup while it waits (about 6 seconds of
+                             bar and pouring, then steam); takes the cup and
+                             walks to the sofa with it
+    resting, idle            rest_on_the_sofa: sofa; a mug held in front of
+                             its chest, chatting
     asleep                   sleep_on_the_sofa: sofa, asleep
     leaving                  pack_up_and_leave: packs a box, goes to the
                              door, waves goodbye
@@ -6898,10 +6904,12 @@ by weight among `stretch` (3), `yawn` (3), `spin_in_the_chair` (2),
 `throw_a_paper_ball_in_the_bin` (1.4) and `throw_a_paper_ball_and_miss` (0.6),
 which leaves the ball on the floor, `get_a_drink_at_the_water_cooler` (2),
 `doodle_on_the_whiteboard` (1), `tidy_the_desk` (2), `nap_on_the_sofa` (1),
-`play_table_tennis` (1, two players) and `pet_the_cat` (1). A waiting agent
-(`waiting`, `waiting_for_subagents`) picks among `drum_its_fingers` (3),
-`look_at_its_watch` (2), `pace_beside_the_desk` (2), `glance_at_the_door` (2)
-and `tap_a_foot` (2); one that needs permission, among
+`play_table_tennis` (1, two players) and `pet_the_cat` (1). The main agent
+while its subagents are in the office (`waiting_for_subagents`) picks, in
+turn, among `go_through_papers`, `check_a_subagents_screen` (it walks to a
+subagent's desk and looks at its screen) and `write_the_plan_on_the_whiteboard`,
+a few seconds each; a subagent that waits (`waiting`) has none and stays at its
+desk. One that needs permission picks among
 `drum_its_fingers_and_wait` (3), `look_at_its_watch_and_wait` (2) and
 `glance_at_the_door_and_wait` (2), each with the hand up. The cat's life and
 the mess are in |aineo-office-cat| and |aineo-office-things|: `mess` and

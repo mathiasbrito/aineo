@@ -1,0 +1,30 @@
+about: A mug of coffee a seated agent holds in front of its chest, steaming, drawn in front of the sofa.
+colours: B = agent, O = door_frame, W = white, w = shine
+anchor: 5, 11
+seconds per frame: 0.4
+---
+............
+............
+..........w.
+...........w
+..........w.
+...........w
+.......WOOW.
+......BWWWWW
+......BWWWWW
+.......WWW..
+............
+............
+---
+............
+............
+...........w
+..........w.
+...........w
+..........w.
+.......WOOW.
+......BWWWWW
+......BWWWWW
+.......WWW..
+............
+............
