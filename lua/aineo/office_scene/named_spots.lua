@@ -244,16 +244,37 @@ local function cells_beside_cats(world, character)
   return cells_beside(world, character, world.cats or {}, NEXT_TO_THE_CAT)
 end
 
+--- The spot `beside_desk` nearest to `desk`, counting cells across and down;
+--- nil when the plan has none.
+---
+---@param world aineo.office_scene.SpotWorld
+---@param desk aineo.office_scene.Spot
+---@return aineo.office_scene.Spot|nil
+local function spot_beside_the_desk(world, desk)
+  local nearest, fewest_cells = nil, math.huge
+  for _, spot in ipairs(world.layout.spots[M.BESIDE_DESK] or {}) do
+    local cells = math.abs(desk.column - spot.column) + math.abs(desk.row - spot.row)
+    if cells < fewest_cells then
+      nearest, fewest_cells = spot, cells
+    end
+  end
+  return nearest
+end
+
 --- The spot of the plan named `name` that belongs to `desk`: the nearest on
 --- the desk's row that faces it, a spot that faces left having the desk on
 --- its left and one that faces right having it on its right. Nil when the
---- plan has none, as when the window cuts the row short of it.
+--- plan has none for the desk, as when the window cuts the row short of it;
+--- when the plan has none of the name at all, the spot beside the desk.
 ---
 ---@param world aineo.office_scene.SpotWorld
 ---@param name string
 ---@param desk aineo.office_scene.Spot
 ---@return aineo.office_scene.Spot|nil
 local function spot_facing_the_desk(world, name, desk)
+  if not world.layout.spots[name] then
+    return spot_beside_the_desk(world, desk)
+  end
   local nearest, nearest_distance = nil, math.huge
   for _, spot in ipairs(world.layout.spots[name] or {}) do
     local across = desk.column - spot.column

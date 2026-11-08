@@ -4,6 +4,7 @@ local eq = MiniTest.expect.equality
 
 local office_pack = require('aineo.office_pack')
 local default = dofile('tests/helpers/office_default.lua')
+local fixture = dofile('tests/helpers/fixture.lua')
 
 local PACK = 'space_station'
 
@@ -180,6 +181,60 @@ T['the space station pack']['is based on the default pack, whose activities and 
   eq(description().based_on, 'default')
   eq(pack.state_activity.working, 'write_code')
   eq(pack.state_activity.idle, 'rest_on_the_sofa')
+end
+
+--- The folders the packs are searched in with a copy of the space station pack
+--- first, whose plan and legend have no spot at the end of a desk and none
+--- beside a screen: the pack as it was before it had them.
+---
+---@return string[]
+local function folders_with_a_station_that_lacks_the_desk_spots()
+  local root = fixture.directory('office_station_without_desk_spots')
+  vim.fn.delete(root, 'rf')
+  fixture.make_directory(root)
+  vim.system({ 'cp', '-R', vim.fs.joinpath(folders()[1], PACK), root }):wait()
+  local plan = vim.fs.joinpath(root, PACK, 'floor.txt')
+  local rows = vim.tbl_map(function(row)
+    return row:sub(1, 1) == '#' and row or row:gsub('[ES]', '.')
+  end, vim.fn.readfile(plan))
+  vim.fn.writefile(rows, plan)
+  local description_file = vim.fs.joinpath(root, PACK, 'pack.lua')
+  local lines = vim.tbl_filter(function(line)
+    return not line:find("^%s+[ES] = { spot = '[%a_]+")
+  end, vim.fn.readfile(description_file))
+  vim.fn.writefile(lines, description_file)
+  return vim.list_extend({ root }, folders())
+end
+
+T['the space station pack']['has no problem when its plan lacks the spots of the desks the main agent coordinates at'] = function()
+  local found = office_pack.check({
+    name = PACK,
+    folders = folders_with_a_station_that_lacks_the_desk_spots(),
+  })
+
+  eq(found, {})
+end
+
+T['the space station pack']['has the main agent go beside its desk to coordinate when its plan lacks those spots'] = function()
+  local pack = assert(office_pack.load({
+    name = PACK,
+    folders = folders_with_a_station_that_lacks_the_desk_spots(),
+  }))
+  pack.agent.colours = vim.deepcopy(default.AGENT_COLOURS)
+  pack.subagent.colours = vim.deepcopy(default.AGENT_COLOURS)
+  pack.cat = nil
+  local size = { 100, 40 }
+  local spots = default.spots(pack, size[1], size[2] - 5)
+  local stage = default.stage(pack, size[1], size[2])
+  local crew =
+    { { id = 'main', state = 'waiting_for_subagents' }, { id = 'sub2', state = 'working' } }
+
+  for step = 0, 40 do
+    stage.advance(crew, step / 4)
+  end
+  local place = default.where_is(default.pixels(stage.picture(), size[1]), default.AGENT_COLOURS[1])
+
+  eq(place and default.nearest_spot(spots, place), 'beside_desk')
 end
 
 T['the space station pack']['draws a floor plan of its own'] = function()
