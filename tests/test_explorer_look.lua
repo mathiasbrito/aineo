@@ -299,6 +299,67 @@ T['the counts']['are not shown for a file git does not count, nor while the look
   eq(off.virtual, {})
 end
 
+T['the header'] = MiniTest.new_set()
+
+--- The header line `tree.render()` gives under `shown`.
+---
+---@param shown aineo.explorer.View
+---@return string
+local function header_of(shown)
+  return tree.render(tree.from_paths({ 'a' }), shown).lines[1]
+end
+
+T['the header']['names the branch after the folder, the toggles after both'] = function()
+  local shown = view({ title = '~/project', branch = 'main' })
+
+  eq(header_of(shown), '~/project · main  ·  ignored hidden  ·  dotfiles shown')
+end
+
+T['the header']['sums the changes up, the files git sees as new apart from the others'] = function()
+  local marks = { a = 'M', b = 'D', c = '?', d = 'A', e = 'R' }
+  local shown = view({ title = 'p', branch = 'main', marks = marks })
+
+  eq(header_of(shown), 'p · main · 3 changed · 2 new  ·  ignored hidden  ·  dotfiles shown')
+end
+
+T['the header']['names only the kind of change there is'] = function()
+  eq(
+    header_of(view({ title = 'p', marks = { a = 'M' } })):sub(1, #'p · 1 changed  ·'),
+    'p · 1 changed  ·'
+  )
+  eq(
+    header_of(view({ title = 'p', marks = { a = '?' } })):sub(1, #'p · 1 new  ·'),
+    'p · 1 new  ·'
+  )
+end
+
+T['the header']['lays the toggles at the right edge of a window whose width is known'] = function()
+  local shown = view({ title = 'p', branch = 'main', width = 60 })
+
+  local header = header_of(shown)
+
+  eq(vim.api.nvim_strwidth(header), 60)
+  eq(header:sub(1, #'p · main'), 'p · main')
+  eq(header:sub(-#'ignored hidden  ·  dotfiles shown'), 'ignored hidden  ·  dotfiles shown')
+end
+
+T['the header']['drops the toggles first, then the summary, when they would not fit'] = function()
+  local base = { title = 'p', branch = 'main', marks = { a = 'M' } }
+  local toggles_fit = vim.api.nvim_strwidth('p · main · 1 changed')
+    + 2
+    + vim.api.nvim_strwidth('ignored hidden  ·  dotfiles shown')
+
+  local with_toggles = header_of(view(vim.tbl_extend('force', base, { width = toggles_fit })))
+  local without_toggles =
+    header_of(view(vim.tbl_extend('force', base, { width = toggles_fit - 1 })))
+  local without_summary =
+    header_of(view(vim.tbl_extend('force', base, { width = vim.api.nvim_strwidth('p · main') })))
+
+  eq(vim.endswith(with_toggles, 'dotfiles shown'), true)
+  eq(without_toggles, 'p · main · 1 changed')
+  eq(without_summary, 'p · main')
+end
+
 T['a repository’s listing'] = MiniTest.new_set()
 
 T['a repository’s listing']['gives the line counts of the files under the folder shown, from it'] = function()
