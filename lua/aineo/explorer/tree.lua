@@ -4,7 +4,7 @@
 
 local compact = require('aineo.explorer.compact')
 local counts = require('aineo.explorer.counts')
-local decoration = require('aineo.explorer.decoration')
+local line_virtual_text = require('aineo.explorer.line_virtual_text')
 local header = require('aineo.explorer.header')
 
 local M = {}
@@ -597,7 +597,7 @@ function M.render(tree, view)
     if entry.kind == 'file' and view.claude and view.claude[entry.path] then
       flashed[number] = view.flash and view.flash[entry.path] or nil
     end
-    local items = decoration.virtual_text_of(view, {
+    local items = line_virtual_text.virtual_text_of(view, {
       entry = entry,
       line = line,
       columns = columns,
