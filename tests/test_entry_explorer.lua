@@ -876,9 +876,8 @@ T['the filter']['shows the files whose path holds it, and an empty one shows eve
   eq(filtered, {
     vim.fn.fnamemodify(child.lua_get('vim.fn.getcwd()'), ':~')
       .. '  ·  ignored hidden  ·  dotfiles shown  ·  filter “UTIL”',
-    '▾   src/',
-    '  ▾   lib/',
-    '        util.lua',
+    '▾   src/lib/',
+    '      util.lua',
   })
   eq(vim.list_slice(explorer_lines(), 2), FOLDED_TREE)
 end
@@ -1120,10 +1119,8 @@ T['a submodule and a nested repository']['show as folders listed from disk, Ente
   child.cmd('Aineo open')
   claude_session.wait_for_status(child, 'ready')
   entry.press(child, '\\e')
-  wait_for_tree({ '▸ ? nested/', '▸   vendor/', '    .gitmodules', '    a.txt' })
-  put_cursor_on('vendor/')
-  entry.press(child, 'l')
-  put_cursor_on('lib/')
+  wait_for_tree({ '▸ ? nested/', '▸   vendor/lib/', '    .gitmodules', '    a.txt' })
+  put_cursor_on('vendor/lib/')
 
   entry.press(child, '<CR>')
   put_cursor_on('nested/')
@@ -1132,9 +1129,8 @@ T['a submodule and a nested repository']['show as folders listed from disk, Ente
   eq(vim.list_slice(explorer_lines(), 2), {
     '▾ ? nested/',
     '      n.txt',
-    '▾   vendor/',
-    '  ▾   lib/',
-    '        s.txt',
+    '▾   vendor/lib/',
+    '      s.txt',
     '    .gitmodules',
     '    a.txt',
   })

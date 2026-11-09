@@ -104,4 +104,90 @@ T['the guides']['are not laid while the look is off'] = function()
   eq(rendering.virtual, {})
 end
 
+T['a chain of single-child folders'] = MiniTest.new_set()
+
+local CHAIN = { 'lua/aineo/explorer/home.lua', 'lua/aineo/explorer/tree.lua', 'README.md' }
+
+T['a chain of single-child folders']['folds onto one line, its entry the deepest folder'] = function()
+  local rendering = render(CHAIN, view({ compact = true }))
+
+  eq(vim.list_slice(rendering.lines, 2), { '▸   lua/aineo/explorer/', '    README.md' })
+  eq(rendering.entries[2].path, 'lua/aineo/explorer')
+  eq(rendering.entries[2].kind, 'folder')
+end
+
+T['a chain of single-child folders']['unfolds with the deepest folder, its entries one level down'] = function()
+  local shown = view({ compact = true, open = { ['lua/aineo/explorer'] = true } })
+
+  local rendering = render(CHAIN, shown)
+
+  eq(vim.list_slice(rendering.lines, 2), {
+    '▾   lua/aineo/explorer/',
+    '      home.lua',
+    '      tree.lua',
+    '    README.md',
+  })
+end
+
+T['a chain of single-child folders']['is not folded while the look is off'] = function()
+  local rendering = render(CHAIN, view({ open = { lua = true } }))
+
+  eq(vim.list_slice(rendering.lines, 2), { '▾   lua/', '  ▸   aineo/', '    README.md' })
+end
+
+T['a chain of single-child folders']['ends at a folder holding more than one entry'] = function()
+  local paths = { 'a/b/c/x.lua', 'a/b/y.lua', 'a/b/c/z.lua' }
+
+  local rendering = render(paths, view({ compact = true, open = { ['a/b'] = true } }))
+
+  eq(vim.list_slice(rendering.lines, 2), { '▾   a/b/', '  ▸   c/', '      y.lua' })
+  eq(rendering.entries[2].path, 'a/b')
+end
+
+T['a chain of single-child folders']['counts the entries that show, not the ones hidden'] = function()
+  local paths = { 'a/.hidden', 'a/b/x.lua' }
+
+  local hidden = render(paths, view({ compact = true, show_dotfiles = false }))
+  local shown = render(paths, view({ compact = true }))
+
+  eq(vim.list_slice(hidden.lines, 2), { '▸   a/b/' })
+  eq(vim.list_slice(shown.lines, 2), { '▸   a/' })
+end
+
+T['a chain of single-child folders']['unfolds through under a filter'] = function()
+  local rendering = render(CHAIN, view({ compact = true, filter = 'tree' }))
+
+  eq(vim.list_slice(rendering.lines, 2), { '▾   lua/aineo/explorer/', '      tree.lua' })
+end
+
+T['a chain of single-child folders']['is one level of the guides'] = function()
+  local shown = view({ compact = true, guides = true, open = { ['a/b'] = true } })
+
+  local rendering = render({ 'a/b/x.lua', 'a/b/y.lua' }, shown)
+
+  eq(virtual_texts(rendering, 3, 'overlay'), { '├ ' })
+  eq(virtual_texts(rendering, 4, 'overlay'), { '└ ' })
+end
+
+T['a chain of single-child folders']['takes the mark of a change below it'] = function()
+  local shown = view({ compact = true, marks = { ['a/b/c.lua'] = 'M' } })
+
+  local rendering = render({ 'a/b/c.lua' }, shown)
+
+  eq(rendering.lines[2], '▸ • a/b/')
+  eq(rendering.spans[2][2].role, 'changed_folder')
+end
+
+T['a chain of single-child folders']['starting at a folder ignored shows whole in the ignored colour'] = function()
+  local tree_of = tree.from_paths({ 'src/a.lua' }, { 'build/out/' })
+  local shown = view({ compact = true, show_ignored = true })
+
+  local rendering = tree.render(tree_of, shown)
+
+  eq(
+    rendering.spans[2],
+    { { first_column = 0, end_column = #'▸   build/out/', role = 'ignored' } }
+  )
+end
+
 return T

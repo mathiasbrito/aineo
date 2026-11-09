@@ -193,6 +193,7 @@ function M.new(settings)
       title = state.place and state.place.title or '',
       quote = settings.quote_name,
       guides = true,
+      compact = true,
     }
   end
 
@@ -573,18 +574,50 @@ function M.new(settings)
     end
   end
 
+  --- The deepest folder of the chain `folder` starts, once the entries of
+  --- each folder along it are known, read from the disk when git does not
+  --- list them.
+  ---
+  ---@param folder aineo.explorer.Entry
+  ---@return aineo.explorer.Entry
+  local function known_chain_end(folder)
+    local deepest
+    repeat
+      list_when_unknown(folder.path)
+      deepest = tree.deepest_folder(state.tree, view(), folder)
+      local extended = deepest.path ~= folder.path
+      folder = deepest
+    until not extended
+    return deepest
+  end
+
   --- Unfolds the folder under the cursor, its entries read from the disk
-  --- when git does not list them, or folds it when it is unfolded.
+  --- when git does not list them, or folds it when it is unfolded. A chain
+  --- of folders on one line unfolds, and folds, as its deepest folder.
   ---
   ---@param folder aineo.explorer.Entry
   local function toggle_folder(folder)
     if state.open[folder.path] then
       state.open[folder.path] = nil
     else
-      list_when_unknown(folder.path)
-      state.open[folder.path] = true
+      state.open[known_chain_end(folder).path] = true
     end
     render()
+  end
+
+  --- The folder that holds `path` nearest to it that has a line of its own:
+  --- a folder inside a chain on one line has none, the chain's has.
+  ---
+  ---@param path string
+  ---@return string|nil
+  local function nearest_shown_folder_above(path)
+    local above = tree.folders_above(path)
+    for index = #above, 1, -1 do
+      if line_of(state.rendering, above[index]) then
+        return above[index]
+      end
+    end
+    return nil
   end
 
   --- What `h` does: folds the folder under the cursor when it is unfolded;
@@ -599,8 +632,7 @@ function M.new(settings)
       toggle_folder(entry)
       return
     end
-    local parent = tree.folders_above(entry.path)
-    local folder = parent[#parent]
+    local folder = nearest_shown_folder_above(entry.path)
     if folder then
       state.open[folder] = nil
       render()
