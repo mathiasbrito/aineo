@@ -700,6 +700,52 @@ local function wait_until_drawn_still()
   end
 end
 
+T['an explorer at rest'] = MiniTest.new_set()
+
+T['an explorer at rest']['is not drawn again while its window has the cursor'] = function()
+  explore('rest')
+  wait_for_tree({ '▸   docs/', '▸   src/', '    README.md' })
+  child.lua(COUNT_DRAWINGS)
+  wait_until_drawn_still()
+  local before = child.lua_get('_G.explorer_draws')
+
+  vim.wait(1000)
+
+  eq(child.lua_get('_G.explorer_draws'), before)
+end
+
+T['an explorer at rest']['is drawn once for an edit of a file in another window'] = function()
+  local top = explore('rest-edit')
+  wait_for_tree({ '▸   docs/', '▸   src/', '    README.md' })
+  child.cmd('edit ' .. vim.fn.fnameescape(vim.fs.joinpath(top, 'README.md')))
+  child.lua(COUNT_DRAWINGS)
+  wait_until_drawn_still()
+  local before = child.lua_get('_G.explorer_draws')
+
+  child.lua('vim.api.nvim_buf_set_lines(0, 0, 0, false, { "edited" })')
+  wait_for_unsaved({ { 4, ' ●' } })
+  vim.wait(500)
+
+  eq(child.lua_get('_G.explorer_draws') - before, 1)
+end
+
+T['the cursor of the explorer'] = MiniTest.new_set()
+
+T['the cursor of the explorer']['keeps its column when a file in another window is edited'] = function()
+  local top = explore('cursor-column')
+  wait_for_tree({ '▸   docs/', '▸   src/', '    README.md' })
+  child.cmd('edit ' .. vim.fn.fnameescape(vim.fs.joinpath(top, 'README.md')))
+  child.lua(COUNT_DRAWINGS)
+  wait_until_drawn_still()
+  local window = child.lua_get("vim.fn.win_findbuf(vim.fn.bufnr('aineo://explorer'))[1]")
+  child.lua('vim.api.nvim_win_set_cursor(..., { 4, 6 })', { window })
+
+  child.lua('vim.api.nvim_buf_set_lines(0, 0, 0, false, { "edited" })')
+  wait_for_unsaved({ { 4, ' ●' } })
+
+  eq(child.lua_get('vim.api.nvim_win_get_cursor(...)', { window }), { 4, 6 })
+end
+
 T['the unsaved mark']['follows the name of a file edited in this editor, until it is written'] = function()
   local top = explore('unsaved')
   wait_for_tree({ '▸   docs/', '▸   src/', '    README.md' })
