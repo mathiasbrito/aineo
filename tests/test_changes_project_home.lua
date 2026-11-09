@@ -102,6 +102,29 @@ local function session_work_count()
   return child.lua_get('_G.count')
 end
 
+--- Asks the home in the child for the files of *Session work* with the
+--- top of their repository, and waits for the answer: its `top` and its
+--- `paths` sorted.
+---
+---@return { top: string, paths: string[] }|nil
+local function session_work_files()
+  child.lua([[
+    _G.listed, _G.work = false, nil
+    _G.home.session_work_files(function(work)
+      _G.listed, _G.work = true, work
+    end)
+  ]])
+  git_repo.wait_until('the files are told', function()
+    return child.lua_get('_G.listed')
+  end)
+  local work = child.lua_get('_G.work')
+  if work == vim.NIL then
+    return nil
+  end
+  table.sort(work.paths)
+  return work
+end
+
 --- The abbreviated id of `commit`, a full id, as the pane shows it.
 ---
 ---@param commit string
@@ -202,6 +225,35 @@ T['the count of Session work']['is nil in a folder that is in no repository'] = 
   end)
 
   eq(session_work_count(), vim.NIL)
+end
+
+T['the files of Session work'] = MiniTest.new_set()
+
+T['the files of Session work']['are those the count counts, with the repository’s top, untracked ones and a commit since included'] = function()
+  local top = git_repo.create('project-home-files', { ['a.txt'] = { 'one' }, ['b.txt'] = { 'b' } })
+  begin_and_show(top)
+  expect_files_line(1, 'Files in: Session work')
+  git_repo.write(top, 'a.txt', { 'two' })
+  git_repo.write(top, 'dir/new.txt', { 'new' })
+  git_repo.write(top, 'c.txt', { 'three' })
+  git_repo.commit_all(top, 'Add c and the rest')
+  git_repo.write(top, 'b.txt', { 'changed again' })
+
+  local work = session_work_files()
+
+  eq(work.paths, { 'a.txt', 'b.txt', 'c.txt', 'dir/new.txt' })
+  eq(vim.uv.fs_realpath(work.top), vim.uv.fs_realpath(top))
+  eq(session_work_count(), 4)
+end
+
+T['the files of Session work']['are none in a folder that is in no repository'] = function()
+  local folder = fixture.directory('project-home-files-no-repository')
+  begin_and_show(folder)
+  git_repo.wait_until('the pane says there is no repository', function()
+    return (lines_of('commits')[1] or ''):find('repository', 1, true) ~= nil
+  end)
+
+  eq(session_work_files(), nil)
 end
 
 T['the watch'] = MiniTest.new_set()

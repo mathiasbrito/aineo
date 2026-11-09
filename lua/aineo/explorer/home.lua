@@ -1,6 +1,7 @@
 --- One explorer: its buffer, the tree it reads of the folder it shows, and
 --- the state the user gives it — folds, toggles, filter — for a tab's life.
 
+local claude_marks = require('aineo.explorer.claude_marks')
 local decorate = require('aineo.explorer.decorate')
 local folders = require('aineo.explorer.folders')
 local icons = require('aineo.explorer.icons')
@@ -45,7 +46,13 @@ local M = {}
 ---@field paste fun(text: string) pastes `text` into Claude Code's prompt, with no Enter
 ---@field quote_name fun(name: string): string how a name shows on its line, a control character in it escaped
 ---@field change_groups table<string, string> the highlight group a file's mark and name show in, by the kind of its change (`'added'`, `'modified'`, `'deleted'`, `'renamed'`, `'type_changed'`, `'untracked'`)
+---@field session_work? fun(done: fun(work: aineo.explorer.SessionWork|nil)) the files in the work of the Claude Code session, their repository's top and their paths from it (`aineo.changes`' `session_work_files()`), nil when they are not known; none given, no file is marked as Claude's
 ---@field define_change_groups fun() defines `change_groups`' groups as default links, as the pane that owns them does
+
+--- The files in the work of the Claude Code session.
+---@class aineo.explorer.SessionWork
+---@field top string the top of their repository, absolute
+---@field paths string[] from it
 
 --- The functions of an explorer, as `M.new()` gives them.
 ---@class aineo.explorer.Home
@@ -68,6 +75,8 @@ local HIGHLIGHTS = {
   AineoExplorerAdded = 'AineoChangesAdded',
   AineoExplorerRemoved = 'AineoChangesDeleted',
   AineoExplorerModified = 'WarningMsg',
+  AineoExplorerClaude = 'Special',
+  AineoExplorerClaudeFlash = 'IncSearch',
 }
 
 --- The group each role of a span that is not the kind of a change shows in
@@ -81,9 +90,14 @@ local ROLE_GROUPS = {
   added_lines = 'AineoExplorerAdded',
   removed_lines = 'AineoExplorerRemoved',
   unsaved = 'AineoExplorerModified',
+  claude = 'AineoExplorerClaude',
   diagnostic_error = 'DiagnosticError',
   diagnostic_warn = 'DiagnosticWarn',
 }
+
+--- How long a file that joined the work of the session flashes, in
+--- milliseconds.
+local FLASH_MS = 1500
 
 --- The namespace of the explorer's highlights.
 local NAMESPACE = vim.api.nvim_create_namespace('aineo.explorer')
@@ -173,6 +187,15 @@ function M.new(settings)
     drawn_width = nil,
     ---@type (fun(entry: aineo.explorer.Entry): aineo.explorer.Icon|nil)|nil
     icon_for = nil,
+    ---@type table<string, true>
+    claude = {},
+    ---@type table<string, string>|nil
+    claude_signatures = nil,
+    ---@type string|nil
+    claude_directory = nil,
+    ---@type table<string, integer>
+    flash = {},
+    flash_started = 0,
     ---@type string|nil
     failure = nil,
     ---@type table<string, true>
@@ -238,6 +261,10 @@ function M.new(settings)
       dim = true,
       line_counts = state.line_counts,
       icons = state.icon_for,
+      claude = state.claude,
+      flash = vim.tbl_map(function()
+        return true
+      end, state.flash),
       modified = buffers.modified,
       diagnostics = buffers.diagnostics,
       width = shown_width(),
@@ -293,6 +320,7 @@ function M.new(settings)
         entries = {},
         spans = {},
         virtual = {},
+        flashed = {},
       }
     end
     state.rendering = rendering
@@ -300,7 +328,10 @@ function M.new(settings)
     vim.api.nvim_buf_set_lines(buffer, 0, -1, false, rendering.lines)
     vim.bo[buffer].modifiable = false
     vim.bo[buffer].modified = false
-    decorate.draw(buffer, NAMESPACE, rendering, role_groups, 'AineoExplorerHeader')
+    decorate.draw(buffer, NAMESPACE, rendering, role_groups, {
+      header = 'AineoExplorerHeader',
+      flash = 'AineoExplorerClaudeFlash',
+    })
     local followed_line = state.followed and line_of(rendering, state.followed)
     if followed_line then
       vim.api.nvim_buf_set_extmark(
@@ -333,24 +364,6 @@ function M.new(settings)
   ---@return boolean
   local function is_last_read(read)
     return read == state.reads
-  end
-
-  --- Takes a folder's tree from the disk: the shown folder's entries, and
-  --- those of each folder unfolded whose own folder is known, from the root
-  --- down. Nothing is ignored there, and nothing is marked.
-  ---
-  ---@param directory string
-  local function take_folders(directory)
-    stop_watch()
-    local read = tree.add_listing({ children = {} }, '', folders.list_folder(directory))
-    local unfolded = vim.tbl_keys(state.open)
-    table.sort(unfolded)
-    for _, folder in ipairs(unfolded) do
-      read = tree.add_listing(read, folder, folders.list_folder(vim.fs.joinpath(directory, folder)))
-    end
-    state.tree, state.marks, state.line_counts, state.failure, state.in_git =
-      read, {}, {}, nil, false
-    render()
   end
 
   local read_tree
@@ -467,6 +480,22 @@ function M.new(settings)
       and #vim.fn.win_findbuf(state.buffer) > 0
   end
 
+  --- Draws the explorer again, once the commands in flight are done, while
+  --- a window shows it, however many times it is asked for meanwhile.
+  local redraw_asked = false
+  local function redraw_when_shown()
+    if redraw_asked then
+      return
+    end
+    redraw_asked = true
+    vim.schedule(function()
+      redraw_asked = false
+      if is_shown() then
+        render()
+      end
+    end)
+  end
+
   --- Starts the watch of `repository`, which reads the tree again at each
   --- change, unless one watches its top already; while no window shows the
   --- explorer, it watches nothing.
@@ -489,6 +518,81 @@ function M.new(settings)
     end)
   end
 
+  --- Makes the lines of the files in `flashed` flash for `FLASH_MS`, the
+  --- explorer drawn again when each stops; a file that flashes again before
+  --- it stops flashes for the whole time again.
+  ---
+  ---@param flashed table<string, true>
+  local function flash_files(flashed)
+    if next(flashed) == nil then
+      return
+    end
+    state.flash_started = state.flash_started + 1
+    local token = state.flash_started
+    for path in pairs(flashed) do
+      state.flash[path] = token
+    end
+    vim.defer_fn(function()
+      for path in pairs(flashed) do
+        if state.flash[path] == token then
+          state.flash[path] = nil
+        end
+      end
+      redraw_when_shown()
+    end, FLASH_MS)
+  end
+
+  --- Takes the files in the work of the session for the ones `read` says,
+  --- and makes the lines of those that joined it, or whose change is read
+  --- anew, flash; nothing flashes when the place has not been read before,
+  --- or when the work is not known.
+  ---
+  ---@param read aineo.explorer.RepositoryTree
+  ---@param known boolean whether the work of the session is known
+  local function take_claude_work(read, known)
+    state.claude = read.claude
+    if not known then
+      state.claude_signatures, state.claude_directory = nil, nil
+      return
+    end
+    local signatures = claude_marks.signatures(read.claude, read.marks, read.line_counts)
+    local same_place = state.claude_directory == state.place.directory
+    flash_files(claude_marks.flashed(same_place and state.claude_signatures or nil, signatures))
+    state.claude_signatures, state.claude_directory = signatures, state.place.directory
+  end
+
+  --- The paths of the session's work if they are those of `repository`, the
+  --- repository the work is in; nil otherwise.
+  ---
+  ---@param work aineo.explorer.SessionWork|nil
+  ---@param repository aineo.git.Repository
+  ---@return string[]|nil
+  local function session_paths_in(work, repository)
+    if work and resolved(work.top) == resolved(repository.top) then
+      return work.paths
+    end
+    return nil
+  end
+
+  --- Takes a folder's tree from the disk: the shown folder's entries, and
+  --- those of each folder unfolded whose own folder is known, from the root
+  --- down. Nothing is ignored there, and nothing is marked.
+  ---
+  ---@param directory string
+  local function take_folders(directory)
+    stop_watch()
+    local read = tree.add_listing({ children = {} }, '', folders.list_folder(directory))
+    local unfolded = vim.tbl_keys(state.open)
+    table.sort(unfolded)
+    for _, folder in ipairs(unfolded) do
+      read = tree.add_listing(read, folder, folders.list_folder(vim.fs.joinpath(directory, folder)))
+    end
+    state.tree, state.marks, state.line_counts, state.failure, state.in_git =
+      read, {}, {}, nil, false
+    take_claude_work({ claude = {}, marks = {}, line_counts = {} }, false)
+    render()
+  end
+
   --- Takes the tree `listing` gives of the folder `prefix` of `repository`,
   --- and the entries of each ignored folder unfolded from the disk, then
   --- watches the repository.
@@ -497,6 +601,7 @@ function M.new(settings)
   ---@param prefix string
   ---@param listing aineo.explorer.RepositoryListing
   local function take_repository(repository, prefix, listing)
+    listing.session_paths = session_paths_in(listing.session_work, repository)
     local read = tree.from_repository(listing, prefix)
     local unfolded = vim.tbl_keys(state.open)
     table.sort(unfolded)
@@ -508,6 +613,7 @@ function M.new(settings)
     end
     state.tree, state.marks, state.failure, state.in_git = read.tree, read.marks, nil, true
     state.line_counts = read.line_counts
+    take_claude_work(read, listing.session_paths ~= nil)
     render()
     watch(repository)
   end
@@ -530,6 +636,9 @@ function M.new(settings)
     end
     if state.counts_shown then
       table.insert(asked, 'line_counts')
+    end
+    if settings.session_work then
+      table.insert(asked, 'session_work')
     end
     local remaining, failed = #asked, nil
     local function one_answered()
@@ -565,6 +674,11 @@ function M.new(settings)
     end
     if state.counts_shown then
       git.line_counts(repository, answered_when_able('line_counts'))
+    end
+    if settings.session_work then
+      settings.session_work(function(work)
+        answered_when_able('session_work')(nil, work)
+      end)
     end
   end
 
@@ -904,22 +1018,6 @@ function M.new(settings)
       desc = 'pick the worktree or branch to show, as the changes pane does',
     },
   }
-
-  --- Draws the explorer again, once the commands in flight are done, while
-  --- a window shows it, however many times it is asked for meanwhile.
-  local redraw_asked = false
-  local function redraw_when_shown()
-    if redraw_asked then
-      return
-    end
-    redraw_asked = true
-    vim.schedule(function()
-      redraw_asked = false
-      if is_shown() then
-        render()
-      end
-    end)
-  end
 
   --- Has the explorer of `buffer` follow the editor while a window shows it:
   --- it is laid out again for the width of its window as that changes, and

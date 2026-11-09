@@ -354,6 +354,80 @@ T['the icons']['leave the right-hand counts room for themselves'] = function()
   eq(placed(rendering, 2, 'right_align'), {})
 end
 
+T['the claude marks'] = MiniTest.new_set()
+
+--- The chunks of the first inline virtual text of `rendering`'s line
+--- `line`, the places before its name; none for a line with none.
+---
+---@param rendering aineo.explorer.Rendering
+---@param line integer
+---@return aineo.explorer.VirtualChunk[]
+local function name_places(rendering, line)
+  for _, item in ipairs(rendering.virtual[line] or {}) do
+    if item.position == 'inline' then
+      return item.chunks
+    end
+  end
+  return {}
+end
+
+T['the claude marks']['sit before the name of each file in the session’s work, a blank before the others so the names line up'] = function()
+  local shown = view({ claude = { ['b.txt'] = true } })
+
+  local rendering = render({ 'a.txt', 'b.txt', 'src/c.txt' }, shown)
+
+  eq(rendering.lines[2], '▸   src/')
+  eq(name_places(rendering, 2), { { text = '  ' } })
+  eq(name_places(rendering, 3), { { text = '  ' } })
+  eq(name_places(rendering, 4), { { text = '✦ ', role = 'claude' } })
+end
+
+T['the claude marks']['come before the icon'] = function()
+  local shown = view({
+    claude = { ['b.txt'] = true },
+    icons = function()
+      return { text = 'L', group = 'IconLua' }
+    end,
+  })
+
+  local rendering = render({ 'b.txt' }, shown)
+
+  eq(name_places(rendering, 2), {
+    { text = '✦ ', role = 'claude' },
+    { text = 'L ', group = 'IconLua' },
+  })
+end
+
+T['the claude marks']['take no place while the session has no work'] = function()
+  eq(render({ 'a.txt' }, view({ claude = {} })).virtual, {})
+  eq(render({ 'a.txt' }, view()).virtual, {})
+end
+
+T['the claude marks']['flash the line of a file named, as a line to colour'] = function()
+  local shown = view({ claude = { ['b.txt'] = true }, flash = { ['b.txt'] = true } })
+
+  local rendering = render({ 'a.txt', 'b.txt' }, shown)
+
+  eq(rendering.flashed, { [3] = true })
+end
+
+T['the claude marks']['flash nothing for a file that shows no mark'] = function()
+  local shown = view({ claude = { ['b.txt'] = true }, flash = { ['a.txt'] = true } })
+
+  eq(render({ 'a.txt', 'b.txt' }, shown).flashed, {})
+end
+
+T['the claude marks']['come from the files of the session’s work a repository’s listing gives, under the folder shown, from it'] = function()
+  local listing = {
+    files = { 'outside.txt', 'sub/a.txt', 'sub/dir/b.txt' },
+    changes = {},
+    session_paths = { 'outside.txt', 'sub/dir/b.txt' },
+  }
+
+  eq(tree.from_repository(listing, 'sub').claude, { ['dir/b.txt'] = true })
+  eq(tree.from_repository({ files = { 'a.txt' }, changes = {} }, '').claude, {})
+end
+
 T['the unsaved mark'] = MiniTest.new_set()
 
 T['the unsaved mark']['follows the name of a file with unsaved edits, a folder never showing one'] = function()
