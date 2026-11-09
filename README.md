@@ -267,7 +267,7 @@ What the tree shows besides the names, each a look that `explorer.*` turns off (
 
 | Look | Shows |
 |---|---|
-| Header | on the left the folder, its branch and a summary (`2 changed · 1 new`); on the right the toggles and the filter, which go first when the window is narrow |
+| Header | on the left the folder, its branch and a summary (`2 changed · 1 new`); on the right the toggles and the filter, which go first when the window is narrow, then the summary and the branch; a long folder is cut from its start |
 | `explorer.guides` | `│ `, `├ ` and `└ ` over the indent, in `AineoExplorerGuide` |
 | `explorer.icons` | the file's icon, from mini.icons (set up) or nvim-web-devicons, never a dependency |
 | `explorer.counts` | `•N` after a folder holding changes; `+added −removed` at the right of a changed file (one `git diff --numstat` per read) |

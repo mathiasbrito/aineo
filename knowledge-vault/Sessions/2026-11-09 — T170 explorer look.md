@@ -98,6 +98,21 @@ The extmarks of the looks are most of it (`decorate.draw`, 21% of a read in the 
 - The cost went up about three times for a tree of 2000 entries (7 to 20 ms with the defaults). The orchestrator decides whether that stays under "the explorer's current budget", which no document states as a number.
 - Pull request #410 carries T169 and T170; the title and body say so.
 
+## Fix round after the attack review (A723)
+
+Eight findings, each test first and seen failing:
+
+1. **A focused explorer redrew itself in a loop** (about 1400 draws a second at rest): its own render flips `'modified'`, and `BufModifiedSet` rescheduled the render. The redraw runs only for a valid buffer with `buftype` empty. The loop had hidden a missing end-of-flash redraw from the entry cases; with it gone the mutant that removes `redraw()` in `claude_work.lua` is killed by the claude-marks entry case and by the home file. Red: the entry case counting draws at rest (15195 against 13802 a second apart).
+2. **The cursor column** is kept across a redraw and a flash (clamped to the line). Red: in-process (column 0 for 5 and 6) and in the child (an edit in another window).
+3. **`l` and Enter on a chain** open every folder above the deepest as the follow does; red: the chain showed folded once it broke, for both keys.
+4. **The looks are resolved once per tree read under `pcall`** (`look.reader()`, `aineo.config`'s `explorer_looks()`); a wrong value keeps its default and is told once while it lasts; a failing source is told and every look is on. Red: 4 config cases, 4 home cases; the entry case sets a wrong look while the editor runs and expects no error, one notice, `guides` on, `icons` off.
+5. **Header fallbacks:** toggles, summary, branch, then the title cut from its start behind `…` by display cells; the line never takes more than the width. Red: the old last fallback was wider than the window; a wide-character case.
+6. **A chain's colour follows its deepest folder.** Red: `a/b/` ignored under a tracked `a/.keep` showed in folder colours.
+7. **Header cases:** the filter case compares the whole header again (folder, branch, gap, toggles, filter); every case that reads the header makes the child's screen wide from the fixture path it creates, so none depends on the checkout's path length.
+8. **`session_paths_in` is `claude_work.paths_in()`** (red: function missing) and the line decoration (`name_places`, `line_virtual` and their helpers) is `decoration.lua`; `tree.lua` is 653 lines, `home.lua` 1117.
+
+Mutants of the round (literal edits, all killed): `redraw()` removed in `claude_work.lua` (entry claude-marks case, home file); the `buftype` test dropped in the redraw callback; the cursor column forced to 0; the `folders_above` loop dropped; `told = still` dropped; the told-once test dropped; `pcall(ask)` dropped; `state.looks = look.ALL_ON`; the wrong-value record and the section check in `explorer_looks()`; the header's without-summary fallback, zero-width guard and cut bound; `entry_line` given the top again; `paths_in` without the top test and without the link resolution; `holds_changes = false`; `shows_branch = false` and a gap one short against the filter case. Every unit that passed the first time did so by nature (the idle edit case: one redraw before and after).
+
 ## Commits
 
 Recorded after the merge.
