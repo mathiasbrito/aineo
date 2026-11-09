@@ -714,7 +714,7 @@ function M.render(tree, view)
     local unfolded = entry.kind == 'folder' and (filter ~= nil or view.open[entry.path] == true)
     local mark = mark_of(entry, top)
     local line, line_spans, columns =
-      entry_line(top, compact.label(chain, quote), depth, unfolded, mark)
+      entry_line(entry, compact.label(chain, quote), depth, unfolded, mark)
     table.insert(lines, line)
     local number = #lines
     entries[number] = entry

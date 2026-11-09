@@ -2,6 +2,7 @@ local MiniTest = require('mini.test')
 
 local eq = MiniTest.expect.equality
 
+local header_home = require('aineo.explorer.header')
 local look = require('aineo.explorer.look')
 local tree = require('aineo.explorer.tree')
 
@@ -189,6 +190,16 @@ T['a chain of single-child folders']['starting at a folder ignored shows whole i
     rendering.spans[2],
     { { first_column = 0, end_column = #'▸   build/out/', role = 'ignored' } }
   )
+end
+
+T['a chain of single-child folders']['takes the colour of its deepest folder: ignored when that folder is'] = function()
+  local tree_of = tree.from_paths({ 'a/.keep' }, { 'a/b/' })
+  local shown = view({ compact = true, show_ignored = true, show_dotfiles = false })
+
+  local rendering = tree.render(tree_of, shown)
+
+  eq(rendering.lines[2], '▸   a/b/')
+  eq(rendering.spans[2], { { first_column = 0, end_column = #'▸   a/b/', role = 'ignored' } })
 end
 
 T['the counts'] = MiniTest.new_set()
@@ -617,6 +628,29 @@ T['the header']['drops the toggles first, then the summary, when they would not 
   eq(vim.endswith(with_toggles, 'dotfiles shown'), true)
   eq(without_toggles, 'p · main · 1 changed')
   eq(without_summary, 'p · main')
+end
+
+T['the header']['drops the branch after the summary, then shortens the title from the left, and never takes more than the width'] = function()
+  local base =
+    { title = '/repo/a/long/folder', branch = 'feature/a-long-branch', toggles = { 'x' } }
+  local title_and_branch = '/repo/a/long/folder · feature/a-long-branch'
+  local function composed(width)
+    return header_home.compose(base, width)
+  end
+
+  eq(composed(vim.api.nvim_strwidth(title_and_branch)), title_and_branch)
+  eq(composed(vim.api.nvim_strwidth(title_and_branch) - 1), '/repo/a/long/folder')
+  eq(composed(vim.api.nvim_strwidth('/repo/a/long/folder')), '/repo/a/long/folder')
+  eq(composed(10), '…ng/folder')
+  eq(composed(1), '…')
+  eq(composed(0), '')
+end
+
+T['the header']['shortens a title of wide characters by cells, never past the width'] = function()
+  local shortened = header_home.compose({ title = '界界界界界界', toggles = {} }, 7)
+
+  eq(shortened, '…界界界')
+  eq(vim.api.nvim_strwidth(shortened) <= 7, true)
 end
 
 T['a repository’s listing'] = MiniTest.new_set()
