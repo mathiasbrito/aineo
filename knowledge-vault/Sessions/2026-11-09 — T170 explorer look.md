@@ -109,9 +109,15 @@ Eight findings, each test first and seen failing:
 5. **Header fallbacks:** toggles, summary, branch, then the title cut from its start behind `…` by display cells; the line never takes more than the width. Red: the old last fallback was wider than the window; a wide-character case.
 6. **A chain's colour follows its deepest folder.** Red: `a/b/` ignored under a tracked `a/.keep` showed in folder colours.
 7. **Header cases:** the filter case compares the whole header again (folder, branch, gap, toggles, filter); every case that reads the header makes the child's screen wide from the fixture path it creates, so none depends on the checkout's path length.
-8. **`session_paths_in` is `claude_work.paths_in()`** (red: function missing) and the line decoration (`name_places`, `line_virtual` and their helpers) is `decoration.lua`; `tree.lua` is 653 lines, `home.lua` 1117.
+8. **`session_paths_in` is `claude_work.paths_in()`** (red: function missing) and the line decoration (`name_places`, `line_virtual` and their helpers) is `line_virtual_text.lua`; `tree.lua` is 653 lines, `home.lua` 1117.
 
 Mutants of the round (literal edits, all killed): `redraw()` removed in `claude_work.lua` (entry claude-marks case, home file); the `buftype` test dropped in the redraw callback; the cursor column forced to 0; the `folders_above` loop dropped; `told = still` dropped; the told-once test dropped; `pcall(ask)` dropped; `state.looks = look.ALL_ON`; the wrong-value record and the section check in `explorer_looks()`; the header's without-summary fallback, zero-width guard and cut bound; `entry_line` given the top again; `paths_in` without the top test and without the link resolution; `holds_changes = false`; `shows_branch = false` and a gap one short against the filter case. Every unit that passed the first time did so by nature (the idle edit case: one redraw before and after).
+
+## Last round (A724)
+
+- **MH pinned:** a changed submodule at the end of a chain shows its mark and no count (`facts.holds_changes` guards the count); mutant MH (`facts.holds_changes and` removed) is killed by the case in `test_explorer_look.lua`. The case arrived green, as it pins code written before it.
+- **`explorer_looks()` never raises:** a source that is no table (a number, a string, `true`) is told as a problem and gives no look, the other source still counts; red: the old code raised at the section lookup (4 cases).
+- **`decoration.lua` is `line_virtual_text.lua`**, so it cannot be mistaken for `decorate.lua`, which draws a rendering on a buffer.
 
 ## Commits
 
