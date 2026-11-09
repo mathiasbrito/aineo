@@ -252,7 +252,7 @@ and, in Terminal mode, `<C-\>Z` do the same.
 | Keys | Does |
 |---|---|
 | `\e` | shows the explorer, a tree of the folder Claude works in, and moves into it |
-| `l`, Enter | in the tree: unfold or fold a folder; Enter on a file opens it in the file column |
+| `l`, Enter | in the tree: unfold or fold a folder; on a file, Enter opens it in the file column and moves there, `l` shows it there and keeps the cursor in the tree |
 | `h` | folds the folder, or the folder above |
 | `@` | pastes `@path ` into Claude's prompt, with no Enter |
 | `I`, `H`, `f`, `R` | show ignored files, hide dotfiles, filter by path, read again |
