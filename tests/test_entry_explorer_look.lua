@@ -58,6 +58,21 @@ local FILES = {
   ['docs/guide.md'] = { 'guide' },
 }
 
+--- The cells the explorer's header leaves for what follows the folder in it
+--- (a branch, a summary of the changes, the toggles and a filter).
+local HEADER_ROOM = 90
+
+--- The cells the folder of the explorer takes in its header in the case
+--- `name`, at most: the repository's folder under the checkout's fixtures,
+--- whatever the length of the checkout's path.
+---
+---@param name string
+---@return integer
+local function title_width(name)
+  local folder = vim.fs.joinpath(vim.uv.cwd(), '.tests', 'fixtures', 'git-look-' .. name, 'repo')
+  return vim.api.nvim_strwidth(vim.fn.fnamemodify(folder, ':~'))
+end
+
 --- Makes the repository `look-<name>` holding `files` (`FILES` without it),
 --- lets `change` edit it, moves the child's working directory there, opens
 --- the layout with aineo running the fake `claude` in its `ready` mode, once
@@ -70,6 +85,7 @@ local FILES = {
 ---@param settings? table more of `vim.g.aineo`
 ---@return string top
 local function explore(name, files, change, settings)
+  child.o.columns = 2 * (title_width(name) + HEADER_ROOM)
   local top = git_repo.create('look-' .. name, files or FILES)
   if change then
     change(top)
@@ -893,7 +909,6 @@ local WINDOW_WIDTH = [[(function()
 end)()]]
 
 T['the header']['names the folder, its branch and the changes, the toggles at the right edge'] = function()
-  child.o.columns = 400
   explore('header', FILES, change_some_files)
 
   local header = wait_for_header(function(shown)
@@ -907,7 +922,6 @@ T['the header']['names the folder, its branch and the changes, the toggles at th
 end
 
 T['the header']['drops the toggles when the window narrows, and lays them out again when it widens'] = function()
-  child.o.columns = 400
   explore('header-resize', FILES, change_some_files)
   wait_for_header(function(shown)
     return shown:find('3 changed', 1, true) ~= nil
@@ -917,7 +931,7 @@ T['the header']['drops the toggles when the window narrows, and lays them out ag
   local narrow = wait_for_header(function(shown)
     return shown:find('dotfiles', 1, true) == nil
   end)
-  child.cmd('vertical resize 190')
+  child.cmd('vertical resize ' .. (title_width('header-resize') + HEADER_ROOM))
   local wide = wait_for_header(function(shown)
     return shown:find('dotfiles', 1, true) ~= nil
   end)
@@ -927,7 +941,6 @@ T['the header']['drops the toggles when the window narrows, and lays them out ag
 end
 
 T['the header']['shows no branch for a folder on a detached HEAD'] = function()
-  child.o.columns = 400
   explore('header-detached', FILES, function(top)
     git_repo.git(top, { 'checkout', '--quiet', '--detach' })
   end)
