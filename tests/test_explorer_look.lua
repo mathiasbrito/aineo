@@ -202,6 +202,20 @@ T['a chain of single-child folders']['takes the colour of its deepest folder: ig
   eq(rendering.spans[2], { { first_column = 0, end_column = #'▸   a/b/', role = 'ignored' } })
 end
 
+T['a chain of single-child folders']['ending at a changed submodule shows the submodule’s mark and no count'] = function()
+  local read = tree.from_repository({
+    files = { 'vendor/lib', 'a.txt' },
+    changes = { { path = 'vendor/lib', kind = 'modified' } },
+    submodules = { 'vendor/lib' },
+  }, '')
+
+  local rendering =
+    tree.render(read.tree, view({ marks = read.marks, compact = true, counts = true }))
+
+  eq(rendering.lines[2], '▸ M vendor/lib/')
+  eq(rendering.virtual[2], nil)
+end
+
 T['the counts'] = MiniTest.new_set()
 
 --- The virtual text of `rendering`'s line `line` at `position` as
