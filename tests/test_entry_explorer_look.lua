@@ -67,14 +67,15 @@ local FILES = {
 ---@param name string
 ---@param files? table<string, string[]>
 ---@param change? fun(top: string)
+---@param settings? table more of `vim.g.aineo`
 ---@return string top
-local function explore(name, files, change)
+local function explore(name, files, change, settings)
   local top = git_repo.create('look-' .. name, files or FILES)
   if change then
     change(top)
   end
   child.cmd('cd ' .. vim.fn.fnameescape(top))
-  entry.use_fake(child, claude_session.fake('look-' .. name, 'ready'))
+  entry.use_fake(child, claude_session.fake('look-' .. name, 'ready'), settings)
   child.cmd('Aineo open')
   claude_session.wait_for_status(child, 'ready')
   entry.press(child, '\\e')
@@ -570,6 +571,7 @@ T['the claude marks']['sit before the files in the work of the session, a blank 
   eq(claude_places(), {})
 
   git_repo.write(top, 'README.md', { 'changed by Claude' })
+  entry.press(child, 'R')
 
   local places = wait_for_claude_places({ { 2, '  ' }, { 3, '  ' }, { 4, '✦ ' } })
   eq(places, { { 2, '  ' }, { 3, '  ' }, { 4, '✦ ' } })
@@ -588,6 +590,7 @@ T['the claude marks']['follow the work the changes pane lists: a file committed 
 
   git_repo.write(top, 'README.md', { 'committed by Claude' })
   git_repo.commit_all(top, 'Claude commits')
+  entry.press(child, 'R')
 
   local places = wait_for_claude_places({ { 2, '  ' }, { 3, '  ' }, { 4, '✦ ' } })
   eq(places, { { 2, '  ' }, { 3, '  ' }, { 4, '✦ ' } })
@@ -600,6 +603,7 @@ T['the claude marks']['flash the line of a file that joins the work for a moment
   local cursor_before = child.lua_get('vim.api.nvim_win_get_cursor(0)')
 
   git_repo.write(top, 'README.md', { 'changed by Claude' })
+  entry.press(child, 'R')
   local appeared = vim.wait(PATIENCE_MS, function()
     return #child.lua_get(FLASHING_LINES) > 0
   end, 10)
@@ -652,6 +656,23 @@ local function wait_for_virtual(position, expected)
   return found
 end
 
+--- Waits, at most `PATIENCE_MS`, until the unsaved marks of the explorer in
+--- the child are `expected`, as `{ line, text }`, and returns them as they
+--- are then.
+---
+---@param expected table[]
+---@return table[]
+local function wait_for_unsaved(expected)
+  local found
+  vim.wait(PATIENCE_MS, function()
+    found = vim.tbl_filter(function(item)
+      return item[2] == ' ●'
+    end, virtual_at('inline'))
+    return vim.deep_equal(found, expected)
+  end, 20)
+  return found
+end
+
 --- Counts, in the child, the times the explorer is drawn (`_G.explorer_draws`).
 local COUNT_DRAWINGS = [[
   _G.explorer_draws = 0
@@ -687,14 +708,14 @@ T['the unsaved mark']['follows the name of a file edited in this editor, until i
   wait_until_drawn_still()
 
   child.lua('vim.api.nvim_buf_set_lines(0, 0, 0, false, { "edited" })')
-  local edited = wait_for_virtual('inline', { { 4, ' ●' } })
+  local edited = wait_for_unsaved({ { 4, ' ●' } })
   child.cmd('write')
-  local written = wait_for_virtual('inline', {})
+  local written = wait_for_unsaved({})
   wait_until_drawn_still()
   child.lua('vim.api.nvim_buf_set_lines(0, 0, 0, false, { "edited again" })')
-  local edited_again = wait_for_virtual('inline', { { 4, ' ●' } })
+  local edited_again = wait_for_unsaved({ { 4, ' ●' } })
   child.cmd('write')
-  local written_again = wait_for_virtual('inline', {})
+  local written_again = wait_for_unsaved({})
 
   eq(edited, { { 4, ' ●' } })
   eq(written, {})
@@ -707,7 +728,7 @@ T['the unsaved mark']['is in the unsaved group, linked to WarningMsg by default'
   wait_for_tree({ '▸   docs/', '▸   src/', '    README.md' })
   child.cmd('edit ' .. vim.fn.fnameescape(vim.fs.joinpath(top, 'README.md')))
   child.lua('vim.api.nvim_buf_set_lines(0, 0, 0, false, { "edited" })')
-  wait_for_virtual('inline', { { 4, ' ●' } })
+  wait_for_unsaved({ { 4, ' ●' } })
 
   local inline = child.lua_get(VIRTUAL_TEXT)
 
@@ -898,6 +919,115 @@ T['the dimming']['shows an unchanged file’s name in the unchanged group while 
   end)()]])
 
   eq(dimmed, { { 3, 6, #'      guide.md' } })
+end
+
+T['the looks turned off'] = MiniTest.new_set()
+
+--- Explores as `explore()` does, with `looks` as the explorer options of the
+--- child's configuration.
+---
+---@param name string
+---@param looks table<string, boolean>
+---@param files? table<string, string[]>
+---@param change? fun(top: string)
+---@return string top
+local function explore_with(name, looks, files, change)
+  return explore(name, files, change, { explorer = looks })
+end
+
+T['the looks turned off']['guides: no connector over the indent'] = function()
+  explore_with('off-guides', { guides = false })
+  wait_for_tree({ '▸   docs/', '▸   src/', '    README.md' })
+  put_cursor_on('src/')
+  entry.press(child, 'l')
+  wait_for_lines(function(lines)
+    return #lines == 5
+  end)
+
+  eq(virtual_at('overlay'), {})
+end
+
+T['the looks turned off']['icons: no place for an icon, though the plugin is set up'] = function()
+  child.lua(FAKE_MINI_ICONS)
+  explore_with('off-icons', { icons = false })
+  wait_for_tree({ '▸   docs/', '▸   src/', '    README.md' })
+
+  eq(virtual_at('inline'), {})
+  eq(child.lua_get('#_G.icon_calls'), 0)
+end
+
+T['the looks turned off']['dim: no unchanged group, though a file is changed and another is not'] = function()
+  local files = vim.tbl_extend('force', FILES, { LICENSE = { 'mit' } })
+  explore_with('off-dim', { dim = false }, files, function(top)
+    git_repo.write(top, 'README.md', { 'readme', 'second' })
+  end)
+  wait_for_lines(function(lines)
+    return #lines == 4
+  end)
+
+  eq(
+    child.lua_get([[(function()
+      local buffer = vim.fn.bufnr('aineo://explorer')
+      local namespace = vim.api.nvim_get_namespaces()['aineo.explorer']
+      for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(buffer, namespace, 0, -1, { details = true })) do
+        if mark[4].hl_group == 'AineoExplorerUnchanged' then
+          return true
+        end
+      end
+      return false
+    end)()]]),
+    false
+  )
+end
+
+T['the looks turned off']['counts: no number after a folder’s mark, no lines added and removed, and no numstat read'] = function()
+  child.lua([[
+    _G.line_count_reads = 0
+    local git = require('aineo.git')
+    local read = git.line_counts
+    git.line_counts = function(...)
+      _G.line_count_reads = _G.line_count_reads + 1
+      return read(...)
+    end
+  ]])
+  explore_with('off-counts', { counts = false }, FILES, change_some_files)
+  wait_for_lines(function(lines)
+    return #lines == 5
+  end)
+  vim.wait(300)
+
+  eq(virtual_at('right_align'), {})
+  eq(
+    vim.tbl_filter(function(item)
+      return item[2]:match('^%d+$') ~= nil
+    end, virtual_at('inline')),
+    {}
+  )
+  eq(child.lua_get('_G.line_count_reads'), 0)
+end
+
+T['the looks turned off']['compact: a chain of single-child folders keeps one line for each folder'] = function()
+  explore_with('off-compact', { compact = false }, CHAIN_FILES)
+
+  local lines = wait_for_lines(function(shown)
+    return #shown == 3
+  end)
+
+  eq(lines, { '▸   lua/', '▸   x/', '    README.md' })
+end
+
+T['the looks turned off']['diagnostics: no errors and warnings at the right'] = function()
+  local top = explore_with('off-diagnostics', { diagnostics = false })
+  wait_for_tree({ '▸   docs/', '▸   src/', '    README.md' })
+  child.cmd('edit ' .. vim.fn.fnameescape(vim.fs.joinpath(top, 'README.md')))
+  child.lua([[
+    vim.diagnostic.set(vim.api.nvim_create_namespace('look-test'), 0, {
+      { lnum = 0, col = 0, message = 'a', severity = vim.diagnostic.severity.ERROR },
+    })
+  ]])
+  vim.wait(500)
+
+  eq(virtual_at('right_align'), {})
 end
 
 return T
