@@ -16,6 +16,28 @@ M.FLASH_MS = 1500
 ---@field flashing fun(): table<string, true> the files that flash now
 ---@field take fun(read: aineo.explorer.RepositoryTree, directory: string, known: boolean) takes the work of a read of the folder `directory`, which says whether the work is known
 
+--- `path` with its symbolic links resolved, or as it is when it cannot be.
+---
+---@param path string
+---@return string
+local function resolved(path)
+  return vim.uv.fs_realpath(path) or path
+end
+
+--- The paths of the session's work if the work is in `repository`, the one
+--- its top level names, links resolved; nil when it is in another, or not
+--- known.
+---
+---@param work aineo.explorer.SessionWork|nil
+---@param repository aineo.git.Repository
+---@return string[]|nil
+function M.paths_in(work, repository)
+  if work and resolved(work.top) == resolved(repository.top) then
+    return work.paths
+  end
+  return nil
+end
+
 --- Makes the tracker of one explorer; `redraw` is called each time a file
 --- stops flashing.
 ---
