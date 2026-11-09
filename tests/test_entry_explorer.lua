@@ -79,6 +79,10 @@ local function open_in_repository(name, files)
   return top
 end
 
+--- The columns of a case that reads the explorer's header: wide enough for
+--- the folder's path and the toggles at its right, whatever the path.
+local WIDE_COLUMNS = 400
+
 --- The lines of the explorer's buffer in the child, the header first.
 ---
 ---@return string[]
@@ -795,6 +799,7 @@ T['a folder outside git']['lists a folder when it unfolds, .git hidden, with no 
 end
 
 T['a folder outside git']['says once for the tab that nothing is ignored there, I pressed twice'] = function()
+  child.o.columns = WIDE_COLUMNS
   explore_folder('plain-ignored', PLAIN_FILES, FOLDED_TREE)
 
   entry.press(child, 'I')
@@ -812,6 +817,7 @@ end
 T['ignored entries'] = MiniTest.new_set()
 
 T['ignored entries']['are hidden, and shown and hidden again by I'] = function()
+  child.o.columns = WIDE_COLUMNS
   local top = git_repo.create('explorer-ignored', FILES)
   git_repo.write(top, 'debug.log', { 'log' })
   git_repo.write(top, 'build/out.o', { 'out' })
@@ -847,6 +853,7 @@ end
 T['dotfiles'] = MiniTest.new_set()
 
 T['dotfiles']['are shown, and hidden and shown again by H'] = function()
+  child.o.columns = WIDE_COLUMNS
   explore('dotfiles')
 
   entry.press(child, 'H')
@@ -862,6 +869,7 @@ end
 T['the filter'] = MiniTest.new_set()
 
 T['the filter']['shows the files whose path holds it, and an empty one shows every file again'] = function()
+  child.o.columns = WIDE_COLUMNS
   explore('filter')
   child.lua([[
     _G.filter_answers = { 'UTIL', '' }
@@ -874,12 +882,10 @@ T['the filter']['shows the files whose path holds it, and an empty one shows eve
   local filtered = explorer_lines()
   entry.press(child, 'f')
 
-  eq(filtered, {
-    vim.fn.fnamemodify(child.lua_get('vim.fn.getcwd()'), ':~')
-      .. '  ·  ignored hidden  ·  dotfiles shown  ·  filter “UTIL”',
-    '▾   src/lib/',
-    '      util.lua',
-  })
+  local folder = vim.fn.fnamemodify(child.lua_get('vim.fn.getcwd()'), ':~')
+  eq(vim.startswith(filtered[1], folder), true)
+  eq(vim.endswith(filtered[1], 'ignored hidden  ·  dotfiles shown  ·  filter “UTIL”'), true)
+  eq(vim.list_slice(filtered, 2), { '▾   src/lib/', '      util.lua' })
   eq(vim.list_slice(explorer_lines(), 2), FOLDED_TREE)
 end
 
@@ -1150,6 +1156,7 @@ T['the folder shown']['is the one Claude works in, wherever the editor moved sin
 end
 
 T['the filter']['is kept as the tree is read again after a change on disk'] = function()
+  child.o.columns = WIDE_COLUMNS
   local top = explore('filter-refresh')
   child.lua([[
     vim.ui.input = function(_, on_confirm)

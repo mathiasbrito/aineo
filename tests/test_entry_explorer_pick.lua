@@ -235,6 +235,7 @@ T['one pick']['of a branch with no worktree shows the folder Claude works in, th
     true
   )
   eq(vim.list_slice(lines_of('aineo://explorer'), 2), OWN_TREE)
+  eq(lines_of('aineo://explorer')[1]:find(' · main', 1, true), nil)
 end
 
 T['one pick']['of a branch checked out in a worktree since shows that worktree'] = function()
@@ -257,6 +258,7 @@ T['one pick']['of a branch checked out in a worktree since shows that worktree']
   local expected = { '  ? lonely.txt', '    main.txt' }
   eq(wait_for_tree(expected), expected)
   eq(lines_of('aineo://explorer')[1]:find('no folder on disk', 1, true), nil)
+  eq(lines_of('aineo://explorer')[1]:find(' · main', 1, true), nil)
 end
 
 T['one pick']['gives way to the folder Claude works in in the changes pane’s default view'] = function()
