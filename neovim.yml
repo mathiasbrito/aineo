@@ -20,3 +20,5 @@ globals:
       message: "`vim.loop` is deprecated; use `vim.uv`"
       replace:
         - "vim.uv"
+  MiniIcons:
+    any: true

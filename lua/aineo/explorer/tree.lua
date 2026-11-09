@@ -36,6 +36,7 @@ local M = {}
 ---@field line_counts? table<string, aineo.git.LineCount> the lines added and removed in each changed file, by path
 ---@field dim? boolean whether the name of a file git sees unchanged is dimmed while a changed file shows
 ---@field width? integer the cells the window takes for a line; unknown when not given
+---@field icons? fun(entry: aineo.explorer.Entry): aineo.explorer.Icon|nil the icon of a file (`aineo.explorer.icons`); none given, no file shows one
 ---@field branch? string the branch the folder shown is on, for the header
 
 --- What the tree renders as.
@@ -495,6 +496,25 @@ local function inline_width(items)
   return width
 end
 
+--- The width of the place an icon takes before a name, the icon and a blank.
+local ICON_PLACE = '  '
+
+--- The virtual text before a name that holds the icon of a file, `icon` from
+--- the view, and the blank place of a folder or a file with none, so that
+--- the names line up.
+---
+---@param icon_of fun(entry: aineo.explorer.Entry): aineo.explorer.Icon|nil
+---@param facts aineo.explorer.LineFacts
+---@return aineo.explorer.VirtualText
+local function icon_slot(icon_of, facts)
+  local icon = facts.entry.kind == 'file' and icon_of(facts.entry) or nil
+  local chunk = { text = ICON_PLACE }
+  if icon then
+    chunk = { text = icon.text .. ' ', group = icon.group }
+  end
+  return { position = 'inline', column = facts.columns.name, chunks = { chunk } }
+end
+
 --- The text a line shows without holding it under `view`: the guide over
 --- its indent, the number of changed files after a folder's mark, and a
 --- changed file's lines added and removed at the right edge when they fit.
@@ -506,6 +526,9 @@ local function line_virtual(view, facts)
   local items = {}
   if view.guides and facts.depth > 0 then
     table.insert(items, guides.virtual_text(facts.place.continues, facts.place.is_last))
+  end
+  if view.icons then
+    table.insert(items, icon_slot(view.icons, facts))
   end
   if view.counts and facts.mark == M.FOLDER_MARK and facts.folders_changed then
     table.insert(

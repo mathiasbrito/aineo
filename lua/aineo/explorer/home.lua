@@ -3,6 +3,7 @@
 
 local decorate = require('aineo.explorer.decorate')
 local folders = require('aineo.explorer.folders')
+local icons = require('aineo.explorer.icons')
 local tree = require('aineo.explorer.tree')
 
 local M = {}
@@ -165,6 +166,8 @@ function M.new(settings)
     branch = nil,
     ---@type integer|nil
     drawn_width = nil,
+    ---@type (fun(entry: aineo.explorer.Entry): aineo.explorer.Icon|nil)|nil
+    icon_for = nil,
     ---@type string|nil
     failure = nil,
     ---@type table<string, true>
@@ -226,6 +229,7 @@ function M.new(settings)
       counts = true,
       dim = true,
       line_counts = state.line_counts,
+      icons = state.icon_for,
       width = shown_width(),
     }
   end
@@ -560,6 +564,8 @@ function M.new(settings)
   read_tree = function()
     state.reads = state.reads + 1
     local read = state.reads
+    local provider = icons.from_plugins()
+    state.icon_for = provider and icons.once_per_path(provider)
     state.place_key = place_key()
     resolve_place(function(place)
       if not is_last_read(read) then
