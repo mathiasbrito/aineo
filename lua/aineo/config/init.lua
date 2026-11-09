@@ -656,15 +656,26 @@ end
 --- The looks of the explorer (`explorer.*`) as `resolve_config()` takes them
 --- from the two sources, but without raising: a look whose value is wrong
 --- has its default, and a problem names it; a setting elsewhere that is wrong
---- changes nothing here.
+--- changes nothing here. A source that is no table is a problem too, and gives
+--- no look.
 ---
 ---@param global_settings? table the value of `vim.g.aineo`
 ---@param setup_options? table the options `require('aineo').setup()` recorded
 ---@return table<string, boolean> looks each look of the explorer, by name
----@return string[] problems one line for each wrong value, in the order of the looks
+---@return string[] problems one line for each source that is no table, then for each wrong value, in the order of the looks
 function M.explorer_looks(global_settings, setup_options)
-  local sources = { setup_options or {}, global_settings or {} }
   local looks, problems = {}, {}
+  local sources = {}
+  for _, named in ipairs({
+    { name = 'setup_options', value = setup_options },
+    { name = 'vim.g.aineo', value = global_settings },
+  }) do
+    if type(named.value) == 'table' then
+      table.insert(sources, named.value)
+    elseif named.value ~= nil then
+      table.insert(problems, ('%s: expected table, got %s'):format(named.name, type(named.value)))
+    end
+  end
   for _, setting in ipairs(SETTINGS) do
     if vim.startswith(setting.name, 'explorer.') then
       local chosen, wrong = setting.default, nil

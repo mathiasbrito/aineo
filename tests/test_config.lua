@@ -334,6 +334,32 @@ T['explorer_looks()']['keep every default when the explorer section is no table,
   eq(#problems, 6)
 end
 
+T['explorer_looks()']['keep every default, telling so, for a source that is no table'] =
+  MiniTest.new_set({
+    parametrize = { { 5 }, { 'text' }, { true } },
+  })
+
+T['explorer_looks()']['keep every default, telling so, for a source that is no table']['as either source'] = function(
+  source
+)
+  local from_global, global_problems = config.explorer_looks(source, nil)
+  local from_setup, setup_problems = config.explorer_looks(nil, source)
+
+  eq(from_global, DEFAULTS.explorer)
+  eq(from_setup, DEFAULTS.explorer)
+  eq(#global_problems, 1)
+  eq(#setup_problems, 1)
+  expect.no_equality(global_problems[1]:find('vim.g.aineo', 1, true), nil)
+  expect.no_equality(setup_problems[1]:find('setup_options', 1, true), nil)
+end
+
+T['explorer_looks()']['take the looks of the source that is a table when the other is not'] = function()
+  local looks, problems = config.explorer_looks(5, { explorer = { dim = false } })
+
+  eq(looks.dim, false)
+  eq(#problems, 1)
+end
+
 T['explorer_looks()']['ignore a setting that is wrong elsewhere'] = function()
   local looks, problems = config.explorer_looks({ tabs = { padding = 'wide' } }, nil)
 
