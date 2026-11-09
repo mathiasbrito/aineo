@@ -2,6 +2,7 @@ local MiniTest = require('mini.test')
 
 local eq = MiniTest.expect.equality
 
+local look = require('aineo.explorer.look')
 local tree = require('aineo.explorer.tree')
 
 --- The view of a tree no key has changed, every look off: nothing
@@ -352,6 +353,35 @@ T['the icons']['leave the right-hand counts room for themselves'] = function()
   local rendering = render({ 'a.txt' }, shown)
 
   eq(placed(rendering, 2, 'right_align'), {})
+end
+
+T['the looks'] = MiniTest.new_set()
+
+T['the looks']['are all on when no setting is given'] = function()
+  local all_on = {
+    guides = true,
+    icons = true,
+    dim = true,
+    counts = true,
+    compact = true,
+    diagnostics = true,
+  }
+
+  eq(look.resolve(nil), all_on)
+  eq(look.resolve({}), all_on)
+end
+
+T['the looks']['are on but the ones a setting turns off'] = function()
+  local resolved = look.resolve({ icons = false, counts = false })
+
+  eq(resolved, {
+    guides = true,
+    icons = false,
+    dim = true,
+    counts = false,
+    compact = true,
+    diagnostics = true,
+  })
 end
 
 T['the claude marks'] = MiniTest.new_set()

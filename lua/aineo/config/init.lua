@@ -274,6 +274,12 @@ local SETTINGS = {
     validator = is_find_picker,
     expected = 'one of ' .. table.concat(FIND_PICKERS, ', '),
   },
+  { name = 'explorer.guides', default = true, validator = 'boolean' },
+  { name = 'explorer.icons', default = true, validator = 'boolean' },
+  { name = 'explorer.dim', default = true, validator = 'boolean' },
+  { name = 'explorer.counts', default = true, validator = 'boolean' },
+  { name = 'explorer.compact', default = true, validator = 'boolean' },
+  { name = 'explorer.diagnostics', default = true, validator = 'boolean' },
   {
     name = 'office.idle_ms',
     default = 180000,
