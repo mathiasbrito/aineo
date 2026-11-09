@@ -537,7 +537,12 @@ local ROWS = vim.list_extend(
     in_buffer('changes_pane', '<S-Tab>', nil, 'show the previous project'),
     in_buffer('changes_pane', 'X', nil, "close the project shown, unless it is the session's"),
     in_buffer('explorer_pane', '<CR>', nil, 'unfold or fold the folder, or open the file'),
-    in_buffer('explorer_pane', 'l', nil, 'unfold or fold the folder'),
+    in_buffer(
+      'explorer_pane',
+      'l',
+      nil,
+      'unfold or fold the folder, or show the file, the cursor staying in the tree'
+    ),
     in_buffer('explorer_pane', 'h', nil, 'fold the folder, or the one above'),
     in_buffer('explorer_pane', 'R', nil, 'read the tree again'),
     in_buffer('explorer_pane', 'I', nil, 'show or hide what git ignores'),
