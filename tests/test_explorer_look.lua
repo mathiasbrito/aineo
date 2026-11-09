@@ -354,6 +354,106 @@ T['the icons']['leave the right-hand counts room for themselves'] = function()
   eq(placed(rendering, 2, 'right_align'), {})
 end
 
+T['the unsaved mark'] = MiniTest.new_set()
+
+T['the unsaved mark']['follows the name of a file with unsaved edits, a folder never showing one'] = function()
+  local shown = view({ modified = { ['a.txt'] = true, src = true } })
+
+  local rendering = render({ 'a.txt', 'b.txt', 'src/c.txt' }, shown)
+
+  eq(rendering.virtual[2], nil)
+  eq(rendering.virtual[3], {
+    {
+      position = 'inline',
+      column = #'    a.txt',
+      chunks = { { text = ' ●', role = 'unsaved' } },
+    },
+  })
+  eq(rendering.virtual[4], nil)
+end
+
+T['the diagnostics'] = MiniTest.new_set()
+
+--- The texts of the chunks of the right-aligned virtual text of
+--- `rendering`'s line `line`, in order; none for a line with none.
+---
+---@param rendering aineo.explorer.Rendering
+---@param line integer
+---@return string[]
+local function right_chunks(rendering, line)
+  for _, item in ipairs(rendering.virtual[line] or {}) do
+    if item.position == 'right_align' then
+      return vim.tbl_map(function(chunk)
+        return chunk.text
+      end, item.chunks)
+    end
+  end
+  return {}
+end
+
+T['the diagnostics']['show the errors and the warnings of a file at the right, in their own roles'] = function()
+  local shown = view({ diagnostics = { ['a.txt'] = { error = 2, warn = 1 } } })
+
+  local rendering = render({ 'a.txt' }, shown)
+
+  eq(rendering.virtual[2][1].chunks, {
+    { text = 'E2', role = 'diagnostic_error' },
+    { text = ' ' },
+    { text = 'W1', role = 'diagnostic_warn' },
+  })
+end
+
+T['the diagnostics']['name only the severity there is, and nothing for a file with none'] = function()
+  local shown = view({
+    diagnostics = {
+      ['a.txt'] = { error = 3, warn = 0 },
+      ['b.txt'] = { error = 0, warn = 4 },
+      ['c.txt'] = { error = 0, warn = 0 },
+    },
+  })
+
+  local rendering = render({ 'a.txt', 'b.txt', 'c.txt' }, shown)
+
+  eq(right_chunks(rendering, 2), { 'E3' })
+  eq(right_chunks(rendering, 3), { 'W4' })
+  eq(right_chunks(rendering, 4), {})
+end
+
+T['the diagnostics']['come before the lines added and removed, on one right-aligned text'] = function()
+  local shown = view({
+    counts = true,
+    marks = { ['a.txt'] = 'M' },
+    line_counts = { ['a.txt'] = { added = 3, removed = 1 } },
+    diagnostics = { ['a.txt'] = { error = 2, warn = 1 } },
+  })
+
+  local rendering = render({ 'a.txt' }, shown)
+
+  eq(right_chunks(rendering, 2), { 'E2', ' ', 'W1', ' ', '+3', ' ', '−1' })
+  eq(#rendering.virtual[2], 1)
+end
+
+T['the diagnostics']['give way when the line is full: the lines added and removed first, then themselves'] = function()
+  local counts = {
+    counts = true,
+    marks = { ['a.txt'] = 'M' },
+    line_counts = { ['a.txt'] = { added = 3, removed = 1 } },
+    diagnostics = { ['a.txt'] = { error = 2, warn = 0 } },
+  }
+  local line_width = vim.api.nvim_strwidth('  M a.txt')
+
+  local both =
+    render({ 'a.txt' }, view(vim.tbl_extend('force', counts, { width = line_width + 1 + 8 })))
+  local only_diagnostics =
+    render({ 'a.txt' }, view(vim.tbl_extend('force', counts, { width = line_width + 1 + 7 })))
+  local neither =
+    render({ 'a.txt' }, view(vim.tbl_extend('force', counts, { width = line_width + 2 })))
+
+  eq(right_chunks(both, 2), { 'E2', ' ', '+3', ' ', '−1' })
+  eq(right_chunks(only_diagnostics, 2), { 'E2' })
+  eq(right_chunks(neither, 2), {})
+end
+
 T['the header'] = MiniTest.new_set()
 
 --- The header line `tree.render()` gives under `shown`.

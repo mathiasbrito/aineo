@@ -4,6 +4,7 @@
 local decorate = require('aineo.explorer.decorate')
 local folders = require('aineo.explorer.folders')
 local icons = require('aineo.explorer.icons')
+local open_buffers = require('aineo.explorer.open_buffers')
 local tree = require('aineo.explorer.tree')
 
 local M = {}
@@ -66,6 +67,7 @@ local HIGHLIGHTS = {
   AineoExplorerUnchanged = 'Comment',
   AineoExplorerAdded = 'AineoChangesAdded',
   AineoExplorerRemoved = 'AineoChangesDeleted',
+  AineoExplorerModified = 'WarningMsg',
 }
 
 --- The group each role of a span that is not the kind of a change shows in
@@ -78,6 +80,9 @@ local ROLE_GROUPS = {
   unchanged = 'AineoExplorerUnchanged',
   added_lines = 'AineoExplorerAdded',
   removed_lines = 'AineoExplorerRemoved',
+  unsaved = 'AineoExplorerModified',
+  diagnostic_error = 'DiagnosticError',
+  diagnostic_warn = 'DiagnosticWarn',
 }
 
 --- The namespace of the explorer's highlights.
@@ -215,6 +220,9 @@ function M.new(settings)
   ---
   ---@return aineo.explorer.View
   local function view()
+    local buffers = open_buffers.read(function(file)
+      return state.place and path_from(state.place.directory, file)
+    end)
     return {
       open = state.open,
       marks = state.marks,
@@ -230,6 +238,8 @@ function M.new(settings)
       dim = true,
       line_counts = state.line_counts,
       icons = state.icon_for,
+      modified = buffers.modified,
+      diagnostics = buffers.diagnostics,
       width = shown_width(),
     }
   end
@@ -572,7 +582,7 @@ function M.new(settings)
         return
       end
       local directory = place.directory
-      state.place = place
+      state.place, state.branch = place, nil
       if state.pending_follow then
         take_followed(state.pending_follow)
         state.pending_follow = nil
@@ -895,6 +905,53 @@ function M.new(settings)
     },
   }
 
+  --- Draws the explorer again, once the commands in flight are done, while
+  --- a window shows it, however many times it is asked for meanwhile.
+  local redraw_asked = false
+  local function redraw_when_shown()
+    if redraw_asked then
+      return
+    end
+    redraw_asked = true
+    vim.schedule(function()
+      redraw_asked = false
+      if is_shown() then
+        render()
+      end
+    end)
+  end
+
+  --- Has the explorer of `buffer` follow the editor while a window shows it:
+  --- it is laid out again for the width of its window as that changes, and
+  --- drawn again as a buffer is modified or written and as diagnostics
+  --- change. It stops once `buffer` is wiped.
+  ---
+  ---@param buffer integer
+  local function watch_editor(buffer)
+    local group = vim.api.nvim_create_augroup('aineo.explorer.' .. buffer, {})
+    vim.api.nvim_create_autocmd('WinResized', {
+      group = group,
+      desc = 'aineo: lay the explorer out again for the width of its window',
+      callback = function()
+        if state.buffer == buffer and is_shown() and shown_width() ~= state.drawn_width then
+          render()
+        end
+      end,
+    })
+    vim.api.nvim_create_autocmd({ 'BufModifiedSet', 'BufWritePost', 'DiagnosticChanged' }, {
+      group = group,
+      desc = 'aineo: draw the explorer again for the unsaved edits and diagnostics of the editor',
+      callback = redraw_when_shown,
+    })
+    vim.api.nvim_create_autocmd('BufWipeout', {
+      buffer = buffer,
+      desc = 'aineo: stop following the editor for the explorer',
+      callback = function()
+        pcall(vim.api.nvim_del_augroup_by_name, 'aineo.explorer.' .. buffer)
+      end,
+    })
+  end
+
   --- Makes the explorer's buffer: a scratch buffer no one edits, named
   --- `aineo://explorer`, or with a number after it for the explorers after
   --- the first, with its keys (`KEYS`). A buffer made again takes the name
@@ -925,22 +982,7 @@ function M.new(settings)
         read_tree()
       end,
     })
-    vim.api.nvim_create_autocmd('WinResized', {
-      group = vim.api.nvim_create_augroup('aineo.explorer.' .. buffer, {}),
-      desc = 'aineo: lay the explorer out again for the width of its window',
-      callback = function()
-        if state.buffer == buffer and is_shown() and shown_width() ~= state.drawn_width then
-          render()
-        end
-      end,
-    })
-    vim.api.nvim_create_autocmd('BufWipeout', {
-      buffer = buffer,
-      desc = 'aineo: stop laying the explorer out for its window',
-      callback = function()
-        pcall(vim.api.nvim_del_augroup_by_name, 'aineo.explorer.' .. buffer)
-      end,
-    })
+    watch_editor(buffer)
     vim.api.nvim_create_autocmd('BufWinLeave', {
       buffer = buffer,
       desc = 'aineo: stop watching while the explorer is hidden',
