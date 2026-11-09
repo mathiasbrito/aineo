@@ -15,6 +15,7 @@ local M = {}
 ---@field uncommitted_files fun(found: aineo.git.Repository, done: fun(failure: aineo.git.Failure|nil, changes: aineo.git.Change[]|nil))
 ---@field ignored_files fun(found: aineo.git.Repository, done: fun(failure: aineo.git.Failure|nil, paths: string[]|nil))
 ---@field submodule_paths fun(found: aineo.git.Repository, done: fun(failure: aineo.git.Failure|nil, paths: string[]|nil))
+---@field line_counts fun(found: aineo.git.Repository, done: fun(failure: aineo.git.Failure|nil, counts: table<string, aineo.git.LineCount>|nil))
 ---@field list_worktrees fun(found: aineo.git.Repository, done: fun(failure: aineo.git.Failure|nil, worktrees: aineo.git.Worktree[]|nil))
 ---@field watch_repository fun(found: aineo.git.Repository, on_change: fun(failure: aineo.git.Failure|nil, change: aineo.git.RepositoryChange|nil)): aineo.git.Watch|nil
 
@@ -60,6 +61,9 @@ local HIGHLIGHTS = {
   AineoExplorerChanged = 'AineoChangesModified',
   AineoExplorerIgnored = 'Comment',
   AineoExplorerGuide = 'NonText',
+  AineoExplorerUnchanged = 'Comment',
+  AineoExplorerAdded = 'AineoChangesAdded',
+  AineoExplorerRemoved = 'AineoChangesDeleted',
 }
 
 --- The group each role of a span that is not the kind of a change shows in
@@ -69,6 +73,9 @@ local ROLE_GROUPS = {
   changed_folder = 'AineoExplorerChanged',
   ignored = 'AineoExplorerIgnored',
   guide = 'AineoExplorerGuide',
+  unchanged = 'AineoExplorerUnchanged',
+  added_lines = 'AineoExplorerAdded',
+  removed_lines = 'AineoExplorerRemoved',
 }
 
 --- The namespace of the explorer's highlights.
@@ -151,6 +158,8 @@ function M.new(settings)
     tree = { children = {} },
     ---@type table<string, string>
     marks = {},
+    ---@type table<string, aineo.git.LineCount>
+    line_counts = {},
     ---@type string|nil
     failure = nil,
     ---@type table<string, true>
@@ -172,6 +181,7 @@ function M.new(settings)
     ---@type string|nil
     pending_follow = nil,
     nothing_ignored_told = false,
+    counts_shown = true,
   }
 
   ---@type aineo.explorer.Home
@@ -179,6 +189,19 @@ function M.new(settings)
 
   --- The group each role of a span shows in (`aineo.explorer.Span`).
   local role_groups = vim.tbl_extend('force', ROLE_GROUPS, settings.change_groups)
+
+  --- The cells a line of the explorer has in its narrowest window, nil while
+  --- no window shows it.
+  ---
+  ---@return integer|nil
+  local function shown_width()
+    local width
+    for _, window in ipairs(state.buffer and vim.fn.win_findbuf(state.buffer) or {}) do
+      local text_width = vim.api.nvim_win_get_width(window) - vim.fn.getwininfo(window)[1].textoff
+      width = width and math.min(width, text_width) or text_width
+    end
+    return width
+  end
 
   --- The view the tree renders under.
   ---
@@ -194,6 +217,10 @@ function M.new(settings)
       quote = settings.quote_name,
       guides = true,
       compact = true,
+      counts = true,
+      dim = true,
+      line_counts = state.line_counts,
+      width = shown_width(),
     }
   end
 
@@ -299,7 +326,8 @@ function M.new(settings)
     for _, folder in ipairs(unfolded) do
       read = tree.add_listing(read, folder, folders.list_folder(vim.fs.joinpath(directory, folder)))
     end
-    state.tree, state.marks, state.failure, state.in_git = read, {}, nil, false
+    state.tree, state.marks, state.line_counts, state.failure, state.in_git =
+      read, {}, {}, nil, false
     render()
   end
 
@@ -453,6 +481,7 @@ function M.new(settings)
       end
     end
     state.tree, state.marks, state.failure, state.in_git = read.tree, read.marks, nil, true
+    state.line_counts = read.line_counts
     render()
     watch(repository)
   end
@@ -473,23 +502,33 @@ function M.new(settings)
     if state.show_ignored then
       table.insert(asked, 'ignored')
     end
+    if state.counts_shown then
+      table.insert(asked, 'line_counts')
+    end
     local remaining, failed = #asked, nil
+    local function one_answered()
+      remaining = remaining - 1
+      if remaining > 0 or not is_last_read(read) then
+        return
+      end
+      if failed then
+        state.failure = ('git could not list the files: %s'):format(failed.message or failed.reason)
+        render()
+        return
+      end
+      take_repository(repository, prefix, listing)
+    end
     local function answered(field)
       return function(failure, answer)
         failed = failed or failure
         listing[field] = answer
-        remaining = remaining - 1
-        if remaining > 0 or not is_last_read(read) then
-          return
-        end
-        if failed then
-          state.failure = ('git could not list the files: %s'):format(
-            failed.message or failed.reason
-          )
-          render()
-          return
-        end
-        take_repository(repository, prefix, listing)
+        one_answered()
+      end
+    end
+    local function answered_when_able(field)
+      return function(_, answer)
+        listing[field] = answer
+        one_answered()
       end
     end
     git.list_files(repository, answered('files'))
@@ -497,6 +536,9 @@ function M.new(settings)
     git.submodule_paths(repository, answered('submodules'))
     if state.show_ignored then
       git.ignored_files(repository, answered('ignored'))
+    end
+    if state.counts_shown then
+      git.line_counts(repository, answered_when_able('line_counts'))
     end
   end
 

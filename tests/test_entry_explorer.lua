@@ -581,6 +581,7 @@ T['the colours']['show a changed file in its change’s group and a folder in th
     { 3, 0, 3, 'AineoExplorerFolder' },
     { 3, 4, 7, 'AineoExplorerChanged' },
     { 3, 8, 12, 'AineoExplorerFolder' },
+    { 4, 4, 14, 'AineoExplorerUnchanged' },
     { 5, 2, 11, 'AineoChangesUntracked' },
     { 6, 2, 13, 'AineoChangesModified' },
   })
