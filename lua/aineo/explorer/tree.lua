@@ -608,8 +608,12 @@ local function line_virtual(view, facts)
       chunks = { { text = UNSAVED, role = 'unsaved' } },
     })
   end
+  local candidates = counts.right_edge(diagnostics_of(view, facts), line_counts_of(view, facts))
+  if #candidates == 0 then
+    return items
+  end
   local taken = vim.api.nvim_strwidth(facts.line) + inline_width(items)
-  for _, item in ipairs(counts.right_edge(diagnostics_of(view, facts), line_counts_of(view, facts))) do
+  for _, item in ipairs(candidates) do
     if counts.fits(item, taken, view.width) then
       table.insert(items, item)
       break
