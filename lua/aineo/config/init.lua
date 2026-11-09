@@ -632,4 +632,57 @@ function M.resolve_config(global_settings, setup_options)
   return config, unknown_keys_across(sources)
 end
 
+--- The value of the setting `setting` in `source`, or why it is wrong: its
+--- section is no table, or its value fails the setting's validator.
+---
+---@param source table
+---@param setting table
+---@return any value nil when the source gives none, or gives a wrong one
+---@return string|nil problem
+local function checked_value_in(source, setting)
+  local section = setting.name:match('^(%w+)%.')
+  if section and source[section] ~= nil and type(source[section]) ~= 'table' then
+    return nil, ('%s: expected table, got %s'):format(section, type(source[section]))
+  end
+  local value = value_in(source, setting.name)
+  local valid, problem =
+    pcall(vim.validate, setting.name, value, setting.validator, true, setting.expected)
+  if not valid then
+    return nil, (tostring(problem):gsub('^.-:%d+: ', ''))
+  end
+  return value, nil
+end
+
+--- The looks of the explorer (`explorer.*`) as `resolve_config()` takes them
+--- from the two sources, but without raising: a look whose value is wrong
+--- has its default, and a problem names it; a setting elsewhere that is wrong
+--- changes nothing here.
+---
+---@param global_settings? table the value of `vim.g.aineo`
+---@param setup_options? table the options `require('aineo').setup()` recorded
+---@return table<string, boolean> looks each look of the explorer, by name
+---@return string[] problems one line for each wrong value, in the order of the looks
+function M.explorer_looks(global_settings, setup_options)
+  local sources = { setup_options or {}, global_settings or {} }
+  local looks, problems = {}, {}
+  for _, setting in ipairs(SETTINGS) do
+    if vim.startswith(setting.name, 'explorer.') then
+      local chosen, wrong = setting.default, nil
+      for _, source in ipairs(sources) do
+        local value, problem = checked_value_in(source, setting)
+        wrong = wrong or problem
+        if value ~= nil then
+          chosen = value
+          break
+        end
+      end
+      looks[setting.name:sub(#'explorer.' + 1)] = chosen
+      if wrong then
+        table.insert(problems, wrong)
+      end
+    end
+  end
+  return looks, problems
+end
+
 return M

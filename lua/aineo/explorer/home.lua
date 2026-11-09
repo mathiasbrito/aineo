@@ -47,7 +47,7 @@ local M = {}
 ---@field paste fun(text: string) pastes `text` into Claude Code's prompt, with no Enter
 ---@field quote_name fun(name: string): string how a name shows on its line, a control character in it escaped
 ---@field change_groups table<string, string> the highlight group a file's mark and name show in, by the kind of its change (`'added'`, `'modified'`, `'deleted'`, `'renamed'`, `'type_changed'`, `'untracked'`)
----@field look? fun(): table<string, boolean> which looks of the tree are on, by name (`aineo.explorer.Look`); every one is on when not given
+---@field look? fun(): table<string, boolean>, string[]|nil which looks of the tree are on, by name (`aineo.explorer.Look`), and the problems of the values that were wrong, asked at each read of the tree; every look is on when not given, and a look not named is on
 ---@field session_work? fun(done: fun(work: aineo.explorer.SessionWork|nil)) the files in the work of the Claude Code session, their repository's top and their paths from it (`aineo.changes`' `session_work_files()`), nil when they are not known; none given, no file is marked as Claude's
 ---@field define_change_groups fun() defines `change_groups`' groups as default links, as the pane that owns them does
 
@@ -183,6 +183,7 @@ function M.new(settings)
     branch = nil,
     ---@type integer|nil
     drawn_width = nil,
+    looks = look.ALL_ON,
     ---@type (fun(entry: aineo.explorer.Entry): aineo.explorer.Icon|nil)|nil
     icon_for = nil,
     ---@type string|nil
@@ -214,6 +215,17 @@ function M.new(settings)
   --- The group each role of a span shows in (`aineo.explorer.Span`).
   local role_groups = vim.tbl_extend('force', ROLE_GROUPS, settings.change_groups)
 
+  --- Reads the looks as they are set, at each read of the tree; a wrong
+  --- value is told to the user once.
+  local read_looks = look.reader(settings.look or function()
+    return {}
+  end, function(problem)
+    vim.notify(
+      ('aineo: the explorer’s looks: %s; the default applies'):format(problem),
+      vim.log.levels.WARN
+    )
+  end)
+
   local redraw_when_shown
 
   --- The work of the Claude Code session, followed from read to read.
@@ -238,7 +250,7 @@ function M.new(settings)
   ---
   ---@return aineo.explorer.View
   local function view()
-    local looks = look.resolve(settings.look and settings.look())
+    local looks = state.looks
     local buffers = open_buffers.read(function(file)
       return state.place and path_from(state.place.directory, file)
     end)
@@ -587,7 +599,7 @@ function M.new(settings)
     if state.show_ignored then
       table.insert(asked, 'ignored')
     end
-    local counts_shown = look.resolve(settings.look and settings.look()).counts
+    local counts_shown = state.looks.counts
     if counts_shown then
       table.insert(asked, 'line_counts')
     end
@@ -642,7 +654,8 @@ function M.new(settings)
   read_tree = function()
     state.reads = state.reads + 1
     local read = state.reads
-    local provider = look.resolve(settings.look and settings.look()).icons and icons.from_plugins()
+    state.looks = read_looks()
+    local provider = state.looks.icons and icons.from_plugins()
     state.icon_for = provider and icons.once_per_path(provider)
     state.place_key = place_key()
     resolve_place(function(place)

@@ -981,6 +981,32 @@ local function explore_with(name, looks, files, change)
   return explore(name, files, change, { explorer = looks })
 end
 
+T['the looks turned off']['one set wrong while the editor runs raises nothing, says so once and keeps its default'] = function()
+  explore_with('off-wrong', { icons = false })
+  wait_for_tree({ '▸   docs/', '▸   src/', '    README.md' })
+  child.lua(
+    "local settings = vim.g.aineo; settings.explorer = { guides = 'no', icons = false }; vim.g.aineo = settings"
+  )
+  child.lua('vim.v.errmsg = ""')
+  put_cursor_on('src/')
+  entry.press(child, 'l')
+  entry.press(child, 'R')
+  wait_for_virtual('overlay', { { 5, '├ ' }, { 6, '└ ' } })
+  entry.press(child, 'R')
+  vim.wait(500)
+
+  eq(child.lua_get('vim.v.errmsg'), '')
+  local about_guides = vim.tbl_filter(function(told)
+    return told.message:find('explorer.guides', 1, true) ~= nil
+  end, entry.messages(child))
+  eq(#about_guides, 1)
+  eq(
+    about_guides[1].message,
+    'aineo: the explorer’s looks: explorer.guides: expected boolean, got string; the default applies'
+  )
+  eq(virtual_at('inline'), {})
+end
+
 T['the looks turned off']['guides: no connector over the indent'] = function()
   explore_with('off-guides', { guides = false })
   wait_for_tree({ '▸   docs/', '▸   src/', '    README.md' })
