@@ -732,14 +732,19 @@ function M.new(settings)
 
   --- Unfolds the folder under the cursor, its entries read from the disk
   --- when git does not list them, or folds it when it is unfolded. A chain
-  --- of folders on one line unfolds, and folds, as its deepest folder.
+  --- of folders on one line unfolds with every folder of it, so that it stays
+  --- unfolded when it breaks, and folds as its deepest folder.
   ---
   ---@param folder aineo.explorer.Entry
   local function toggle_folder(folder)
     if state.open[folder.path] then
       state.open[folder.path] = nil
     else
-      state.open[known_chain_end(folder).path] = true
+      local deepest = known_chain_end(folder)
+      state.open[deepest.path] = true
+      for _, above in ipairs(tree.folders_above(deepest.path)) do
+        state.open[above] = true
+      end
     end
     render()
   end

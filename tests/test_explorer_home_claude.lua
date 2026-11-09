@@ -1,5 +1,7 @@
 local MiniTest = require('mini.test')
 
+local fake_explorer = dofile('tests/helpers/fake_explorer.lua')
+
 local eq = MiniTest.expect.equality
 
 --- How long a case waits for the flash to end, in milliseconds.
@@ -14,60 +16,8 @@ local explorer
 local T = MiniTest.new_set({
   hooks = {
     pre_case = function()
-      world = {
-        files = { 'a.txt', 'b.txt', 'c.txt' },
-        changes = {},
-        counts = {},
-        work = { top = '/repo', paths = {} },
-        folder = '/repo',
-      }
-      local git = {
-        find_repository = function(_, done)
-          done(nil, { top = '/repo', git_directory = '/repo/.git', branch = 'main' })
-        end,
-        list_files = function(_, done)
-          done(nil, world.files)
-        end,
-        uncommitted_files = function(_, done)
-          done(nil, world.changes)
-        end,
-        ignored_files = function(_, done)
-          done(nil, {})
-        end,
-        submodule_paths = function(_, done)
-          done(nil, {})
-        end,
-        list_worktrees = function(_, done)
-          done(nil, {})
-        end,
-        watch_repository = function() end,
-        line_counts = function(_, done)
-          done(nil, world.counts)
-        end,
-      }
-      explorer = require('aineo.explorer').new({
-        git = git,
-        claude_folder = function()
-          return world.folder
-        end,
-        open_file = function() end,
-        paste = function() end,
-        quote_name = function(name)
-          return name
-        end,
-        change_groups = {
-          added = 'DiffAdd',
-          modified = 'DiffChange',
-          deleted = 'DiffDelete',
-          renamed = 'DiffChange',
-          type_changed = 'DiffChange',
-          untracked = 'DiffAdd',
-        },
-        define_change_groups = function() end,
-        session_work = function(done)
-          done(world.work)
-        end,
-      })
+      world = fake_explorer.new_world()
+      explorer = fake_explorer.new(world)
       vim.cmd('only')
     end,
     post_case = function()
