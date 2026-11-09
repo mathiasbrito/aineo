@@ -219,4 +219,29 @@ T['the work of the session']['is not marked in a repository that is not the sess
   eq(marked_lines(), {})
 end
 
+T['the cursor of the explorer'] = MiniTest.new_set()
+
+T['the cursor of the explorer']['keeps its column as the tree is read again'] = function()
+  show_explorer()
+  vim.api.nvim_win_set_cursor(0, { 3, 5 })
+
+  explorer.refresh()
+
+  eq(vim.api.nvim_win_get_cursor(0), { 3, 5 })
+end
+
+T['the cursor of the explorer']['keeps its column when a flash ends'] = function()
+  world.work = { top = '/repo', paths = { 'a.txt' } }
+  show_explorer()
+  world.work.paths = { 'a.txt', 'c.txt' }
+  explorer.refresh()
+  vim.api.nvim_win_set_cursor(0, { 3, 6 })
+
+  vim.wait(PATIENCE_MS, function()
+    return #flashing_lines() == 0
+  end, 10)
+
+  eq(vim.api.nvim_win_get_cursor(0), { 3, 6 })
+end
+
 return T

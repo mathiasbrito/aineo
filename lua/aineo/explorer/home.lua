@@ -300,10 +300,11 @@ function M.new(settings)
       return
     end
     local windows = vim.fn.win_findbuf(buffer)
-    local paths = {}
+    local paths, columns = {}, {}
     for _, window in ipairs(windows) do
       local entry = entry_in(window)
       paths[window] = entry and entry.path
+      columns[window] = vim.api.nvim_win_get_cursor(window)[2]
     end
     local shown = view()
     state.drawn_width = shown.width
@@ -339,7 +340,8 @@ function M.new(settings)
     for _, window in ipairs(windows) do
       local line = paths[window] and line_of(rendering, paths[window])
       if line then
-        vim.api.nvim_win_set_cursor(window, { line, 0 })
+        local column = math.min(columns[window], #rendering.lines[line])
+        vim.api.nvim_win_set_cursor(window, { line, column })
       end
     end
   end
@@ -991,7 +993,11 @@ function M.new(settings)
     vim.api.nvim_create_autocmd({ 'BufModifiedSet', 'BufWritePost', 'DiagnosticChanged' }, {
       group = group,
       desc = 'aineo: draw the explorer again for the unsaved edits and diagnostics of the editor',
-      callback = redraw_when_shown,
+      callback = function(event)
+        if vim.api.nvim_buf_is_valid(event.buf) and vim.bo[event.buf].buftype == '' then
+          redraw_when_shown()
+        end
+      end,
     })
     vim.api.nvim_create_autocmd('BufWipeout', {
       buffer = buffer,
