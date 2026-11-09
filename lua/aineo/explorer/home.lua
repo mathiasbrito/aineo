@@ -526,19 +526,6 @@ function M.new(settings)
     end)
   end
 
-  --- The paths of the session's work if they are those of `repository`, the
-  --- repository the work is in; nil otherwise.
-  ---
-  ---@param work aineo.explorer.SessionWork|nil
-  ---@param repository aineo.git.Repository
-  ---@return string[]|nil
-  local function session_paths_in(work, repository)
-    if work and resolved(work.top) == resolved(repository.top) then
-      return work.paths
-    end
-    return nil
-  end
-
   --- Takes a folder's tree from the disk: the shown folder's entries, and
   --- those of each folder unfolded whose own folder is known, from the root
   --- down. Nothing is ignored there, and nothing is marked.
@@ -566,7 +553,7 @@ function M.new(settings)
   ---@param prefix string
   ---@param listing aineo.explorer.RepositoryListing
   local function take_repository(repository, prefix, listing)
-    listing.session_paths = session_paths_in(listing.session_work, repository)
+    listing.session_paths = claude_work.paths_in(listing.session_work, repository)
     local read = tree.from_repository(listing, prefix)
     local unfolded = vim.tbl_keys(state.open)
     table.sort(unfolded)
