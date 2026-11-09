@@ -7,7 +7,6 @@
 --- the Send home (`aineo.send`'s `paste()`).
 
 local links = require('aineo.entry.links')
-local resolved_config = require('aineo.entry.settings').resolved
 
 local M = {}
 
@@ -31,7 +30,8 @@ function M.make_explorer(homes)
     focused_work = homes.changes.focused_work,
     session_work = homes.changes.session_work_files,
     look = function()
-      return resolved_config().explorer
+      local config = require('aineo.config')
+      return config.explorer_looks(vim.g.aineo, config.recorded_setup_options())
     end,
     offer_work = function()
       if homes.claude.session_status() == nil then

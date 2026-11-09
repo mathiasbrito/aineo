@@ -298,6 +298,49 @@ T['resolve_config()']['refuses a look of the explorer that is not a boolean']['a
   end, 'explorer%.' .. look .. ': expected boolean')
 end
 
+T['explorer_looks()'] = MiniTest.new_set()
+
+T['explorer_looks()']['are the looks resolve_config() gives, with no problem, when every value is right'] = function()
+  local looks, problems = config.explorer_looks(
+    { explorer = { dim = false } },
+    { explorer = { icons = false } }
+  )
+
+  eq(looks, {
+    guides = true,
+    icons = false,
+    dim = false,
+    counts = true,
+    compact = true,
+    diagnostics = true,
+  })
+  eq(problems, {})
+end
+
+T['explorer_looks()']['keep the default of a look whose value is wrong, and say which, the others as given'] = function()
+  local looks, problems =
+    config.explorer_looks({ explorer = { guides = 'no', icons = false } }, nil)
+
+  eq(looks.guides, true)
+  eq(looks.icons, false)
+  eq(#problems, 1)
+  expect.no_equality(problems[1]:find('explorer.guides', 1, true), nil)
+end
+
+T['explorer_looks()']['keep every default when the explorer section is no table, saying so once for each look'] = function()
+  local looks, problems = config.explorer_looks({ explorer = 'no' }, nil)
+
+  eq(looks, DEFAULTS.explorer)
+  eq(#problems, 6)
+end
+
+T['explorer_looks()']['ignore a setting that is wrong elsewhere'] = function()
+  local looks, problems = config.explorer_looks({ tabs = { padding = 'wide' } }, nil)
+
+  eq(looks, DEFAULTS.explorer)
+  eq(problems, {})
+end
+
 T['resolve_config()']['takes whether the tab line always shows from either source, true by default'] = function()
   local from_global = config.resolve_config({ tabs = { always_show = false } }, nil)
   local from_setup = config.resolve_config(
