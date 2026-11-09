@@ -367,6 +367,107 @@ T['a file']['that is not text goes to the operating system with Enter'] = functi
   eq(entry.current_window(child), 'aineo://explorer')
 end
 
+--- Waits, at most `PATIENCE_MS`, until the child's windows are `expected`
+--- and its current window shows the explorer, and returns the windows then.
+---
+---@param expected string[]
+---@return string[]
+local function wait_for_windows_with_cursor_in_explorer(expected)
+  local windows
+  vim.wait(PATIENCE_MS, function()
+    windows = entry.windows(child)
+    return vim.deep_equal(windows, expected) and entry.current_window(child) == 'aineo://explorer'
+  end, 20)
+  return windows
+end
+
+T['a file']['previews in the file column with l, the cursor staying in the tree on its line'] = function()
+  local top = explore('preview')
+  put_cursor_on('src/')
+  entry.press(child, 'l')
+  put_cursor_on('main.lua')
+  local main = vim.fs.joinpath(top, 'src', 'main.lua')
+
+  entry.press(child, 'l')
+
+  local expected = { 'terminal', main, 'aineo://explorer' }
+  eq(wait_for_windows_with_cursor_in_explorer(expected), expected)
+  eq(line_at_cursor(), '      main.lua')
+  eq(child.fn.mode(), 'n')
+end
+
+T['a file']['previews the next file with l, moving the cursor opening nothing'] = function()
+  local top = explore('preview-next')
+  put_cursor_on('src/')
+  entry.press(child, 'l')
+  put_cursor_on('README.md')
+  local readme = vim.fs.joinpath(top, 'README.md')
+  local main = vim.fs.joinpath(top, 'src', 'main.lua')
+  entry.press(child, 'l')
+  wait_for_windows_with_cursor_in_explorer({ 'terminal', readme, 'aineo://explorer' })
+
+  put_cursor_on('main.lua')
+  vim.wait(200, function()
+    return entry.windows(child)[2] ~= readme
+  end, 20)
+  local while_moving = entry.windows(child)
+  entry.press(child, 'l')
+
+  eq(while_moving, { 'terminal', readme, 'aineo://explorer' })
+  local expected = { 'terminal', main, 'aineo://explorer' }
+  eq(wait_for_windows_with_cursor_in_explorer(expected), expected)
+end
+
+T['a file']['that is not text goes to the operating system with l, the cursor staying in the tree'] = function()
+  local top =
+    explore('preview-binary', vim.tbl_extend('force', FILES, { ['image.bin'] = { 'a\nb' } }), {
+      '▸   docs/',
+      '▸   src/',
+      '    .gitignore',
+      '    image.bin',
+      '    README.md',
+    })
+  child.lua([[
+    _G.opened = {}
+    vim.ui.open = function(path)
+      table.insert(_G.opened, path)
+      return nil, nil
+    end
+  ]])
+  put_cursor_on('image.bin')
+
+  entry.press(child, 'l')
+
+  eq(child.lua_get('_G.opened'), { vim.fs.joinpath(top, 'image.bin') })
+  eq(entry.current_window(child), 'aineo://explorer')
+  eq(line_at_cursor(), '    image.bin')
+end
+
+T['the header'] = MiniTest.new_set()
+
+T['the header']['does nothing with l'] = function()
+  explore('preview-header')
+  child.lua('vim.api.nvim_win_set_cursor(0, { 1, 0 }); vim.v.errmsg = ""')
+
+  entry.press(child, 'l')
+
+  eq(child.lua_get('vim.v.errmsg'), '')
+  eq(vim.list_slice(explorer_lines(), 2), FOLDED_TREE)
+  eq(entry.windows(child), { 'terminal', 'aineo://explorer' })
+  eq(entry.messages(child), {})
+end
+
+T['a file']['is shown by l, the map’s description says so'] = function()
+  explore('preview-desc')
+
+  local description = child.lua_get("vim.fn.maparg('l', 'n', false, true).desc")
+
+  eq(
+    description,
+    'aineo explorer: unfold or fold the folder, or show the file, the cursor staying in the tree'
+  )
+end
+
 T['git’s marks'] = MiniTest.new_set()
 
 T['git’s marks']['show modified, untracked and deleted files, and folders holding a change'] = function()
@@ -1072,6 +1173,59 @@ T['a file']['turned into a link to a folder opens nothing with Enter'] = functio
   entry.press(child, '<CR>')
 
   eq(child.lua_get('_G.opened'), {})
+  eq(entry.current_window(child), 'aineo://explorer')
+  eq(entry.messages(child), {
+    {
+      message = 'aineo: README.md is a folder on disk, not a file to open',
+      level = vim.log.levels.INFO,
+    },
+  })
+end
+
+T['a file']['deleted opens nothing with l, and says so as Enter does'] = function()
+  explore_changed('preview-deleted', function(top)
+    vim.fn.delete(vim.fs.joinpath(top, 'README.md'))
+  end, { '▸   docs/', '▸   src/', '    .gitignore', '  D README.md' })
+  child.lua([[
+    _G.opened = {}
+    vim.ui.open = function(path)
+      table.insert(_G.opened, path)
+      return nil, nil
+    end
+  ]])
+  put_cursor_on('README.md')
+
+  entry.press(child, 'l')
+
+  eq(child.lua_get('_G.opened'), {})
+  eq(entry.windows(child), { 'terminal', 'aineo://explorer' })
+  eq(entry.current_window(child), 'aineo://explorer')
+  eq(entry.messages(child), {
+    {
+      message = 'aineo: README.md is deleted; \\g shows its diff',
+      level = vim.log.levels.INFO,
+    },
+  })
+end
+
+T['a file']['turned into a link to a folder opens nothing with l, and says so as Enter does'] = function()
+  explore_changed('preview-folder-link', function(top)
+    vim.fn.delete(vim.fs.joinpath(top, 'README.md'))
+    vim.uv.fs_symlink('src', vim.fs.joinpath(top, 'README.md'))
+  end, { '▸   docs/', '▸   src/', '    .gitignore', '  T README.md' })
+  child.lua([[
+    _G.opened = {}
+    vim.ui.open = function(path)
+      table.insert(_G.opened, path)
+      return nil, nil
+    end
+  ]])
+  put_cursor_on('README.md')
+
+  entry.press(child, 'l')
+
+  eq(child.lua_get('_G.opened'), {})
+  eq(entry.windows(child), { 'terminal', 'aineo://explorer' })
   eq(entry.current_window(child), 'aineo://explorer')
   eq(entry.messages(child), {
     {
