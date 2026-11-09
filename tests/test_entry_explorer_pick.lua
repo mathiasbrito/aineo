@@ -195,6 +195,38 @@ T['one pick']['in the explorer moves the changes pane, which shows the worktree 
   eq(wait_until(changes_pane_shows_feature), true)
 end
 
+--- The number of marks of Claude's work in the explorer's buffer in the
+--- child.
+local CLAUDE_MARKS = [[(function()
+  local buffer = vim.fn.bufnr('aineo://explorer')
+  local namespace = vim.api.nvim_get_namespaces()['aineo.explorer']
+  local count = 0
+  for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(buffer, namespace, 0, -1, { details = true })) do
+    for _, chunk in ipairs(mark[4].virt_text or {}) do
+      if chunk[1] == '✦ ' then
+        count = count + 1
+      end
+    end
+  end
+  return count
+end)()]]
+
+T['one pick']['of a worktree shows no mark of Claude’s, whose work is in the folder Claude works in'] = function()
+  local repository = open_with_worktree('claude-marks')
+  git_repo.write(repository.top, 'main.txt', { 'changed by Claude' })
+  entry.press(child, '\\e')
+  local marked = wait_until(function()
+    return child.lua_get(CLAUDE_MARKS) == 1
+  end)
+
+  pick('[worktree] feature')
+  wait_for_tree(FEATURE_TREE)
+  vim.wait(300)
+
+  eq(marked, true)
+  eq(child.lua_get(CLAUDE_MARKS), 0)
+end
+
 T['one pick']['opens a file of the worktree picked for editing there'] = function()
   local repository = open_with_worktree('open-in-worktree')
   entry.press(child, '\\e')

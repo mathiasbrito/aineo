@@ -38,6 +38,8 @@ local M = {}
 ---@field width? integer the cells the window takes for a line; unknown when not given
 ---@field modified? table<string, true> the files with unsaved edits in the editor, by path
 ---@field diagnostics? table<string, aineo.explorer.DiagnosticCount> the diagnostics of each file the editor has loaded, by path
+---@field claude? table<string, true> the files in the work of the session, by path
+---@field flash? table<string, true> the files of `claude` that joined it, or changed in it, just now, by path
 ---@field icons? fun(entry: aineo.explorer.Entry): aineo.explorer.Icon|nil the icon of a file (`aineo.explorer.icons`); none given, no file shows one
 ---@field branch? string the branch the folder shown is on, for the header
 
@@ -47,6 +49,7 @@ local M = {}
 ---@field entries table<integer, aineo.explorer.Entry> the entry each line shows, by line number, from 1
 ---@field spans table<integer, aineo.explorer.Span[]> the colours of each entry's line, by line number, from 1; none for a line with no colour
 ---@field virtual table<integer, aineo.explorer.VirtualText[]> the text each line shows without holding it, by line number, from 1; none for a line with none
+---@field flashed table<integer, true> the lines to colour as flashing, by line number, from 1
 
 --- A run of an entry's line shown in one colour: what it is, as a role.
 --- A role is the kind of a file's change (`'added'`, `'modified'`,
@@ -141,6 +144,8 @@ end
 ---@field ignored? string[] the entries it ignores, a folder's ending in `/` (`aineo.git`'s `ignored_files()`)
 ---@field submodules? string[] the paths of its submodules, which `files` lists as files (`aineo.git`'s `submodule_paths()`)
 ---@field line_counts? table<string, aineo.git.LineCount> the lines added and removed in each file that differs from `HEAD` (`aineo.git`'s `line_counts()`)
+---@field session_paths? string[] the files in the work of the session, if the repository is the session's
+---@field session_work? aineo.explorer.SessionWork what the session's work was read as, before it is known to be this repository's
 
 --- A tree read from a repository, the marks of its changed files and the
 --- lines added and removed in them.
@@ -148,6 +153,7 @@ end
 ---@field tree aineo.explorer.Tree
 ---@field marks table<string, string> by path from the tree's root
 ---@field line_counts table<string, aineo.git.LineCount> by path from the tree's root
+---@field claude table<string, true> the files in the work of the session, by path from the tree's root
 
 --- The mark of each kind of change git gives.
 local CHANGE_MARKS = {
@@ -184,6 +190,18 @@ local function paths_under(paths, prefix)
     end
   end
   return under
+end
+
+--- The set of the values of `list`.
+---
+---@param list string[]
+---@return table<string, true>
+local function set_of(list)
+  local set = {}
+  for _, value in ipairs(list) do
+    set[value] = true
+  end
+  return set
 end
 
 --- The entries of `by_path`, a table keyed by paths from the repository's
@@ -245,6 +263,7 @@ function M.from_repository(listing, prefix)
     tree = M.from_paths(files, ignored),
     marks = marks,
     line_counts = keyed_under(listing.line_counts or {}, prefix),
+    claude = set_of(paths_under(listing.session_paths or {}, prefix)),
   }
 end
 
@@ -498,23 +517,36 @@ local function inline_width(items)
   return width
 end
 
---- The width of the place an icon takes before a name, the icon and a blank.
-local ICON_PLACE = '  '
+--- The width of the place a mark or an icon takes before a name, the glyph
+--- and a blank.
+local PLACE = '  '
 
---- The virtual text before a name that holds the icon of a file, `icon` from
---- the view, and the blank place of a folder or a file with none, so that
---- the names line up.
+--- The mark of a file in the work of the session, with its blank.
+local CLAUDE_MARK = '✦ '
+
+--- The chunks before a name: the place of Claude's mark, taken while the
+--- session has files in its work, then the place of an icon, taken while the
+--- view has icons. A folder, a file with no mark and a file with no icon
+--- leave their places blank, so that the names line up.
 ---
----@param icon_of fun(entry: aineo.explorer.Entry): aineo.explorer.Icon|nil
+---@param view aineo.explorer.View
 ---@param facts aineo.explorer.LineFacts
----@return aineo.explorer.VirtualText
-local function icon_slot(icon_of, facts)
-  local icon = facts.entry.kind == 'file' and icon_of(facts.entry) or nil
-  local chunk = { text = ICON_PLACE }
-  if icon then
-    chunk = { text = icon.text .. ' ', group = icon.group }
+---@return aineo.explorer.VirtualChunk[]
+local function name_places(view, facts)
+  local chunks = {}
+  local is_file = facts.entry.kind == 'file'
+  if view.claude and next(view.claude) then
+    local marked = is_file and view.claude[facts.entry.path]
+    table.insert(chunks, marked and { text = CLAUDE_MARK, role = 'claude' } or { text = PLACE })
   end
-  return { position = 'inline', column = facts.columns.name, chunks = { chunk } }
+  if view.icons then
+    local icon = is_file and view.icons(facts.entry) or nil
+    table.insert(
+      chunks,
+      icon and { text = icon.text .. ' ', group = icon.group } or { text = PLACE }
+    )
+  end
+  return chunks
 end
 
 --- The text that follows the name of a file with unsaved edits: a blank,
@@ -559,8 +591,9 @@ local function line_virtual(view, facts)
   if view.guides and facts.depth > 0 then
     table.insert(items, guides.virtual_text(facts.place.continues, facts.place.is_last))
   end
-  if view.icons then
-    table.insert(items, icon_slot(view.icons, facts))
+  local places = name_places(view, facts)
+  if #places > 0 then
+    table.insert(items, { position = 'inline', column = facts.columns.name, chunks = places })
   end
   if view.counts and facts.mark == M.FOLDER_MARK and facts.folders_changed then
     table.insert(
@@ -648,7 +681,7 @@ end
 ---@return aineo.explorer.Rendering
 function M.render(tree, view)
   local lines, entries, spans, virtual = { header_line(view) }, {}, {}, {}
-  local unchanged_names, changed_shown = {}, 0
+  local unchanged_names, changed_shown, flashed = {}, 0, {}
   local quote = view.quote or as_it_is
   local filter = view.filter and view.filter ~= '' and view.filter:lower() or nil
   local changed_below = counts.changed_below(view.marks)
@@ -690,6 +723,9 @@ function M.render(tree, view)
       else
         unchanged_names[number] = columns
       end
+    end
+    if entry.kind == 'file' and view.claude and view.claude[entry.path] then
+      flashed[number] = view.flash and view.flash[entry.path] or nil
     end
     local items = line_virtual(view, {
       entry = entry,
@@ -734,7 +770,13 @@ function M.render(tree, view)
   if filter and #lines == 1 then
     table.insert(lines, no_match_line(view.filter))
   end
-  return { lines = lines, entries = entries, spans = spans, virtual = virtual }
+  return {
+    lines = lines,
+    entries = entries,
+    spans = spans,
+    virtual = virtual,
+    flashed = flashed,
+  }
 end
 
 return M
