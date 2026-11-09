@@ -1,6 +1,7 @@
 --- The git home: what a repository holds, asked of git — the files it lists,
 --- those it ignores and its submodules, the files changed since a base
---- commit, the commits since it or between two commits, the commit graph of
+--- commit, the lines added and removed in the files that differ from `HEAD`,
+--- the commits since the base or between two commits, the commit graph of
 --- every branch, their diffs, a file
 --- as a commit has it, a name resolved to a commit, the names that point at
 --- a commit, its worktrees and the
@@ -29,6 +30,7 @@ local content = require('aineo.git.content')
 local diffs = require('aineo.git.diffs')
 local files = require('aineo.git.files')
 local history = require('aineo.git.history')
+local line_counts = require('aineo.git.line_counts')
 local names = require('aineo.git.names')
 local process = require('aineo.git.process')
 local repository = require('aineo.git.repository')
@@ -90,6 +92,19 @@ end
 ---@param options? aineo.git.Options
 function M.uncommitted_files(found, done, options)
   changes.uncommitted_files(process.runner(options), found, done)
+end
+
+--- Counts the lines added and removed in each file of `found` that differs
+--- from `HEAD` as it is now — staged or not — and calls `done(nil, counts)`
+--- with `{ added, removed }` by path relative to its top level, or
+--- `done(failure)`. A binary file, an untracked file and a file whose lines
+--- did not change have no count.
+---
+---@param found aineo.git.Repository as `M.find_repository()` gave it
+---@param done fun(failure: aineo.git.Failure|nil, counts: table<string, aineo.git.LineCount>|nil)
+---@param options? aineo.git.Options
+function M.line_counts(found, done, options)
+  line_counts.line_counts(process.runner(options), found, done)
 end
 
 --- Lists the files of `found`, the tracked ones and the untracked ones its

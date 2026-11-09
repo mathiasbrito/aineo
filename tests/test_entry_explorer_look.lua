@@ -356,4 +356,101 @@ T['a chain of single-child folders']['read from the disk as its first folder unf
   })
 end
 
+--- Changes three files of `FILES`' repository and adds an untracked one.
+---
+---@param top string
+local function change_some_files(top)
+  git_repo.write(top, 'README.md', { 'readme', 'second', 'third' })
+  git_repo.write(top, 'src/lib/util.lua', { 'changed' })
+  git_repo.write(top, 'docs/guide.md', { 'guide', 'more' })
+  git_repo.write(top, 'new.txt', { 'new' })
+end
+
+T['the counts'] = MiniTest.new_set()
+
+T['the counts']['follow the mark of a folder holding changes, and show the lines of a changed file at the right'] = function()
+  explore('counts', FILES, change_some_files)
+  local folded = wait_for_lines(function(lines)
+    return #lines == 5
+  end)
+  put_cursor_on('docs/')
+  entry.press(child, 'l')
+
+  eq(folded, { '▸ • docs/', '▸ • src/', '  ? new.txt', '  M README.md' })
+  eq(virtual_at('inline'), { { 2, '1' }, { 4, '1' } })
+  eq(virtual_at('right_align'), { { 3, '+1 −0' }, { 6, '+2 −0' } })
+end
+
+T['the counts']['read the lines of the changed files in one call of the git home for each read'] = function()
+  explore('counts-calls', FILES, change_some_files)
+  wait_for_lines(function(lines)
+    return #lines == 5
+  end)
+  child.lua([[
+    _G.line_count_reads = 0
+    local git = require('aineo.git')
+    local read = git.line_counts
+    git.line_counts = function(...)
+      _G.line_count_reads = _G.line_count_reads + 1
+      return read(...)
+    end
+  ]])
+
+  entry.press(child, 'R')
+  vim.wait(PATIENCE_MS, function()
+    return child.lua_get('_G.line_count_reads') > 0
+  end, 20)
+  vim.wait(300)
+
+  eq(child.lua_get('_G.line_count_reads'), 1)
+end
+
+T['the counts']['are shown in the added and removed groups, linked to the changes pane’s by default'] = function()
+  explore('counts-groups', FILES, change_some_files)
+  wait_for_lines(function(lines)
+    return #lines == 5
+  end)
+
+  local groups = child.lua_get([[{
+    added = vim.api.nvim_get_hl(0, { name = 'AineoExplorerAdded' }).link,
+    removed = vim.api.nvim_get_hl(0, { name = 'AineoExplorerRemoved' }).link,
+    unchanged = vim.api.nvim_get_hl(0, { name = 'AineoExplorerUnchanged' }).link,
+  }]])
+
+  eq(
+    groups,
+    { added = 'AineoChangesAdded', removed = 'AineoChangesDeleted', unchanged = 'Comment' }
+  )
+  eq(child.lua_get(VIRTUAL_TEXT)[#child.lua_get(VIRTUAL_TEXT)].groups, {
+    'AineoExplorerAdded',
+    'AineoExplorerRemoved',
+  })
+end
+
+T['the dimming'] = MiniTest.new_set()
+
+T['the dimming']['shows an unchanged file’s name in the unchanged group while a file shows changed, and none otherwise'] = function()
+  explore('dim', FILES, function(top)
+    git_repo.write(top, 'README.md', { 'readme', 'second' })
+  end)
+  wait_for_lines(function(lines)
+    return #lines == 3
+  end)
+  put_cursor_on('docs/')
+  entry.press(child, 'l')
+  local dimmed = child.lua_get([[(function()
+    local buffer = vim.fn.bufnr('aineo://explorer')
+    local namespace = vim.api.nvim_get_namespaces()['aineo.explorer']
+    local found = {}
+    for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(buffer, namespace, 0, -1, { details = true })) do
+      if mark[4].hl_group == 'AineoExplorerUnchanged' then
+        table.insert(found, { mark[2] + 1, mark[3], mark[4].end_col })
+      end
+    end
+    return found
+  end)()]])
+
+  eq(dimmed, { { 3, 6, #'      guide.md' } })
+end
+
 return T
