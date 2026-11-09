@@ -512,6 +512,175 @@ T['the icons']['are none when no icon plugin is set up, today’s look'] = funct
   eq(virtual_at('inline'), {})
 end
 
+T['the unsaved mark'] = MiniTest.new_set()
+
+--- Waits, at most `PATIENCE_MS`, until the virtual text of the explorer at
+--- `position` is `expected`, as `{ line, text }`, and returns it as it is
+--- then.
+---
+---@param position string
+---@param expected table[]
+---@return table[]
+local function wait_for_virtual(position, expected)
+  local found
+  vim.wait(PATIENCE_MS, function()
+    found = virtual_at(position)
+    return vim.deep_equal(found, expected)
+  end, 20)
+  return found
+end
+
+--- Counts, in the child, the times the explorer is drawn (`_G.explorer_draws`).
+local COUNT_DRAWINGS = [[
+  _G.explorer_draws = 0
+  local decorate = require('aineo.explorer.decorate')
+  local draw = decorate.draw
+  decorate.draw = function(...)
+    _G.explorer_draws = _G.explorer_draws + 1
+    return draw(...)
+  end
+]]
+
+--- Waits until the explorer in the child was not drawn for 300 ms, at most
+--- `PATIENCE_MS`: what a change made before, such as opening a file, set
+--- going (a read of the tree) has then drawn what it had to.
+local function wait_until_drawn_still()
+  local deadline = vim.uv.now() + PATIENCE_MS
+  local drawn = child.lua_get('_G.explorer_draws')
+  while vim.uv.now() < deadline do
+    vim.wait(300)
+    local now = child.lua_get('_G.explorer_draws')
+    if now == drawn then
+      return
+    end
+    drawn = now
+  end
+end
+
+T['the unsaved mark']['follows the name of a file edited in this editor, until it is written'] = function()
+  local top = explore('unsaved')
+  wait_for_tree({ '▸   docs/', '▸   src/', '    README.md' })
+  child.lua(COUNT_DRAWINGS)
+  child.cmd('edit ' .. vim.fn.fnameescape(vim.fs.joinpath(top, 'README.md')))
+  wait_until_drawn_still()
+
+  child.lua('vim.api.nvim_buf_set_lines(0, 0, 0, false, { "edited" })')
+  local edited = wait_for_virtual('inline', { { 4, ' ●' } })
+  child.cmd('write')
+  local written = wait_for_virtual('inline', {})
+  wait_until_drawn_still()
+  child.lua('vim.api.nvim_buf_set_lines(0, 0, 0, false, { "edited again" })')
+  local edited_again = wait_for_virtual('inline', { { 4, ' ●' } })
+  child.cmd('write')
+  local written_again = wait_for_virtual('inline', {})
+
+  eq(edited, { { 4, ' ●' } })
+  eq(written, {})
+  eq(edited_again, { { 4, ' ●' } })
+  eq(written_again, {})
+end
+
+T['the unsaved mark']['is in the unsaved group, linked to WarningMsg by default'] = function()
+  local top = explore('unsaved-group')
+  wait_for_tree({ '▸   docs/', '▸   src/', '    README.md' })
+  child.cmd('edit ' .. vim.fn.fnameescape(vim.fs.joinpath(top, 'README.md')))
+  child.lua('vim.api.nvim_buf_set_lines(0, 0, 0, false, { "edited" })')
+  wait_for_virtual('inline', { { 4, ' ●' } })
+
+  local inline = child.lua_get(VIRTUAL_TEXT)
+
+  eq(inline[#inline].groups, { 'AineoExplorerModified' })
+  eq(child.lua_get("vim.api.nvim_get_hl(0, { name = 'AineoExplorerModified' }).link"), 'WarningMsg')
+end
+
+T['the unsaved mark']['leaves out a file outside the folder shown, and a buffer that is no file'] = function()
+  local top = explore('unsaved-outside')
+  wait_for_tree({ '▸   docs/', '▸   src/', '    README.md' })
+  child.cmd('edit ' .. vim.fn.fnameescape(vim.fs.joinpath(vim.fs.dirname(top), 'elsewhere.txt')))
+  child.lua('vim.api.nvim_buf_set_lines(0, 0, 0, false, { "edited" })')
+  child.cmd('enew')
+  child.lua(
+    [[
+      local name = ...
+      vim.bo.buftype = 'nofile'
+      vim.api.nvim_buf_set_name(0, name)
+      vim.api.nvim_buf_set_lines(0, 0, 0, false, { 'scratch' })
+      vim.bo.modified = true
+    ]],
+    { vim.fs.joinpath(top, 'README.md') }
+  )
+  vim.wait(300)
+
+  eq(virtual_at('inline'), {})
+end
+
+T['the diagnostics'] = MiniTest.new_set()
+
+T['the diagnostics']['of a loaded file show at its right, E before W, in the diagnostic groups'] = function()
+  local top = explore('diagnostics')
+  wait_for_tree({ '▸   docs/', '▸   src/', '    README.md' })
+  child.cmd('edit ' .. vim.fn.fnameescape(vim.fs.joinpath(top, 'README.md')))
+
+  child.lua([[
+    local severity = vim.diagnostic.severity
+    local namespace = vim.api.nvim_create_namespace('look-test')
+    vim.diagnostic.set(namespace, 0, {
+      { lnum = 0, col = 0, message = 'a', severity = severity.ERROR },
+      { lnum = 0, col = 0, message = 'b', severity = severity.ERROR },
+      { lnum = 0, col = 0, message = 'c', severity = severity.WARN },
+      { lnum = 0, col = 0, message = 'd', severity = severity.HINT },
+    })
+  ]])
+  local shown = wait_for_virtual('right_align', { { 4, 'E2 W1' } })
+
+  local right = child.lua_get(VIRTUAL_TEXT)
+  eq(shown, { { 4, 'E2 W1' } })
+  eq(right[#right].groups, { 'DiagnosticError', 'DiagnosticWarn' })
+end
+
+T['the diagnostics']['of a file the editor no longer has loaded are left out'] = function()
+  local top = explore('diagnostics-unloaded')
+  wait_for_tree({ '▸   docs/', '▸   src/', '    README.md' })
+  child.cmd('edit ' .. vim.fn.fnameescape(vim.fs.joinpath(top, 'README.md')))
+  child.lua([[
+    vim.diagnostic.set(vim.api.nvim_create_namespace('look-test'), 0, {
+      { lnum = 0, col = 0, message = 'a', severity = vim.diagnostic.severity.ERROR },
+    })
+  ]])
+  wait_for_virtual('right_align', { { 4, 'E1' } })
+  local readme = child.lua_get('vim.api.nvim_get_current_buf()')
+  child.cmd('edit ' .. vim.fn.fnameescape(vim.fs.joinpath(top, 'docs', 'guide.md')))
+  child.cmd('bunload ' .. readme)
+
+  child.lua([[
+    vim.diagnostic.set(vim.api.nvim_create_namespace('look-test-other'), 0, {
+      { lnum = 0, col = 0, message = 'b', severity = vim.diagnostic.severity.WARN },
+    })
+  ]])
+  local shown = wait_for_virtual('right_align', { { 3, 'W1' } })
+
+  eq(shown, { { 3, 'W1' } })
+end
+
+T['the diagnostics']['go when the file has none left'] = function()
+  local top = explore('diagnostics-gone')
+  wait_for_tree({ '▸   docs/', '▸   src/', '    README.md' })
+  child.cmd('edit ' .. vim.fn.fnameescape(vim.fs.joinpath(top, 'README.md')))
+  child.lua([[
+    _G.look_namespace = vim.api.nvim_create_namespace('look-test')
+    vim.diagnostic.set(_G.look_namespace, 0, {
+      { lnum = 0, col = 0, message = 'a', severity = vim.diagnostic.severity.WARN },
+    })
+  ]])
+  local shown = wait_for_virtual('right_align', { { 4, 'W1' } })
+
+  child.lua('vim.diagnostic.reset(_G.look_namespace, 0)')
+  local gone = wait_for_virtual('right_align', {})
+
+  eq(shown, { { 4, 'W1' } })
+  eq(gone, {})
+end
+
 T['the header'] = MiniTest.new_set()
 
 --- Waits, at most `PATIENCE_MS`, until the explorer's header satisfies

@@ -36,6 +36,8 @@ local M = {}
 ---@field line_counts? table<string, aineo.git.LineCount> the lines added and removed in each changed file, by path
 ---@field dim? boolean whether the name of a file git sees unchanged is dimmed while a changed file shows
 ---@field width? integer the cells the window takes for a line; unknown when not given
+---@field modified? table<string, true> the files with unsaved edits in the editor, by path
+---@field diagnostics? table<string, aineo.explorer.DiagnosticCount> the diagnostics of each file the editor has loaded, by path
 ---@field icons? fun(entry: aineo.explorer.Entry): aineo.explorer.Icon|nil the icon of a file (`aineo.explorer.icons`); none given, no file shows one
 ---@field branch? string the branch the folder shown is on, for the header
 
@@ -515,6 +517,36 @@ local function icon_slot(icon_of, facts)
   return { position = 'inline', column = facts.columns.name, chunks = { chunk } }
 end
 
+--- The text that follows the name of a file with unsaved edits: a blank,
+--- then a dot.
+local UNSAVED = ' ●'
+
+--- The errors and warnings of the file `facts` is about, nil when none
+--- are known.
+---
+---@param view aineo.explorer.View
+---@param facts aineo.explorer.LineFacts
+---@return aineo.explorer.DiagnosticCount|nil
+local function diagnostics_of(view, facts)
+  return facts.entry.kind == 'file' and view.diagnostics and view.diagnostics[facts.entry.path]
+    or nil
+end
+
+--- The lines added and removed in the file `facts` is about while the view
+--- shows counts and git sees it changed, nil otherwise.
+---
+---@param view aineo.explorer.View
+---@param facts aineo.explorer.LineFacts
+---@return aineo.git.LineCount|nil
+local function line_counts_of(view, facts)
+  return view.counts
+      and facts.mark
+      and facts.entry.kind == 'file'
+      and view.line_counts
+      and view.line_counts[facts.entry.path]
+    or nil
+end
+
 --- The text a line shows without holding it under `view`: the guide over
 --- its indent, the number of changed files after a folder's mark, and a
 --- changed file's lines added and removed at the right edge when they fit.
@@ -536,16 +568,18 @@ local function line_virtual(view, facts)
       counts.folder_count(facts.folders_changed, facts.columns.mark_end, 'changed_folder')
     )
   end
-  local line_counts = view.counts
-    and facts.mark
-    and facts.entry.kind == 'file'
-    and view.line_counts
-    and view.line_counts[facts.entry.path]
-  if line_counts then
-    local item = counts.line_counts(line_counts)
-    local taken = vim.api.nvim_strwidth(facts.line) + inline_width(items)
+  if view.modified and facts.entry.kind == 'file' and view.modified[facts.entry.path] then
+    table.insert(items, {
+      position = 'inline',
+      column = facts.columns.name_end,
+      chunks = { { text = UNSAVED, role = 'unsaved' } },
+    })
+  end
+  local taken = vim.api.nvim_strwidth(facts.line) + inline_width(items)
+  for _, item in ipairs(counts.right_edge(diagnostics_of(view, facts), line_counts_of(view, facts))) do
     if counts.fits(item, taken, view.width) then
       table.insert(items, item)
+      break
     end
   end
   return items
