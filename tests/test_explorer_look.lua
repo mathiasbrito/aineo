@@ -299,6 +299,61 @@ T['the counts']['are not shown for a file git does not count, nor while the look
   eq(off.virtual, {})
 end
 
+T['the icons'] = MiniTest.new_set()
+
+--- An icon provider that gives every file `L` in `IconLua` and records the
+--- paths it was asked about in `asked`.
+---
+---@param asked string[]
+---@return fun(entry: aineo.explorer.Entry): aineo.explorer.Icon|nil
+local function icons_asking(asked)
+  return function(entry)
+    table.insert(asked, entry.path)
+    return { text = 'L', group = 'IconLua' }
+  end
+end
+
+T['the icons']['sit before a file’s name, a folder’s place left blank so the names line up'] = function()
+  local asked = {}
+  local shown = view({ icons = icons_asking(asked) })
+
+  local rendering = render({ 'src/main.lua', 'top.lua' }, shown)
+
+  eq(rendering.virtual[2], {
+    { position = 'inline', column = #'▸   ', chunks = { { text = '  ' } } },
+  })
+  eq(rendering.virtual[3], {
+    { position = 'inline', column = #'    ', chunks = { { text = 'L ', group = 'IconLua' } } },
+  })
+  eq(asked, { 'top.lua' })
+end
+
+T['the icons']['are none when the look has no provider'] = function()
+  eq(render({ 'top.lua' }, view()).virtual, {})
+end
+
+T['the icons']['are left blank for a file the provider gives none'] = function()
+  local shown = view({ icons = function() end })
+
+  local rendering = render({ 'top.lua' }, shown)
+
+  eq(rendering.virtual[2][1].chunks, { { text = '  ' } })
+end
+
+T['the icons']['leave the right-hand counts room for themselves'] = function()
+  local shown = view({
+    icons = icons_asking({}),
+    counts = true,
+    marks = { ['a.txt'] = 'M' },
+    line_counts = { ['a.txt'] = { added = 1, removed = 1 } },
+    width = #'  M   a.txt' + 1 + #'+1 −1' - 3,
+  })
+
+  local rendering = render({ 'a.txt' }, shown)
+
+  eq(placed(rendering, 2, 'right_align'), {})
+end
+
 T['the header'] = MiniTest.new_set()
 
 --- The header line `tree.render()` gives under `shown`.

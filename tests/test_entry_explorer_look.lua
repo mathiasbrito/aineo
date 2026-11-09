@@ -427,6 +427,91 @@ T['the counts']['are shown in the added and removed groups, linked to the change
   })
 end
 
+T['the icons'] = MiniTest.new_set()
+
+--- Makes `mini.icons` in the child a fake, set up, that gives every file
+--- `M` in `FakeIconGroup` and counts its calls in `_G.icon_calls`.
+local FAKE_MINI_ICONS = [[
+  _G.icon_calls = {}
+  local fake = {
+    get = function(category, name)
+      table.insert(_G.icon_calls, category .. ':' .. name)
+      return 'M', 'FakeIconGroup'
+    end,
+  }
+  package.loaded['mini.icons'] = fake
+  _G.MiniIcons = fake
+]]
+
+T['the icons']['come from mini.icons when it is set up, before each file’s name, in its group'] = function()
+  child.lua(FAKE_MINI_ICONS)
+  explore('icons-mini')
+  wait_for_tree({ '▸   docs/', '▸   src/', '    README.md' })
+
+  local inline = child.lua_get(VIRTUAL_TEXT)
+
+  eq(
+    vim.tbl_map(function(item)
+      return { item.line, item.column, item.text, item.groups }
+    end, inline),
+    {
+      { 2, #'▸   ', '  ', {} },
+      { 3, #'▸   ', '  ', {} },
+      { 4, #'    ', 'M ', { 'FakeIconGroup' } },
+    }
+  )
+  eq(child.lua_get('_G.icon_calls'), { 'file:README.md' })
+end
+
+T['the icons']['are asked for once for each path of a read, not once for each drawing'] = function()
+  child.lua(FAKE_MINI_ICONS)
+  explore('icons-once')
+  wait_for_tree({ '▸   docs/', '▸   src/', '    README.md' })
+  put_cursor_on('docs/')
+  entry.press(child, 'l')
+  entry.press(child, 'l')
+  entry.press(child, 'l')
+  local before_reading = child.lua_get('#_G.icon_calls')
+
+  entry.press(child, 'R')
+  vim.wait(PATIENCE_MS, function()
+    return child.lua_get('#_G.icon_calls') > before_reading
+  end, 20)
+  vim.wait(300)
+
+  eq(before_reading, 2)
+  eq(
+    child.lua_get('_G.icon_calls'),
+    { 'file:README.md', 'file:guide.md', 'file:guide.md', 'file:README.md' }
+  )
+end
+
+T['the icons']['come from nvim-web-devicons when mini.icons is not set up'] = function()
+  child.lua([[
+    package.preload['nvim-web-devicons'] = function()
+      return {
+        get_icon = function(name, extension)
+          return 'D' .. extension, 'FakeDevIcon'
+        end,
+      }
+    end
+  ]])
+  explore('icons-devicons')
+  wait_for_tree({ '▸   docs/', '▸   src/', '    README.md' })
+
+  local inline = child.lua_get(VIRTUAL_TEXT)
+
+  eq(inline[#inline].text, 'Dmd ')
+  eq(inline[#inline].groups, { 'FakeDevIcon' })
+end
+
+T['the icons']['are none when no icon plugin is set up, today’s look'] = function()
+  explore('icons-none')
+  wait_for_tree({ '▸   docs/', '▸   src/', '    README.md' })
+
+  eq(virtual_at('inline'), {})
+end
+
 T['the header'] = MiniTest.new_set()
 
 --- Waits, at most `PATIENCE_MS`, until the explorer's header satisfies
