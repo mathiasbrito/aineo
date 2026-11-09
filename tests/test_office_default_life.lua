@@ -273,36 +273,125 @@ end
 
 T['a waiting agent'] = MiniTest.new_set()
 
-T['a waiting agent']['plays each of the things the mock has it do while it waits for its subagents'] =
-  MiniTest.new_set({
-    parametrize = {
-      { 'drum_its_fingers', 'drums its fingers' },
-      { 'look_at_its_watch', 'looks at its watch' },
-      { 'pace_beside_the_desk', 'paces beside the desk' },
-      { 'glance_at_the_door', 'glances at the door' },
-      { 'tap_a_foot', 'taps its foot' },
-    },
-  })
+T['a coordinating agent'] = MiniTest.new_set()
 
-T['a waiting agent']['plays each of the things the mock has it do while it waits for its subagents']['activity and label'] = function(
-  name,
-  label
-)
-  local listed =
-    listed_over(pack_with_life({ name }), default.agents(1, 'waiting_for_subagents'), 60)
-
-  eq(listed:find(label, 1, true) ~= nil, true)
+--- The main agent coordinating, and two subagents at work.
+---
+---@return aineo.office_states.Agent[]
+local function coordinating_two_subagents()
+  return {
+    { id = 'main', state = 'waiting_for_subagents' },
+    { id = 'sub2', state = 'writing_code' },
+    { id = 'sub3', state = 'writing_code' },
+  }
 end
 
-T['a waiting agent']['drums its fingers at its own desk, going no farther than beside it'] = function()
-  local visited = spots_visited(
-    pack_with_life({ 'drum_its_fingers' }),
-    default.agents(1, 'waiting_for_subagents'),
-    60,
-    default.AGENT_COLOURS[1]
+--- The spots, among `names`, the agent drawn in `colour` stays nearest to, in
+--- order, each held for at least `seconds_held`, sampled every quarter second
+--- for `seconds`; the spots it only passes are left out. The end of another
+--- desk, next to the spot beside its screen, counts as the screen.
+---
+---@param pack aineo.office_pack.Pack
+---@param agents aineo.office_states.Agent[]
+---@param colour string `#rrggbb`
+---@param names string[]
+---@param seconds number
+---@param seconds_held number
+---@return string[]
+local function spots_stayed_at(pack, agents, colour, names, seconds, seconds_held)
+  local spots = default.spots(pack, ROOM[1], ROOM[2] - LIST_ROWS)
+  local stage = default.stage(pack, ROOM[1], ROOM[2])
+  local runs = {}
+  for step = 0, seconds * 4 do
+    stage.advance(agents, step / 4)
+    local place = default.where_is(default.pixels(stage.picture(), ROOM[1]), colour)
+    local name = place and default.nearest_spot(spots, place)
+    if name == 'its_desks_end' and place.column > spots.its_desks_end[1].column + 4 then
+      name = 'a_subagents_screen'
+    end
+    if runs[#runs] and runs[#runs].name == name then
+      runs[#runs].samples = runs[#runs].samples + 1
+    else
+      table.insert(runs, { name = name, samples = 1 })
+    end
+  end
+  local stayed = {}
+  for _, run in ipairs(runs) do
+    if vim.list_contains(names, run.name) and run.samples >= seconds_held * 4 then
+      table.insert(stayed, run.name)
+    end
+  end
+  return stayed
+end
+
+T['a coordinating agent']['goes through its papers, looks at a subagent’s screen, writes on the whiteboard, looks at a screen again, and goes round'] = function()
+  local pack = default.load_pack()
+  pack.cat = nil
+
+  local stayed = spots_stayed_at(
+    pack,
+    coordinating_two_subagents(),
+    default.AGENT_COLOURS[1],
+    { 'its_desks_end', 'a_subagents_screen', 'whiteboard' },
+    80,
+    3
   )
 
-  eq(visited, { beside_desk = true, desk = true })
+  eq(vim.list_slice(stayed, 1, 6), {
+    'its_desks_end',
+    'a_subagents_screen',
+    'whiteboard',
+    'a_subagents_screen',
+    'its_desks_end',
+    'a_subagents_screen',
+  })
+end
+
+T['a coordinating agent']['has only its rounds to do, and no coffee, sofa or sleep, while subagents are in the office'] = function()
+  local pack = default.load_pack()
+  local names = {}
+  for name, activity in pairs(pack.activities) do
+    if activity.during and vim.list_contains(activity.during, 'waiting_for_subagents') then
+      table.insert(names, name)
+    end
+  end
+  table.sort(names)
+
+  eq(
+    { names, pack.state_activity.waiting_for_subagents },
+    { { 'coordinate', 'coordinate_again' }, 'coordinate' }
+  )
+end
+
+T['a subagent that waits'] = MiniTest.new_set()
+
+--- The name of the spot nearest to the agent drawn in `colour`, `seconds`
+--- after the agents began on a stage of the default pack without its cat.
+---
+---@param agents aineo.office_states.Agent[]
+---@param seconds number
+---@param colour string `#rrggbb`
+---@return string
+local function spot_of_agent_at(agents, seconds, colour)
+  local pack = default.load_pack()
+  pack.cat = nil
+  local spots = default.spots(pack, ROOM[1], ROOM[2] - LIST_ROWS)
+  local stage = default.stage(pack, ROOM[1], ROOM[2])
+  for step = 0, seconds * 4 do
+    stage.advance(agents, step / 4)
+  end
+  local place = default.where_is(default.pixels(stage.picture(), ROOM[1]), colour)
+  return place and default.nearest_spot(spots, place) or 'nowhere'
+end
+
+T['a subagent that waits']['stays at its own desk'] = function()
+  local crew =
+    { { id = 'main', state = 'waiting_for_subagents' }, { id = 'sub2', state = 'waiting' } }
+
+  eq({
+    spot_of_agent_at(crew, 30, default.AGENT_COLOURS[2]),
+    spot_of_agent_at(crew, 120, default.AGENT_COLOURS[2]),
+  }, { 'desk', 'desk' })
 end
 
 T['a waiting agent']['plays each of the seated things while it waits for an answer'] =

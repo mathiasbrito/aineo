@@ -166,6 +166,148 @@ T['a step that goes to an idle agent’s desk']['goes nowhere when no other agen
   eq(where_the_two_are(stage, 8)[1], '0,0')
 end
 
+T['a step that goes to a subagent’s screen'] = MiniTest.new_set()
+
+--- Two desks, each with the spot `a_subagents_screen` to its right, facing it.
+local SCREENS = '# plan\n \n a.dmdm..\n'
+local SCREENS_LEGEND =
+  vim.tbl_extend('force', DESKS_LEGEND, { m = { spot = 'a_subagents_screen', facing = 'left' } })
+
+T['a step that goes to a subagent’s screen']['goes to the spot that faces a subagent’s desk, not the nearest'] = function()
+  local stage = stage_of_a_visit(SCREENS, SCREENS_LEGEND, 8, 'a_subagents_screen')
+  local crew = scene.agents_in('idle', 'working')
+  stage.advance(crew, 0)
+
+  stage.advance(crew, 3)
+
+  eq(where_the_two_are(stage, 8), { '5,0', '4,0' })
+end
+
+T['a step that goes to a subagent’s screen']['goes nowhere when the office has no subagent'] = function()
+  local stage = stage_of_a_visit(SCREENS, SCREENS_LEGEND, 8, 'a_subagents_screen')
+  local crew = scene.agents_in('idle')
+  stage.advance(crew, 0)
+
+  stage.advance(crew, 3)
+
+  eq(where_the_two_are(stage, 8)[1], '0,0')
+end
+
+T['a step that goes to a subagent’s screen']['does not go to a spot on another row, however near'] = function()
+  local legend = vim.tbl_extend(
+    'force',
+    SCREENS_LEGEND,
+    { m = { spot = 'a_subagents_screen', facing = 'left' } }
+  )
+  local pack = scene.people_pack('# plan\n \n a.dd..m.\n ....m...\n', legend, {
+    activities = {
+      stand = { steps = { { at = 'aside', for_seconds = 1 } } },
+      work = { steps = { { at = 'desk', pose = 'sitting' } } },
+      visit = { during = { 'idle' }, steps = { { at = 'a_subagents_screen' } } },
+    },
+    states = { standing = 'stand', idle = 'stand', working = 'work' },
+  })
+  local stage = scene.stage_of(pack, 8, 2, { random = scene.always(0) })
+  local crew = scene.agents_in('idle', 'working')
+  stage.advance(crew, 0)
+
+  stage.advance(crew, 3)
+
+  eq(scene.agent_cell(stage.picture(), 8, 2), '6,0')
+end
+
+T['a step that goes to a subagent’s screen']['goes to the spot beside the desk when the plan has none of the name'] = function()
+  local legend = vim.tbl_extend('force', DESKS_LEGEND, { b = { spot = 'beside_desk' } })
+  local stage = stage_of_a_visit('# plan\n \n a.dd.b..\n', legend, 8, 'a_subagents_screen')
+  local crew = scene.agents_in('idle', 'working')
+  stage.advance(crew, 0)
+
+  stage.advance(crew, 3)
+
+  eq(where_the_two_are(stage, 8)[1], '5,0')
+end
+
+T['a step that goes to a subagent’s screen']['goes to the screen of each subagent in turn'] = function()
+  local pack = scene.people_pack('# plan\n \n a.dmdmdm..\n', SCREENS_LEGEND, {
+    activities = {
+      stand = { steps = { { at = 'aside' } } },
+      work = { steps = { { at = 'desk', pose = 'sitting' } } },
+      visit = {
+        steps = {
+          { at = 'a_subagents_screen', for_seconds = 1 },
+          { at = 'aside', for_seconds = 1 },
+          { at = 'a_subagents_screen' },
+        },
+      },
+    },
+    states = { standing = 'stand', idle = 'visit', working = 'work' },
+  })
+  local stage = scene.stage_of(pack, 10, 1)
+  local crew = scene.agents_in('idle', 'working', 'working')
+  stage.advance(crew, 0)
+  local first = scene.group_at(stage.picture(), 5, 0)
+
+  stage.advance(crew, 6)
+
+  eq(
+    { first, scene.group_at(stage.picture(), 7, 0) },
+    { scene.solid(scene.AGENT), scene.solid(scene.AGENT) }
+  )
+end
+
+T['a step that goes to a subagent’s screen']['goes beside the desk of each subagent in turn when the plan has no screen spot'] = function()
+  local legend = vim.tbl_extend('force', DESKS_LEGEND, { b = { spot = 'beside_desk' } })
+  local pack = scene.people_pack('# plan\n \n a.d.d.d..\n ..b.b.b..\n', legend, {
+    activities = {
+      stand = { steps = { { at = 'aside' } } },
+      work = { steps = { { at = 'desk', pose = 'sitting' } } },
+      visit = {
+        steps = {
+          { at = 'a_subagents_screen', for_seconds = 1 },
+          { at = 'aside', for_seconds = 1 },
+          { at = 'a_subagents_screen' },
+        },
+      },
+    },
+    states = { standing = 'stand', idle = 'visit', working = 'work' },
+  })
+  local stage = scene.stage_of(pack, 10, 2)
+  local crew = scene.agents_in('idle', 'working', 'working')
+  stage.advance(crew, 0)
+  local first = scene.group_at(stage.picture(), 4, 1)
+
+  stage.advance(crew, 6)
+
+  eq(
+    { first, scene.group_at(stage.picture(), 6, 1) },
+    { scene.solid(scene.AGENT), scene.solid(scene.AGENT) }
+  )
+end
+
+T['a step that goes to the end of its desk'] = MiniTest.new_set()
+
+T['a step that goes to the end of its desk']['goes to the spot that faces its own desk, not the nearest'] = function()
+  local legend = vim.tbl_extend('force', DESKS_LEGEND, { e = { spot = 'its_desks_end' } })
+  local stage = stage_of_a_visit('# plan\n \n aaedede.\n', legend, 8, 'its_desks_end')
+  local crew = scene.agents_in('working', 'idle')
+  stage.advance(crew, 0)
+
+  stage.advance(crew, 3)
+
+  eq(where_the_two_are(stage, 8)[2], '4,0')
+end
+
+T['a step that goes to the end of its desk']['goes to the spot beside the desk when the plan has none of the name'] = function()
+  local legend = vim.tbl_extend('force', DESKS_LEGEND, { b = { spot = 'beside_desk' } })
+  local stage = stage_of_a_visit('# plan\n \n a.dd.b..\n', legend, 8, 'its_desks_end')
+  local crew = scene.agents_in('working', 'idle')
+  stage.advance(crew, 0)
+
+  stage.advance(crew, 3)
+
+  eq(where_the_two_are(stage, 8)[2], '5,0')
+end
+
 T['a step that goes next to an agent'] = MiniTest.new_set()
 
 T['a step that goes next to an agent']['goes to the nearest free cell beside another agent who stands still'] = function()

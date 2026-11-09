@@ -136,7 +136,43 @@ local function item_of(canvas, drawing, character, pose)
   }
 end
 
---- The items for the agents the director placed, each in the pose it holds.
+--- How many pixel rows below its feet a pose's `in_front` piece stands: it is
+--- drawn over what stands in front of the agent within two cells of it.
+local IN_FRONT_PIXELS = 4
+
+--- The item that paints the piece the pose holds in front, in front of what
+--- stands in front of `character`; nil when the pose holds none the pack has.
+---
+---@param canvas aineo.office_scene.Canvas
+---@param drawing aineo.office_scene.Drawing
+---@param character aineo.office_scene.Character
+---@param pose aineo.office_pack.Pose
+---@return aineo.office_scene.Item|nil
+local function in_front_item_of(canvas, drawing, character, pose)
+  local piece = pose.in_front and drawing.pack.pieces[pose.in_front]
+  if not piece then
+    return nil
+  end
+  local feet_row = feet_row_of(character)
+  return {
+    depth = feet_row + IN_FRONT_PIXELS,
+    rank = items.RANK.standing,
+    paint = function()
+      local lift = rise_of(pose, layers_of(drawing.pack, pose), character, drawing.now)
+      canvas.paint_art(piece, {
+        frame = items.frame_after(piece, math.max(0, drawing.now - character.pose_since)),
+        column = items.round(character.column),
+        row = feet_row - lift,
+        colours = art_colours(drawing.pack, character),
+        mirrored = is_mirrored(character.facing == 'left', piece),
+        clip = items.plan_area(drawing),
+      })
+    end,
+  }
+end
+
+--- The items for the agents the director placed, each in the pose it holds,
+--- and the piece its pose holds in front of it.
 ---
 ---@param canvas aineo.office_scene.Canvas
 ---@param drawing aineo.office_scene.Drawing
@@ -147,6 +183,10 @@ function M.items(canvas, drawing)
     local pose = poses.of(drawing.pack, character)
     if pose then
       table.insert(made, item_of(canvas, drawing, character, pose))
+      local in_front = in_front_item_of(canvas, drawing, character, pose)
+      if in_front then
+        table.insert(made, in_front)
+      end
     end
   end
   return made

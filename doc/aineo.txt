@@ -5439,13 +5439,16 @@ folder `<session id>/subagents` beside it, the transcript and the meta file of
 each subagent. The office reads the end of the transcript when it opens, and
 each line added while it shows; a subagent that runs when it opens, or starts
 while it shows, is followed until its meta file says it finished or the user
-stopped it. A subagent quiet for ten minutes is not in the office: one whose
-transcript was last written ten minutes or more before the office opens is
-left out, and one that writes nothing the office reads for ten minutes while
-it shows walks out, unless the session's agent still waits on the call that
-started it or the subagent waits for your permission; either walks in again
-with its next line, one that walked out during a call of its own still in
-that call, so that the call's result shows it at that call's spot. A
+stopped it. A subagent with no call of its own running that writes nothing
+the office reads for ten minutes stays at its desk, shown waiting (the state
+`waiting`), one inside a call keeps that call's state, and one quiet for an
+hour is not in the office: one whose transcript was last written an hour or
+more before the office opens is left out, and one that writes nothing the
+office reads for an hour while it shows walks out, unless the session's agent
+still waits on the call that started it or the subagent waits for your
+permission; either walks in again with its next line, one that walked out
+during a call of its own still in that call, so that the call's result shows
+it at that call's spot. A
 transcript cut short or replaced by another is read again from its end.
 It calls no Claude, sends nothing to its terminal, makes
 no MCP call or network request, writes nothing and spends no token. While it
@@ -5490,9 +5493,10 @@ Each agent, the main one and every subagent, is in one state at a time. The
 state comes from what the transcript says and from the permission hook
 (|aineo-office|); what the state looks like comes from the pack
 (|aineo-office-pack-states|). There are 24 states, numbered as `:Aineo office
-states` numbers them (|:Aineo-office-states|), and four parents that are no
-state of an agent's life: `standing`, `working`, `waiting` and `resting`. A
-pack that maps no activity to a state falls back to the state named below, and
+states` numbers them (|:Aineo-office-states|), and four parents, `standing`,
+`working`, `waiting` and `resting`, that no agent is in but one: a subagent
+that has said nothing for ten minutes is `waiting`. A pack that maps no
+activity to a state falls back to the state named below, and
 that one to its own, down to `standing`, which every pack maps. A pack that
 maps the four parents therefore covers all 24. The status list says a state
 in its name with spaces for `_`, except `background_job` (running a background
@@ -5544,8 +5548,9 @@ job) and `error` (hit an error), unless the activity played has a `label`.
 12  `delegating` (falls back to `working`)
     A call of `Agent`.
 13  `waiting_for_subagents` (falls back to `waiting`)
-    The main agent only: some subagents run, and the `Agent` call is the call
-    it started last, or its turn has ended.
+    The main agent only: some subagents are in the office, those that wait
+    (|aineo-office|) among them, and the `Agent` call is the call it started
+    last, or its turn has ended.
 14  `needs_permission` (falls back to `waiting`)
     The `PermissionRequest` hook for that agent (|aineo-office-hooks|), until
     the agent's next line in its transcript that is not the start of a tool
@@ -5570,14 +5575,16 @@ job) and `error` (hit an error), unless the activity played has a `label`.
 21  `done` (falls back to `resting`)
     The end of the agent's turn: for the main agent a `turn_duration` line,
     for a subagent the text that ends its turn (`end_turn`). A subagent whose
-    meta file says it finished is `done` too. Lasts 4 seconds.
+    meta file says it finished is `done` too. Lasts 4 seconds. The main agent
+    is not `done` when its turn ends while a subagent is in the office: it
+    waits for subagents.
 22  `idle` (falls back to `resting`)
     The turn ended and `done` is over, with nothing new since.
 23  `asleep` (falls back to `idle`)
     `idle` for 10 minutes, by the clock.
 24  `leaving` (falls back to `standing`)
     A subagent: its meta file says it finished or the user stopped it,
-    after `done`; or it has been quiet for ten minutes
+    after `done`; or it has been quiet for an hour
     (|aineo-office|). It is listed for about half a minute more, to walk out.
     The main agent: the session the tab shows ended — its `SessionEnd` hook
     says so, the tab's Claude Code exits by itself, or the tab lets go of a
@@ -5833,6 +5840,13 @@ Field	Default	Means ~
 `holding`	none	a prop drawn at the `hand` area of the first
 		layer that has one, mirrored with that layer
 		and as the prop's own `faces` says
+`in_front`	none	a piece drawn a second time, as the layers are, over
+		everything that stands within two cells in front of
+		the character's feet: a mug held in front of the chest
+		seen over the arm of the sofa
+`walks_as`	none	the pose the character walks in once it has taken this
+		pose, until it takes another (the character that took
+		a cup walks with it)
 `rises`	none	pixels the pose lifts the character by, one number for
 		each frame of the first layer, one after the other from
 		the moment the pose begins; negative numbers sink
@@ -6011,6 +6025,10 @@ A legend entry has:
 `walk_over`	the piece lies on the floor and is walked over (`false`)
 `in_use`	the art the piece shows in its place while a character stands
 	on the spot nearest to the piece or walks over it
+`in_use_once`	for a piece with `in_use`: the art plays once, from the moment
+	a character comes to rest at the spot, and its last frame stays
+	while the character does; a character that only walks over the
+	spot starts nothing (`false`)
 `decorations`	for a run of the letter: pieces placed left to right, as
 	many as fit, in this order of preference, each with a spot of
 	its own name on the first floor row below it
@@ -6210,6 +6228,15 @@ The names aineo knows without any legend:
 `next_to_an_agent`	a cell beside another agent who stands still
 `next_to_the_cat`	a cell beside a cat that stands still, facing it,
 	which then keeps its pose and its place until the agent's step is over
+`a_subagents_screen`	the spots of the plan of that name that face a
+	subagent's desk (|aineo-office-desks|), the nearest on the desk's row
+	that has it in front of it: where its screen is looked at from; the
+	subagents' screens in turn, the one after the one the agent last
+	looked at
+`its_desks_end`	the spot of the plan of that name that faces the agent's
+	own desk, likewise: where the agent stands at its desk
+	A plan with no spot of either name sends the agent to the spot
+	`beside_desk` nearest to the desk.
 A thing's name	the cell where a thing of that name lies
 	(|aineo-office-things|)
 
@@ -6250,7 +6277,10 @@ free spots as `players` for its first step with a spot and a spot for each
 step after, when the others that must play it are free, and, for a step that
 follows someone, when someone is on the move. An agent with nothing to pick
 keeps its last pose and looks again every second. When the agent's state
-changes, what it picked at random is dropped for what the new state asks for.
+changes, what it picked at random is dropped for what the new state asks for;
+so is what the old state asked for, unless both states rest (`done`, `idle`,
+`asleep`) and the agent has not yet reached the last step of it: it finishes
+its steps, and then plays what the new state asks for.
 
 An activity with `players = 2` is a game. It takes along another agent, picked
 at random among the free ones in a state its `during` names (not in a game,
@@ -6814,7 +6844,7 @@ pixel wide and two tall):
                                         area plan 22 x 10
     file_cabinet            21 x 24     file_cabinet_open 23 x 24, 4 frames
     door                    10 x 24     door_open
-    coffee_machine          25 x 26     coffee_machine_brewing, 31 frames
+    coffee_machine          25 x 26     coffee_machine_brew_once, 62 frames
     printer                 14 x 14     area page 8 x 4; printed_page 8 x 4
     window                  24 x 13     area sky 22 x 10; sky_night,
                                         sky_dawn, sky_day, sky_dusk 22 x 10
@@ -6846,8 +6876,12 @@ takes:
     on_the_web               browse_the_web: desk; a browser on the monitor
     delegating               hand_a_task_over: beside_desk; holds a paper
                              out
-    waiting,                 wait_for_subagents: taps a foot beside the
-    waiting_for_subagents    desk, then sits at the desk
+    waiting                  wait_quietly_at_the_desk: desk, head down,
+                             typing now and then; it stays
+    waiting_for_subagents    coordinate: papers at the end of its desk, a
+                             subagent's screen, the whiteboard, the next
+                             subagent's screen; then coordinate_again, the
+                             same round, and coordinate, and so on
     needs_permission         wait_for_permission: desk; a hand up and
                              "! y/n?"
     asking_you               ask_a_question: desk; a hand up and "?"
@@ -6858,9 +6892,12 @@ takes:
     error                    hit_an_error: desk; scratching its head, the
                              screen red
     interrupted              get_interrupted: desk; jumps up, papers fly
-    done                     finish_up: stretches, gets a cup at the coffee
-                             machine, goes to the sofa
-    resting, idle            rest_on_the_sofa: sofa; a cup, chatting
+    done                     finish_up: desk, then the coffee machine, which
+                             brews a cup while it waits (about 6 seconds of
+                             bar and pouring, then steam); takes the cup and
+                             walks to the sofa with it
+    resting, idle            rest_on_the_sofa: sofa; a mug held in front of
+                             its chest, chatting
     asleep                   sleep_on_the_sofa: sofa, asleep
     leaving                  pack_up_and_leave: packs a box, goes to the
                              door, waves goodbye
@@ -6873,11 +6910,15 @@ by weight among `stretch` (3), `yawn` (3), `spin_in_the_chair` (2),
 `throw_a_paper_ball_in_the_bin` (1.4) and `throw_a_paper_ball_and_miss` (0.6),
 which leaves the ball on the floor, `get_a_drink_at_the_water_cooler` (2),
 `doodle_on_the_whiteboard` (1), `tidy_the_desk` (2), `nap_on_the_sofa` (1),
-`play_table_tennis` (1, two players) and `pet_the_cat` (1). A waiting agent
-(`waiting`, `waiting_for_subagents`) picks among `drum_its_fingers` (3),
-`look_at_its_watch` (2), `pace_beside_the_desk` (2), `glance_at_the_door` (2)
-and `tap_a_foot` (2); one that needs permission, among
-`drum_its_fingers_and_wait` (3), `look_at_its_watch_and_wait` (2) and
+`play_table_tennis` (1, two players) and `pet_the_cat` (1). The main agent
+while its subagents are in the office (`waiting_for_subagents`) goes round in
+turn: it goes through its papers at the end of its desk, walks to a subagent's
+desk and looks at its screen, writes on the whiteboard, looks at the screen of
+the next subagent (each subagent in turn), a few seconds at each, and starts
+again, `coordinate` and `coordinate_again` following one another because an
+agent never plays the activity it has just played; a subagent that waits
+(`waiting`) has none and stays at its desk. One that needs permission picks
+among `drum_its_fingers_and_wait` (3), `look_at_its_watch_and_wait` (2) and
 `glance_at_the_door_and_wait` (2), each with the hand up. The cat's life and
 the mess are in |aineo-office-cat| and |aineo-office-things|: `mess` and
 `puddle` are the two things, each upsetting agents within 40 cells, who play
@@ -7012,6 +7053,22 @@ by the tiny pack (|aineo-office-tiny|), and the default pack is the one to
 copy from (|aineo-office-default|). Every problem `:Aineo office check` tells
 names the entry by its path and says what it must be (|aineo-office-check|).
 
+A pack based on the default that brings a floor of its own plays the default's
+coordination and coffee as they are, and may draw them its own way:
+- The main agent coordinates while its subagents are in the office with the
+  activities `coordinate` and `coordinate_again`, which go round its own desk,
+  the screens of the subagents and the whiteboard. They go to the plan's spots
+  `its_desks_end` and `a_subagents_screen` (|aineo-office-spots|); a plan that
+  has none of a name sends the agent to the spot `beside_desk` nearest to the
+  desk instead, and `:Aineo office check` tells nothing.
+- The poses these and the coffee break use, which a pack that draws its own
+  characters draws its own way: `going_through_papers`, `looking_at_a_screen`,
+  `waiting_quietly` (a subagent that has said nothing for ten minutes),
+  `waiting_for_the_coffee`, `taking_the_cup` (which walks as
+  `walking_with_a_cup`) and `walking_with_a_cup`, and `sipping_coffee`, which
+  may hold a piece in front of the sofa with `in_front`
+  (|aineo-office-poses|). A pose the pack does not draw is the default's.
+
                                                         *aineo-office-sharing*
 Sharing your pack ~
 A pack is a folder, so it is shared as a repository. aineo has no installer:
@@ -7141,7 +7198,7 @@ What it reads:
 - 64 subagents followed at a time, each with a file watch of its own, and a
   subagent's meta file to 64 KiB. 64 agents' waits for permission kept while
   the office is hidden (|aineo-office-hooks|).
-- A subagent quiet for ten minutes is not in the office, or leaves it
+- A subagent quiet for an hour is not in the office, or leaves it
   (|aineo-office|). A background job whose notice never comes stays until the
   session ends.
 - What Claude Code writes is not a documented format. A line the office cannot

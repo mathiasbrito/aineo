@@ -9,7 +9,10 @@
 --- `anywhere` is a floor cell at random; `an_empty_desk` a desk no agent has;
 --- `an_idle_agents_desk` the desk of another agent in the state `idle`;
 --- `next_to_an_agent` a cell beside another agent who stands still,
---- `next_to_the_cat` a cell beside a cat that stands still. A thing
+--- `next_to_the_cat` a cell beside a cat that stands still;
+--- `a_subagents_screen` the plan's spots of that name that face the desks of
+--- the subagents, and `its_desks_end` the one that faces the agent's own desk.
+--- A thing
 --- that lies on the floor is a spot of its own name. Any other name is every
 --- spot of the name, and the character may go to the ones no
 --- other character has taken.
@@ -241,13 +244,110 @@ local function cells_beside_cats(world, character)
   return cells_beside(world, character, world.cats or {}, NEXT_TO_THE_CAT)
 end
 
+--- The spot `beside_desk` nearest to `desk`, counting cells across and down;
+--- nil when the plan has none.
+---
+---@param world aineo.office_scene.SpotWorld
+---@param desk aineo.office_scene.Spot
+---@return aineo.office_scene.Spot|nil
+local function spot_beside_the_desk(world, desk)
+  local nearest, fewest_cells = nil, math.huge
+  for _, spot in ipairs(world.layout.spots[M.BESIDE_DESK] or {}) do
+    local cells = math.abs(desk.column - spot.column) + math.abs(desk.row - spot.row)
+    if cells < fewest_cells then
+      nearest, fewest_cells = spot, cells
+    end
+  end
+  return nearest
+end
+
+--- The spot of the plan named `name` that belongs to `desk`: the nearest on
+--- the desk's row that faces it, a spot that faces left having the desk on
+--- its left and one that faces right having it on its right. Nil when the
+--- plan has none for the desk, as when the window cuts the row short of it;
+--- when the plan has none of the name at all, the spot beside the desk.
+---
+---@param world aineo.office_scene.SpotWorld
+---@param name string
+---@param desk aineo.office_scene.Spot
+---@return aineo.office_scene.Spot|nil
+local function spot_facing_the_desk(world, name, desk)
+  if not world.layout.spots[name] then
+    return spot_beside_the_desk(world, desk)
+  end
+  local nearest, nearest_distance = nil, math.huge
+  for _, spot in ipairs(world.layout.spots[name] or {}) do
+    local across = desk.column - spot.column
+    local faces_it = (spot.facing == 'left' and across < 0)
+      or (spot.facing == 'right' and across > 0)
+    if spot.row == desk.row and faces_it and math.abs(across) < nearest_distance then
+      nearest, nearest_distance = spot, math.abs(across)
+    end
+  end
+  return nearest
+end
+
+--- The spot after `last` among `spots`, round again; the first when `last` is
+--- none of them.
+---
+---@param spots aineo.office_scene.Spot[]
+---@param last aineo.office_scene.Spot|nil
+---@return aineo.office_scene.Spot
+local function after(spots, last)
+  for index, spot in ipairs(spots) do
+    if spot == last then
+      return spots[index % #spots + 1]
+    end
+  end
+  return spots[1]
+end
+
+--- The spot named `a_subagents_screen` facing the desk of a subagent, the one
+--- after the screen `character` last looked at, in the order of the agents:
+--- where the screens of the subagents' desks are looked at from in turn.
+---
+---@param world aineo.office_scene.SpotWorld
+---@param character { id: string, last_rested_at?: table<string, aineo.office_scene.Spot> }
+---@return aineo.office_scene.Spot[]
+local function subagents_screens(world, character)
+  local desks = world.layout.spots[OWN_DESK] or {}
+  local found = {}
+  for _, agent in ipairs(world.agents) do
+    local desk = desks[agent.place]
+    local spot = desk
+      and agent.id ~= character.id
+      and roles.kind_of(agent) == 'subagent'
+      and spot_facing_the_desk(world, 'a_subagents_screen', desk)
+    if spot then
+      table.insert(found, spot)
+    end
+  end
+  if #found == 0 then
+    return found
+  end
+  return { after(found, (character.last_rested_at or {}).a_subagents_screen) }
+end
+
+--- The spot named `its_desks_end` that faces the desk of `character`.
+---
+---@param world aineo.office_scene.SpotWorld
+---@param character { place?: integer }
+---@return aineo.office_scene.Spot[]
+local function end_of_its_desk(world, character)
+  local desk = (world.layout.spots[OWN_DESK] or {})[character.place]
+  local spot = desk and spot_facing_the_desk(world, 'its_desks_end', desk)
+  return spot and { spot } or {}
+end
+
 --- The spots, besides the plan's own, that aineo knows by name, each found
 --- from the state of the office.
 ---
 ---@type table<string, fun(world: aineo.office_scene.SpotWorld, character: table): aineo.office_scene.Spot[]>
 local KNOWN_SPOTS = {
+  a_subagents_screen = subagents_screens,
   an_empty_desk = empty_desks,
   an_idle_agents_desk = idle_agents_desks,
+  its_desks_end = end_of_its_desk,
   next_to_an_agent = cells_beside_agents,
   next_to_the_cat = cells_beside_cats,
 }

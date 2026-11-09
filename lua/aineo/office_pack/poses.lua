@@ -13,6 +13,8 @@ local M = {}
 ---@field effect? string the effect it shows while held
 ---@field screen? string the piece the character's own monitor shows while it holds the pose
 ---@field holding? string a prop drawn at the art's `hand` area
+---@field in_front? string a piece drawn again over the pieces the character stands among, at its place
+---@field walks_as? string the pose the character walks in after taking this pose, until it takes another
 ---@field rises? number[] pixels it rises by, one number per frame
 
 --- How many poses a pose may be like, one after another: a pose like a pose

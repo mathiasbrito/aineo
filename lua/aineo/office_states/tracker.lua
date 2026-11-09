@@ -123,12 +123,15 @@ end
 --- office adds `session_started` and `session_ended` for the main agent's
 --- session, and `permission_asked` for the agent that asked.
 ---
---- A subagent goes quiet when it is heard of not at all for
---- `timing.QUIET_SUBAGENT_SECONDS`, unless the main agent's call that started
---- it still runs or it waits for permission: it then leaves, and is listed no
---- more once it has walked out. A replayed subagent whose transcript was last
---- written that long ago (`options.wall_clock`) is not listed at all. Either
---- walks in again with the next signal heard of it as it happens.
+--- A subagent with no call of its own running that is heard of not at all for
+--- `timing.WAITING_SUBAGENT_SECONDS` shows that it waits, at its desk, and a
+--- subagent heard of not at all for `timing.QUIET_SUBAGENT_SECONDS` goes quiet
+--- and leaves, unless the main agent's call that started it still runs or it
+--- waits for permission; it is listed no more once it has walked out. A
+--- replayed subagent whose transcript was last written that long ago
+--- (`options.wall_clock`) is not listed at all. Either walks in again with the
+--- next signal heard of it as it happens. Subagents that wait are in the
+--- office, and the main agent waits for them as for any that runs.
 ---
 ---@param options? aineo.office_states.TrackerOptions
 ---@return aineo.office_states.Tracker tracker
@@ -243,14 +246,15 @@ function M.new_tracker(options)
     end, records)
   end
 
-  --- When the agent of `record` goes quiet: `timing.QUIET_SUBAGENT_SECONDS`
-  --- after it was last heard of; never for the main agent, an agent that
-  --- finished or waits for permission, or a subagent whose starting call the
-  --- main agent still runs.
+  --- When the agent of `record` has been silent for `seconds`: that long after
+  --- it was last heard of; never for the main agent, an agent that finished or
+  --- waits for permission, or a subagent whose starting call the main agent
+  --- still runs.
   ---
   ---@param record aineo.office_states.Record
+  ---@param seconds number
   ---@return number|nil
-  local function quiet_at(record)
+  local function silent_for(record, seconds)
     if
       record.id == record_module.MAIN
       or record.finished
@@ -259,7 +263,7 @@ function M.new_tracker(options)
     then
       return nil
     end
-    return record.heard_at + timing.QUIET_SUBAGENT_SECONDS
+    return record.heard_at + seconds
   end
 
   --- When the last subagent that has gone quiet by `now` went quiet; nil when
@@ -305,7 +309,10 @@ function M.new_tracker(options)
   local function refresh_facts(now)
     local running_subagents = count_running_subagents(records, now)
     for _, record in ipairs(records) do
-      record.quiet_at = quiet_at(record)
+      record.waits_at = next(record.open_calls) == nil
+          and silent_for(record, timing.WAITING_SUBAGENT_SECONDS)
+        or nil
+      record.quiet_at = silent_for(record, timing.QUIET_SUBAGENT_SECONDS)
       local state, activity = record_module.fact_state(record, running_subagents)
       if state ~= record.fact.state or activity ~= record.fact.activity then
         record.fact = { state = state, activity = activity, since = now }
@@ -347,7 +354,12 @@ function M.new_tracker(options)
   ---@param signal aineo.transcript.Signal
   ---@param now number
   local function let_hear(signal, now)
-    local hearing = { now = now, replayed = signal.replayed == true, settings = settings }
+    local hearing = {
+      now = now,
+      replayed = signal.replayed == true,
+      subagents_in_room = count_running_subagents(records, now),
+      settings = settings,
+    }
     local hearer = record_of(signal.agent)
     note_when_heard(hearer, signal, now)
     record_module.hear(hearer, signal, hearing)

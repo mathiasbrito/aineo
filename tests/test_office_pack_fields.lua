@@ -196,6 +196,18 @@ local WRONG_FIELDS = {
     'characters.agent.poses.typing.like names the pose “floating”, which the pack does not have',
   },
   {
+    'a pose that walks as one the pack lacks',
+    { characters = agent_with({ typing = { like = 'sitting', walks_as = 'floating' } }) },
+    'characters',
+    'characters.agent.poses.typing.walks_as names the pose “floating”, which the pack does not have',
+  },
+  {
+    'a pose with a piece in front the pack lacks',
+    { characters = agent_with({ typing = { like = 'sitting', in_front = 'mug' } }) },
+    'characters',
+    'characters.agent.poses.typing.in_front names the piece “mug”, which the pack does not have',
+  },
+  {
     'a cat that is none',
     {
       characters = vim.tbl_extend(
@@ -305,6 +317,14 @@ local WRONG_FIELDS = {
     { floor = { legend = { D = { decorations = { 'person', 'vase' } }, s = { spot = 'desk' } } } },
     'floor',
     'floor.legend.D.decorations[2] names the piece “vase”, which the pack does not have',
+  },
+  {
+    'a legend piece used once by saying yes',
+    {
+      floor = { legend = { D = { piece = 'person', in_use_once = 'yes' }, s = { spot = 'desk' } } },
+    },
+    'floor',
+    'floor.legend.D.in_use_once must be true or false',
   },
   {
     'an activity with no steps',

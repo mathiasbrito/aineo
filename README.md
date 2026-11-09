@@ -730,9 +730,11 @@ When you leave the right side of the layout alone for three minutes
 is a jelly bean at a desk and each subagent is another, acting out what the
 session does. It types while a tool call runs, goes to the whiteboard to
 think, to the file cabinet to read, waits with a hand up when Claude Code asks
-you for permission, prints a page when it reports, and, when it has nothing to
-do, gets a coffee, naps on the sofa, plays table tennis with another idle
-agent and pets the cat. `\O` or `:Aineo office` shows it at once, and the
+you for permission, prints a page when it reports, goes through its papers,
+looks at the screens of its subagents and writes on the whiteboard while they
+work, and, when it has nothing to do, gets a coffee, naps on the sofa, plays
+table tennis with another idle agent and pets the cat. A subagent stays at its
+desk until it finishes, shown waiting while it says nothing. `\O` or `:Aineo office` shows it at once, and the
 cursor entering the right side closes it. A report that comes in shows as a
 card in its corner.
 

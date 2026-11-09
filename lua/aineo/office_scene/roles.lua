@@ -12,12 +12,25 @@ local IDLE_STATE = 'idle'
 --- The states of an agent that is coming in or going out.
 local ENTRANCE_STATES = { arriving = true, leaving = true }
 
+--- The states that fall back to `resting`: an agent that goes from one to
+--- another has not gone back to work.
+local RESTING_STATES = { done = true, idle = true, asleep = true }
+
 --- Whether `agent` has nothing to do: it is in the state `idle`.
 ---
 ---@param agent { state: string }
 ---@return boolean
 function M.is_idle(agent)
   return agent.state == IDLE_STATE
+end
+
+--- Whether `state` is one of the states of an agent that rests: `done`, `idle`
+--- and `asleep`.
+---
+---@param state string|nil
+---@return boolean
+function M.is_resting(state)
+  return RESTING_STATES[state] == true
 end
 
 --- Whether `agent` is neither arriving nor leaving: it is in the office, and

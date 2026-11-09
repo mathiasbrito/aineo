@@ -87,6 +87,8 @@ M.POSE = schema.fields('a pose', {
   effect = schema.reference('effect'),
   screen = schema.reference('piece'),
   holding = schema.reference('piece'),
+  in_front = schema.reference('piece'),
+  walks_as = schema.reference('pose'),
   rises = schema.list(schema.number, 1),
 }, { at_least_one_of = { 'art', 'like' } })
 
@@ -107,6 +109,7 @@ M.LEGEND_ENTRY = schema.fields('a legend entry', {
   facing = schema.with_default(schema.choice(FACINGS), 'right'),
   walk_over = schema.with_default(schema.flag, false),
   in_use = schema.reference('piece'),
+  in_use_once = schema.flag,
   decorations = schema.list(schema.reference('piece'), 1),
   from_width = schema.count,
   shows = schema.choice(SHOWN),

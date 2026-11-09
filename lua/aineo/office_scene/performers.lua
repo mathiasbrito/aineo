@@ -29,12 +29,17 @@ local MOST_CATS = 4
 ---@field pose string the pose it holds
 ---@field pose_since number when it took the pose, on the stage's clock
 ---@field at_a_seat boolean whether it stands at a spot where characters sit
+---@field walks_from? string the pose it held when it last began to walk
+---@field rests_at? aineo.office_scene.Spot the spot it has come to rest at, until it walks again
+---@field rests_since? number when it came to rest at that spot, on the stage's clock
+---@field last_rested_at table<string, aineo.office_scene.Spot> the spot of each name it last came to rest at
 ---@field effect? string the effect its step names, shown in place of its pose's
 
 ---@class aineo.office_scene.Performer : aineo.office_scene.Character
 ---@field state string the state of the agent it is, as of the last update
 ---@field state_changed boolean whether the state changed in the last update
 ---@field wanted_name? string the activity its state, or a trigger, asks for
+---@field plays_wanted_after_steps? boolean whether it goes on with the activity it plays until its last step is reached, and then plays `wanted_name`: its state changed to another that rests
 ---@field activity_name string
 ---@field activity table the activity it plays
 ---@field playing string `WANTED` when it plays the activity its state asks for, `RANDOM` when it plays one it picked at random, `INTERLUDE` when it plays one because of something that happened
@@ -85,6 +90,7 @@ function M.new_agent(context, agent, now)
     path = {},
     step_index = 1,
     steps_begun = 0,
+    last_rested_at = {},
   }
 end
 
@@ -111,6 +117,7 @@ function M.new_cats(context, now)
       path = {},
       step_index = 1,
       steps_begun = 0,
+      last_rested_at = {},
     }
   end
   return cats

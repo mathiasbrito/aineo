@@ -28,7 +28,7 @@ local FIRST_SPOT = {
   { 'background_job', 'desk' },
   { 'on_the_web', 'desk' },
   { 'delegating', 'beside_desk' },
-  { 'waiting_for_subagents', 'beside_desk' },
+  { 'waiting_for_subagents', 'its_desks_end' },
   { 'needs_permission', 'desk' },
   { 'asking_you', 'desk' },
   { 'reporting', 'printer' },

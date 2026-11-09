@@ -106,6 +106,93 @@ T['a piece in use']['shows its in_use art while an agent walks over the spot'] =
   eq(scene.group_at(stage.picture(), 1, 0), scene.solid(BLUE))
 end
 
+T['a piece used once'] = MiniTest.new_set()
+
+--- The art a piece used once shows in use: a red, a green and a blue
+--- picture, a second each.
+local THREE_PICTURES = 'colours: R = red, G = green, B = blue\nanchor: 0, 1\nseconds per frame: 1\n'
+  .. '---\nR\nR\n---\nG\nG\n---\nB\nB\n'
+
+local GREEN = '#00ff00'
+
+--- The pack of the door of `DOOR_PLAN` made a piece used once, whose own art
+--- is brown: it plays the three pictures once. An agent that stands plays
+--- `stand_steps`, one step at `aside` unless they are given.
+---
+---@param stand_steps? table[]
+---@return aineo.office_pack.Pack
+local function once_pack(stand_steps)
+  return scene.people_pack(
+    DOOR_PLAN,
+    vim.tbl_extend('force', DOOR_LEGEND, {
+      C = { piece = 'desk', in_use = 'three', in_use_once = true },
+    }),
+    {
+      activities = {
+        stand = { steps = stand_steps or { { at = 'aside' } } },
+        work = { steps = { { at = 'seat' } } },
+        rest = { steps = { { at = 'end' } } },
+      },
+      states = { standing = 'stand', working = 'work', resting = 'rest' },
+    },
+    { ['art/three.txt'] = THREE_PICTURES }
+  )
+end
+
+--- The group of the piece's cell after an agent working at the seat was
+--- brought to the time `first` and then, in the states `then_states`, to the
+--- time `later`.
+---
+---@param first number
+---@param then_states string[]
+---@param later number
+---@return string|nil
+local function once_piece_after(first, then_states, later)
+  local stage = scene.stage_of(once_pack(), 4, 2)
+  stage.advance(scene.agents_in('working'), first)
+  stage.advance(scene.agents_in(unpack(then_states)), later)
+  return scene.group_at(stage.picture(), 1, 0)
+end
+
+T['a piece used once']['plays its in_use art from the moment an agent comes to its spot'] = function()
+  eq({
+    once_piece_after(5, { 'standing' }, 5.5),
+    once_piece_after(5, { 'standing' }, 6.5),
+  }, { scene.solid(RED), scene.solid(GREEN) })
+end
+
+T['a piece used once']['goes on playing when the agent goes on to another step at the spot'] = function()
+  local stage = scene.stage_of(
+    once_pack({ { at = 'aside', for_seconds = 1.5 }, { at = 'aside', pose = 'standing' } }),
+    4,
+    2
+  )
+  stage.advance(scene.agents_in('working'), 5)
+  stage.advance(scene.agents_in('standing'), 5.5)
+
+  stage.advance(scene.agents_in('standing'), 6.9)
+
+  eq(scene.group_at(stage.picture(), 1, 0), scene.solid(GREEN))
+end
+
+T['a piece used once']['holds the last picture while the agent stays'] = function()
+  eq(once_piece_after(5, { 'standing' }, 60), scene.solid(BLUE))
+end
+
+T['a piece used once']['shows its own art while an agent walks over the spot'] = function()
+  eq(once_piece_after(0, { 'resting' }, 0.15), scene.solid(BROWN))
+end
+
+T['a piece used once']['shows its own art again when the agent has left'] = function()
+  local stage = scene.stage_of(once_pack(), 4, 2)
+  stage.advance(scene.agents_in('working'), 5)
+  stage.advance(scene.agents_in('standing'), 6)
+
+  stage.advance(scene.agents_in('working'), 8)
+
+  eq(scene.group_at(stage.picture(), 1, 0), scene.solid(BROWN))
+end
+
 T['a piece larger than the stage'] = MiniTest.new_set()
 
 T['a piece larger than the stage']['is read only where it lies on the stage'] = function()
