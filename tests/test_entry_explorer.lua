@@ -443,6 +443,43 @@ T['a file']['that is not text goes to the operating system with l, the cursor st
   eq(line_at_cursor(), '    image.bin')
 end
 
+T['a file']['previews above a modified file the column cannot leave, the cursor back in the tree'] = function()
+  local top = explore('preview-modified')
+  child.o.hidden = false
+  local readme = vim.fs.joinpath(top, 'README.md')
+  local ignore_file = vim.fs.joinpath(top, '.gitignore')
+  put_cursor_on('README.md')
+  entry.press(child, 'l')
+  wait_for_windows_with_cursor_in_explorer({ 'terminal', readme, 'aineo://explorer' })
+  child.lua(
+    [[
+      local readme = ...
+      vim.api.nvim_buf_set_lines(vim.fn.bufnr(readme), 0, 0, false, { 'unsaved' })
+    ]],
+    { readme }
+  )
+  put_cursor_on('.gitignore')
+
+  entry.press(child, 'l')
+
+  local expected = { 'terminal', ignore_file, readme, 'aineo://explorer' }
+  eq(wait_for_windows_with_cursor_in_explorer(expected), expected)
+  eq(line_at_cursor(), '    .gitignore')
+  eq(child.fn.mode(), 'n')
+end
+
+T['a file']['is shown by l, the cheatsheet’s row says what the map’s description does'] = function()
+  explore('preview-cheatsheet')
+
+  local description = child.lua_get("vim.fn.maparg('l', 'n', false, true).desc")
+
+  local rows = vim.tbl_filter(function(row)
+    return row.group == 'explorer_pane' and row.key == 'l'
+  end, require('aineo.keys').rows())
+  eq(#rows, 1)
+  eq('aineo explorer: ' .. rows[1].phrase, description)
+end
+
 T['the header'] = MiniTest.new_set()
 
 T['the header']['does nothing with l'] = function()
