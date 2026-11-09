@@ -1892,7 +1892,8 @@ when the pane writes its first list, and again at every list it writes.
                                                         *hl-AineoChangesAdded*
 AineoChangesAdded        an added file, linked to `Added`
                                                     *hl-AineoChangesUntracked*
-AineoChangesUntracked    a new file git does not track, linked to `Added`
+AineoChangesUntracked    a new file git does not track, linked to
+                         `DiagnosticHint`, a colour of its own
                                                      *hl-AineoChangesModified*
 AineoChangesModified     a modified file, linked to `Changed`
                                                       *hl-AineoChangesRenamed*

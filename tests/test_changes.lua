@@ -2787,7 +2787,7 @@ end)()]]
 --- group of Neovim's own, or, for a commit's subject, empty, as a default.
 local DEFAULT_GROUPS = {
   AineoChangesAdded = { link = 'Added' },
-  AineoChangesUntracked = { link = 'Added' },
+  AineoChangesUntracked = { link = 'DiagnosticHint' },
   AineoChangesModified = { link = 'Changed' },
   AineoChangesRenamed = { link = 'Changed' },
   AineoChangesTypeChanged = { link = 'Changed' },
