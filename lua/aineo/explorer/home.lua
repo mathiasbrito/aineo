@@ -31,6 +31,7 @@ local M = {}
 ---@class aineo.explorer.Place
 ---@field directory string absolute
 ---@field title string
+---@field shows_branch? boolean whether the header names the branch the folder is on: for the folder Claude works in, not for what the changes pane shows alone
 
 --- What an explorer is handed.
 ---@class aineo.explorer.Settings
@@ -161,6 +162,10 @@ function M.new(settings)
     ---@type table<string, aineo.git.LineCount>
     line_counts = {},
     ---@type string|nil
+    branch = nil,
+    ---@type integer|nil
+    drawn_width = nil,
+    ---@type string|nil
     failure = nil,
     ---@type table<string, true>
     open = {},
@@ -214,6 +219,7 @@ function M.new(settings)
       show_dotfiles = state.show_dotfiles,
       filter = state.filter,
       title = state.place and state.place.title or '',
+      branch = state.branch,
       quote = settings.quote_name,
       guides = true,
       compact = true,
@@ -264,7 +270,9 @@ function M.new(settings)
       local entry = entry_in(window)
       paths[window] = entry and entry.path
     end
-    local rendering = tree.render(state.tree, view())
+    local shown = view()
+    state.drawn_width = shown.width
+    local rendering = tree.render(state.tree, shown)
     if state.failure then
       rendering = {
         lines = { rendering.lines[1], '  ' .. state.failure },
@@ -351,7 +359,11 @@ function M.new(settings)
   local function claude_place(note)
     local directory = settings.claude_folder()
     local title = vim.fn.fnamemodify(directory, ':~')
-    return { directory = directory, title = note and ('%s (%s)'):format(title, note) or title }
+    return {
+      directory = directory,
+      title = note and ('%s (%s)'):format(title, note) or title,
+      shows_branch = note == nil,
+    }
   end
 
   --- Calls `done` with the place of the worktree of `repository` that has
@@ -563,6 +575,7 @@ function M.new(settings)
         if not is_last_read(read) then
           return
         end
+        state.branch = repository and place.shows_branch and repository.branch or nil
         local prefix = repository and path_from(repository.top, directory)
         if not prefix then
           take_folders(directory)
@@ -904,6 +917,22 @@ function M.new(settings)
       desc = 'aineo: read the explorer again as it shows',
       callback = function()
         read_tree()
+      end,
+    })
+    vim.api.nvim_create_autocmd('WinResized', {
+      group = vim.api.nvim_create_augroup('aineo.explorer.' .. buffer, {}),
+      desc = 'aineo: lay the explorer out again for the width of its window',
+      callback = function()
+        if state.buffer == buffer and is_shown() and shown_width() ~= state.drawn_width then
+          render()
+        end
+      end,
+    })
+    vim.api.nvim_create_autocmd('BufWipeout', {
+      buffer = buffer,
+      desc = 'aineo: stop laying the explorer out for its window',
+      callback = function()
+        pcall(vim.api.nvim_del_augroup_by_name, 'aineo.explorer.' .. buffer)
       end,
     })
     vim.api.nvim_create_autocmd('BufWinLeave', {

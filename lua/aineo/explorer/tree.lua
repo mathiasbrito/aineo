@@ -5,6 +5,7 @@
 local compact = require('aineo.explorer.compact')
 local counts = require('aineo.explorer.counts')
 local guides = require('aineo.explorer.guides')
+local header = require('aineo.explorer.header')
 
 local M = {}
 
@@ -35,6 +36,7 @@ local M = {}
 ---@field line_counts? table<string, aineo.git.LineCount> the lines added and removed in each changed file, by path
 ---@field dim? boolean whether the name of a file git sees unchanged is dimmed while a changed file shows
 ---@field width? integer the cells the window takes for a line; unknown when not given
+---@field branch? string the branch the folder shown is on, for the header
 
 --- What the tree renders as.
 ---@class aineo.explorer.Rendering
@@ -398,21 +400,26 @@ local function is_shown(entry, view)
   return view.show_dotfiles or entry.name:sub(1, 1) ~= '.'
 end
 
---- The header line: the title of what the tree shows, whether ignored
+--- The header line (`aineo.explorer.header`): the title of what the tree
+--- shows, its branch and a summary of its changes, then whether ignored
 --- entries and dotfiles show, and the filter, when there is one.
 ---
 ---@param view aineo.explorer.View
 ---@return string
 local function header_line(view)
-  local parts = {
-    view.title or '',
+  local toggles = {
     view.show_ignored and 'ignored shown' or 'ignored hidden',
     view.show_dotfiles and 'dotfiles shown' or 'dotfiles hidden',
   }
   if view.filter and view.filter ~= '' then
-    table.insert(parts, ('filter “%s”'):format(view.filter))
+    table.insert(toggles, ('filter “%s”'):format(view.filter))
   end
-  return table.concat(parts, '  ·  ')
+  return header.compose({
+    title = view.title or '',
+    branch = view.branch,
+    summary = header.summary(view.marks),
+    toggles = toggles,
+  }, view.width)
 end
 
 --- The line that stands for the tree when no file matches `filter`.

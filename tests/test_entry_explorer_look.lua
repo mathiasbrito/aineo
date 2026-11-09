@@ -427,6 +427,77 @@ T['the counts']['are shown in the added and removed groups, linked to the change
   })
 end
 
+T['the header'] = MiniTest.new_set()
+
+--- Waits, at most `PATIENCE_MS`, until the explorer's header satisfies
+--- `predicate`, and returns it as it is then.
+---
+---@param predicate fun(header: string): boolean
+---@return string
+local function wait_for_header(predicate)
+  local header
+  vim.wait(PATIENCE_MS, function()
+    header = explorer_lines()[1] or ''
+    return predicate(header)
+  end, 20)
+  return header
+end
+
+--- The cells the explorer's window takes for a line in the child.
+local WINDOW_WIDTH = [[(function()
+  local window = vim.fn.win_findbuf(vim.fn.bufnr('aineo://explorer'))[1]
+  return vim.api.nvim_win_get_width(window) - vim.fn.getwininfo(window)[1].textoff
+end)()]]
+
+T['the header']['names the folder, its branch and the changes, the toggles at the right edge'] = function()
+  child.o.columns = 400
+  explore('header', FILES, change_some_files)
+
+  local header = wait_for_header(function(shown)
+    return shown:find('3 changed', 1, true) ~= nil
+  end)
+
+  eq(header:find(' · main · 3 changed · 1 new', 1, true) ~= nil, true)
+  eq(vim.endswith(header, 'ignored hidden  ·  dotfiles shown'), true)
+  eq(vim.api.nvim_strwidth(header), child.lua_get(WINDOW_WIDTH))
+  eq(#explorer_lines(), 5)
+end
+
+T['the header']['drops the toggles when the window narrows, and lays them out again when it widens'] = function()
+  child.o.columns = 400
+  explore('header-resize', FILES, change_some_files)
+  wait_for_header(function(shown)
+    return shown:find('3 changed', 1, true) ~= nil
+  end)
+
+  child.cmd('vertical resize 30')
+  local narrow = wait_for_header(function(shown)
+    return shown:find('dotfiles', 1, true) == nil
+  end)
+  child.cmd('vertical resize 190')
+  local wide = wait_for_header(function(shown)
+    return shown:find('dotfiles', 1, true) ~= nil
+  end)
+
+  eq(narrow:find('dotfiles', 1, true), nil)
+  eq(vim.endswith(wide, 'dotfiles shown'), true)
+end
+
+T['the header']['shows no branch for a folder on a detached HEAD'] = function()
+  child.o.columns = 400
+  explore('header-detached', FILES, function(top)
+    git_repo.git(top, { 'checkout', '--quiet', '--detach' })
+  end)
+
+  wait_for_tree({ '▸   docs/', '▸   src/', '    README.md' })
+  local header = explorer_lines()[1]
+
+  eq(
+    header:match('^(.-)%s+ignored hidden'),
+    vim.fn.fnamemodify(child.lua_get('vim.fn.getcwd()'), ':~')
+  )
+end
+
 T['the dimming'] = MiniTest.new_set()
 
 T['the dimming']['shows an unchanged file’s name in the unchanged group while a file shows changed, and none otherwise'] = function()
