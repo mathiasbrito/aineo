@@ -2,6 +2,7 @@
 --- the lines they render as under a view — which folders are unfolded, the
 --- marks, the toggles and the filter. It touches no buffer, window or file.
 
+local compact = require('aineo.explorer.compact')
 local guides = require('aineo.explorer.guides')
 
 local M = {}
@@ -28,6 +29,7 @@ local M = {}
 ---@field title? string what the header names as shown: the folder, or the worktree
 ---@field quote? fun(name: string): string how a name shows, so that a control character in it cannot break its line; as it is when not given
 ---@field guides? boolean whether the connectors of the tree are laid over the indent (`aineo.explorer.guides`)
+---@field compact? boolean whether a chain of folders each holding a folder alone shows on one line (`aineo.explorer.compact`)
 
 --- What the tree renders as.
 ---@class aineo.explorer.Rendering
@@ -313,21 +315,21 @@ end
 
 --- The line that shows `entry` at `depth` folders below the root: its
 --- indent, a folder's sign — `▾` unfolded, `▸` folded — then `mark`, a
---- space when it has none, then its name as `quote` shows it, a folder's
---- ending in `/`; and its colours (`entry_spans()`).
+--- space when it has none, then `label`, a folder's ending in `/`; and its
+--- colours (`entry_spans()`).
 ---
 ---@param entry aineo.explorer.Entry
+---@param label string the name it shows as, quoted
 ---@param depth integer
 ---@param unfolded boolean
 ---@param mark string|nil
----@param quote fun(name: string): string
 ---@return string line
 ---@return aineo.explorer.Span[] spans
-local function entry_line(entry, depth, unfolded, mark, quote)
+local function entry_line(entry, label, depth, unfolded, mark)
   local indent = string.rep('  ', depth)
   local sign = entry.kind == 'file' and ' ' or (unfolded and '▾' or '▸')
   local shown_mark = mark or ' '
-  local name = quote(entry.name) .. (entry.kind == 'folder' and '/' or '')
+  local name = label .. (entry.kind == 'folder' and '/' or '')
   local line = ('%s%s %s %s'):format(indent, sign, shown_mark, name)
   local columns = { sign = #indent }
   columns.mark = columns.sign + #sign + 1
@@ -438,31 +440,17 @@ local function folder_match_finder(tree, view, filter)
   return holds_match
 end
 
---- The lines `tree` shows under `view`: a header, then each entry of the
---- root, in a folder's order (`comes_before()`), each unfolded folder's
---- entries below it; a file with its mark, a folder with its own mark when
---- it has one — an untracked nested repository's — else, when it holds a
---- marked file, with `M.FOLDER_MARK`. Under a filter, only the files whose path holds it,
---- ignoring case, show, in their folders, every one unfolded, and a line
---- says so when none does. Each entry's line has its colours as spans
---- (`aineo.explorer.Span`); the header and the line that says no file
---- matches have none.
+--- The entries of a folder as `tree` shows them under `view`, by the
+--- folder's path: those that show (`is_shown()`) and, under a filter, those
+--- that hold a file whose path matches, in a folder's order
+--- (`comes_before()`).
 ---
 ---@param tree aineo.explorer.Tree
 ---@param view aineo.explorer.View
----@return aineo.explorer.Rendering
-function M.render(tree, view)
-  local lines, entries, spans, virtual = { header_line(view) }, {}, {}, {}
-  local quote = view.quote or as_it_is
+---@return fun(folder: string): aineo.explorer.Entry[]
+function M.shown_entries_of(tree, view)
   local filter = view.filter and view.filter ~= '' and view.filter:lower() or nil
   local holds_match = filter and folder_match_finder(tree, view, filter)
-  local changed_folders = folders_holding_changes(view.marks)
-  local function mark_of(entry)
-    if view.marks[entry.path] then
-      return view.marks[entry.path]
-    end
-    return entry.kind == 'folder' and changed_folders[entry.path] and M.FOLDER_MARK or nil
-  end
   local function matches(entry)
     if not holds_match then
       return true
@@ -472,18 +460,81 @@ function M.render(tree, view)
     end
     return file_matches(entry, filter)
   end
-  --- Adds the entries of `folder`, `depth` folders below the root, below
-  --- the line of the folder; `continues` tells, for each folder above it but
-  --- the root's, whether that folder has entries after it.
-  local function add_folder(folder, depth, continues)
+  return function(folder)
     local sorted = vim.tbl_filter(function(entry)
       return is_shown(entry, view) and matches(entry)
     end, tree.children[folder] or {})
     table.sort(sorted, comes_before)
-    for position, entry in ipairs(sorted) do
+    return sorted
+  end
+end
+
+--- The deepest folder of the chain `folder` starts under `view` — `folder`
+--- itself when `view` folds no chains (`aineo.explorer.compact`) or the
+--- folder shows no folder alone.
+---
+---@param tree aineo.explorer.Tree
+---@param view aineo.explorer.View
+---@param folder aineo.explorer.Entry
+---@return aineo.explorer.Entry
+function M.deepest_folder(tree, view, folder)
+  if not view.compact then
+    return folder
+  end
+  local chain = compact.chain(folder, M.shown_entries_of(tree, view))
+  return chain[#chain]
+end
+
+--- The lines `tree` shows under `view`: a header, then each entry of the
+--- root, in a folder's order (`comes_before()`), each unfolded folder's
+--- entries below it; a file with its mark, a folder with its own mark when
+--- it has one — an untracked nested repository's — else, when it holds a
+--- marked file, with `M.FOLDER_MARK`. Under a filter, only the files whose path holds it,
+--- ignoring case, show, in their folders, every one unfolded, and a line
+--- says so when none does. Under `view.compact` a folder that shows a folder
+--- alone takes one line with it, its entry the deepest folder of the chain
+--- (`aineo.explorer.compact`). Each entry's line has its colours as spans
+--- (`aineo.explorer.Span`) and the text it shows without holding it as
+--- virtual text; the header and the line that says no file matches have
+--- neither.
+---
+---@param tree aineo.explorer.Tree
+---@param view aineo.explorer.View
+---@return aineo.explorer.Rendering
+function M.render(tree, view)
+  local lines, entries, spans, virtual = { header_line(view) }, {}, {}, {}
+  local quote = view.quote or as_it_is
+  local filter = view.filter and view.filter ~= '' and view.filter:lower() or nil
+  local changed_folders = folders_holding_changes(view.marks)
+  --- The mark of the line of `entry`, the deepest folder of the chain
+  --- `top` starts, `top` itself when it stands alone.
+  local function mark_of(entry, top)
+    if view.marks[entry.path] then
+      return view.marks[entry.path]
+    end
+    return entry.kind == 'folder' and changed_folders[top.path] and M.FOLDER_MARK or nil
+  end
+  local shown_entries = M.shown_entries_of(tree, view)
+  --- The folders of the line `entry` makes: `entry` alone, or the chain it
+  --- starts while the look folds chains.
+  local function folders_of_line(entry)
+    if view.compact and entry.kind == 'folder' then
+      return compact.chain(entry, shown_entries)
+    end
+    return { entry }
+  end
+  --- Adds the entries of `folder`, `depth` folders below the root, below
+  --- the line of the folder; `continues` tells, for each folder above it but
+  --- the root's, whether that folder has entries after it.
+  local function add_folder(folder, depth, continues)
+    local sorted = shown_entries(folder)
+    for position, top in ipairs(sorted) do
       local is_last = position == #sorted
+      local chain = folders_of_line(top)
+      local entry = chain[#chain]
       local unfolded = entry.kind == 'folder' and (filter ~= nil or view.open[entry.path] == true)
-      local line, line_spans = entry_line(entry, depth, unfolded, mark_of(entry), quote)
+      local label = compact.label(chain, quote)
+      local line, line_spans = entry_line(top, label, depth, unfolded, mark_of(entry, top))
       table.insert(lines, line)
       entries[#lines] = entry
       if #line_spans > 0 then

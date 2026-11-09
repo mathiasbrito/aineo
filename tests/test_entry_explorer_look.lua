@@ -218,4 +218,142 @@ T['the guides']['are linked to NonText by default'] = function()
   eq(link, 'NonText')
 end
 
+--- The files of the repository the chain cases explore: a chain two
+--- folders deep, beside a folder holding two entries.
+local CHAIN_FILES = {
+  ['lua/aineo/explorer/home.lua'] = { 'home' },
+  ['lua/aineo/explorer/tree.lua'] = { 'tree' },
+  ['README.md'] = { 'readme' },
+  ['x/a/b/f.lua'] = { 'f' },
+  ['x/y.lua'] = { 'y' },
+}
+
+T['a chain of single-child folders'] = MiniTest.new_set()
+
+T['a chain of single-child folders']['shows on one line, and l or Enter unfolds and folds its deepest folder'] =
+  MiniTest.new_set({ parametrize = { { 'l' }, { '<CR>' } } })
+
+T['a chain of single-child folders']['shows on one line, and l or Enter unfolds and folds its deepest folder']['by'] = function(
+  key
+)
+  explore('chain-' .. (key == 'l' and 'l' or 'enter'), CHAIN_FILES)
+  local folded = {
+    '▸   lua/aineo/explorer/',
+    '▸   x/',
+    '    README.md',
+  }
+  eq(wait_for_tree(folded), folded)
+
+  put_cursor_on('lua/aineo/explorer/')
+  entry.press(child, key)
+  local unfolded = vim.list_slice(explorer_lines(), 2, 4)
+  entry.press(child, key)
+
+  eq(unfolded, { '▾   lua/aineo/explorer/', '      home.lua', '      tree.lua' })
+  eq(vim.list_slice(explorer_lines(), 2), folded)
+end
+
+T['a chain of single-child folders']['is folded by h from a file in it, the cursor on its line'] = function()
+  explore('chain-h', CHAIN_FILES)
+  wait_for_lines(function(lines)
+    return #lines == 3
+  end)
+  put_cursor_on('lua/aineo/explorer/')
+  entry.press(child, 'l')
+  put_cursor_on('tree.lua')
+
+  entry.press(child, 'h')
+
+  eq(vim.list_slice(explorer_lines(), 2, 2), { '▸   lua/aineo/explorer/' })
+  eq(child.lua_get('vim.api.nvim_get_current_line()'), '▸   lua/aineo/explorer/')
+end
+
+T['a chain of single-child folders']['folded is left by h for the folder that holds it'] = function()
+  explore('chain-h-up', CHAIN_FILES)
+  wait_for_lines(function(lines)
+    return #lines == 3
+  end)
+  put_cursor_on('x/')
+  entry.press(child, 'l')
+  local unfolded = wait_for_lines(function(lines)
+    return #lines == 5
+  end)
+  put_cursor_on('a/b/')
+
+  entry.press(child, 'h')
+
+  eq(
+    unfolded,
+    { '▸   lua/aineo/explorer/', '▾   x/', '  ▸   a/b/', '      y.lua', '    README.md' }
+  )
+  eq(vim.list_slice(explorer_lines(), 2), {
+    '▸   lua/aineo/explorer/',
+    '▸   x/',
+    '    README.md',
+  })
+  eq(child.lua_get('vim.api.nvim_get_current_line()'), '▸   x/')
+end
+
+T['a chain of single-child folders']['has @ paste the deepest folder’s path'] = function()
+  explore('chain-paste', CHAIN_FILES)
+  wait_for_lines(function(lines)
+    return #lines == 3
+  end)
+  put_cursor_on('lua/aineo/explorer/')
+  child.lua([[
+    _G.pasted = {}
+    require('aineo.send').paste = function(text)
+      table.insert(_G.pasted, text)
+    end
+  ]])
+
+  entry.press(child, '@')
+
+  eq(child.lua_get('_G.pasted'), { '@lua/aineo/explorer/ ' })
+end
+
+T['a chain of single-child folders']['is unfolded to by the file in the file column'] = function()
+  local top = explore('chain-follow', CHAIN_FILES)
+  wait_for_lines(function(lines)
+    return #lines == 3
+  end)
+
+  child.cmd(
+    'edit ' .. vim.fn.fnameescape(vim.fs.joinpath(top, 'lua', 'aineo', 'explorer', 'tree.lua'))
+  )
+
+  local followed = wait_for_lines(function(lines)
+    return #lines == 5
+  end)
+  eq(followed, {
+    '▾   lua/aineo/explorer/',
+    '      home.lua',
+    '      tree.lua',
+    '▸   x/',
+    '    README.md',
+  })
+end
+
+T['a chain of single-child folders']['read from the disk as its first folder unfolds is unfolded to its deepest folder'] = function()
+  explore('chain-disk', { ['a.txt'] = { 'a' }, ['.gitignore'] = { 'build/' } }, function(top)
+    vim.fn.mkdir(vim.fs.joinpath(top, 'build', 'out'), 'p')
+    git_repo.write(top, 'build/out/x.o', { 'x' })
+  end)
+  wait_for_lines(function(lines)
+    return #lines == 2
+  end)
+  entry.press(child, 'I')
+  wait_for_tree({ '▸   build/', '    .gitignore', '    a.txt' })
+  put_cursor_on('build/')
+
+  entry.press(child, '<CR>')
+
+  eq(vim.list_slice(explorer_lines(), 2), {
+    '▾   build/out/',
+    '      x.o',
+    '    .gitignore',
+    '    a.txt',
+  })
+end
+
 return T
