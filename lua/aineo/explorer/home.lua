@@ -591,15 +591,6 @@ function M.new(settings)
     render()
   end
 
-  --- What `l` does: unfolds or folds the folder under the cursor; nothing
-  --- on a file or the header.
-  local function on_l()
-    local entry = entry_in(0)
-    if entry and entry.kind == 'folder' then
-      toggle_folder(entry)
-    end
-  end
-
   --- What `h` does: folds the folder under the cursor when it is unfolded;
   --- otherwise folds the folder that holds the entry under the cursor and
   --- moves the cursor to it. Nothing on the header or an entry of the root.
@@ -621,36 +612,79 @@ function M.new(settings)
     end
   end
 
+  --- Puts the cursor of `window` on line `line`, while it shows the
+  --- explorer's buffer and the line is still there.
+  ---
+  ---@param window integer
+  ---@param line integer
+  local function put_cursor_on_line(window, line)
+    if
+      vim.api.nvim_win_is_valid(window)
+      and vim.api.nvim_win_get_buf(window) == state.buffer
+      and line <= vim.api.nvim_buf_line_count(state.buffer)
+    then
+      vim.api.nvim_win_set_cursor(window, { line, 0 })
+    end
+  end
+
   --- Puts the cursor of `window` back on line `line` once the commands in
-  --- flight are done, while it shows the explorer's buffer: a file opened
-  --- in that window moves to the file column once its command is done, and
-  --- the buffer it gets back would show its first line.
+  --- flight are done: a file opened in that window moves to the file column
+  --- once its command is done, and the buffer it gets back would show its
+  --- first line.
   ---
   ---@param window integer
   ---@param line integer
   local function keep_cursor_line(window, line)
     vim.schedule(function()
-      if
-        vim.api.nvim_win_is_valid(window)
-        and vim.api.nvim_win_get_buf(window) == state.buffer
-        and line <= vim.api.nvim_buf_line_count(state.buffer)
-      then
-        vim.api.nvim_win_set_cursor(window, { line, 0 })
-      end
+      put_cursor_on_line(window, line)
     end)
   end
 
-  --- What Enter tells the user on a file git sees deleted, by its path.
+  --- Moves the cursor back to `window`, the explorer's, onto line `line`,
+  --- once the commands in flight are done: the file just shown has taken the
+  --- cursor to the file column by then (`keep_cursor_line()`).
+  ---
+  ---@param window integer
+  ---@param line integer
+  local function return_cursor_to_tree(window, line)
+    vim.schedule(function()
+      if vim.api.nvim_win_is_valid(window) then
+        vim.api.nvim_set_current_win(window)
+      end
+      put_cursor_on_line(window, line)
+    end)
+  end
+
+  --- What opening a file git sees deleted tells the user, by its path.
   local DELETED = 'aineo: %s is deleted; \\g shows its diff'
 
-  --- What Enter tells the user on a file that is a folder on disk, as a
+  --- What opening a file that is a folder on disk tells the user, as a
   --- tracked file turned into a link to a folder is, by its path.
   local A_FOLDER = 'aineo: %s is a folder on disk, not a file to open'
 
+  --- Opens the file `entry` lists in the file column (`settings.open_file`),
+  --- the cursor going there. A file git sees deleted, and one that is a
+  --- folder on disk, opens nothing: the user is told why.
+  ---
+  ---@param entry aineo.explorer.Entry a file
+  ---@return boolean opened whether `settings.open_file` was called
+  local function open_file_of(entry)
+    local file = vim.fs.joinpath(state.place.directory, entry.path)
+    if state.marks[entry.path] == 'D' then
+      vim.notify(DELETED:format(entry.path), vim.log.levels.INFO)
+      return false
+    end
+    if vim.fn.isdirectory(file) == 1 then
+      vim.notify(A_FOLDER:format(entry.path), vim.log.levels.INFO)
+      return false
+    end
+    settings.open_file(file)
+    return true
+  end
+
   --- What Enter does: unfolds or folds the folder under the cursor, or opens
-  --- the file under it (`settings.open_file`), the explorer's cursor kept
-  --- on its line; nothing on the header. A file git sees deleted, and one
-  --- that is a folder on disk, opens nothing: the user is told why.
+  --- the file under it (`open_file_of()`), the explorer's cursor kept on its
+  --- line; nothing on the header.
   local function on_enter()
     local entry = entry_in(0)
     if not entry then
@@ -660,18 +694,28 @@ function M.new(settings)
       toggle_folder(entry)
       return
     end
-    local file = vim.fs.joinpath(state.place.directory, entry.path)
-    if state.marks[entry.path] == 'D' then
-      vim.notify(DELETED:format(entry.path), vim.log.levels.INFO)
+    local window, line = vim.api.nvim_get_current_win(), vim.api.nvim_win_get_cursor(0)[1]
+    if open_file_of(entry) then
+      keep_cursor_line(window, line)
+    end
+  end
+
+  --- What `l` does: unfolds or folds the folder under the cursor, or shows
+  --- the file under it as Enter opens it (`open_file_of()`), the cursor
+  --- staying in the tree, on its line; nothing on the header.
+  local function on_l()
+    local entry = entry_in(0)
+    if not entry then
       return
     end
-    if vim.fn.isdirectory(file) == 1 then
-      vim.notify(A_FOLDER:format(entry.path), vim.log.levels.INFO)
+    if entry.kind == 'folder' then
+      toggle_folder(entry)
       return
     end
     local window, line = vim.api.nvim_get_current_win(), vim.api.nvim_win_get_cursor(0)[1]
-    settings.open_file(file)
-    keep_cursor_line(window, line)
+    if open_file_of(entry) then
+      return_cursor_to_tree(window, line)
+    end
   end
 
   --- What the explorer tells the user as `I` is pressed over a folder
@@ -733,7 +777,11 @@ function M.new(settings)
   --- The keys of the explorer's buffer, by what they do.
   ---@type { lhs: string, rhs: fun(), desc: string }[]
   local KEYS = {
-    { lhs = 'l', rhs = on_l, desc = 'unfold or fold the folder' },
+    {
+      lhs = 'l',
+      rhs = on_l,
+      desc = 'unfold or fold the folder, or show the file, the cursor staying in the tree',
+    },
     { lhs = '<CR>', rhs = on_enter, desc = 'unfold or fold the folder, or open the file' },
     { lhs = 'h', rhs = on_h, desc = 'fold the folder, or the folder above' },
     {
