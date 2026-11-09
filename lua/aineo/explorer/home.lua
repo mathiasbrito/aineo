@@ -1,6 +1,7 @@
 --- One explorer: its buffer, the tree it reads of the folder it shows, and
 --- the state the user gives it — folds, toggles, filter — for a tab's life.
 
+local decorate = require('aineo.explorer.decorate')
 local folders = require('aineo.explorer.folders')
 local tree = require('aineo.explorer.tree')
 
@@ -58,6 +59,7 @@ local HIGHLIGHTS = {
   AineoExplorerFolder = 'Directory',
   AineoExplorerChanged = 'AineoChangesModified',
   AineoExplorerIgnored = 'Comment',
+  AineoExplorerGuide = 'NonText',
 }
 
 --- The group each role of a span that is not the kind of a change shows in
@@ -66,6 +68,7 @@ local ROLE_GROUPS = {
   folder = 'AineoExplorerFolder',
   changed_folder = 'AineoExplorerChanged',
   ignored = 'AineoExplorerIgnored',
+  guide = 'AineoExplorerGuide',
 }
 
 --- The namespace of the explorer's highlights.
@@ -189,6 +192,7 @@ function M.new(settings)
       filter = state.filter,
       title = state.place and state.place.title or '',
       quote = settings.quote_name,
+      guides = true,
     }
   end
 
@@ -238,6 +242,7 @@ function M.new(settings)
         lines = { rendering.lines[1], '  ' .. state.failure },
         entries = {},
         spans = {},
+        virtual = {},
       }
     end
     state.rendering = rendering
@@ -245,16 +250,7 @@ function M.new(settings)
     vim.api.nvim_buf_set_lines(buffer, 0, -1, false, rendering.lines)
     vim.bo[buffer].modifiable = false
     vim.bo[buffer].modified = false
-    vim.api.nvim_buf_clear_namespace(buffer, NAMESPACE, 0, -1)
-    vim.api.nvim_buf_set_extmark(buffer, NAMESPACE, 0, 0, { line_hl_group = 'AineoExplorerHeader' })
-    for line, spans in pairs(rendering.spans) do
-      for _, span in ipairs(spans) do
-        vim.api.nvim_buf_set_extmark(buffer, NAMESPACE, line - 1, span.first_column, {
-          end_col = span.end_column,
-          hl_group = role_groups[span.role],
-        })
-      end
-    end
+    decorate.draw(buffer, NAMESPACE, rendering, role_groups, 'AineoExplorerHeader')
     local followed_line = state.followed and line_of(rendering, state.followed)
     if followed_line then
       vim.api.nvim_buf_set_extmark(
