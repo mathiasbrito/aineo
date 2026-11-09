@@ -28,6 +28,7 @@ function M.make_explorer(homes)
       return homes.claude.session_directory() or vim.fn.getcwd()
     end,
     focused_work = homes.changes.focused_work,
+    session_work = homes.changes.session_work_files,
     offer_work = function()
       if homes.claude.session_status() == nil then
         vim.notify(NOT_STARTED, vim.log.levels.INFO)

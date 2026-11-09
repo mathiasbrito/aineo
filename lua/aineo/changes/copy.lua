@@ -95,6 +95,12 @@ end
 ---@field branch? string the branch's name
 ---@field heading string
 
+--- The files *Session work* lists: the top of their repository, and their
+--- paths from it.
+---@class aineo.changes.SessionWorkFiles
+---@field top string
+---@field paths string[]
+
 --- A changes home, whose functions are called as fields, never as methods.
 ---@class aineo.changes.Home
 ---@field begin_session fun(settings: aineo.changes.SessionSettings)
@@ -109,6 +115,7 @@ end
 ---@field close_shown_diff fun() closes the windows of the current tab page that show a diff the home showed, and tells once when none was closed
 ---@field focused_work fun(): aineo.changes.FocusedWork|nil what the focused view shows alone, nil for the default view
 ---@field watch_focused_work fun(watcher: fun()) calls `watcher` each time what `focused_work()` gives changes
+---@field session_work_files fun(done: fun(work: aineo.changes.SessionWorkFiles|nil)) calls `done` once, on the main loop, with the repository's top and the paths, from it, of the files that differ from the session's base — the files *Session work* lists — or nil when no repository was found, the base is not read yet or the read fails
 ---@field count_session_work fun(done: fun(count: integer|nil)) calls `done` once, on the main loop, with how many files differ from the session's base — the files *Session work* lists — or nil when no repository was found, the base is not read yet or the read fails
 ---@field has_shown_diff fun(): boolean whether a window of the current tab page shows a diff the home showed
 ---@field stop_watching fun() stops the watch of the repository and that of the worktree whose *Uncommitted* is chosen; the next showing of the pane starts them again
@@ -4021,20 +4028,43 @@ function M.new(label)
     table.insert(repository_change_listeners, listener)
   end
 
+  --- Calls `done` once with the files that differ from the session's base:
+  --- the files *Session work* lists, read now whatever the pane shows, their
+  --- paths from the top of the repository they are in. Nil while no
+  --- repository was found or git looks for the base, and when the read fails
+  --- or the home was let go.
+  ---
+  ---@param done fun(work: aineo.changes.SessionWorkFiles|nil)
+  function home.session_work_files(done)
+    if not (session and session.repository) or session.looking_for_head or released then
+      done(nil)
+      return
+    end
+    local top = session.repository.top
+    git.changed_files(session.repository, session.base, function(failure, changes)
+      if failure or released then
+        done(nil)
+        return
+      end
+      done({
+        top = top,
+        paths = vim.tbl_map(function(change)
+          return change.path
+        end, changes),
+      })
+    end, session.settings.git)
+  end
+
   --- Calls `done` once with how many files differ from the session's base:
-  --- the files *Session work* lists, read now whatever the pane shows. Nil
+  --- the files *Session work* lists (`home.session_work_files()`). Nil
   --- while no repository was found or git looks for the base, and when the
   --- read fails or the home was let go.
   ---
   ---@param done fun(count: integer|nil)
   function home.count_session_work(done)
-    if not (session and session.repository) or session.looking_for_head or released then
-      done(nil)
-      return
-    end
-    git.changed_files(session.repository, session.base, function(failure, changes)
-      done(not failure and not released and #changes or nil)
-    end, session.settings.git)
+    home.session_work_files(function(work)
+      done(work and #work.paths or nil)
+    end)
   end
 
   --- A scratch buffer of the pane named `name` (`aineo.changes.scratch`),

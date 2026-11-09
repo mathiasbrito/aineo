@@ -377,7 +377,12 @@ T['the counts']['follow the mark of a folder holding changes, and show the lines
   entry.press(child, 'l')
 
   eq(folded, { '▸ • docs/', '▸ • src/', '  ? new.txt', '  M README.md' })
-  eq(virtual_at('inline'), { { 2, '1' }, { 4, '1' } })
+  eq(
+    vim.tbl_filter(function(item)
+      return item[2]:match('^%d+$') ~= nil
+    end, virtual_at('inline')),
+    { { 2, '1' }, { 4, '1' } }
+  )
   eq(virtual_at('right_align'), { { 3, '+1 −0' }, { 6, '+2 −0' } })
 end
 
@@ -421,7 +426,10 @@ T['the counts']['are shown in the added and removed groups, linked to the change
     groups,
     { added = 'AineoChangesAdded', removed = 'AineoChangesDeleted', unchanged = 'Comment' }
   )
-  eq(child.lua_get(VIRTUAL_TEXT)[#child.lua_get(VIRTUAL_TEXT)].groups, {
+  local right_aligned = vim.tbl_filter(function(item)
+    return item.position == 'right_align'
+  end, child.lua_get(VIRTUAL_TEXT))
+  eq(right_aligned[#right_aligned].groups, {
     'AineoExplorerAdded',
     'AineoExplorerRemoved',
   })
@@ -510,6 +518,120 @@ T['the icons']['are none when no icon plugin is set up, today’s look'] = funct
   wait_for_tree({ '▸   docs/', '▸   src/', '    README.md' })
 
   eq(virtual_at('inline'), {})
+end
+
+T['the claude marks'] = MiniTest.new_set()
+
+--- The lines of the explorer in the child that flash, from 1.
+local FLASHING_LINES = [[(function()
+  local buffer = vim.fn.bufnr('aineo://explorer')
+  local namespace = vim.api.nvim_get_namespaces()['aineo.explorer']
+  local lines = {}
+  for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(buffer, namespace, 0, -1, { details = true })) do
+    if mark[4].line_hl_group == 'AineoExplorerClaudeFlash' then
+      table.insert(lines, mark[2] + 1)
+    end
+  end
+  return lines
+end)()]]
+
+--- The text before the names of the explorer's lines in the child, as
+--- `{ line, text }`, for the places that hold a mark of Claude's or are
+--- blank.
+---
+---@return table[]
+local function claude_places()
+  local found = {}
+  for _, item in ipairs(child.lua_get(VIRTUAL_TEXT)) do
+    if item.position == 'inline' and (item.text == '✦ ' or item.text == '  ') then
+      table.insert(found, { item.line, item.text })
+    end
+  end
+  return found
+end
+
+--- Waits, at most `PATIENCE_MS`, until `claude_places()` is `expected`, and
+--- returns it as it is then.
+---
+---@param expected table[]
+---@return table[]
+local function wait_for_claude_places(expected)
+  local found
+  vim.wait(PATIENCE_MS, function()
+    found = claude_places()
+    return vim.deep_equal(found, expected)
+  end, 20)
+  return found
+end
+
+T['the claude marks']['sit before the files in the work of the session, a blank place before the others'] = function()
+  local top = explore('claude')
+  wait_for_tree({ '▸   docs/', '▸   src/', '    README.md' })
+  eq(claude_places(), {})
+
+  git_repo.write(top, 'README.md', { 'changed by Claude' })
+
+  local places = wait_for_claude_places({ { 2, '  ' }, { 3, '  ' }, { 4, '✦ ' } })
+  eq(places, { { 2, '  ' }, { 3, '  ' }, { 4, '✦ ' } })
+  local inline = child.lua_get(VIRTUAL_TEXT)
+  eq(inline[#inline].groups, { 'AineoExplorerClaude' })
+  eq(child.lua_get("vim.api.nvim_get_hl(0, { name = 'AineoExplorerClaude' }).link"), 'Special')
+  eq(
+    child.lua_get("vim.api.nvim_get_hl(0, { name = 'AineoExplorerClaudeFlash' }).link"),
+    'IncSearch'
+  )
+end
+
+T['the claude marks']['follow the work the changes pane lists: a file committed since the session began too'] = function()
+  local top = explore('claude-committed')
+  wait_for_tree({ '▸   docs/', '▸   src/', '    README.md' })
+
+  git_repo.write(top, 'README.md', { 'committed by Claude' })
+  git_repo.commit_all(top, 'Claude commits')
+
+  local places = wait_for_claude_places({ { 2, '  ' }, { 3, '  ' }, { 4, '✦ ' } })
+  eq(places, { { 2, '  ' }, { 3, '  ' }, { 4, '✦ ' } })
+end
+
+T['the claude marks']['flash the line of a file that joins the work for a moment, the cursor staying where it is'] = function()
+  local top = explore('claude-flash')
+  wait_for_tree({ '▸   docs/', '▸   src/', '    README.md' })
+  put_cursor_on('docs/')
+  local cursor_before = child.lua_get('vim.api.nvim_win_get_cursor(0)')
+
+  git_repo.write(top, 'README.md', { 'changed by Claude' })
+  local appeared = vim.wait(PATIENCE_MS, function()
+    return #child.lua_get(FLASHING_LINES) > 0
+  end, 10)
+  local started = vim.uv.now()
+  local flashing = child.lua_get(FLASHING_LINES)
+  local cursor_during = child.lua_get('vim.api.nvim_win_get_cursor(0)')
+  local ended = vim.wait(PATIENCE_MS, function()
+    return #child.lua_get(FLASHING_LINES) == 0
+  end, 10)
+  local lasted = vim.uv.now() - started
+
+  eq(appeared, true)
+  eq(flashing, { 4 })
+  eq(ended, true)
+  eq(lasted >= 1200 and lasted <= 2500, true)
+  eq(cursor_during, cursor_before)
+  eq(child.lua_get('vim.api.nvim_win_get_cursor(0)'), cursor_before)
+  eq(
+    wait_for_claude_places({ { 2, '  ' }, { 3, '  ' }, { 4, '✦ ' } }),
+    { { 2, '  ' }, { 3, '  ' }, { 4, '✦ ' } }
+  )
+end
+
+T['the claude marks']['flash nothing for the work the session already had when the tree is first read'] = function()
+  explore('claude-no-flash', FILES, function(top)
+    git_repo.write(top, 'README.md', { 'changed before the explorer showed' })
+  end)
+  wait_for_tree({ '▸   docs/', '▸   src/', '  M README.md' })
+  wait_for_claude_places({ { 2, '  ' }, { 3, '  ' }, { 4, '✦ ' } })
+  vim.wait(300)
+
+  eq(child.lua_get(FLASHING_LINES), {})
 end
 
 T['the unsaved mark'] = MiniTest.new_set()
