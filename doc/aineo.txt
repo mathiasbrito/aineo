@@ -341,18 +341,19 @@ branch when it is the folder Claude works in and HEAD is on one, and a
 summary of the changes (`2 changed · 1 new`, the files git sees as new apart
 from the others); and on the right the toggles and the filter, when there is
 one. When the window is too narrow for both sides, the toggles go first, then
-the summary. A worktree or branch picked with `s` keeps the heading the
-changes pane gives it. Folders come first, then files, each alphabetically,
-`▸` before a folded folder and `▾` before an unfolded one. In a repository
-git's mark sits before a file's name: `M` modified, `A` added, `D` deleted
-(a file gone from disk still shows, with its mark), `R` renamed, `T` its
-type changed, `?` untracked; a folder holding a change, at any depth, has
-`•`, followed by the number of changed files below it (`•2`). A submodule,
-and a repository nested in it, is a folder listed from disk as it unfolds
-(|aineo-limits|). What git ignores is hidden, dotfiles show, and `.git`
-never does, a folder or a file. A name holding a control character shows
-quoted, as the changes pane shows such a path. While the
-explorer shows, the tree is read again whenever the repository changes (a
+the summary, then the branch, and a folder still too long is cut from its
+start, behind `…`: the line never wraps. A worktree or branch picked with `s`
+keeps the heading the changes pane gives it. Folders come first, then files,
+each alphabetically, `▸` before a folded folder and `▾` before an unfolded
+one. In a repository git's mark sits before a file's name: `M` modified,
+`A` added, `D` deleted (a file gone from disk still shows, with its mark),
+`R` renamed, `T` its type changed, `?` untracked; a folder holding a change,
+at any depth, has `•`, followed by the number of changed files below it
+(`•2`). A submodule, and a repository nested in it, is a folder listed
+from disk as it unfolds (|aineo-limits|). What git ignores is hidden,
+dotfiles show, and `.git` never does, a folder or a file. A name holding a
+control character shows quoted, as the changes pane shows such a path. While
+the explorer shows, the tree is read again whenever the repository changes (a
 file written, a commit, a checkout), the folds, the filter and each
 cursor's entry kept; hidden, it watches nothing, and reads the tree again
 as it shows.
