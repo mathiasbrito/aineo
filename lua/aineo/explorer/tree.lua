@@ -2,6 +2,8 @@
 --- the lines they render as under a view — which folders are unfolded, the
 --- marks, the toggles and the filter. It touches no buffer, window or file.
 
+local guides = require('aineo.explorer.guides')
+
 local M = {}
 
 --- One file or folder of the tree.
@@ -25,12 +27,14 @@ local M = {}
 ---@field filter? string the text a file's path must hold to show, ignoring case; none, or empty, shows every file
 ---@field title? string what the header names as shown: the folder, or the worktree
 ---@field quote? fun(name: string): string how a name shows, so that a control character in it cannot break its line; as it is when not given
+---@field guides? boolean whether the connectors of the tree are laid over the indent (`aineo.explorer.guides`)
 
 --- What the tree renders as.
 ---@class aineo.explorer.Rendering
 ---@field lines string[] the buffer's lines, the header first
 ---@field entries table<integer, aineo.explorer.Entry> the entry each line shows, by line number, from 1
 ---@field spans table<integer, aineo.explorer.Span[]> the colours of each entry's line, by line number, from 1; none for a line with no colour
+---@field virtual table<integer, aineo.explorer.VirtualText[]> the text each line shows without holding it, by line number, from 1; none for a line with none
 
 --- A run of an entry's line shown in one colour: what it is, as a role.
 --- A role is the kind of a file's change (`'added'`, `'modified'`,
@@ -41,6 +45,21 @@ local M = {}
 ---@field first_column integer the byte column it starts at, from 0
 ---@field end_column integer the byte column it ends before
 ---@field role string
+
+--- Text a line shows that its buffer text does not hold: laid over the
+--- line's cells (`'overlay'`), between two characters of it (`'inline'`)
+--- or at the window's right edge (`'right_align'`).
+---@class aineo.explorer.VirtualText
+---@field position 'overlay'|'inline'|'right_align'
+---@field column integer the byte column it lies at, from 0; unused by `'right_align'`
+---@field chunks aineo.explorer.VirtualChunk[]
+
+--- A run of virtual text in one colour: a role (`aineo.explorer.Span`'s
+--- roles, and `'guide'`), or a highlight group of a plugin's own.
+---@class aineo.explorer.VirtualChunk
+---@field text string
+---@field role? string
+---@field group? string
 
 --- The folder that holds `path`, `''` for an entry of the root.
 ---
@@ -433,7 +452,7 @@ end
 ---@param view aineo.explorer.View
 ---@return aineo.explorer.Rendering
 function M.render(tree, view)
-  local lines, entries, spans = { header_line(view) }, {}, {}
+  local lines, entries, spans, virtual = { header_line(view) }, {}, {}, {}
   local quote = view.quote or as_it_is
   local filter = view.filter and view.filter ~= '' and view.filter:lower() or nil
   local holds_match = filter and folder_match_finder(tree, view, filter)
@@ -453,12 +472,16 @@ function M.render(tree, view)
     end
     return file_matches(entry, filter)
   end
-  local function add_folder(folder, depth)
+  --- Adds the entries of `folder`, `depth` folders below the root, below
+  --- the line of the folder; `continues` tells, for each folder above it but
+  --- the root's, whether that folder has entries after it.
+  local function add_folder(folder, depth, continues)
     local sorted = vim.tbl_filter(function(entry)
       return is_shown(entry, view) and matches(entry)
     end, tree.children[folder] or {})
     table.sort(sorted, comes_before)
-    for _, entry in ipairs(sorted) do
+    for position, entry in ipairs(sorted) do
+      local is_last = position == #sorted
       local unfolded = entry.kind == 'folder' and (filter ~= nil or view.open[entry.path] == true)
       local line, line_spans = entry_line(entry, depth, unfolded, mark_of(entry), quote)
       table.insert(lines, line)
@@ -466,16 +489,23 @@ function M.render(tree, view)
       if #line_spans > 0 then
         spans[#lines] = line_spans
       end
+      if view.guides and depth > 0 then
+        virtual[#lines] = { guides.virtual_text(continues, is_last) }
+      end
       if unfolded then
-        add_folder(entry.path, depth + 1)
+        local below = continues
+        if depth > 0 then
+          below = vim.list_extend(vim.deepcopy(continues), { not is_last })
+        end
+        add_folder(entry.path, depth + 1, below)
       end
     end
   end
-  add_folder('', 0)
+  add_folder('', 0, {})
   if filter and #lines == 1 then
     table.insert(lines, no_match_line(view.filter))
   end
-  return { lines = lines, entries = entries, spans = spans }
+  return { lines = lines, entries = entries, spans = spans, virtual = virtual }
 end
 
 return M
