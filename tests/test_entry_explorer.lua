@@ -79,9 +79,26 @@ local function open_in_repository(name, files)
   return top
 end
 
---- The columns of a case that reads the explorer's header: wide enough for
---- the folder's path and the toggles at its right, whatever the path.
-local WIDE_COLUMNS = 400
+--- The cells the explorer's header leaves for what follows the folder in it
+--- (a branch, a summary of the changes, the toggles and a filter).
+local HEADER_ROOM = 90
+
+--- Makes the child's screen wide enough for the explorer's header in the
+--- case `name`, whatever the length of the checkout's path: the folder of
+--- the longest fixture the case makes, and the room for the rest.
+---
+---@param name string
+local function make_room_for_header(name)
+  local folder =
+    vim.fs.joinpath(vim.uv.cwd(), '.tests', 'fixtures', 'git-explorer-' .. name, 'repo')
+  child.o.columns = 2 * (vim.api.nvim_strwidth(vim.fn.fnamemodify(folder, ':~')) + HEADER_ROOM)
+end
+
+--- The cells a line of the explorer's window has in the child.
+local WINDOW_WIDTH = [[(function()
+  local window = vim.fn.win_findbuf(vim.fn.bufnr('aineo://explorer'))[1]
+  return vim.api.nvim_win_get_width(window) - vim.fn.getwininfo(window)[1].textoff
+end)()]]
 
 --- The lines of the explorer's buffer in the child, the header first.
 ---
@@ -799,7 +816,7 @@ T['a folder outside git']['lists a folder when it unfolds, .git hidden, with no 
 end
 
 T['a folder outside git']['says once for the tab that nothing is ignored there, I pressed twice'] = function()
-  child.o.columns = WIDE_COLUMNS
+  make_room_for_header('plain-ignored')
   explore_folder('plain-ignored', PLAIN_FILES, FOLDED_TREE)
 
   entry.press(child, 'I')
@@ -817,7 +834,7 @@ end
 T['ignored entries'] = MiniTest.new_set()
 
 T['ignored entries']['are hidden, and shown and hidden again by I'] = function()
-  child.o.columns = WIDE_COLUMNS
+  make_room_for_header('ignored')
   local top = git_repo.create('explorer-ignored', FILES)
   git_repo.write(top, 'debug.log', { 'log' })
   git_repo.write(top, 'build/out.o', { 'out' })
@@ -853,7 +870,7 @@ end
 T['dotfiles'] = MiniTest.new_set()
 
 T['dotfiles']['are shown, and hidden and shown again by H'] = function()
-  child.o.columns = WIDE_COLUMNS
+  make_room_for_header('dotfiles')
   explore('dotfiles')
 
   entry.press(child, 'H')
@@ -869,7 +886,7 @@ end
 T['the filter'] = MiniTest.new_set()
 
 T['the filter']['shows the files whose path holds it, and an empty one shows every file again'] = function()
-  child.o.columns = WIDE_COLUMNS
+  make_room_for_header('filter')
   explore('filter')
   child.lua([[
     _G.filter_answers = { 'UTIL', '' }
@@ -882,9 +899,10 @@ T['the filter']['shows the files whose path holds it, and an empty one shows eve
   local filtered = explorer_lines()
   entry.press(child, 'f')
 
-  local folder = vim.fn.fnamemodify(child.lua_get('vim.fn.getcwd()'), ':~')
-  eq(vim.startswith(filtered[1], folder), true)
-  eq(vim.endswith(filtered[1], 'ignored hidden  ·  dotfiles shown  ·  filter “UTIL”'), true)
+  local left = vim.fn.fnamemodify(child.lua_get('vim.fn.getcwd()'), ':~') .. ' · main'
+  local right = 'ignored hidden  ·  dotfiles shown  ·  filter “UTIL”'
+  local gap = child.lua_get(WINDOW_WIDTH) - vim.api.nvim_strwidth(left .. right)
+  eq(filtered[1], left .. string.rep(' ', gap) .. right)
   eq(vim.list_slice(filtered, 2), { '▾   src/lib/', '      util.lua' })
   eq(vim.list_slice(explorer_lines(), 2), FOLDED_TREE)
 end
@@ -1156,7 +1174,7 @@ T['the folder shown']['is the one Claude works in, wherever the editor moved sin
 end
 
 T['the filter']['is kept as the tree is read again after a change on disk'] = function()
-  child.o.columns = WIDE_COLUMNS
+  make_room_for_header('filter-refresh')
   local top = explore('filter-refresh')
   child.lua([[
     vim.ui.input = function(_, on_confirm)
