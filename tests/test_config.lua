@@ -13,6 +13,14 @@ local DEFAULTS = {
   changes = { graph_limit = 1000 },
   tabs = { padding = 2, always_show = true },
   find = { picker = 'auto' },
+  explorer = {
+    guides = true,
+    icons = true,
+    dim = true,
+    counts = true,
+    compact = true,
+    diagnostics = true,
+  },
   explain = {
     model = 'sonnet',
     timeout_ms = 180000,
@@ -240,6 +248,54 @@ T['resolve_config()']['refuses a padding that is not a whole number from 0 to 8'
   expect.error(function()
     config.resolve_config({ tabs = { padding = padding } }, nil)
   end, 'tabs%.padding: expected a whole number from 0 to 8')
+end
+
+local EXPLORER_LOOKS = { 'guides', 'icons', 'dim', 'counts', 'compact', 'diagnostics' }
+
+T['resolve_config()']['takes each look of the explorer from either source, on by default'] = function()
+  for _, look in ipairs(EXPLORER_LOOKS) do
+    local from_global = config.resolve_config({ explorer = { [look] = false } }, nil)
+    local from_setup = config.resolve_config(
+      { explorer = { [look] = false } },
+      { explorer = { [look] = true } }
+    )
+
+    eq(from_global.explorer[look], false)
+    eq(from_setup.explorer[look], true)
+    eq(config.resolve_config(nil, nil).explorer[look], true)
+  end
+end
+
+T['resolve_config()']['turns off one look of the explorer and keeps the others'] = function()
+  local resolved = config.resolve_config(nil, { explorer = { icons = false } })
+
+  eq(resolved.explorer, {
+    guides = true,
+    icons = false,
+    dim = true,
+    counts = true,
+    compact = true,
+    diagnostics = true,
+  })
+end
+
+T['resolve_config()']['refuses a look of the explorer that is not a boolean'] = MiniTest.new_set({
+  parametrize = {
+    { 'guides' },
+    { 'icons' },
+    { 'dim' },
+    { 'counts' },
+    { 'compact' },
+    { 'diagnostics' },
+  },
+})
+
+T['resolve_config()']['refuses a look of the explorer that is not a boolean']['as explorer.<look>'] = function(
+  look
+)
+  expect.error(function()
+    config.resolve_config({ explorer = { [look] = 'no' } }, nil)
+  end, 'explorer%.' .. look .. ': expected boolean')
 end
 
 T['resolve_config()']['takes whether the tab line always shows from either source, true by default'] = function()

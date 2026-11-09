@@ -1,10 +1,11 @@
 --- One explorer: its buffer, the tree it reads of the folder it shows, and
 --- the state the user gives it — folds, toggles, filter — for a tab's life.
 
-local claude_marks = require('aineo.explorer.claude_marks')
+local claude_work = require('aineo.explorer.claude_work')
 local decorate = require('aineo.explorer.decorate')
 local folders = require('aineo.explorer.folders')
 local icons = require('aineo.explorer.icons')
+local look = require('aineo.explorer.look')
 local open_buffers = require('aineo.explorer.open_buffers')
 local tree = require('aineo.explorer.tree')
 
@@ -46,6 +47,7 @@ local M = {}
 ---@field paste fun(text: string) pastes `text` into Claude Code's prompt, with no Enter
 ---@field quote_name fun(name: string): string how a name shows on its line, a control character in it escaped
 ---@field change_groups table<string, string> the highlight group a file's mark and name show in, by the kind of its change (`'added'`, `'modified'`, `'deleted'`, `'renamed'`, `'type_changed'`, `'untracked'`)
+---@field look? fun(): table<string, boolean> which looks of the tree are on, by name (`aineo.explorer.Look`); every one is on when not given
 ---@field session_work? fun(done: fun(work: aineo.explorer.SessionWork|nil)) the files in the work of the Claude Code session, their repository's top and their paths from it (`aineo.changes`' `session_work_files()`), nil when they are not known; none given, no file is marked as Claude's
 ---@field define_change_groups fun() defines `change_groups`' groups as default links, as the pane that owns them does
 
@@ -94,10 +96,6 @@ local ROLE_GROUPS = {
   diagnostic_error = 'DiagnosticError',
   diagnostic_warn = 'DiagnosticWarn',
 }
-
---- How long a file that joined the work of the session flashes, in
---- milliseconds.
-local FLASH_MS = 1500
 
 --- The namespace of the explorer's highlights.
 local NAMESPACE = vim.api.nvim_create_namespace('aineo.explorer')
@@ -187,15 +185,6 @@ function M.new(settings)
     drawn_width = nil,
     ---@type (fun(entry: aineo.explorer.Entry): aineo.explorer.Icon|nil)|nil
     icon_for = nil,
-    ---@type table<string, true>
-    claude = {},
-    ---@type table<string, string>|nil
-    claude_signatures = nil,
-    ---@type string|nil
-    claude_directory = nil,
-    ---@type table<string, integer>
-    flash = {},
-    flash_started = 0,
     ---@type string|nil
     failure = nil,
     ---@type table<string, true>
@@ -217,7 +206,6 @@ function M.new(settings)
     ---@type string|nil
     pending_follow = nil,
     nothing_ignored_told = false,
-    counts_shown = true,
   }
 
   ---@type aineo.explorer.Home
@@ -225,6 +213,13 @@ function M.new(settings)
 
   --- The group each role of a span shows in (`aineo.explorer.Span`).
   local role_groups = vim.tbl_extend('force', ROLE_GROUPS, settings.change_groups)
+
+  local redraw_when_shown
+
+  --- The work of the Claude Code session, followed from read to read.
+  local session_work = claude_work.new(function()
+    redraw_when_shown()
+  end)
 
   --- The cells a line of the explorer has in its narrowest window, nil while
   --- no window shows it.
@@ -243,6 +238,7 @@ function M.new(settings)
   ---
   ---@return aineo.explorer.View
   local function view()
+    local looks = look.resolve(settings.look and settings.look())
     local buffers = open_buffers.read(function(file)
       return state.place and path_from(state.place.directory, file)
     end)
@@ -255,18 +251,16 @@ function M.new(settings)
       title = state.place and state.place.title or '',
       branch = state.branch,
       quote = settings.quote_name,
-      guides = true,
-      compact = true,
-      counts = true,
-      dim = true,
+      guides = looks.guides,
+      compact = looks.compact,
+      counts = looks.counts,
+      dim = looks.dim,
       line_counts = state.line_counts,
-      icons = state.icon_for,
-      claude = state.claude,
-      flash = vim.tbl_map(function()
-        return true
-      end, state.flash),
+      icons = looks.icons and state.icon_for or nil,
+      claude = session_work.files(),
+      flash = session_work.flashing(),
       modified = buffers.modified,
-      diagnostics = buffers.diagnostics,
+      diagnostics = looks.diagnostics and buffers.diagnostics or nil,
       width = shown_width(),
     }
   end
@@ -483,7 +477,7 @@ function M.new(settings)
   --- Draws the explorer again, once the commands in flight are done, while
   --- a window shows it, however many times it is asked for meanwhile.
   local redraw_asked = false
-  local function redraw_when_shown()
+  redraw_when_shown = function()
     if redraw_asked then
       return
     end
@@ -518,49 +512,6 @@ function M.new(settings)
     end)
   end
 
-  --- Makes the lines of the files in `flashed` flash for `FLASH_MS`, the
-  --- explorer drawn again when each stops; a file that flashes again before
-  --- it stops flashes for the whole time again.
-  ---
-  ---@param flashed table<string, true>
-  local function flash_files(flashed)
-    if next(flashed) == nil then
-      return
-    end
-    state.flash_started = state.flash_started + 1
-    local token = state.flash_started
-    for path in pairs(flashed) do
-      state.flash[path] = token
-    end
-    vim.defer_fn(function()
-      for path in pairs(flashed) do
-        if state.flash[path] == token then
-          state.flash[path] = nil
-        end
-      end
-      redraw_when_shown()
-    end, FLASH_MS)
-  end
-
-  --- Takes the files in the work of the session for the ones `read` says,
-  --- and makes the lines of those that joined it, or whose change is read
-  --- anew, flash; nothing flashes when the place has not been read before,
-  --- or when the work is not known.
-  ---
-  ---@param read aineo.explorer.RepositoryTree
-  ---@param known boolean whether the work of the session is known
-  local function take_claude_work(read, known)
-    state.claude = read.claude
-    if not known then
-      state.claude_signatures, state.claude_directory = nil, nil
-      return
-    end
-    local signatures = claude_marks.signatures(read.claude, read.marks, read.line_counts)
-    local same_place = state.claude_directory == state.place.directory
-    flash_files(claude_marks.flashed(same_place and state.claude_signatures or nil, signatures))
-    state.claude_signatures, state.claude_directory = signatures, state.place.directory
-  end
-
   --- The paths of the session's work if they are those of `repository`, the
   --- repository the work is in; nil otherwise.
   ---
@@ -589,7 +540,7 @@ function M.new(settings)
     end
     state.tree, state.marks, state.line_counts, state.failure, state.in_git =
       read, {}, {}, nil, false
-    take_claude_work({ claude = {}, marks = {}, line_counts = {} }, false)
+    session_work.take({ claude = {}, marks = {}, line_counts = {} }, directory, false)
     render()
   end
 
@@ -613,7 +564,7 @@ function M.new(settings)
     end
     state.tree, state.marks, state.failure, state.in_git = read.tree, read.marks, nil, true
     state.line_counts = read.line_counts
-    take_claude_work(read, listing.session_paths ~= nil)
+    session_work.take(read, state.place.directory, listing.session_paths ~= nil)
     render()
     watch(repository)
   end
@@ -634,7 +585,8 @@ function M.new(settings)
     if state.show_ignored then
       table.insert(asked, 'ignored')
     end
-    if state.counts_shown then
+    local counts_shown = look.resolve(settings.look and settings.look()).counts
+    if counts_shown then
       table.insert(asked, 'line_counts')
     end
     if settings.session_work then
@@ -672,7 +624,7 @@ function M.new(settings)
     if state.show_ignored then
       git.ignored_files(repository, answered('ignored'))
     end
-    if state.counts_shown then
+    if counts_shown then
       git.line_counts(repository, answered_when_able('line_counts'))
     end
     if settings.session_work then
@@ -688,7 +640,7 @@ function M.new(settings)
   read_tree = function()
     state.reads = state.reads + 1
     local read = state.reads
-    local provider = icons.from_plugins()
+    local provider = look.resolve(settings.look and settings.look()).icons and icons.from_plugins()
     state.icon_for = provider and icons.once_per_path(provider)
     state.place_key = place_key()
     resolve_place(function(place)
