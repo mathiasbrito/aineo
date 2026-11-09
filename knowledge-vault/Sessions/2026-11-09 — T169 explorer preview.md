@@ -35,7 +35,7 @@ T169 (D144, A718): in the explorer, `l` on a file shows it in the file column an
 
 ## Evidence
 
-Units 1–4 were seen failing in `tests/test_entry_explorer.lua` before any production code changed (five failing cases, for the intended reason: the file column stayed empty, the system was not asked to open the file, or the message was missing). Units 5 and 6 were written after the code, and each was seen to fail under a mutant (below) instead.
+Units 1–4 were seen failing in `tests/test_entry_explorer.lua` before any production code changed (five failing cases, for the intended reason: the file column stayed empty, the system was not asked to open the file, or the message was missing). **A deviation from the `tdd` skill (its §7):** units 5 and 6 (the header, the map's description) were written after the code, not before it, and were never seen red as written; each was seen failing only under a mutant (below). The fix round (A719) added two more cases the same way, on behaviour already right: the cheatsheet's row pinned to the map's description (seen failing under the mutant that reverts the row) and `l` with a modified buffer in the file column under `nohidden` (the file opens in a window above, the cursor returns to the tree on its line; seen failing under the no-focus-return mutant).
 
 Mutants of `lua/aineo/explorer/home.lua`, each run on `tests/test_entry_explorer.lua` and each killed: no return of the cursor to the tree (2 fail); the deleted-file check off (2); the folder-on-disk check off (2); no cursor line restored after `l` (1); `l` on a folder not toggling (11); Enter returning the cursor to the tree (3); the map's description reverted (1); the header unguarded (1, after the header test also read `v:errmsg`: the first version survived).
 
