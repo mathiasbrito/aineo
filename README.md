@@ -75,7 +75,12 @@ and its state:
   frontend with watch, say, each in a terminal of its own, stacked in the
   right column.
 - **Explorer pane.** `\e`: the folder Claude works in as a tree, folders
-  first, with git's marks, over the right column's whole height.
+  first, with git's marks, over the right column's whole height. It shows
+  guides, file icons when mini.icons or nvim-web-devicons is installed,
+  the number of changes in each folder, the lines added and removed in each
+  changed file, the files Claude's session touched marked `✦` (flashing as
+  they join), unsaved edits `●`, diagnostics counts, and a chain of folders
+  with one folder each on one line.
 - **Walkthrough pane.** `\pw`: the plan of a code walkthrough Claude gives
   you, in the Report's place, Input below it: what the walkthrough is about,
   what it covers, its steps with the one on show marked, and the concepts each
@@ -257,6 +262,19 @@ and, in Terminal mode, `<C-\>Z` do the same.
 | `@` | pastes `@path ` into Claude's prompt, with no Enter |
 | `I`, `H`, `f`, `R` | show ignored files, hide dotfiles, filter by path, read again |
 | `s` | picks the worktree or branch shown, the same pick as the changes pane's `s` |
+
+What the tree shows besides the names, each a look that `explorer.*` turns off (see Settings below), display only, so the keys read the same lines:
+
+| Look | Shows |
+|---|---|
+| Header | on the left the folder, its branch and a summary (`2 changed · 1 new`); on the right the toggles and the filter, which go first when the window is narrow |
+| `explorer.guides` | `│ `, `├ ` and `└ ` over the indent, in `AineoExplorerGuide` |
+| `explorer.icons` | the file's icon, from mini.icons (set up) or nvim-web-devicons, never a dependency |
+| `explorer.counts` | `•N` after a folder holding changes; `+added −removed` at the right of a changed file (one `git diff --numstat` per read) |
+| `explorer.dim` | the names of unchanged files dim while a changed file shows |
+| `explorer.compact` | a folder holding a folder alone folds onto one line with it, `lua/aineo/explorer/`; `l`, Enter, `h` and `@` act on the deepest |
+| `explorer.diagnostics` | `E2 W1` at the right of a loaded file |
+| always on | `✦` before the files in Claude's work (`AineoExplorerClaude`; the line flashes in `AineoExplorerClaudeFlash` for 1.5 s as a file joins); ` ●` after the name of a file with unsaved edits (`AineoExplorerModified`) |
 
 ## The changes pane
 
@@ -868,6 +886,12 @@ vim.g.aineo = {
 | `tabs.padding` | `2` | Spaces either side of each title in aineo's tab line, from 0 to 8. |
 | `tabs.always_show` | `true` | Whether the tab line shows with a single tab page: aineo sets `'showtabline'` to `2` once, when its first tab opens, and a value you set afterwards is kept. `false` leaves `'showtabline'` as you have it. Read at the first tab: a later change needs a restart. |
 | `find.picker` | `'auto'` | The picker `\f` hands its search to: `'auto'` takes the first installed of snacks.nvim, fzf-lua, telescope.nvim and mini.pick; `'snacks'`, `'fzf-lua'`, `'telescope'` or `'mini.pick'` takes that one alone. With none installed, or the one named missing, aineo lists the files through `vim.ui.select()`. None is a dependency. |
+| `explorer.guides` | `true` | Whether the explorer lays guides over the indent of its entries. |
+| `explorer.icons` | `true` | Whether the explorer shows file icons from mini.icons or nvim-web-devicons, when either is installed. |
+| `explorer.dim` | `true` | Whether unchanged files dim while a changed file shows. |
+| `explorer.counts` | `true` | Whether folders show the number of changed files below them and changed files the lines added and removed; `false` also stops the `git diff --numstat` that reads them. |
+| `explorer.compact` | `true` | Whether a chain of folders each holding a folder alone shows on one line. |
+| `explorer.diagnostics` | `true` | Whether files show their errors and warnings. |
 | `explain.model` | `'sonnet'` | The model of the Claude Code that `\v` and `\V` start to explain code, as `claude --model` takes it: an alias such as `'opus'` or a full name. A non-empty string. |
 | `explain.timeout_ms` | `180000` | How long a request to explain code may run before aineo stops its Claude Code, a whole number of milliseconds of at least 1. |
 | `explain.deep_model` | `'sonnet'` | The model of the Claude Code that `\VV` and `\VVI` start, as `claude --model` takes it. A non-empty string. |
