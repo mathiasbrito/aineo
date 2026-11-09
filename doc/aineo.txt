@@ -356,7 +356,11 @@ mark; `R` reads it again.
 
 The keys of the tree, in Normal mode, in its buffer alone:
 
-    `l`        unfold a folder, or fold it again
+    `l`        unfold a folder, or fold it again; on a file, show it in the
+             file column as `<CR>` opens it, the cursor staying in the
+             tree, on that line, in Normal mode, as `l` in the changes
+             pane does (|aineo-changes|); moving the cursor shows
+             nothing, the next `l` or `<CR>` shows the next file
     `<CR>`     unfold or fold a folder; on a file, open it in the file
              column and move the cursor there, as a link opens
              (|aineo-links|): a text file in aineo, anything else with
