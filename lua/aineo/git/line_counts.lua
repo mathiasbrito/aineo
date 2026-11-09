@@ -15,8 +15,8 @@ local M = {}
 --- The counts `git diff --numstat -z` gave as `output`: per file its
 --- added and removed counts and its path, a binary file's counts shown as
 --- `-`; for a rename the path field is empty, followed by the old path and
---- the new one. A binary file has no count here, and a rename counts under
---- its new path.
+--- the new one. A binary file and a file with no line changed have no count
+--- here, and a rename counts under its new path.
 ---
 ---@param output string
 ---@return table<string, aineo.git.LineCount>
@@ -35,8 +35,9 @@ local function parse_numstat(output)
       else
         index = index + 1
       end
-      if added ~= '-' and removed ~= '-' and path then
-        counts[path] = { added = tonumber(added), removed = tonumber(removed) }
+      local lines_added, lines_removed = tonumber(added), tonumber(removed)
+      if lines_added and lines_removed and path and lines_added + lines_removed > 0 then
+        counts[path] = { added = lines_added, removed = lines_removed }
       end
     end
   end

@@ -88,6 +88,31 @@ T['the line counts']['are those of the new path for a renamed file, the old path
   eq(seen.result, { ['new.txt'] = { added = 1, removed = 0 } })
 end
 
+T['the line counts']['read a rename from a path with tabs in it as one file, the path of the new name'] = function()
+  local top = git_repo.create('counts-renamed-tabs', {
+    ['1\t2\tz.txt'] = { 'l1', 'l2', 'l3', 'l4', 'l5', 'l6' },
+  })
+  git_repo.git(top, { 'mv', '1\t2\tz.txt', 'new.txt' })
+
+  local seen = child.lua(LINE_COUNTS, { top })
+
+  eq(seen.result, {})
+end
+
+T['the line counts']['detect a rename where the repository turns rename detection off'] = function()
+  local top = git_repo.create('counts-renamed-off', {
+    ['old.txt'] = { 'l1', 'l2', 'l3', 'l4', 'l5', 'l6' },
+  })
+  git_repo.git(top, { 'config', 'diff.renames', 'false' })
+  git_repo.git(top, { 'mv', 'old.txt', 'new.txt' })
+  git_repo.write(top, 'new.txt', { 'l1', 'l2', 'l3', 'l4', 'l5', 'l6', 'l7' })
+  git_repo.git(top, { 'add', 'new.txt' })
+
+  local seen = child.lua(LINE_COUNTS, { top })
+
+  eq(seen.result, { ['new.txt'] = { added = 1, removed = 0 } })
+end
+
 T['the line counts']['are every staged line as added before the first commit'] = function()
   local top = git_repo.create_unborn('counts-unborn')
   git_repo.write(top, 'first.txt', { '1', '2', '3' })
