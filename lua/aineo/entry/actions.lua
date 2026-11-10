@@ -302,10 +302,23 @@ ACTIONS['layout right'] = function()
   put_claude_on('right')
 end
 
+--- The side Claude Code's column is on in the screen the user sees: that of
+--- the aineo tab of the current tab page, else of the tab used last; the side
+--- the user chose or the setting names when there is none.
+---
+---@return aineo.layout.Side
+local function side_on_screen()
+  local tab = registry.tab_of_current_page() or registry.last_used_tab
+  if tab and tab.is_bound() then
+    return tab.homes.layout.claude_side()
+  end
+  return layout_side.current()
+end
+
 --- What `:Aineo layout swap` does: puts Claude Code's column on the side it
---- is not on, in every aineo tab, for the editor's life.
+--- is not on, as the user sees it, in every aineo tab, for the editor's life.
 ACTIONS['layout swap'] = function()
-  put_claude_on(require('aineo.layout').opposite_side(layout_side.current()))
+  put_claude_on(require('aineo.layout').opposite_side(side_on_screen()))
 end
 
 ACTIONS['tab new'] = function()
