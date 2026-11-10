@@ -451,6 +451,24 @@ T['focus_explorer_column()']['raises an error naming the setting when the layout
   end, 'arrangement%.explorer_column')
 end
 
+T['a file opened in the explorer column'] = MiniTest.new_set()
+
+T['a file opened in the explorer column']['moves to the file column, the column showing the explorer again'] = function()
+  local buffers, arrangement = arrangement_with_column('left')
+  layout.open(child, arrangement)
+  focus_explorer_column(arrangement)
+
+  child.cmd('edit ' .. layout.file('first.txt'))
+  local file = child.lua_get('vim.fn.bufnr(...)', { layout.file('first.txt') })
+  layout.wait_until(child, '#vim.api.nvim_tabpage_list_wins(0) == 5')
+
+  local explorer, file_box = box_of(buffers.explorer), box_of(file)
+  eq(explorer.col, 0)
+  expect.equality(file_box.col > box_of(buffers.claude).col, true)
+  expect.equality(file_box.col < box_of(buffers.report).col, true)
+  eq(layout.window_count(child), 5)
+end
+
 T['explorer_column()'] = MiniTest.new_set()
 
 T['explorer_column()']['is false before a column was handed and the side after'] = function()
