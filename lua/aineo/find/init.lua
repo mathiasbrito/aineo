@@ -26,6 +26,7 @@ end
 ---@field directory string the directory whose files are searched: an absolute path
 ---@field picker string `find.picker`: `auto`, or the name of the one picker to use
 ---@field list_files? aineo.find.ListFiles how the files of the repository the directory is in are listed, for the finder's own list; nil when the directory is in none, and the files are those a walk of it finds
+---@field on_open? fun(file: string) called with the absolute path of the file the finder's own list opened, once it is open; never for a file a third-party picker opens, which the finder does not see
 
 --- What the user is told when the picker `find.picker` forces, `name`, is not
 --- installed.
@@ -42,20 +43,26 @@ end
 local PROMPT = 'Find file'
 
 --- Opens `path`, relative to `directory`, in `window` when it still exists,
---- else in the current window, as `:edit` does. Tells the user once, with an
---- error, when `:edit` refuses — the buffer in the window holds unsaved changes
---- and cannot be hidden, say.
+--- else in the current window, as `:edit` does, and calls `on_open` with its
+--- absolute path. Tells the user once, with an error, when `:edit` refuses —
+--- the buffer in the window holds unsaved changes and cannot be hidden, say.
 ---
 ---@param directory string
 ---@param path string
 ---@param window integer
-local function open_file(directory, path, window)
+---@param on_open? fun(file: string)
+local function open_file(directory, path, window, on_open)
   if vim.api.nvim_win_is_valid(window) then
     vim.api.nvim_set_current_win(window)
   end
-  local opened, failure = pcall(vim.cmd.edit, vim.fn.fnameescape(vim.fs.joinpath(directory, path)))
+  local file = vim.fs.joinpath(directory, path)
+  local opened, failure = pcall(vim.cmd.edit, vim.fn.fnameescape(file))
   if not opened then
     vim.notify(('aineo: %s'):format((tostring(failure):gsub('^Vim:', ''))), vim.log.levels.ERROR)
+    return
+  end
+  if on_open then
+    on_open(file)
   end
 end
 
@@ -74,13 +81,14 @@ end
 
 --- Offers the files under `directory` through `vim.ui.select()`, once they
 --- are listed (`aineo.find.files`'s `list()`, given `list_files`), and opens
---- the one picked in the window the cursor is in now. Tells the user once, with
---- a warning, when listing the repository's files failed and a walk of the
---- folder stands in.
+--- the one picked in the window the cursor is in now, and calls `on_open` with
+--- it. Tells the user once, with a warning, when listing the repository's
+--- files failed and a walk of the folder stands in.
 ---
 ---@param directory string
 ---@param list_files aineo.find.ListFiles|nil
-local function select_from_files(directory, list_files)
+---@param on_open? fun(file: string)
+local function select_from_files(directory, list_files, on_open)
   local window = vim.api.nvim_get_current_win()
   files.list(directory, list_files, function(listed, cut, failure)
     if failure then
@@ -98,7 +106,7 @@ local function select_from_files(directory, list_files)
     end
     vim.ui.select(listed, { prompt = PROMPT }, function(path)
       if path then
-        open_file(directory, path, window)
+        open_file(directory, path, window, on_open)
       end
     end)
   end)
@@ -114,16 +122,18 @@ end
 --- the user is told once that it is not installed.
 ---
 ---@param options aineo.find.Options
+---@return boolean handed_to_a_picker whether a third-party picker took the search, which opens a file in its own time and tells no one; false for the finder's own list, which tells `options.on_open`
 function M.find_file(options)
   local picker = pickers.installed(options.picker)
   if picker then
     picker.open(options.directory)
-    return
+    return true
   end
   if options.picker ~= 'auto' then
     vim.notify(not_installed(options.picker), vim.log.levels.WARN)
   end
-  select_from_files(options.directory, options.list_files)
+  select_from_files(options.directory, options.list_files, options.on_open)
+  return false
 end
 
 return M

@@ -69,11 +69,15 @@ function M.find_in(tab)
       return
     end
     errors.run(function()
-      find_reveal.watching(tab.homes.explorer.reveal, function()
-        require('aineo.find').find_file({
+      local reveal = tab.homes.explorer.reveal
+      find_reveal.watching(reveal, function()
+        return require('aineo.find').find_file({
           directory = repository and repository.top or directory,
           picker = picker,
           list_files = repository and list_files_of(repository) or nil,
+          on_open = function(file)
+            find_reveal.reveal_when_settled(reveal, file)
+          end,
         })
       end)
     end)

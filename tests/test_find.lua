@@ -129,6 +129,15 @@ T['find_file()']['asks the first installed picker, and no other, when the picker
   eq(find_pickers.calls(child), { { picker = 'fzf-lua', options = { cwd = '/tmp/root' } } })
 end
 
+T['find_file()']['says it handed the search to a third-party picker'] = function()
+  find_pickers.install(child, { 'snacks' })
+
+  local handed =
+    child.lua_get("require('aineo.find').find_file({ directory = '/tmp/root', picker = 'auto' })")
+
+  eq(handed, true)
+end
+
 T['find_file() with no picker installed'] = MiniTest.new_set()
 
 --- The Lua that replaces `vim.ui.select()` in the child with a recorder: each
@@ -366,6 +375,71 @@ T['find_file() with no picker installed']['opens the file picked in the window t
     child.bo.modifiable,
     child.bo.readonly,
   }, { true, vim.fs.joinpath(top, 'b.txt'), true, false })
+end
+
+--- Starts the finder in `child` for `directory` with no third-party picker,
+--- `vim.ui.select()` recorded (`RECORD_SELECTIONS`), and `on_open` keeping each
+--- file it is called with in `_G.opened`; `_G.handed` is what the call returned.
+---
+---@param directory string
+local function find_keeping_opened_files(directory)
+  find_pickers.install(child, {})
+  child.lua(RECORD_SELECTIONS)
+  child.lua(
+    [[
+      _G.opened = {}
+      _G.handed = require('aineo.find').find_file({
+        directory = ...,
+        picker = 'auto',
+        on_open = function(file)
+          table.insert(_G.opened, file)
+        end,
+      })
+    ]],
+    { directory }
+  )
+  git_repo.wait_until('the files to be offered', function()
+    return child.lua_get('#_G.selections') > 0
+  end)
+end
+
+T['find_file() with no picker installed']['says it handed the search to no picker'] = function()
+  local top = git_repo.create('find-handed', { ['a.txt'] = { 'one' } })
+
+  find_keeping_opened_files(top)
+
+  eq(child.lua_get('_G.handed'), false)
+end
+
+T['find_file() with no picker installed']['tells on_open the absolute path of the file picked, once it is open'] = function()
+  local top = git_repo.create('find-on-open', { ['a.txt'] = { 'one' }, ['b.txt'] = { 'two' } })
+  find_keeping_opened_files(top)
+
+  child.lua('_G.choose(2)')
+
+  eq(child.lua_get('_G.opened'), { vim.fs.joinpath(top, 'b.txt') })
+end
+
+T['find_file() with no picker installed']['tells on_open nothing when the search is cancelled'] = function()
+  local top = git_repo.create('find-on-open-cancel', { ['a.txt'] = { 'one' } })
+  find_keeping_opened_files(top)
+
+  child.lua('_G.callbacks[#_G.callbacks](nil)')
+
+  eq(child.lua_get('_G.opened'), {})
+end
+
+T['find_file() with no picker installed']['tells on_open nothing when the file cannot be opened'] = function()
+  local top =
+    git_repo.create('find-on-open-refused', { ['a.txt'] = { 'one' }, ['b.txt'] = { 'two' } })
+  find_keeping_opened_files(top)
+  child.cmd('set nohidden')
+  child.cmd('enew')
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { 'unsaved' })
+
+  child.lua('_G.choose(1)')
+
+  eq(child.lua_get('_G.opened'), {})
 end
 
 return T
