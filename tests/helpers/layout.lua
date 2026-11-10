@@ -91,12 +91,19 @@ function M.stand_ins(child)
 end
 
 --- The arrangement `require('aineo.layout').open()` takes, showing
---- `buffers` with the Report at `M.REPORT_HEIGHT`.
+--- `buffers` with the Report at `M.REPORT_HEIGHT`, and Claude's column on
+--- `claude_side` when given.
 ---
 ---@param buffers { claude: integer, report: integer }
+---@param claude_side? 'left'|'right'
 ---@return table arrangement
-function M.arrangement(buffers)
-  return { claude = buffers.claude, report = buffers.report, report_height = M.REPORT_HEIGHT }
+function M.arrangement(buffers, claude_side)
+  return {
+    claude = buffers.claude,
+    report = buffers.report,
+    report_height = M.REPORT_HEIGHT,
+    claude_side = claude_side,
+  }
 end
 
 --- Opens the layout in `child` with `arrangement`.
@@ -124,15 +131,17 @@ function M.input_buffer(child)
   return child.lua_get([[require('aineo.layout').input_buffer()]])
 end
 
---- Starts `child`, opens the layout in it with the stand-ins and returns the
---- buffers of its three windows by name.
+--- Starts `child`, opens the layout in it with the stand-ins, Claude's column
+--- on `claude_side` when given, and returns the buffers of its three windows
+--- by name.
 ---
 ---@param child table
+---@param claude_side? 'left'|'right'
 ---@return { claude: integer, report: integer, input: integer } buffers
-function M.open_with_stand_ins(child)
+function M.open_with_stand_ins(child, claude_side)
   M.start(child)
   local buffers = M.stand_ins(child)
-  M.open(child, M.arrangement(buffers))
+  M.open(child, M.arrangement(buffers, claude_side))
   buffers.input = M.input_buffer(child)
   return buffers
 end

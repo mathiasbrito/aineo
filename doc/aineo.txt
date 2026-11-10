@@ -4692,6 +4692,13 @@ layout.report_height	A number strictly between 0 and 1.
 			The Agent Report's share of the right column's
 			rows; Input takes the rest.
 
+                                             *aineo-config-layout.claude_side*
+layout.claude_side	`'left'` or `'right'`. Default: `'left'`
+			The side of the screen Claude Code's terminal is on;
+			the panes column (|aineo-layout|) is on the other
+			side and the file column between them. `'right'`
+			mirrors the layout: panes, files, Claude Code.
+
                   *aineo-config-changes* *aineo-config-changes.working_branch*
 changes.working_branch	A non-empty string.
 			Default: none
