@@ -49,8 +49,18 @@ A728 (a bug found in v0.2.100): measured, not reproduced. A terminal job recordi
 Whole run on Neovim 0.12.5, on the host, on the tree pushed with `AINEO_TEST_RUN_LIMIT_MS=2400000`: 10267 cases in 320 groups, `Fails (0)`, exit 0. A first run of the same tree under a host load of 55 ended on the default 960 s limit with one failure in `tests/test_entry_sessions.lua` ("is refused while the panes follow a claimed session", a file this packet does not touch) and `tests/test_send.lua` unfinished; the rerun alone was cut short by the host, and the second whole run passed both. The touched files alone: `test_layout_explorer_column`, `test_layout_swap_terminal_size`, `test_explorer_home_reveal`, `test_config`, `test_doc`, `test_layout_side`, `test_layout_file_column`, `test_entry_explorer_column`, `test_entry_find_reveal`, `test_entry_find`, `test_entry_explorer`: all `Fails (0)`; `make lint` clean.
 
 
+## Fix round (review of the pull request, attack and test integrity)
+
+Six findings, each fixed test first and seen failing; the reviewer's measured prototypes were the leads.
+
+1. **`\f` revealed nothing with the real snacks.nvim picker.** It opens its windows after `picker.files()` returns, so the watch ended at once, and its close puts the cursor in a window showing a file, whose `BufEnter` revealed the old file. `aineo.entry.find_reveal` now follows `BufWinEnter`, counts the picker as seen on a `WinEnter` into a window that did not exist when the search began, reveals only while the search call runs or after a picker window was seen, and ends two ticks after a `WinEnter` into an existing tiled window. The tests gain an asynchronous fake like snacks (the confirm case red first). Mutants F1-F6 killed by assertions.
+2. **A swap absorbed a window across the screen and grew `'cmdheight'`** (1 to 14 with the column, 1 to 8 without, already in T171), and **3.** reopening the column, Claude's window or moving the column back spanned it too. `keeping_across_the_screen()` records the layout-free windows as wide as the screen with edge and height and puts them back after those moves (17 cases red first, four commands: `botright 6new`, `botright copen 6`, `topleft 6new`, `help`); mutants A1-A8 killed, A9 (the explorer window counted as across) is equivalent, it is never as wide as the screen.
+4. **Ending `\Z` after a resize scaled the column** (80 to 120 gave 45): its width is set again after `full_zoom.restore()`; the entry case asserts the column is 1 wide while zoomed.
+5. **The layout's "kept from before" contract** (mutant `arrangement.explorer or state.buffers.explorer`) is pinned for the buffer, the column and the width.
+6. **A live `setup()` applies at once** (the orchestrator's ruling, recorded in the D148 row): `setup()` fires `User AineoSetup`; `plugin/aineo.lua` handles it without loading `aineo.entry` when that is not loaded; `aineo.entry.explorer_column` applies the settings to every bound tab through `aineo.layout`'s new `set_explorer_column()`, which works on a layout in any tab page. Layout 7 and entry 6 cases red first; mutants S1-S10 killed after two validation cases were tightened. The help's wording is fixed. The 31-column note (Claude's window 0 wide on a tiny screen) is left as it is, as ruled.
+
 ## Open threads
 
-- A window across the whole width opened before a swap is absorbed by the swap (T171's `win = -1`), so the explorer column, like the others, then spans its cells; the new tests pin the order only.
 - A reveal asked before the explorer's first tree read moves no cursor; the file is highlighted once it is read.
 - A picker that confirms its file more than two ticks after its window closed is not revealed.
+- A tiny screen (31 columns) leaves Claude's window 0 wide once the explorer column takes its width.
