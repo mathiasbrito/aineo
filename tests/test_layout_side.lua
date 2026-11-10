@@ -322,4 +322,192 @@ T['open() on a layout that is open']['rebuilds on the side the layout was set to
   eq(lies_left_of(buffers.report, buffers.claude), true)
 end
 
+T['the file column on a swapped layout'] = MiniTest.new_set()
+
+T['the file column on a swapped layout']['takes a file shown with show_file() between the two columns'] = function()
+  local buffers = layout.open_with_stand_ins(child, 'right')
+  local path = layout.file('first.txt')
+  child.cmd('badd ' .. path)
+  local file = child.lua_get('vim.fn.bufnr(...)', { path })
+
+  child.lua([[require('aineo.layout').show_file(...)]], { file })
+
+  eq(layout.window_count(child), 4)
+  eq(lies_left_of(buffers.report, file), true)
+  eq(lies_left_of(file, buffers.claude), true)
+end
+
+T['the file column on a swapped layout']['takes a diff shown with show_diff() between the two columns'] = function()
+  local buffers = layout.open_with_stand_ins(child, 'right')
+  local diff = layout.named_scratch(child, 'aineo://a-diff')
+
+  child.lua([[require('aineo.layout').show_diff(...)]], { diff })
+
+  eq(lies_left_of(buffers.report, diff), true)
+  eq(lies_left_of(diff, buffers.claude), true)
+end
+
+T['the file column on a swapped layout']['takes a file opened from Claude’s window, between the two columns'] = function()
+  local buffers = layout.open_with_stand_ins(child, 'right')
+  local path = layout.file('first.txt')
+  layout.enter_window_showing(child, buffers.claude)
+
+  child.cmd('edit ' .. path)
+
+  local file = child.lua_get('vim.fn.bufnr(...)', { path })
+  eq(layout.wait_until(child, 'vim.fn.bufwinid(...) ~= -1', { file }), true)
+  eq(lies_left_of(buffers.report, file), true)
+  eq(lies_left_of(file, buffers.claude), true)
+end
+
+T['the file column on a swapped layout']['takes a file shown while Claude’s window is closed, on Claude’s side of the right column'] = function()
+  local buffers = layout.open_with_stand_ins(child, 'right')
+  layout.close_windows(child, buffers, { 'claude' })
+  local path = layout.file('first.txt')
+  child.cmd('badd ' .. path)
+  local file = child.lua_get('vim.fn.bufnr(...)', { path })
+
+  child.lua([[require('aineo.layout').show_file(...)]], { file })
+
+  eq(lies_left_of(buffers.report, file), true)
+end
+
+T['the file column on a swapped layout']['tells whether a window is in it'] = function()
+  local buffers = open_with_a_file_column('right')
+
+  local in_the_column = child.lua_get(
+    [[(function(file, report, claude)
+      local layout = require('aineo.layout')
+      return {
+        layout.is_file_column_window(vim.fn.bufwinid(file)),
+        layout.is_file_column_window(vim.fn.bufwinid(report)),
+        layout.is_file_column_window(vim.fn.bufwinid(claude)),
+      }
+    end)(...)]],
+    { buffers.file, buffers.report, buffers.claude }
+  )
+
+  eq(in_the_column, { true, false, false })
+end
+
+T['the panes column on a swapped layout'] = MiniTest.new_set()
+
+T['the panes column on a swapped layout']['has the area of the Report and Input, on the left'] = function()
+  local buffers = layout.open_with_stand_ins(child, 'right')
+
+  local area = child.lua_get([[require('aineo.layout').right_column_area()]])
+
+  local report = layout.box(child, layout.window_showing(child, buffers.report))
+  eq(area.col, 0)
+  eq(area.width, report.width)
+  eq(area.row, 0)
+end
+
+T['the panes column on a swapped layout']['has the area of the Report and Input, on the right, once it moved'] = function()
+  local buffers = layout.open_with_stand_ins(child, 'right')
+  set_claude_side('left')
+
+  local area = child.lua_get([[require('aineo.layout').right_column_area()]])
+
+  local report = layout.box(child, layout.window_showing(child, buffers.report))
+  eq(area.col, report.col)
+end
+
+T['the panes column on a swapped layout']['reopens its Report above Input, on the left'] = function()
+  local buffers = layout.open_with_stand_ins(child, 'right')
+  layout.close_windows(child, buffers, { 'report' })
+
+  layout.open(child, layout.arrangement(buffers))
+
+  local boxes = layout.boxes(child, buffers)
+  eq({ boxes.report.col, boxes.report.row }, { 0, 0 })
+  eq(boxes.input.row > boxes.report.row, true)
+  eq(boxes.claude.col > boxes.report.col, true)
+end
+
+T['the panes column on a swapped layout']['reopens the Report and Input on the left once both closed'] = function()
+  local buffers = layout.open_with_stand_ins(child, 'right')
+  layout.close_windows(child, buffers, { 'report', 'input' })
+
+  layout.open(child, layout.arrangement(buffers))
+
+  eq(lies_left_of(buffers.report, buffers.claude), true)
+  eq(lies_left_of(buffers.input, buffers.claude), true)
+end
+
+T['the panes column on a swapped layout']['reopens Input below the Report'] = function()
+  local buffers = layout.open_with_stand_ins(child, 'right')
+  layout.close_windows(child, buffers, { 'input' })
+
+  layout.open(child, layout.arrangement(buffers))
+
+  local boxes = layout.boxes(child, buffers)
+  eq(boxes.input.col, boxes.report.col)
+  eq(boxes.input.row > boxes.report.row, true)
+end
+
+T['the panes column on a swapped layout']['keeps the Report’s share of its rows'] = function()
+  local buffers = layout.open_with_stand_ins(child, 'right')
+
+  local boxes = layout.boxes(child, buffers)
+  layout.expect_near(
+    boxes.report.height,
+    layout.REPORT_HEIGHT * (boxes.report.height + boxes.input.height)
+  )
+end
+
+T['the panes column on a swapped layout']['shows the changes pane in the same two windows'] = function()
+  local buffers = layout.open_with_stand_ins(child, 'right')
+  local files = layout.named_scratch(child, 'aineo://changes-files')
+  local commits = layout.named_scratch(child, 'aineo://changes-commits')
+  local arrangement = layout.arrangement(buffers)
+  arrangement.changes = { files = files, commits = commits }
+
+  child.lua([[require('aineo.layout').show_pane('changes', ...)]], { arrangement })
+
+  eq(lies_left_of(files, buffers.claude), true)
+  eq(lies_left_of(commits, buffers.claude), true)
+end
+
+T['the panes column on a swapped layout']['gives the terminal pane the whole column on the left and gives Input back'] = function()
+  local buffers = layout.open_with_stand_ins(child, 'right')
+  local shell = layout.terminal(child)
+  local arrangement = layout.arrangement(buffers)
+  arrangement.shell = shell
+
+  child.lua([[require('aineo.layout').show_pane('terminal', ...)]], { arrangement })
+  local alone = layout.window_count(child)
+  local shell_is_left = lies_left_of(shell, buffers.claude)
+  child.lua([[require('aineo.layout').show_pane('agent', ...)]], { arrangement })
+
+  eq({ alone, shell_is_left }, { 2, true })
+  eq(layout.window_count(child), 3)
+  eq(lies_left_of(buffers.input, buffers.claude), true)
+end
+
+T['the panes column on a swapped layout']['opens Input on the left when the Report’s window was closed under the terminal pane that gives way'] = function()
+  local buffers = layout.open_with_stand_ins(child, 'right')
+  local shell = layout.terminal(child)
+  local arrangement = layout.arrangement(buffers)
+  arrangement.shell = shell
+  child.lua([[require('aineo.layout').show_pane('terminal', ...)]], { arrangement })
+  child.lua('vim.api.nvim_win_close(vim.fn.win_findbuf(...)[1], false)', { shell })
+
+  child.cmd('bwipeout! ' .. shell)
+
+  eq(layout.wait_until(child, 'vim.fn.bufwinid(...) ~= -1', { buffers.input }), true)
+  eq(lies_left_of(buffers.input, buffers.claude), true)
+end
+
+T['the panes column on a swapped layout']['zooms a window of the column to its rows'] = function()
+  local buffers = layout.open_with_stand_ins(child, 'right')
+  layout.enter_window_showing(child, buffers.input)
+
+  child.lua([[require('aineo.layout').toggle_zoom()]])
+
+  eq(child.lua_get([[require('aineo.layout').is_zoomed()]]), true)
+  local boxes = layout.boxes(child, buffers)
+  eq(boxes.input.height > boxes.report.height, true)
+end
+
 return T
