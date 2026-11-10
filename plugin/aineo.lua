@@ -847,6 +847,7 @@ end
 vim.api.nvim_create_autocmd('User', {
   group = vim.api.nvim_create_augroup('aineo.setup', {}),
   pattern = 'AineoSetup',
+  nested = true,
   desc = 'aineo: make the explorer column of every tab what setup() set',
   callback = function()
     if package.loaded['aineo.entry'] then
