@@ -639,6 +639,53 @@ local function make_layout(input_name, group_name)
     end
   end
 
+  --- The windows, top to bottom, of the column that holds `window`, in the
+  --- row of the tab that holds the layout's windows; none when no row does.
+  --- Read from the tab as it is now, so that it is read for both columns
+  --- before either moves: a window across the screen below the row turns the
+  --- column the other moves to the edge into the whole old row.
+  ---
+  ---@param window integer
+  ---@return integer[] members
+  local function column_members(window)
+    local tree = vim.fn.winlayout(vim.api.nvim_tabpage_get_number(layout_tab()))
+    return columns.windows_of_column_holding(tree, existing_windows(), window)
+  end
+
+  --- Moves the windows of a column, as `column_members()` listed them, to the
+  --- outer edge of the screen on `edge`, window by window, each below the one
+  --- before it: the windows keep their buffers, jobs, cursors and IDs. A
+  --- window of the column split further than a column holds comes with it,
+  --- below the window before it.
+  ---
+  ---@param members integer[]
+  ---@param edge aineo.layout.Side
+  local function move_column(members, edge)
+    local above = nil
+    for _, member in ipairs(members) do
+      vim.api.nvim_win_set_config(
+        member,
+        above and { split = 'below', win = above } or { split = edge, win = -1 }
+      )
+      above = member
+    end
+  end
+
+  --- Moves the explorer column back to the outer edge of its side when a
+  --- column opened beyond it, as Claude's does at the edge of the screen: it
+  --- is left alone while it is outermost, or when no row of the tab holds the
+  --- layout's windows and it.
+  local function keep_explorer_outermost()
+    if not has_explorer_column() then
+      return
+    end
+    local held = vim.list_extend(existing_windows(), { state.explorer_window })
+    local tree = vim.fn.winlayout(vim.api.nvim_tabpage_get_number(layout_tab()))
+    if not columns.is_outermost(tree, held, state.explorer_window, state.explorer_column) then
+      move_column(column_members(state.explorer_window), state.explorer_column)
+    end
+  end
+
   --- Puts the layout's proportions back: the columns' widths, the Report's
   --- share of the right column's rows when Input's window shows, and the
   --- equal shares of the run pane's stack; with the right column zoomed, the
@@ -648,6 +695,7 @@ local function make_layout(input_name, group_name)
     if keep_full_zoom() then
       return
     end
+    keep_explorer_outermost()
     size_columns()
     if keep_zoom() then
       return
@@ -708,38 +756,6 @@ local function make_layout(input_name, group_name)
     end
   end
 
-  --- The windows, top to bottom, of the column that holds `window`, in the
-  --- row of the tab that holds the layout's windows; none when no row does.
-  --- Read from the tab as it is now, so that it is read for both columns
-  --- before either moves: a window across the screen below the row turns the
-  --- column the other moves to the edge into the whole old row.
-  ---
-  ---@param window integer
-  ---@return integer[] members
-  local function column_members(window)
-    local tree = vim.fn.winlayout(vim.api.nvim_tabpage_get_number(layout_tab()))
-    return columns.windows_of_column_holding(tree, existing_windows(), window)
-  end
-
-  --- Moves the windows of a column, as `column_members()` listed them, to the
-  --- outer edge of the screen on `edge`, window by window, each below the one
-  --- before it: the windows keep their buffers, jobs, cursors and IDs. A
-  --- window of the column split further than a column holds comes with it,
-  --- below the window before it.
-  ---
-  ---@param members integer[]
-  ---@param edge aineo.layout.Side
-  local function move_column(members, edge)
-    local above = nil
-    for _, member in ipairs(members) do
-      vim.api.nvim_win_set_config(
-        member,
-        above and { split = 'below', win = above } or { split = edge, win = -1 }
-      )
-      above = member
-    end
-  end
-
   --- The width and height of each window of the layout's tab page that does
   --- not float, by window.
   ---
@@ -774,8 +790,10 @@ local function make_layout(input_name, group_name)
   --- buffers or jobs, and the cursor stays in the window it was in. A zoom
   --- ends first, its sizes not given back; every window of the tab page then
   --- gets the size it had, which mirrors the columns, and the layout's
-  --- proportions are put back while the layout is open. With no window of the
-  --- layout open, only the side is recorded, for the layout to open on.
+  --- proportions are put back while the layout is open. The explorer column
+  --- moves last, to the edge of its own side, so that it stays outermost
+  --- there. With no window of the layout open, only the side is recorded,
+  --- for the layout to open on.
   ---
   ---@param target aineo.layout.Side
   local function move_columns_to(target)
@@ -790,8 +808,10 @@ local function make_layout(input_name, group_name)
       local claude_members = has_window('claude') and column_members(state.windows.claude) or {}
       local right_column = right_column_window()
       local right_members = right_column and column_members(right_column) or {}
+      local explorer_members = has_explorer_column() and column_members(state.explorer_window) or {}
       move_column(claude_members, claude_edge())
       move_column(right_members, right_column_edge())
+      move_column(explorer_members, state.explorer_column)
       restore_sizes(sizes)
       if is_open() then
         apply_proportions()
@@ -2927,7 +2947,8 @@ local function make_layout(input_name, group_name)
   --- page whether or not it is shown: the windows move, and Claude's terminal
   --- and its job, Input's draft, every pane's buffer, the file column's
   --- buffers and splits, each window's cursor and the window the cursor is in
-  --- stay. A zoom ends first, its sizes not given back (`M.toggle_zoom()`,
+  --- stay, and so does the explorer column, outermost on its side. A zoom ends
+  --- first, its sizes not given back (`M.toggle_zoom()`,
   --- `M.toggle_full_zoom()`), and the columns take the layout's proportions.
   --- With none of the layout's windows open, the layout opens on that side
   --- next (`M.open()`). Asked for the side it is on, it changes nothing.
