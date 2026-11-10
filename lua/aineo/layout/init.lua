@@ -640,6 +640,99 @@ local function make_layout(input_name, group_name)
     end
   end
 
+  --- Whether `window` is not floating.
+  ---
+  ---@param window integer
+  ---@return boolean
+  local function is_tiled(window)
+    return vim.api.nvim_win_get_config(window).relative == ''
+  end
+
+  --- The windows of the layout's tab page that are not floating, in the order
+  --- the tab page lists them.
+  ---
+  ---@return integer[] windows
+  local function tab_windows()
+    return vim.iter(vim.api.nvim_tabpage_list_wins(layout_tab())):filter(is_tiled):totable()
+  end
+
+  --- A window that lies across the whole screen, as `:botright split` or
+  --- `:copen` opens one, which the layout's columns end above or below.
+  ---@class aineo.layout.AcrossTheScreen
+  ---@field window integer
+  ---@field edge 'above'|'below' the edge of the screen it lies on
+  ---@field height integer
+
+  --- The windows of the layout's tab page, none of the layout's own, that are
+  --- as wide as the screen, top to bottom: each with the edge it lies on and
+  --- its height, to put it back with `put_across_the_screen()` after a window
+  --- opened or moved to the screen's edge, which `nvim_open_win()` and
+  --- `nvim_win_set_config()` with `win = -1` do over the whole tab page,
+  --- across such a window too.
+  ---
+  ---@return aineo.layout.AcrossTheScreen[] across
+  local function windows_across_the_screen()
+    local windows = tab_windows()
+    local top = math.huge
+    for _, window in ipairs(windows) do
+      top = math.min(top, vim.api.nvim_win_get_position(window)[1])
+    end
+    local across = {}
+    for _, window in ipairs(windows) do
+      if
+        not role_of(window)
+        and window ~= state.explorer_window
+        and vim.api.nvim_win_get_width(window) == vim.o.columns
+      then
+        table.insert(across, {
+          window = window,
+          edge = vim.api.nvim_win_get_position(window)[1] == top and 'above' or 'below',
+          height = vim.api.nvim_win_get_height(window),
+        })
+      end
+    end
+    return across
+  end
+
+  --- Puts the windows `windows_across_the_screen()` listed back across the
+  --- screen at their edges and their heights, those on the top edge from the
+  --- bottom one up, those on the bottom edge from the top one down, so that
+  --- they keep their order.
+  ---
+  ---@param across aineo.layout.AcrossTheScreen[]
+  local function put_across_the_screen(across)
+    local ordered = vim.tbl_filter(function(entry)
+      return entry.edge == 'above'
+    end, across)
+    ordered = vim.fn.reverse(ordered)
+    vim.list_extend(
+      ordered,
+      vim.tbl_filter(function(entry)
+        return entry.edge == 'below'
+      end, across)
+    )
+    for _, entry in ipairs(ordered) do
+      if vim.api.nvim_win_is_valid(entry.window) then
+        vim.api.nvim_win_set_config(entry.window, { split = entry.edge, win = -1 })
+        vim.api.nvim_win_set_height(entry.window, entry.height)
+      end
+    end
+  end
+
+  --- Runs `action`, which opens or moves layout windows to the screen's
+  --- edges, and puts the windows across the screen back where they were
+  --- (`put_across_the_screen()`), so that no column spans them.
+  ---
+  ---@generic T
+  ---@param action fun(): T
+  ---@return T result what `action` returns
+  local function keeping_across_the_screen(action)
+    local across = windows_across_the_screen()
+    local result = action()
+    put_across_the_screen(across)
+    return result
+  end
+
   --- The windows, top to bottom, of the column that holds `window`, in the
   --- row of the tab that holds the layout's windows; none when no row does.
   --- Read from the tab as it is now, so that it is read for both columns
@@ -683,7 +776,9 @@ local function make_layout(input_name, group_name)
     local held = vim.list_extend(existing_windows(), { state.explorer_window })
     local tree = vim.fn.winlayout(vim.api.nvim_tabpage_get_number(layout_tab()))
     if not columns.is_outermost(tree, held, state.explorer_window, state.explorer_column) then
-      move_column(column_members(state.explorer_window), state.explorer_column)
+      keeping_across_the_screen(function()
+        move_column(column_members(state.explorer_window), state.explorer_column)
+      end)
     end
   end
 
@@ -707,29 +802,14 @@ local function make_layout(input_name, group_name)
     equalize_run_windows()
   end
 
-  --- Whether `window` is not floating.
-  ---
-  ---@param window integer
-  ---@return boolean
-  local function is_tiled(window)
-    return vim.api.nvim_win_get_config(window).relative == ''
-  end
-
-  --- The windows of the layout's tab page that are not floating, in the order
-  --- the tab page lists them.
-  ---
-  ---@return integer[] windows
-  local function tab_windows()
-    return vim.iter(vim.api.nvim_tabpage_list_wins(layout_tab())):filter(is_tiled):totable()
-  end
-
   --- Ends the full zoom, if a window is zoomed fully. When the tab page holds
   --- the windows it held as the zoom began, every window gets the size it had
   --- (a zoom of the right column that was on stays on). When a window opened
   --- or closed meanwhile, those sizes no longer apply: the layout's
   --- proportions are put back (`apply_proportions()`), and, while the layout
   --- is not open, because the zoomed window of the layout closed, the windows
-  --- that remain get the sizes they had.
+  --- that remain get the sizes they had, but for the explorer column, which
+  --- keeps its width whatever size the screen had.
   local function end_full_zoom()
     local zoomed = state.full_zoom
     if not zoomed then
@@ -742,6 +822,9 @@ local function make_layout(input_name, group_name)
       apply_proportions()
     else
       full_zoom.restore(zoomed)
+      if has_explorer_column() then
+        vim.api.nvim_win_set_width(state.explorer_window, state.explorer_width)
+      end
     end
   end
 
@@ -810,9 +893,11 @@ local function make_layout(input_name, group_name)
       local right_column = right_column_window()
       local right_members = right_column and column_members(right_column) or {}
       local explorer_members = has_explorer_column() and column_members(state.explorer_window) or {}
-      move_column(claude_members, claude_edge())
-      move_column(right_members, right_column_edge())
-      move_column(explorer_members, state.explorer_column)
+      keeping_across_the_screen(function()
+        move_column(claude_members, claude_edge())
+        move_column(right_members, right_column_edge())
+        move_column(explorer_members, state.explorer_column)
+      end)
       restore_sizes(sizes)
       if is_open() then
         apply_proportions()
@@ -1184,31 +1269,35 @@ local function make_layout(input_name, group_name)
   --- right column's side when Input is closed too, and Input below the
   --- Report, unless the pane shown has none for Input.
   local function reopen_closed_windows()
-    if not has_window('claude') then
-      state.windows.claude =
-        vim.api.nvim_open_win(own_buffer('claude'), false, { split = claude_edge(), win = -1 })
-    end
-    if not has_window('report') then
-      open_report_window()
-    end
-    if not has_window('input') and PANE_BUFFERS[state.pane].input then
-      state.windows.input = vim.api.nvim_open_win(
-        own_buffer('input'),
-        false,
-        { split = 'below', win = state.windows.report }
-      )
-    end
+    keeping_across_the_screen(function()
+      if not has_window('claude') then
+        state.windows.claude =
+          vim.api.nvim_open_win(own_buffer('claude'), false, { split = claude_edge(), win = -1 })
+      end
+      if not has_window('report') then
+        open_report_window()
+      end
+      if not has_window('input') and PANE_BUFFERS[state.pane].input then
+        state.windows.input = vim.api.nvim_open_win(
+          own_buffer('input'),
+          false,
+          { split = 'below', win = state.windows.report }
+        )
+      end
+    end)
   end
 
   --- Opens the explorer column: a window showing the explorer's buffer, as
   --- tall as the screen, at the outer edge on the side the column is on, its
   --- width fixed. The cursor stays where it is.
   local function open_explorer_column()
-    state.explorer_window = vim.api.nvim_open_win(
-      state.buffers.explorer,
-      false,
-      { split = state.explorer_column, win = -1 }
-    )
+    state.explorer_window = keeping_across_the_screen(function()
+      return vim.api.nvim_open_win(
+        state.buffers.explorer,
+        false,
+        { split = state.explorer_column, win = -1 }
+      )
+    end)
     vim.wo[state.explorer_window].winfixwidth = true
   end
 
