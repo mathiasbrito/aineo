@@ -665,8 +665,8 @@ local function make_layout(input_name, group_name)
   ---@field height integer
 
   --- The windows of the layout's tab page, none of the layout's own, that are
-  --- as wide as the screen, top to bottom: each with the edge it lies on and
-  --- its height, to put it back with `put_across_the_screen()` after a window
+  --- as wide as the screen, top to bottom: each with the edge it lies on, the
+  --- top one when it lies above the layout's first window, and its height, to put it back with `put_across_the_screen()` after a window
   --- opened or moved to the screen's edge, which `nvim_open_win()` and
   --- `nvim_win_set_config()` with `win = -1` do over the whole tab page,
   --- across such a window too.
@@ -675,7 +675,7 @@ local function make_layout(input_name, group_name)
   local function windows_across_the_screen()
     local windows = tab_windows()
     local top = math.huge
-    for _, window in ipairs(windows) do
+    for _, window in ipairs(existing_windows()) do
       top = math.min(top, vim.api.nvim_win_get_position(window)[1])
     end
     local across = {}
@@ -687,7 +687,7 @@ local function make_layout(input_name, group_name)
       then
         table.insert(across, {
           window = window,
-          edge = vim.api.nvim_win_get_position(window)[1] == top and 'above' or 'below',
+          edge = vim.api.nvim_win_get_position(window)[1] < top and 'above' or 'below',
           height = vim.api.nvim_win_get_height(window),
         })
       end
