@@ -59,6 +59,15 @@ Six findings, each fixed test first and seen failing; the reviewer's measured pr
 5. **The layout's "kept from before" contract** (mutant `arrangement.explorer or state.buffers.explorer`) is pinned for the buffer, the column and the width.
 6. **A live `setup()` applies at once** (the orchestrator's ruling, recorded in the D148 row): `setup()` fires `User AineoSetup`; `plugin/aineo.lua` handles it without loading `aineo.entry` when that is not loaded; `aineo.entry.explorer_column` applies the settings to every bound tab through `aineo.layout`'s new `set_explorer_column()`, which works on a layout in any tab page. Layout 7 and entry 6 cases red first; mutants S1-S10 killed after two validation cases were tightened. The help's wording is fixed. The 31-column note (Claude's window 0 wide on a tiny screen) is left as it is, as ruled.
 
+## Second fix round (re-measure of the pull request)
+
+- **N1** The `User AineoSetup` handler in `plugin/aineo.lua` was not `nested`: opening the column in it fired no `BufWinEnter` (the explorer's tree was never read, the cause of the empty first read) and closing it fired no `BufWinLeave` (two file system watches leaked). It is nested, `refresh()` is gone, and the tests pin the window's autocommand and the watches' release (2 red).
+- **N2** Any `setup()` ended every tab's `\Z`. `set_explorer_column()` now changes nothing for the column and width the layout has (3 red; the width-alone case added for a surviving mutant).
+- **N3, N4** The finder's own `vim.ui.select` list is read asynchronously, so a file picked there was never revealed, and a cancelled one left the watch alive for the next `:vsplit`. `find_file()` says whether a third-party picker took the search and tells `on_open` the file its own list opened; the watch ends when no picker took it, and the entry reveals through `on_open` (2 red; mutants M1-M6 killed, M6, the reveal not waiting for the layout's redirect, after a case for the explorer pane was added).
+- **N5** Two windows across the top lost their order on a swap: a window lies above when its row is above the layout's first window (4 red).
+
+Open thread, **N6**: a window across the screen split vertically (`botright 4new` then `vnew`) is not detected, so a swap absorbs both halves and `'cmdheight'` grows (12); skipping the heights of windows that span the tab in `restore_sizes()`, as `full_zoom` does, is the lead.
+
 ## Open threads
 
 - A reveal asked before the explorer's first tree read moves no cursor; the file is highlighted once it is read.
