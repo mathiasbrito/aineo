@@ -212,6 +212,92 @@ T['\\e']['opens a column that was closed, in place, and takes the cursor into it
   eq(entry.current_window(child), 'aineo://explorer')
 end
 
+T['setup()'] = MiniTest.new_set()
+
+--- Calls `setup()` in the child with `layout` as the layout settings.
+---
+---@param layout_settings table
+local function setup_layout(layout_settings)
+  child.lua([[require('aineo').setup({ layout = ... })]], { layout_settings })
+end
+
+T['setup()']['opens the column at once when it turns it on, the cursor staying'] = function()
+  open_in_repository('setup-on')
+  local before = entry.current_window(child)
+
+  setup_layout({ explorer_column = 'left' })
+
+  eq(entry.windows(child), COLUMN_LEFT)
+  eq(entry.current_window(child), before)
+  eq(wait_for_tree(), FOLDED_TREE)
+end
+
+T['setup()']['closes the column at once when it turns it off'] = function()
+  open_with_column('setup-off', 'left')
+
+  setup_layout({ explorer_column = false })
+
+  eq(entry.windows(child), { 'terminal', 'aineo://report', 'aineo://input' })
+end
+
+T['setup()']['moves the column and gives it the width at once'] = function()
+  open_with_column('setup-move', 'left')
+
+  setup_layout({ explorer_column = 'right', explorer_width = 20 })
+
+  eq(entry.windows(child), COLUMN_RIGHT)
+  eq(
+    child.lua_get(
+      [[vim.api.nvim_win_get_width(vim.fn.win_findbuf(vim.fn.bufnr('aineo://explorer'))[1])]]
+    ),
+    20
+  )
+end
+
+T['setup()']['gives the explorer pane’s place to the agent pane at once when it turns the column on'] = function()
+  open_in_repository('setup-pane')
+  entry.press(child, '\\e')
+  eq(entry.windows(child), { 'terminal', 'aineo://explorer' })
+
+  setup_layout({ explorer_column = 'left' })
+
+  eq(entry.windows(child), COLUMN_LEFT)
+end
+
+T['setup()']['changes every aineo tab at once, the tab page shown staying'] = function()
+  tabs.use_own_state(child, 'explorer-column-setup-tabs')
+  entry.use_fake(child, tabs.fake('explorer-column-setup-tabs-first'))
+  child.cmd('Aineo open')
+  claude_session.wait_for_status(child, 'ready')
+  entry.use_fake(child, tabs.fake('explorer-column-setup-tabs-second'))
+  child.cmd('Aineo tab new')
+  claude_session.wait_for_status(child, 'ready')
+  local shown = tabs.current_tab(child)
+
+  setup_layout({ explorer_column = 'left' })
+  local turned_on = { tabs.windows_of_tab(child, 1), tabs.windows_of_tab(child, 2) }
+  setup_layout({ explorer_column = 'right' })
+  local moved = { tabs.windows_of_tab(child, 1), tabs.windows_of_tab(child, 2) }
+  setup_layout({ explorer_column = false })
+
+  eq(turned_on, { COLUMN_LEFT, COLUMN_LEFT })
+  eq(moved, { COLUMN_RIGHT, COLUMN_RIGHT })
+  eq(tabs.windows_of_tab(child, 1), { 'terminal', 'aineo://report', 'aineo://input' })
+  eq(tabs.windows_of_tab(child, 2), { 'terminal', 'aineo://report', 'aineo://input' })
+  eq(tabs.current_tab(child), shown)
+end
+
+T['setup()']['tells a wrong column once and leaves the layout as it is'] = function()
+  open_with_column('setup-wrong', 'left')
+
+  setup_layout({ explorer_column = 'middle' })
+
+  local messages = entry.messages(child)
+  eq(#messages, 1)
+  eq(messages[1].message:find('layout.explorer_column', 1, true) ~= nil, true)
+  eq(entry.windows(child), COLUMN_LEFT)
+end
+
 T['\\e']['opens the column when setup() turned it on after the layout opened'] = function()
   open_in_repository('late')
   child.lua([[require('aineo').setup({ layout = { explorer_column = 'left' } })]])

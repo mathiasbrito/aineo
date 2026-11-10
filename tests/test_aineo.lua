@@ -41,6 +41,21 @@ T['setup()']['records its options for the configuration to resolve'] = function(
   eq(child.lua_get(RECORDED_OPTIONS), { prefix = ',', claude = { cmd = { 'my-claude' } } })
 end
 
+T['setup()']['fires the User event AineoSetup once, after it recorded the options'] = function()
+  child.lua([[
+    _G.fired = {}
+    vim.api.nvim_create_autocmd('User', {
+      pattern = 'AineoSetup',
+      callback = function()
+        table.insert(_G.fired, require('aineo.config').recorded_setup_options().prefix)
+      end,
+    })
+    require('aineo').setup({ prefix = ',' })
+  ]])
+
+  eq(child.lua_get('_G.fired'), { ',' })
+end
+
 T['setup()']['replaces what an earlier call recorded, without merging'] = function()
   child.lua([[require('aineo').setup({ prefix = ',', claude = { cmd = { 'my-claude' } } })]])
   child.lua([[require('aineo').setup({ autostart = false })]])
