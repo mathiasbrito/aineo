@@ -111,6 +111,18 @@ local function is_padding(value)
     and value == math.floor(value)
 end
 
+--- The values of `layout.claude_side`: the side of the screen Claude Code's
+--- terminal is on, the panes on the other and the file column between.
+local CLAUDE_SIDES = { 'left', 'right' }
+
+--- Whether `value` names a side Claude Code's terminal can be on.
+---
+---@param value any
+---@return boolean
+local function is_claude_side(value)
+  return vim.list_contains(CLAUDE_SIDES, value)
+end
+
 --- The values of `find.picker`: `auto`, which takes the first third-party
 --- picker installed, and the name of each picker that can be forced.
 local FIND_PICKERS = { 'auto', 'snacks', 'fzf-lua', 'telescope', 'mini.pick' }
@@ -248,6 +260,12 @@ local SETTINGS = {
     default = 2 / 3,
     validator = is_share,
     expected = 'a number strictly between 0 and 1',
+  },
+  {
+    name = 'layout.claude_side',
+    default = 'left',
+    validator = is_claude_side,
+    expected = "'left' or 'right'",
   },
   {
     name = 'changes.working_branch',

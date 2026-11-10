@@ -1,5 +1,7 @@
 --- aineo's layout, `require('aineo.layout')`: the Claude terminal in a column
---- on the left, and a column on the right whose windows show one pane at
+--- on one side of the screen (the left by default, `Arrangement.claude_side`),
+--- and across the screen from it the panes column — "the right column" in
+--- this file, whichever side it is on — whose windows show one pane at
 --- a time — the agent pane, the Report above Input; the changes pane; the
 --- terminal pane, a shell's terminal in the Report's window alone, taking the
 --- whole column, with Input's window closed while the pane shows; the run
@@ -26,12 +28,14 @@
 
 local columns = require('aineo.layout.columns')
 local full_zoom = require('aineo.layout.full_zoom')
+local side = require('aineo.layout.side')
 local zoom = require('aineo.layout.zoom')
 
 ---@class aineo.layout.Arrangement
 ---@field claude integer the Claude session's terminal buffer
 ---@field report integer the Report buffer
 ---@field report_height number the Report's share of the right column's height, strictly between 0 and 1
+---@field claude_side? aineo.layout.Side the side of the screen Claude's column is on, the right column across from it; without it the layout keeps the side its columns are on, the left before any was handed
 ---@field changes? aineo.layout.ChangesPane the changes pane's buffers; without them the layout keeps those it was handed last
 ---@field shell? integer the terminal pane's buffer, the terminal of a shell, shown alone in the right column, in the Report's window; without it the layout keeps the one it was handed last, if its shell lives
 ---@field run? aineo.layout.RunPane the run pane's terminals; without them the run pane has nothing to show, and the layout shows the agent pane in its place
@@ -81,6 +85,8 @@ local zoom = require('aineo.layout.zoom')
 ---@field is_zoomed fun(): boolean
 ---@field input_buffer fun(): integer|nil
 ---@field right_column_area fun(): aineo.layout.Area|nil
+---@field claude_side fun(): aineo.layout.Side
+---@field set_claude_side fun(claude_side: aineo.layout.Side)
 ---@field let_go? fun() only on a layout `M.new()` made: removes its handlers and wipes its Input
 
 --- Makes a layout: its state, and the functions that act on it, and the
@@ -99,8 +105,10 @@ local zoom = require('aineo.layout.zoom')
 local function make_layout(input_name, group_name)
   local M = {}
 
-  --- The layout's windows, by role, and the buffers they show, by role or, for
-  --- the changes pane's and the shell's, by name; the pane the right column
+  --- The side of the screen Claude's column is on, the right column across
+  --- from it and the file column between; the layout's windows, by role, and
+  --- the buffers they show, by role or, for the changes pane's and the
+  --- shell's, by name; the pane the right column
   --- shows, for the editor's life; the Report and its `b:changedtick` as they
   --- were when the agent pane was hidden, until the agent pane shows again
   --- with the Report in the Report's window;
@@ -122,6 +130,8 @@ local function make_layout(input_name, group_name)
   --- zoomed (`M.toggle_zoom()`); and the window zoomed fully, if one is
   --- (`M.toggle_full_zoom()`).
   local state = {
+    ---@type aineo.layout.Side
+    claude_side = side.DEFAULT,
     ---@type table<aineo.layout.Role, integer>
     windows = {},
     ---@type table<aineo.layout.Role|'files'|'commits'|'shell'|'run'|'explorer'|'walkthrough', integer>
@@ -307,19 +317,37 @@ local function make_layout(input_name, group_name)
     return vim.iter(state.run_windows):find(vim.api.nvim_win_is_valid)
   end
 
-  --- The file column's windows, top to bottom: those of the columns right of
-  --- Claude's column and left of the right one, in the row that holds the
-  --- layout's windows; with Claude's window closed, those left of the right
-  --- column, and with both of the right column's closed, those right of
-  --- Claude's. None when the file column is not open.
+  --- The direction that splits a window to the outer edge of the screen on
+  --- Claude's side, which is the side Claude's column is on.
+  ---
+  ---@return aineo.layout.Side
+  local function claude_edge()
+    return state.claude_side
+  end
+
+  --- The direction that splits a window to the outer edge of the screen on
+  --- the right column's side, across from Claude's.
+  ---
+  ---@return aineo.layout.Side
+  local function right_column_edge()
+    return side.opposite(state.claude_side)
+  end
+
+  --- The file column's windows, top to bottom: those of the columns between
+  --- Claude's column and the right one, in the row that holds the layout's
+  --- windows; with Claude's window closed, those on the file side of the
+  --- right column, and with both of the right column's closed, those on the
+  --- file side of Claude's. None when the file column is not open.
   ---
   ---@return integer[] windows
   local function file_column_windows()
     local tree = vim.fn.winlayout(vim.api.nvim_tabpage_get_number(layout_tab()))
+    local claude_window = has_window('claude') and state.windows.claude or nil
+    local claude_is_left = state.claude_side == 'left'
     return columns.windows_between(tree, {
       held = existing_windows(),
-      left = has_window('claude') and state.windows.claude or nil,
-      right = right_column_window(),
+      left = claude_is_left and claude_window or right_column_window(),
+      right = claude_is_left and right_column_window() or claude_window,
     })
   end
 
@@ -656,19 +684,115 @@ local function make_layout(input_name, group_name)
     end
   end
 
-  --- Opens a file column showing `file`, with the cursor in it: right of
-  --- Claude's column, or, with Claude's window closed, at the left of the tab
-  --- holding the layout's `window`.
+  --- The windows, top to bottom, of the column that holds `window`, in the
+  --- row of the tab that holds the layout's windows; none when no row does.
+  --- Read from the tab as it is now, so that it is read for both columns
+  --- before either moves: a window across the screen below the row turns the
+  --- column the other moves to the edge into the whole old row.
+  ---
+  ---@param window integer
+  ---@return integer[] members
+  local function column_members(window)
+    local tree = vim.fn.winlayout(vim.api.nvim_tabpage_get_number(layout_tab()))
+    return columns.windows_of_column_holding(tree, existing_windows(), window)
+  end
+
+  --- Moves the windows of a column, as `column_members()` listed them, to the
+  --- outer edge of the screen on `edge`, window by window, each below the one
+  --- before it: the windows keep their buffers, jobs, cursors and IDs. A
+  --- window of the column split further than a column holds comes with it,
+  --- below the window before it.
+  ---
+  ---@param members integer[]
+  ---@param edge aineo.layout.Side
+  local function move_column(members, edge)
+    local above = nil
+    for _, member in ipairs(members) do
+      vim.api.nvim_win_set_config(
+        member,
+        above and { split = 'below', win = above } or { split = edge, win = -1 }
+      )
+      above = member
+    end
+  end
+
+  --- The width and height of each window of the layout's tab page that does
+  --- not float, by window.
+  ---
+  ---@return table<integer, integer[]> sizes
+  local function sizes_of_tab_windows()
+    local sizes = {}
+    for _, window in ipairs(tab_windows()) do
+      sizes[window] = { vim.api.nvim_win_get_width(window), vim.api.nvim_win_get_height(window) }
+    end
+    return sizes
+  end
+
+  --- Gives each window of `sizes` that exists the width and height it had.
+  --- Done twice over, since a window given its size takes the cells of its
+  --- neighbours, which the next window then gives back.
+  ---
+  ---@param sizes table<integer, integer[]>
+  local function restore_sizes(sizes)
+    for _ = 1, 2 do
+      for window, size in pairs(sizes) do
+        if vim.api.nvim_win_is_valid(window) then
+          vim.api.nvim_win_set_width(window, size[1])
+          vim.api.nvim_win_set_height(window, size[2])
+        end
+      end
+    end
+  end
+
+  --- Moves Claude's column to `target` and the right column across from it,
+  --- the file column staying between them, in the tab page of the layout
+  --- whether or not it is the one shown. The windows move, never their
+  --- buffers or jobs, and the cursor stays in the window it was in. A zoom
+  --- ends first, its sizes not given back; every window of the tab page then
+  --- gets the size it had, which mirrors the columns, and the layout's
+  --- proportions are put back while the layout is open. With no window of the
+  --- layout open, only the side is recorded, for the layout to open on.
+  ---
+  ---@param target aineo.layout.Side
+  local function move_columns_to(target)
+    state.claude_side = target
+    if not has_any_window() then
+      return
+    end
+    vim.api.nvim_win_call(existing_windows()[1], function()
+      end_full_zoom()
+      end_zoom()
+      local sizes = sizes_of_tab_windows()
+      local claude_members = has_window('claude') and column_members(state.windows.claude) or {}
+      local right_column = right_column_window()
+      local right_members = right_column and column_members(right_column) or {}
+      move_column(claude_members, claude_edge())
+      move_column(right_members, right_column_edge())
+      restore_sizes(sizes)
+      if is_open() then
+        apply_proportions()
+      end
+    end)
+  end
+
+  --- Opens a file column showing `file`, with the cursor in it: beside
+  --- Claude's column, on the side of the right column, or, with Claude's
+  --- window closed, at the edge of the tab holding the layout's `window` on
+  --- Claude's side.
   ---
   ---@param file integer
   ---@param window integer one of the layout's windows
   ---@return integer file_window
   local function open_file_column(file, window)
     if has_window('claude') then
-      return vim.api.nvim_open_win(file, true, { split = 'right', win = state.windows.claude })
+      return vim.api.nvim_open_win(
+        file,
+        true,
+        { split = right_column_edge(), win = state.windows.claude }
+      )
     end
     vim.api.nvim_set_current_win(window)
-    return vim.api.nvim_open_win(file, true, { split = 'left', win = -1 })
+    return vim.api.nvim_open_win(file, true, { split = claude_edge(), win = -1 })
   end
 
   --- Whether the buffer `window` shows can leave it without being lost: when it
@@ -963,14 +1087,14 @@ local function make_layout(input_name, group_name)
     local input_window = start
     if shown ~= input and is_file_to_keep(shown) then
       input_window =
-        vim.api.nvim_open_win(own_buffer('input'), false, { split = 'right', win = -1 })
+        vim.api.nvim_open_win(own_buffer('input'), false, { split = right_column_edge(), win = -1 })
     else
       vim.api.nvim_win_set_buf(input_window, own_buffer('input'))
     end
     local report_window =
       vim.api.nvim_open_win(own_buffer('report'), false, { split = 'above', win = input_window })
     local claude_window =
-      vim.api.nvim_open_win(own_buffer('claude'), false, { split = 'left', win = -1 })
+      vim.api.nvim_open_win(own_buffer('claude'), false, { split = claude_edge(), win = -1 })
     state.windows = { claude = claude_window, report = report_window, input = input_window }
     vim.api.nvim_set_current_win(input_window)
     if not PANE_BUFFERS[state.pane].input then
@@ -980,21 +1104,24 @@ local function make_layout(input_name, group_name)
 
   --- Opens the Report's window again, showing its own buffer: above Input, or
   --- above the first window of the run pane's stack that remains when Input
-  --- is closed, or as the rightmost column when there is none either.
+  --- is closed, or as the outermost column on the right column's side when
+  --- there is none either.
   local function open_report_window()
     local below = right_column_window()
-    local place = below and { split = 'above', win = below } or { split = 'right', win = -1 }
+    local place = below and { split = 'above', win = below }
+      or { split = right_column_edge(), win = -1 }
     state.windows.report = vim.api.nvim_open_win(own_buffer('report'), false, place)
   end
 
   --- Opens again, in their places, those of the layout's windows that were
-  --- closed, each showing its buffer: Claude's as the leftmost column, the
-  --- Report above Input, or as the rightmost column when Input is closed too,
-  --- and Input below the Report, unless the pane shown has none for Input.
+  --- closed, each showing its buffer: Claude's as the outermost column on
+  --- Claude's side, the Report above Input, or as the outermost column on the
+  --- right column's side when Input is closed too, and Input below the
+  --- Report, unless the pane shown has none for Input.
   local function reopen_closed_windows()
     if not has_window('claude') then
       state.windows.claude =
-        vim.api.nvim_open_win(own_buffer('claude'), false, { split = 'left', win = -1 })
+        vim.api.nvim_open_win(own_buffer('claude'), false, { split = claude_edge(), win = -1 })
     end
     if not has_window('report') then
       open_report_window()
@@ -1261,6 +1388,13 @@ local function make_layout(input_name, group_name)
       is_share,
       false,
       'a number strictly between 0 and 1'
+    )
+    vim.validate(
+      'arrangement.claude_side',
+      arrangement.claude_side,
+      side.is_side,
+      true,
+      "'left' or 'right'"
     )
     vim.validate('arrangement.changes', arrangement.changes, 'table', true)
     vim.validate('arrangement.claude_statusline', arrangement.claude_statusline, 'string', true)
@@ -1568,17 +1702,17 @@ local function make_layout(input_name, group_name)
     end
   end
 
-  --- Opens Input's window below the Report's, or as the rightmost column when
-  --- the Report's is closed too, showing the buffer `pane` shows there, gives
-  --- the Report its share of the column (also with Claude's window closed),
-  --- puts the proportions back and gives the window the view kept for that buffer,
-  --- once the window has its size.
+  --- Opens Input's window below the Report's, or as the outermost column on
+  --- the right column's side when the Report's is closed too, showing the
+  --- buffer `pane` shows there, gives the Report its share of the column
+  --- (also with Claude's window closed), puts the proportions back and gives
+  --- the window the view kept for that buffer, once the window has its size.
   ---
   ---@param pane aineo.layout.Pane
   local function open_input_window(pane)
     local buffer = state.buffers[PANE_BUFFERS[pane].input]
     local place = has_window('report') and { split = 'below', win = state.windows.report }
-      or { split = 'right', win = -1 }
+      or { split = right_column_edge(), win = -1 }
     state.windows.input = vim.api.nvim_open_win(buffer, false, place)
     pin_windows()
     if has_window('report') then
@@ -2034,6 +2168,12 @@ local function make_layout(input_name, group_name)
   --- window-local options go with a buffer; another buffer shown in those
   --- windows, and every other window, draw the user's own.
   ---
+  --- Claude's column is on `arrangement.claude_side`, the right column across
+  --- the screen from it, and the file column between them; an arrangement
+  --- without it leaves the columns on the side they are on, the left before
+  --- any was handed, and one that names the other side moves the columns of
+  --- a layout that is open (`M.set_claude_side()`).
+  ---
   --- While any of the three windows exists, opening again restores the layout
   --- instead, in the tab that holds it: it creates only the windows that were
   --- closed, in their places, Input's not under the terminal pane, shows in
@@ -2090,7 +2230,8 @@ local function make_layout(input_name, group_name)
   ---
   --- Raises an error naming the setting, before changing anything, when
   --- `arrangement` is not a table, `claude` or `report` is not an existing
-  --- buffer, `report_height` is not a number strictly between 0 and 1, or
+  --- buffer, `report_height` is not a number strictly between 0 and 1,
+  --- `claude_side`, when given, is neither `'left'` nor `'right'`, or
   --- `changes`, when given, is not a table whose `files` and `commits` are
   --- existing buffers, or `shell`, when given, is not an existing buffer, or
   --- `run`, when given, is not a table whose `buffers` are at least one
@@ -2103,14 +2244,19 @@ local function make_layout(input_name, group_name)
     validate_arrangement(arrangement)
     take_arrangement(arrangement)
     forget_wiped_shell()
+    local wanted_side = arrangement.claude_side or state.claude_side
     if has_any_window() then
       vim.api.nvim_set_current_tabpage(layout_tab())
       if not has_input() then
         make_input(buffer_named_input() or vim.api.nvim_create_buf(false, true))
       end
+      if wanted_side ~= state.claude_side then
+        move_columns_to(wanted_side)
+      end
       reopen_closed_windows()
       show_buffers()
     else
+      state.claude_side = wanted_side
       build()
     end
     state.report_height = arrangement.report_height
@@ -2487,7 +2633,7 @@ local function make_layout(input_name, group_name)
   --- What `M.toggle_zoom()` tells the user, as a warning, when the cursor is
   --- in none of the right column's windows.
   local NOT_IN_THE_COLUMN =
-    'aineo: nothing zoomed — the cursor is in none of the windows aineo shows in the right column (the agent, changes, terminal, run and explorer panes)'
+    'aineo: nothing zoomed — the cursor is in none of the windows aineo shows in the panes column (the agent, changes, terminal, run and explorer panes)'
 
   --- Whether the layout is zoomed now: a window of the right column
   --- (`M.toggle_zoom()`), or a window over the whole tab page
@@ -2641,6 +2787,34 @@ local function make_layout(input_name, group_name)
     return { row = top, col = left, width = right - left, height = bottom - top }
   end
 
+  --- The side of the screen Claude's column is on.
+  ---
+  ---@return aineo.layout.Side
+  function M.claude_side()
+    return state.claude_side
+  end
+
+  --- Moves Claude's column to `claude_side`, the right column across the
+  --- screen from it and the file column between them, in the layout's tab
+  --- page whether or not it is shown: the windows move, and Claude's terminal
+  --- and its job, Input's draft, every pane's buffer, the file column's
+  --- buffers and splits, each window's cursor and the window the cursor is in
+  --- stay. A zoom ends first, its sizes not given back (`M.toggle_zoom()`,
+  --- `M.toggle_full_zoom()`), and the columns take the layout's proportions.
+  --- With none of the layout's windows open, the layout opens on that side
+  --- next (`M.open()`). Asked for the side it is on, it changes nothing.
+  ---
+  --- Raises an error naming `claude_side` when it is neither `'left'` nor
+  --- `'right'`.
+  ---
+  ---@param claude_side aineo.layout.Side
+  function M.set_claude_side(claude_side)
+    vim.validate('claude_side', claude_side, side.is_side, false, "'left' or 'right'")
+    if claude_side ~= state.claude_side then
+      move_columns_to(claude_side)
+    end
+  end
+
   --- Lets the layout go, as its tab page closes: removes its handlers, by
   --- deleting their group, and wipes its Input. Its windows are the tab
   --- page's to close. What Input holds goes with it, so a caller that keeps
@@ -2659,6 +2833,15 @@ end
 local layouts_made = 1
 
 local M = make_layout('aineo://input', 'aineo.layout')
+
+--- The side of the screen across from `claude_side`, where the right column
+--- is when Claude's column is on `claude_side`.
+---
+---@param claude_side aineo.layout.Side
+---@return aineo.layout.Side
+function M.opposite_side(claude_side)
+  return side.opposite(claude_side)
+end
 
 --- Whether the autocommand group `name` exists.
 ---

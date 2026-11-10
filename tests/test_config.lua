@@ -9,7 +9,7 @@ local DEFAULTS = {
   terminal_prefix = '<C-\\>',
   autostart = true,
   claude = { cmd = { 'claude' }, hide_multiplexer = true },
-  layout = { report_height = 2 / 3 },
+  layout = { report_height = 2 / 3, claude_side = 'left' },
   changes = { graph_limit = 1000 },
   tabs = { padding = 2, always_show = true },
   find = { picker = 'auto' },
@@ -224,6 +224,28 @@ T['resolve_config()']['refuses a report height not strictly between 0 and 1']['a
   expect.error(function()
     config.resolve_config({ layout = { report_height = height } }, nil)
   end, 'layout%.report_height: expected')
+end
+
+T['resolve_config()']['takes the side Claude Code is on from either source, the left by default'] = function()
+  local from_global = config.resolve_config({ layout = { claude_side = 'right' } }, nil)
+  local from_setup = config.resolve_config(nil, { layout = { claude_side = 'right' } })
+
+  eq(from_global.layout.claude_side, 'right')
+  eq(from_setup.layout.claude_side, 'right')
+  eq(config.resolve_config(nil, nil).layout.claude_side, 'left')
+end
+
+T['resolve_config()']['refuses a side for Claude Code that is not left or right'] =
+  MiniTest.new_set({
+    parametrize = { { 'middle' }, { '' }, { 'Left' }, { false }, { 1 }, { {} } },
+  })
+
+T['resolve_config()']['refuses a side for Claude Code that is not left or right']['as layout.claude_side'] = function(
+  side
+)
+  expect.error(function()
+    config.resolve_config({ layout = { claude_side = side } }, nil)
+  end, "layout%.claude_side: expected 'left' or 'right'")
 end
 
 T['resolve_config()']['takes the padding of the tab titles from either source, 2 by default'] = function()

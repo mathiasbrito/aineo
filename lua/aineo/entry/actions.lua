@@ -3,6 +3,7 @@
 
 local cheatsheets = require('aineo.entry.cheatsheet')
 local finding = require('aineo.entry.finding')
+local layout_side = require('aineo.entry.layout_side')
 local offices = require('aineo.entry.office')
 local opening = require('aineo.entry.opening')
 local quitting = require('aineo.entry.quitting')
@@ -181,7 +182,7 @@ end
 --- What `:Aineo office` tells the user, as a warning, when there is no aineo tab.
 local NO_TAB_FOR_OFFICE = 'aineo: there is no aineo tab to show the office in'
 
---- What `:Aineo office` does: shows the office over the right side of the
+--- What `:Aineo office` does: shows the office over the panes column of the
 --- layout of the existing aineo tab to act on (`aineo.entry.opening`'s
 --- `existing_acting_tab()`, `aineo.entry.office`), and never makes a tab. With
 --- none, tells the user.
@@ -199,7 +200,7 @@ end
 --- aineo tab.
 local NO_TAB_FOR_CHEATSHEET = 'aineo: there is no aineo tab to show the cheatsheet in'
 
---- What `:Aineo cheatsheet` does: shows the cheatsheet over the right side of
+--- What `:Aineo cheatsheet` does: shows the cheatsheet over the panes column of
 --- the layout of the existing aineo tab to act on (`aineo.entry.opening`'s
 --- `existing_acting_tab()`, `aineo.entry.cheatsheet`), or closes it when it
 --- shows; never makes a tab. The office that shows closes as the cursor
@@ -244,7 +245,7 @@ function M.preview_office(name)
   offices.preview(tab, name)
 end
 
---- What `:Aineo zoom` does: zooms the window of the right column the cursor
+--- What `:Aineo zoom` does: zooms the window of the panes column the cursor
 --- is in, or gives back the heights it took (`aineo.layout`'s `toggle_zoom()`),
 --- in the aineo tab of the current tab page, and never makes a tab. From a tab
 --- page that is none of aineo's, the module's own layout, which has no such
@@ -271,6 +272,53 @@ ACTIONS['zoom full'] = function()
   else
     require('aineo.layout').toggle_full_zoom()
   end
+end
+
+--- Puts Claude Code's column on `side` in every aineo tab whose tab page
+--- exists, and records it as the side for the tabs opened later and the
+--- layouts restored (`aineo.entry.layout_side`).
+---
+---@param side aineo.layout.Side
+local function put_claude_on(side)
+  layout_side.choose(side)
+  for _, tab in ipairs(registry.tab_list) do
+    if tab.is_bound() then
+      tab.homes.layout.set_claude_side(side)
+    end
+  end
+end
+
+--- What `:Aineo layout left` does: puts Claude Code's column on the left of
+--- the screen, the panes column on the right, in every aineo tab, for the
+--- editor's life.
+ACTIONS['layout left'] = function()
+  put_claude_on('left')
+end
+
+--- What `:Aineo layout right` does: puts Claude Code's column on the right
+--- of the screen, the panes column on the left, in every aineo tab, for the
+--- editor's life.
+ACTIONS['layout right'] = function()
+  put_claude_on('right')
+end
+
+--- The side Claude Code's column is on in the screen the user sees: that of
+--- the aineo tab of the current tab page, else of the tab used last; the side
+--- the user chose or the setting names when there is none.
+---
+---@return aineo.layout.Side
+local function side_on_screen()
+  local tab = registry.tab_of_current_page() or registry.last_used_tab
+  if tab and tab.is_bound() then
+    return tab.homes.layout.claude_side()
+  end
+  return layout_side.current()
+end
+
+--- What `:Aineo layout swap` does: puts Claude Code's column on the side it
+--- is not on, as the user sees it, in every aineo tab, for the editor's life.
+ACTIONS['layout swap'] = function()
+  put_claude_on(require('aineo.layout').opposite_side(side_on_screen()))
 end
 
 ACTIONS['tab new'] = function()
