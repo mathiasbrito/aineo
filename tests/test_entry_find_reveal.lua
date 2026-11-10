@@ -239,6 +239,8 @@ T['a search'] = MiniTest.new_set()
 
 T['an asynchronous picker'] = MiniTest.new_set()
 
+T['the vim.ui.select fallback'] = MiniTest.new_set()
+
 T['a picker that raises'] = MiniTest.new_set()
 
 T['a picker that opens nothing'] = MiniTest.new_set()
@@ -498,6 +500,83 @@ T['an asynchronous picker']['reveals nothing when cancelled, though the cursor r
   eq({ explorer_cursor_is_on('top.txt'), explorer_cursor_is_on('other.txt') }, { false, false })
 end
 
+--- Leaves no third-party picker in the child, so that the finder lists the
+--- files through `vim.ui.select()`, which `choose` stands in for: the Lua of
+--- a function of the item list that returns the item to pick, nil to cancel.
+---
+---@param choose string
+local function find_through_vim_ui_select(choose)
+  child.lua(
+    [[
+      package.preload['snacks'] = nil
+      local choose = loadstring('return ' .. ...)()
+      vim.ui.select = function(items, _, on_choice)
+        on_choice(choose(items))
+      end
+    ]],
+    { choose }
+  )
+end
+
+T['the vim.ui.select fallback']['reveals the file picked'] = function()
+  local top = open_with_column('select-confirm', 'sub/note.txt')
+  wait_for_tree()
+  find_through_vim_ui_select([[function(items)
+    for _, item in ipairs(items) do
+      if vim.endswith(item, 'note.txt') then
+        return item
+      end
+    end
+  end]])
+  put_explorer_cursor_on_the_first_line()
+
+  entry.press(child, '\\f')
+
+  local note = vim.fs.joinpath(top, 'sub', 'note.txt')
+  eq(wait_for_current_window(note), note)
+  vim.wait(PATIENCE_MS, function()
+    return explorer_cursor_is_on('note.txt')
+  end, 20)
+  eq(explorer_cursor_is_on('note.txt'), true)
+end
+
+T['the vim.ui.select fallback']['reveals the file picked in the explorer pane, the file opened from its window'] = function()
+  local top = open_in_repository('select-pane', 'sub/note.txt')
+  entry.press(child, '\\e')
+  wait_for_tree()
+  find_through_vim_ui_select([[function(items)
+    for _, item in ipairs(items) do
+      if vim.endswith(item, 'note.txt') then
+        return item
+      end
+    end
+  end]])
+  put_explorer_cursor_on_the_first_line()
+
+  entry.press(child, '\\f')
+
+  local note = vim.fs.joinpath(top, 'sub', 'note.txt')
+  eq(wait_for_current_window(note), note)
+  vim.wait(PATIENCE_MS, function()
+    return explorer_cursor_is_on('note.txt')
+  end, 20)
+  eq(explorer_cursor_is_on('note.txt'), true)
+end
+
+T['the vim.ui.select fallback']['reveals nothing for a file entered after it was cancelled'] = function()
+  local top = open_with_column('select-cancel', 'sub/note.txt')
+  wait_for_tree()
+  find_through_vim_ui_select('function() return nil end')
+  put_explorer_cursor_on_the_first_line()
+
+  entry.press(child, '\\f')
+  vim.wait(500)
+  child.cmd('vsplit ' .. vim.fn.fnameescape(vim.fs.joinpath(top, 'sub', 'other.txt')))
+
+  vim.wait(300)
+  eq(explorer_cursor_is_on('other.txt'), false)
+end
+
 T['a search']['is not ended by the cancel of the search before it'] = function()
   local top = open_with_column('stale', 'sub/note.txt')
   wait_for_tree()
@@ -520,11 +599,13 @@ T['a search']['is not ended by the cancel of the search before it'] = function()
       local first
       watching(reveal, function()
         first = open_float()
+        return true
       end)
       vim.api.nvim_win_close(first, true)
       local second
       watching(reveal, function()
         second = open_float()
+        return true
       end)
       _G.second_float = second
     ]],

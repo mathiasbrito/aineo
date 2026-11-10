@@ -135,21 +135,37 @@ local function start(reveal)
   return watch
 end
 
---- Runs `search`, which starts a search for a file and may open the file it
---- finds before returning or later, and has the file revealed (`reveal`) the
---- way `start()` says. An error `search` raises is raised again, the watch
---- over.
+--- Runs `search`, which starts a search for a file, and has the file it
+--- finds revealed (`reveal`) the way `start()` says while it returns true:
+--- the search handed to a third-party picker, which may open the file before
+--- `search` returns or later. A search that returns anything else, such as one
+--- the finder lists itself, opens no window of a picker, so the watch ends
+--- with it. An error `search` raises is raised again, the watch over.
 ---
 ---@param reveal fun(file: string) what reveals a file in the tab's explorer
----@param search fun()
+---@param search fun(): boolean? whether a third-party picker took the search
 function M.watching(reveal, search)
   local watch = start(reveal)
-  local searched, failure = pcall(search)
+  local searched, handed_to_a_picker = pcall(search)
   watch.searching = false
   if not searched then
     watch.stop()
-    error(failure, 0)
+    error(handed_to_a_picker, 0)
   end
+  if not handed_to_a_picker then
+    watch.stop()
+  end
+end
+
+--- Reveals `file` (`reveal`) once the layout has moved a file a window of its
+--- own showed to the file column: for a file the finder's own list opened.
+---
+---@param reveal fun(file: string)
+---@param file string absolute
+function M.reveal_when_settled(reveal, file)
+  after_the_layout_settles(function()
+    reveal(file)
+  end)
 end
 
 return M
