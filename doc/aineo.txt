@@ -20,9 +20,11 @@ CONTENTS                                                      *aineo-contents*
 1. INTRODUCTION                                                        *aineo*
 
 aineo turns Neovim into a console for Claude Code. Claude Code's own
-interactive CLI runs in a terminal on the left; on the right, the Agent
-Report shows what Claude says it is doing, above an Input buffer where you
-write your next message. Files you open land in a column between the two.
+interactive CLI runs in a terminal on one side of the screen, the left by
+default; across from it the Agent Report shows what Claude says it is doing,
+above an Input buffer where you write your next message. Files you open land
+in a column between the two. `:Aineo layout swap` puts Claude Code on the
+other side (|aineo-layout-swap|).
 
 Every command sits behind one prefix key, `\` by default, in Normal mode (and
 most behind its twin in Terminal and Insert mode, below):
@@ -34,7 +36,7 @@ sessions Claude Code lists for the folder and opens the one you pick in a new
 tab, or moves to the tab that has it (|:Aineo-sessions|). `\N` starts a new
 Claude Code session: on a new id once Claude Code has exited, where `\o`
 resumes the last, and with `/clear` while it runs (|:Aineo-new|). `\pa`,
-`\g` and `\pt` switch the right column between the agent pane, the Report
+`\g` and `\pt` switch the panes column between the agent pane, the Report
 over Input, the changes pane, and a shell's terminal, each filling the column,
 and move to the Report, to the changes pane's commits and into the shell, in
 Terminal mode (|aineo-panes|). `\x` asks for a command and runs it in the
@@ -49,14 +51,14 @@ session of its own, `\1` to `\9` move to the tab page of that number, and
 pane shows in the middle column, from any window of the tab (|:Aineo-diff|).
 `\f` finds a file under the folder Claude Code works in and opens it in the
 middle column, from any window of the tab but a floating one (|aineo-find|).
-`\z` zooms the window of the right column the cursor is in, to the column's
+`\z` zooms the window of the panes column the cursor is in, to the column's
 whole height, and gives the heights back when pressed again (|aineo-zoom|).
 `\Z` zooms the window the cursor is in to the whole tab page, every other
 window shrinking to a sliver, and gives the sizes back when pressed again
 (|aineo-zoom-full|).
-`\O` shows the office over the right column, an animation of your Claude Code
+`\O` shows the office over the panes column, an animation of your Claude Code
 at work (|aineo-office|).
-`\?` shows a cheatsheet of aineo's keys over the right column
+`\?` shows a cheatsheet of aineo's keys over the panes column
 (|aineo-cheatsheet|).
 In Visual mode, in Input, `\s` sends the selection alone and removes it from
 Input (|aineo-v_\s|).
@@ -109,7 +111,7 @@ aineo works without a `setup()` call. To configure it, see
 3. THE LAYOUT                                                   *aineo-layout*
 
 The layout fills one tab page with three windows, and a file column between
-the two sides while a file or a diff is open; the right column's two show one
+the two sides while a file or a diff is open; the panes column's two show one
 pane at a time, here the agent pane, with the file column open:
 
     +--------------------+--------------------+--------------------+
@@ -119,7 +121,7 @@ pane at a time, here the agent pane, with the file column open:
     |                    |    diff of one     |       Input        |
     +--------------------+--------------------+--------------------+
 
-The right column's panes, each behind a key and each filling the column; the
+The panes column's panes, each behind a key and each filling the column; the
 fifth, `\e`, is the explorer, a tree of the project's folders
 (|aineo-explorer|), and the sixth, `\pw`, the walkthrough pane, the plan of a
 code walkthrough over Input (|aineo-walkthrough-pane|):
@@ -136,8 +138,9 @@ code walkthrough over Input (|aineo-walkthrough-pane|):
                       | a1b2c3 Fix.. |                   |              |
                       +--------------+                   +--------------+
 
-- Claude Code's terminal takes the left half of the columns.
-- The Agent Report, `aineo://report`, takes the top of the right column:
+- Claude Code's terminal takes half of the columns, the left half by
+  default (|aineo-layout-swap|).
+- The Agent Report, `aineo://report`, takes the top of the panes column:
   two thirds of its rows by default (|aineo-config-layout.report_height|).
   It is read-only to you.
 - Input, `aineo://input`, takes the rest: a scratch buffer, left out of
@@ -146,6 +149,31 @@ code walkthrough over Input (|aineo-walkthrough-pane|):
 - The changes pane shows in the same two windows in their place, and a
   shell's terminal, or the stack of the run pane's terminals, takes the
   whole column in place of both (|aineo-panes|).
+
+                                                          *aineo-layout-swap*
+Swapping the layout ~
+The picture is the layout with Claude Code on the left and the panes column
+on the right, the default. The other layout mirrors it: the panes column on
+the left, the file column in the middle, Claude Code's terminal on the
+right. `layout.claude_side` (|aineo-config-layout.claude_side|) names the
+side the layout opens on, and you can change it at will:
+
+- `:Aineo layout swap` puts Claude Code on the side it is not on,
+  `:Aineo layout left` and `:Aineo layout right` put it on the one named
+  (|:Aineo-layout|). There is no default key; map the `<Plug>` mappings
+  (|<Plug>(aineo-layout-swap)|) to one of your own.
+- Every aineo tab moves at once, and a tab opened later, and the layout
+  restored by `\o`, `\r`, `\i` or `\c` after its windows closed, opens on the
+  side you left it on. The side lasts for the editor's life; the setting is
+  where a lasting choice lives.
+- The windows move, nothing in them does: Claude Code's terminal and its
+  session, Input's draft, the Report, every pane's buffer, the file column's
+  files and splits, each window's cursor and the window the cursor is in
+  stay. A zoom (|aineo-zoom|, |aineo-zoom-full|) ends first and is not
+  brought back. The columns take the same widths mirrored.
+- Whatever shows over or in the panes column follows it: the Report and
+  Input, `\g`, `\pt`, `\x`, `\e` and the other panes, the office
+  (|aineo-office|) and the cheatsheet (|aineo-cheatsheet|).
 
 The Report and Input wrap long lines between words, a wrapped line keeping
 its indent ('wrap', 'linebreak', 'breakindent'), whatever your own settings.
@@ -166,7 +194,7 @@ Input; a file the current window shows stays, as the file column.
 
 Panes ~
                                                                  *aineo-panes*
-The right column shows one of six panes, each filling its whole height: the
+The panes column shows one of six panes, each filling its whole height: the
 agent pane, the changes pane and the walkthrough pane in two windows,
 switched in place (the same two windows, at the same sizes, show the other
 pane's buffers), the terminal pane and the explorer pane in one, and the run
@@ -182,7 +210,7 @@ pane in one window for each process.
   `:edit` there writes its list again. A buffer of yours under either name,
   such as one a restored session made, gives the name up: it is wiped out,
   or kept unnamed when you changed its text.
-- The terminal pane: a shell's terminal alone in the right column, which it
+- The terminal pane: a shell's terminal alone in the panes column, which it
   fills from top to bottom: the Report's window takes the whole column, and
   Input's window is closed while the pane shows, Input kept as it is. The
   shell is your 'shell', run in the folder aineo started in, whatever `:cd`
@@ -191,7 +219,7 @@ pane in one window for each process.
 - The run pane: the processes you run, each in a terminal and a window of its
   own, stacked from the top of the column to the bottom (|aineo-run|).
 - The explorer pane: `aineo://explorer`, the tree of the folder Claude works
-  in, alone in the right column, Input's window closed as under the terminal
+  in, alone in the panes column, Input's window closed as under the terminal
   pane (|aineo-explorer|).
 - The walkthrough pane: `aineo://walkthrough` in the Report's place, over
   Input, which stays as it is; it shows once the agent has sent the plan of
@@ -250,7 +278,7 @@ process of it remains.
 
 Run pane ~
                                                                    *aineo-run*
-`\x` (|:Aineo-pane|) runs a command in the right column, which the run pane
+`\x` (|:Aineo-pane|) runs a command in the panes column, which the run pane
 takes whole as the terminal pane does, with Input's window closed and Input
 kept as it is. Each process has a terminal and a window of its own. The
 windows are stacked from the top of the column to the bottom at equal heights
@@ -321,7 +349,7 @@ half, at a quit, at `\Q` and when the tab page closes (|aineo-limits|).
 
 Explorer pane ~
                                                               *aineo-explorer*
-`\e` (|:Aineo-pane|) shows the explorer in the right column, one window over
+`\e` (|:Aineo-pane|) shows the explorer in the panes column, one window over
 the column's whole height, as the terminal pane shows, and moves the cursor
 into it: a tree of the folder Claude works in, `aineo://explorer`, read-only
 to you. `\pa`, `\g`, `\pt`, `\x` and `\pw` swap it out as they swap each
@@ -502,13 +530,13 @@ it does not show.
 
 Zoom ~
                                                                   *aineo-zoom*
-`\z` (|:Aineo-zoom|) zooms the window of the right column the cursor is in,
+`\z` (|:Aineo-zoom|) zooms the window of the panes column the cursor is in,
 under any pane: it takes the rows the column's other windows can spare, which
 is the column's whole height, and they shrink to the least height Neovim gives
 a window, 'winminheight' lines (one by default; none where it is 0). Their
 winbars and status lines stay, so each still says what it shows: a run pane
 window, whose winbar takes a row, keeps the winbar and one line of text. Rows
-come from the right column alone: a window across the whole width below the
+come from the panes column alone: a window across the whole width below the
 layout, the quickfix list say, and Claude's window keep their heights. `\z`
 again gives every window the height it had when you zoomed, a resize you made
 by hand before it included, not the layout's own proportions.
@@ -517,7 +545,7 @@ The zoom stays with the window it began in while the cursor goes elsewhere, as
 tmux's zoom does, so that you can look into Claude's window or the file column
 and come back. `\z` pressed in another window of the column moves the zoom
 there; `\z` in the zoomed window ends it. With the cursor in none of the
-windows aineo shows in the right column — Claude's window, the file column, a
+windows aineo shows in the panes column — Claude's window, the file column, a
 tab page that is none of aineo's, or a window you split off the column by hand
 (`:split`) — `\z` changes nothing and tells you once so. A window split off by
 hand is outside the zoom: it neither changes the zoom nor ends it, and `\z`
@@ -552,7 +580,7 @@ page: every other window shrinks to the least size Neovim gives a window,
 the zoomed window takes the rest. The others stay open and visible as
 slivers, their winbars and status lines kept. It works in any window of an
 aineo tab page that does not float: Claude's window, the file column, a window
-of the right column under any pane, or a window you split off by hand
+of the panes column under any pane, or a window you split off by hand
 (`:split`). In a tab page that is none of aineo's, or in a floating window,
 `\Z` changes nothing and tells you once so.
 
@@ -1456,7 +1484,7 @@ must still be in the files window when the 120 ms end.
 `<BS>` in a diff the pane showed in the middle column, whether Enter, `l`, `h`
 or the cursor's following showed it, moves the cursor back to the files
 window, onto the line of the file the diff shows, when the window still lists
-it, in Normal mode. When the right column shows another pane, `<BS>` shows
+it, in Normal mode. When the panes column shows another pane, `<BS>` shows
 the changes pane first, as `\g` does. It is a map of the pane's diff buffers
 alone: a file opened for editing, in the working tree or as `gf` shows it,
 keeps Vim's own `<BS>`.
@@ -1896,7 +1924,7 @@ keeps what you picked with `s` (a worktree by its folder, a branch by its
 name), each reported worktree, by its folder, with its label, when its last
 report came and its branches, each with the base reported, and whether the
 focused view or the default view showed; nothing else: not the pane the
-right column shows, not a cursor, not a commit expanded, not the label
+panes column shows, not a cursor, not a commit expanded, not the label
 picked, which comes back as all the reported work. The file is written at
 once, whole, whenever one of these changes, through a file beside it that
 then replaces it, so a crash keeps what the last change left, and not when
@@ -2697,7 +2725,7 @@ plan, the agent sends it, before step 1, as `title`, a `summary` in prose of
 what the walkthrough is about, `covers`, the features and changes it goes
 through, and `steps`, each with a `title`, the `file` it shows and the
 concepts it `introduces`. The walkthrough pane then takes the Report's place
-in the right column, Input staying below it: `aineo://walkthrough`, read-only
+in the panes column, Input staying below it: `aineo://walkthrough`, read-only
 to you, as wide as the Report's window and laid out again for its width
 whenever the window is resized (the summary, the covers and the step titles
 wrap to it). It shows, top to bottom:
@@ -2727,7 +2755,7 @@ the `▸`; a plan sent again replaces the one shown, the step on show staying
 marked.
 
 The pane shows itself when a plan arrives only where that swaps nothing you
-chose and rebuilds nothing: while the right column shows the agent pane, with
+chose and rebuilds nothing: while the panes column shows the agent pane, with
 its two windows in place, the pane takes the Report's place and the cursor
 stays where it is. While you have another pane shown (`\g`, `\pt`, `\x`,
 `\e`), or a window of the layout is closed, or you wiped the pane's buffer,
@@ -3343,7 +3371,7 @@ when a window closes (a floating one aside), when the editor is resized and
 when you enter its tab.
 `\o` (|:Aineo-open|) restores the layout while any of its windows is left:
 it recreates the windows that were closed, in their places, and keeps the
-pane the right column shows (|aineo-panes|). The layout lives in one tab;
+pane the panes column shows (|aineo-panes|). The layout lives in one tab;
 from another tab, `\o` moves you to it.
 
 ==============================================================================
@@ -3403,7 +3431,7 @@ Normal-mode command. `i`, `a` and |:startinsert| leave that terminal in Normal
 mode too. Any other terminal of yours keeps Neovim's own behaviour.
 
 `report`, `input`, `claude` and `pane` open the layout first when their window
-is gone (for `pane`, either window of the right column, or a buffer of the
+is gone (for `pane`, either window of the panes column, or a buffer of the
 pane wiped or deleted; for `report` and `input` while the changes pane shows,
 the Report or Input wiped or deleted too), around Claude's terminal as it is —
 its exit on screen when Claude Code has exited. They start Claude Code only
@@ -3580,7 +3608,7 @@ only in place of a resume Claude Code has no conversation for
 			then is in |aineo-limits|.
 
                                                                  *:Aineo-pane*
-:Aineo pane {pane}	Shows {pane} in the right column, `agent`,
+:Aineo pane {pane}	Shows {pane} in the panes column, `agent`,
 			`changes`, `terminal`, `run`, `explorer` or
 			`walkthrough` (|aineo-panes|), and moves the cursor
 			into it: into the Report for `agent`, into the commits
@@ -3758,7 +3786,7 @@ keeps the tab's claim, and the next start takes it up again (|aineo-tabs|).
 			the same (|aineo-keys|).
 
                                                                  *:Aineo-zoom*
-:Aineo zoom		Zooms the window of the right column the cursor is
+:Aineo zoom		Zooms the window of the panes column the cursor is
 			in to the rows the column's other windows can spare,
 			they keeping 'winminheight' lines each (one by
 			default), or, when that window is zoomed, gives
@@ -3766,7 +3794,7 @@ keeps the tab's claim, and the next start takes it up again (|aineo-tabs|).
 			the cursor in another window of the column, the zoom
 			moves there. It acts on the aineo tab of the current
 			tab page and makes none: with the cursor in none of
-			the windows aineo shows in the right column,
+			the windows aineo shows in the panes column,
 			including a window you split off it by hand and a
 			tab page that is none of aineo's, it changes nothing
 			and tells you, with one warning, so. Under the
@@ -3791,6 +3819,19 @@ keeps the tab's claim, and the next start takes it up again (|aineo-tabs|).
 			you, with one error, what `:Aineo zoom` takes. `\Z`
 			and, in Terminal mode and in Insert mode, `<C-\>Z`
 			do the same (|aineo-keys|).
+
+                                                              *:Aineo-layout*
+:Aineo layout swap	Puts Claude Code's column on the side of the screen
+:Aineo layout left	it is not on (`swap`), on the left (`left`) or on
+:Aineo layout right	the right (`right`), the panes column across from
+			it and the file column between them, in every aineo
+			tab at once (|aineo-layout-swap|). Tabs opened later
+			and layouts restored open on that side, for the
+			editor's life. Nothing changes but the places of the
+			windows, and a zoom ends. It makes no tab: with none,
+			it only records the side. With any other word, or
+			none, it tells you, with one error, what
+			`:Aineo layout` takes. No key is mapped to it.
 
                                                              *:Aineo-explain*
 :[range]Aineo explain [issues] [tools] [new]
@@ -3836,7 +3877,7 @@ keeps the tab's claim, and the next start takes it up again (|aineo-tabs|).
 			tells you, with one error, what it takes.
 
                                                                *:Aineo-office*
-:Aineo office		Shows the office over the right side of the layout, at
+:Aineo office		Shows the office over the panes column, at
 			once (|aineo-office|). It acts on the aineo tab of
 			the current tab page and makes none: with no aineo
 			tab it tells you, with one warning, so. Asked while
@@ -3876,7 +3917,7 @@ keeps the tab's claim, and the next start takes it up again (|aineo-tabs|).
 
                                                        *:Aineo-office-preview*
 :Aineo office preview [name]
-			Shows the office over the right side of the layout
+			Shows the office over the panes column of the layout
 			with every state of the vocabulary acted out in turn,
 			nine seconds each, the state and its number named on
 			the first row, over scripted agents: the main agent,
@@ -3890,7 +3931,7 @@ keeps the tab's claim, and the next start takes it up again (|aineo-tabs|).
 			it is. The preview follows no transcript and watches
 			no file, calls no Claude and spends no token; it takes
 			the place of the office that shows and closes as the
-			office does, when the cursor enters the right side
+			office does, when the cursor enters the panes column
 			(|aineo-office|). Like `:Aineo office`, it acts on the
 			aineo tab of the current tab page and makes none, and
 			it shows nothing, and tells you why, with
@@ -3940,8 +3981,8 @@ keeps the tab's claim, and the next start takes it up again (|aineo-tabs|).
 
                                                          *:Aineo-office-reset*
 :Aineo office reset
-			Shows the office over the right side of the layout as
-			if the tab's session began now: every agent it showed
+			Shows the office over the panes column as if the tab's
+			session began now: every agent it showed
 			is forgotten, the main agent walks in through the
 			door (not when the session has ended: it stays gone
 			until a session starts, state 24 of
@@ -3963,7 +4004,7 @@ keeps the tab's claim, and the next start takes it up again (|aineo-tabs|).
 			what `:Aineo office` takes.
 
                                                           *:Aineo-cheatsheet*
-:Aineo cheatsheet	Shows the cheatsheet over the right side of
+:Aineo cheatsheet	Shows the cheatsheet over the panes column of
 			the layout, or closes it when it shows
 			(|aineo-cheatsheet|). It acts on the aineo tab
 			of the current tab page and makes none: with no
@@ -3972,7 +4013,7 @@ keeps the tab's claim, and the next start takes it up again (|aineo-tabs|).
 			`\?` does the same (|aineo-keys|).
 
                                                             *aineo-cheatsheet*
-The cheatsheet lists aineo's keys in a window over the right side of the
+The cheatsheet lists aineo's keys in a window over the panes column of the
 layout, the whole column and its full height, whatever the column shows. Each
 row is a key, a few words on what it does and, dimmed, the `:Aineo` command
 that does the same. The keys are in groups, each with a heading and keys in a
@@ -4006,7 +4047,7 @@ resized as you left it. The cursor leaving the sheet, a click on another
 window, say, closes it, and the cursor stays where it went. `\z` and `\Z` zoom
 the window the cursor is in, and from inside the sheet they have no window of
 the column to zoom: they tell you so and the sheet stays. It closes when the
-layout shows no right side. The sheet and the office (|aineo-office|) never
+layout shows no panes column. The sheet and the office (|aineo-office|) never
 show together: opening one closes the other. The sheet runs nothing and starts
 no request.
 
@@ -4318,6 +4359,19 @@ you turn the prefix off, or when a prefix key is yours: >lua
 <Plug>(aineo-zoom-full)
 			Does what `:Aineo zoom full` does
 			(|:Aineo-zoom-full|).
+
+                                                  *<Plug>(aineo-layout-swap)*
+<Plug>(aineo-layout-swap)
+			Does what `:Aineo layout swap` does (|:Aineo-layout|).
+
+                                                  *<Plug>(aineo-layout-left)*
+<Plug>(aineo-layout-left)
+			Does what `:Aineo layout left` does (|:Aineo-layout|).
+
+                                                 *<Plug>(aineo-layout-right)*
+<Plug>(aineo-layout-right)
+			Does what `:Aineo layout right` does
+			(|:Aineo-layout|).
 
                                                         *<Plug>(aineo-office)*
 <Plug>(aineo-office)
@@ -4689,7 +4743,7 @@ claude.hide_multiplexer	A boolean. Default: `true`
                                            *aineo-config-layout.report_height*
 layout.report_height	A number strictly between 0 and 1.
 			Default: `2/3`
-			The Agent Report's share of the right column's
+			The Agent Report's share of the panes column's
 			rows; Input takes the rest.
 
                                              *aineo-config-layout.claude_side*
@@ -4790,7 +4844,7 @@ find.picker		One of `'auto'`, `'snacks'`, `'fzf-lua'`,
 office.idle_ms		A whole number of at least 1, or `false`. Default:
 			`180000`
 			How many milliseconds the cursor stays out of the
-			right side of the layout before the office shows by
+			panes column of the layout before the office shows by
 			itself (|aineo-office|). `false` turns that off: the
 			office then shows only when you ask for it. Read each
 			time the countdown starts, so a change counts at once.
@@ -5528,24 +5582,24 @@ working directory of its own moment.
 9. THE OFFICE                                                   *aineo-office*
 
 The office is a screensaver for your tab's Claude Code: an animated office
-that covers the right side of the layout, the whole column and its full
+that covers the panes column of the layout, the whole column and its full
 height, whatever the column shows. Your Claude Code is a jelly bean at a
 desk. It stands beside the desk while nothing runs, and sits behind it and
 types, dots rising over its head, while a tool call runs.
 
-The office shows by itself once the cursor has stayed out of the right side of
-the layout for `office.idle_ms` (|aineo-config-office.idle_ms|), three minutes
-by default, and only while the layout shows a right side to cover: with the
-right column closed or zoomed away, it waits, and shows when the column comes
-back if the time has passed. The cursor entering the right side stops the
+The office shows by itself once the cursor has stayed out of the panes column
+for `office.idle_ms` (|aineo-config-office.idle_ms|), three minutes by
+default, and only while the layout shows a panes column to cover: with the
+panes column closed or zoomed away, it waits, and shows when the column comes
+back if the time has passed. The cursor entering the panes column stops the
 countdown, leaving it starts it again, and so does a report coming in or
 entering a tab page. While the office is hidden, that countdown is the one
 timer it holds, and it reads nothing.
 
 `:Aineo office` (|:Aineo-office|), `\O` and `<Plug>(aineo-office)` show it at
 once. The cursor entering any window the office covers closes it: a click on
-it, `<C-w>w` reaching the right column, `\r`, `\i`, `\g` and the other keys
-that move to a window of the right column. Moving to Claude's window or to a
+it, `<C-w>w` reaching the panes column, `\r`, `\i`, `\g` and the other keys
+that move to a window of the panes column. Moving to Claude's window or to a
 file leaves it as it is. When the office opens, the cursor stays in the
 window it was in.
 
@@ -5586,8 +5640,8 @@ Each tab page has an office of its own, that follows its own session. Leaving
 the tab page stops its frames and its file watches, and entering it starts
 them again, the scene catching up with what the session did meanwhile. An
 office that shows stays shown through that, even when the cursor was in the
-right side it covers (shown with `\O` while there); it closes only when the
-cursor enters the right side afterwards. In a window smaller than 60 columns
+panes column it covers (shown with `\O` while there); it closes only when the
+cursor enters the panes column afterwards. In a window smaller than 60 columns
 by 24 rows the office draws one line saying so in place of the scene.
 
 The rest of this chapter has two halves. For the person who uses the office:
@@ -5736,7 +5790,7 @@ older ones. A card is coloured by its report's status:
 |hl-AineoOfficeCardDone| for `done`, |hl-AineoOfficeCardProgress| for
 `started` and `progress`, and |hl-AineoOfficeCardProblem| for `blocked` and
 `failed`, whose dot also blinks. The cards are kept until the cursor enters
-the right side, where the Report shows every report; a report that comes in
+the panes column, where the Report shows every report; a report that comes in
 while the cursor is there, and the office is hidden, leaves none.
 
                                                     *hl-AineoOfficeCardDone*
@@ -7126,7 +7180,7 @@ A pack starts as a copy of one that works, and changes one thing at a time.
    the quickfix list as `file:line: problem` (|aineo-office-check|); `:Aineo
    office states harbour` lists what each of the 24 states draws, and the
    custom triggers (|aineo-office-states|); `:Aineo office preview harbour`
-   plays every state in turn over the right side, nine seconds each, the
+   plays every state in turn over the panes column, nine seconds each, the
    state's name on the first row. The office reads a pack again as soon as one
    of its files changed: save a file and run the preview again.
 5. Go on to what you care about: the floor plan (|aineo-office-floor|), the
@@ -7240,8 +7294,8 @@ The packs known to aineo are the two that come with it, `default` and
 
                                                         *aineo-office-session*
 The session it acts out ~
-The office stays over the right column as the screen or a window is resized,
-and closes when the layout shows no right column, as under `\Z`; it makes its
+The office stays over the panes column as the screen or a window is resized,
+and closes when the layout shows no panes column, as under `\Z`; it makes its
 colours again after a colorscheme. It follows the transcript Claude Code's
 `SessionStart` hook names; when no hook ran, it looks for the session's
 transcript in `projects/` under Claude Code's configuration directory, and
@@ -7729,7 +7783,7 @@ The terminal pane ~
   it hangs the shell up after aineo has stopped Claude Code, and a program
   of the shell's that ignores the hangup, or a job it started with `nohup`,
   outlives the editor.
-- The shell's window is as tall as the right column, taller than the Report's,
+- The shell's window is as tall as the panes column, taller than the Report's,
   so the shell's terminal is resized as the pane shows and as it gives way:
   the terminal redraws, and the top line of its window can differ from where
   it was, the cursor line staying.

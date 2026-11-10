@@ -291,7 +291,7 @@ T['showing the office']['says there is no right side to cover, and opens nothing
 
   eq(office_window(), vim.NIL)
   eq(child.lua_get([[_G.told]]), {
-    { message = "aineo: the office has no right side of aineo's layout to cover", level = 3 },
+    { message = "aineo: the office has no panes column of aineo's layout to cover", level = 3 },
   })
 end
 

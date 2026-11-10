@@ -2195,7 +2195,7 @@ T['the office']["is fine when 'termguicolors' is on, and says when it shows by i
 
   eq(health.section(report, 'Office'), {
     "- ✅ OK 'termguicolors' is on: the office draws its pixels",
-    '- the office shows by itself after 90 s without the cursor in the right side (office.idle_ms), and for :Aineo office and \\O: :help |aineo-office|',
+    '- the office shows by itself after 90 s without the cursor in the panes column (office.idle_ms), and for :Aineo office and \\O: :help |aineo-office|',
     ('- %d office packs found'):format(#SHIPPED_PACKS),
     ('- ✅ OK the office pack “default” in %s, named by office.pack, has no problem'):format(
       shipped_pack_folder('default')

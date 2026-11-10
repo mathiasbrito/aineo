@@ -1,6 +1,6 @@
 --- What aineo does for a tab with the plan of a code walkthrough its Claude
 --- Code's agent sends (`aineo.mcp.walkthrough_plan_tool`): keeps the plan in
---- a buffer of the tab's walkthrough pane, shown in the right column in the
+--- a buffer of the tab's walkthrough pane, shown in the panes column in the
 --- Report's place with Input kept below it, laid out for the width of its
 --- window (`aineo.explain`'s `render_walkthrough_plan()`), marks the step on
 --- show as the walkthrough moves (`aineo.entry.walkthrough`), asks the agent
@@ -20,7 +20,7 @@ local M = {}
 ---@class aineo.entry.WalkthroughPlanTab : aineo.entry.WalkthroughMovingTab
 ---@field key string? what tells the tab from the editor's other tabs; nil for the first
 ---@field is_bound fun(): boolean whether the tab's layout is open in a tab page
----@field show_pane fun(pane: aineo.layout.Pane) shows `pane` in the layout's right column, the cursor staying where it is
+---@field show_pane fun(pane: aineo.layout.Pane) shows `pane` in the layout's panes column, the cursor staying where it is
 ---@field focus_pane fun(pane: aineo.layout.Pane) shows `pane` and moves the cursor into it
 
 --- The walkthrough pane of a tab: its buffer, the plan it shows, if any, the
@@ -353,7 +353,7 @@ end
 --- repositories are open, and a plan with a file that may not be shown is
 --- refused, naming the step, and changes nothing. A step's file in a checkout
 --- `project_of_root` names a project of is shown as `<project>: <path>`. A plan taken is drawn in the
---- tab's walkthrough pane, which takes the Report's place in the right column
+--- tab's walkthrough pane, which takes the Report's place in the panes column
 --- while the tab's layout is open, the cursor staying where it is; the step on
 --- show stays marked.
 ---
@@ -390,7 +390,7 @@ function M.focus(tab)
   tab.focus_pane('walkthrough')
 end
 
---- Forgets the plan of `tab`, and gives the right column back to the Report
+--- Forgets the plan of `tab`, and gives the panes column back to the Report
 --- when the walkthrough pane is what it shows.
 ---
 ---@param tab aineo.entry.WalkthroughPlanTab

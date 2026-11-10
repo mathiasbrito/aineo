@@ -1,7 +1,7 @@
 --- The report cards of the office: a line of text for each report that came in,
 --- drawn over the bottom right corner of the scene, the newest at the bottom,
 --- above the status list. The reports that came in are kept until the user
---- enters the right side.
+--- enters the panes column.
 
 local text_module = require('aineo.office.text')
 

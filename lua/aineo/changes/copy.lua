@@ -170,7 +170,7 @@ function M.new(label)
   ---@field git? aineo.git.WatchOptions how the git home runs git; its defaults when not given
   ---@field working_branch? string the branch work lands in, as the user's setting names it; the remote's default branch when not given
   ---@field edit_file_key? string a Normal-mode key, written as in a mapping, that opens the file under the cursor in the files buffer for edition as `<S-CR>` does; none when not given. Mapped when the files buffer is made, so a session holds it when begun before the buffer
-  ---@field show_changes_pane? fun() shows the changes pane in the layout's right column, the cursor staying where it is; the pane stays hidden when not given
+  ---@field show_changes_pane? fun() shows the changes pane in the layout's panes column, the cursor staying where it is; the pane stays hidden when not given
   ---@field start_timer? fun(milliseconds: integer, act: fun()): fun() starts a timer that runs `act` once, on the main loop, after `milliseconds`, and returns what stops it; a `vim.uv` timer when not given
   ---@field now? fun(): integer the time the pane tells the ages of commits at, in seconds since the epoch; `os.time` when not given
   ---@field graph_limit? integer how many commits the commit graph draws, at least 1; `DEFAULT_GRAPH_LIMIT` when not given

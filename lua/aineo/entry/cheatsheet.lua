@@ -1,6 +1,6 @@
 --- The cheatsheet of each tab, in the composition root: makes a tab's
 --- cheatsheet the first time it is asked for, hands it what it is not to
---- reach for — the layout's right side and the keys it lists, written for the
+--- reach for — the layout's panes column and the keys it lists, written for the
 --- editor as it stands (`aineo.entry.cheatsheet_keys`) — and shows it,
 --- hides it and lets it go.
 ---
@@ -32,7 +32,7 @@ local function sheet_of(tab)
   return sheets[tab]
 end
 
---- Shows the cheatsheet of `tab` over the right side of its layout, or
+--- Shows the cheatsheet of `tab` over the panes column of its layout, or
 --- closes it when it shows.
 ---
 ---@param tab aineo.entry.Tab

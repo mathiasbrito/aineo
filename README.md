@@ -1,12 +1,13 @@
 # aineo
 
 aineo turns Neovim into a console for [Claude Code](https://claude.com/claude-code).
-Claude Code's own interactive CLI runs in a terminal on the left. On the
-right, a column of panes you switch between: the Agent Report, which shows
-what Claude says it is doing, above an Input buffer where you write your next
-message; what changed in your repository; a shell; and the services you run.
-Files you open land in a column between the two. Each tab page is a session
-of its own, and a tab line tells which ones are working.
+Claude Code's own interactive CLI runs in a terminal on one side of the
+screen, the left by default. Across from it, a column of panes you switch
+between: the Agent Report, which shows what Claude says it is doing, above an
+Input buffer where you write your next message; what changed in your
+repository; a shell; and the services you run. Files you open land in a
+column between the two. Each tab page is a session of its own, and a tab line
+tells which ones are working.
 
 ```
  1: Fix the login ◒    2: Add tests ●    3: Notes
@@ -21,7 +22,25 @@ of its own, and a tab line tells which ones are working.
 +--------------------+--------------------+--------------------+
 ```
 
-The right column shows one pane at a time, each behind a key; the run
+`:Aineo layout swap` mirrors it, live and in every tab: the panes column on
+the left, the file column in the middle, Claude Code on the right.
+`:Aineo layout left` and `:Aineo layout right` name the side, and the setting
+`layout.claude_side` is where a lasting choice lives:
+
+```
+ 1: Fix the login ◒    2: Add tests ●    3: Notes
++--------------------+--------------------+--------------------+
+| Agent Report       | lua/auth.lua       | Claude Code        |
+| 10:42 [started] .. |                    | (terminal)         |
+| 10:51 [done] ..    | a file, or a diff  |                    |
+|                    | of one, opened by  | your prompt and    |
++--------------------+ \f, Enter or gf    | its dialogs        |
+| Input              |                    |                    |
+| \s sends it        |                    |                    |
++--------------------+--------------------+--------------------+
+```
+
+The panes column shows one pane at a time, each behind a key; the run
 pane stacks one window per process, each with a winbar naming the command
 and its state:
 
@@ -54,7 +73,7 @@ and its state:
 - **Claude terminal.** The real Claude Code CLI. aineo answers none of its
   questions: permission prompts and dialogs are yours to answer there.
 - **File column.** Files you open, and the diffs the changes pane shows, take
-  a column between Claude's terminal and the right column. `\f` finds a file
+  a column between Claude's terminal and the panes column. `\f` finds a file
   to open there.
 - **Agent pane.** The Agent Report over Input.
   - *Agent Report.* Claude Code calls a report tool aineo gives it, and each
@@ -70,12 +89,12 @@ and its state:
 - **Changes pane.** In place of the Report and Input: the files that changed
   in your repository since the session began, above its commits, what landed
   in your working branch and the other worktrees, with a diff of each file.
-- **Terminal pane.** A shell in the right column.
+- **Terminal pane.** A shell in the panes column.
 - **Run pane.** The services you run while you develop, a backend and a
   frontend with watch, say, each in a terminal of its own, stacked in the
-  right column.
+  panes column.
 - **Explorer pane.** `\e`: the folder Claude works in as a tree, folders
-  first, with git's marks, over the right column's whole height. It shows
+  first, with git's marks, over the panes column's whole height. It shows
   guides, file icons when mini.icons or nvim-web-devicons is installed,
   the number of changes in each folder, the lines added and removed in each
   changed file, the files Claude's session touched marked `✦` (flashing as
@@ -189,10 +208,10 @@ resumes it.
 | `\vn`, `\vp`, `\vq` | while a walkthrough step is shown (see What Claude tells aineo), ask the agent for the next step, the previous one, or the end, which also clears its bands; `\vc` clears them too, sending nothing |
 | `\vm` | marks the issues on the cursor's line (on each selected line in Visual mode), or unmarks them; `\s` then sends the marked issues to Claude |
 | `]v`, `[v` | jump to the next and the previous explanation or issue of the buffer |
-| `\z` | zooms the window of the right column the cursor is in, and gives the heights back when pressed again |
+| `\z` | zooms the window of the panes column the cursor is in, and gives the heights back when pressed again |
 | `\Z` | zooms the window the cursor is in to the whole tab page, and gives the sizes back when pressed again |
-| `\O` | shows the office, an animation of your Claude Code at work over the right column, which also shows by itself after `office.idle_ms` without the cursor in the right column; the cursor entering a window it covers closes it. A report that comes in shows as a card in its corner |
-| `\?` | shows a cheatsheet of aineo's keys over the right column, in two colourful columns when it is wide enough: each key as you type it, what it does and, dimmed, the `:Aineo` command that does the same. `q`, `<Esc>` or `\?` closes it, and the column is as it was; it and the office never show together. `:help aineo-cheatsheet` has the details |
+| `\O` | shows the office, an animation of your Claude Code at work over the panes column, which also shows by itself after `office.idle_ms` without the cursor in the panes column; the cursor entering a window it covers closes it. A report that comes in shows as a card in its corner |
+| `\?` | shows a cheatsheet of aineo's keys over the panes column, in two colourful columns when it is wide enough: each key as you type it, what it does and, dimmed, the `:Aineo` command that does the same. `q`, `<Esc>` or `\?` closes it, and the column is as it was; it and the office never show together. `:help aineo-cheatsheet` has the details |
 
 `\z` gives the right-column window with the cursor the column's whole height,
 in every pane, and the other windows of the column shrink to a line or so;
@@ -397,7 +416,7 @@ Every part takes its colour from your colour scheme, through the
   come back, reopen the
   tab or resume the session with `\S`, and the view is back; a worktree or
   branch that is gone is dropped. The line chosen in the commits window, the
-  pane the right column shows and the cursor are not kept.
+  pane the panes column shows and the cursor are not kept.
 
 `<S-CR>` reaches Neovim only when your terminal tells Shift+Return from
 Return, which many terminals do only once asked for extended keys. Inside
@@ -607,7 +626,7 @@ request is a model call, billed as your Claude Code usage is.
 
 `\x` asks for a command, with shell-command completion, and runs it through
 your `'shell'` in the folder Neovim started in, in a terminal of its own in the
-right column. Press `\x` again, with the cursor in the stack, for another
+panes column. Press `\x` again, with the cursor in the stack, for another
 command: each new terminal joins the bottom of the stack, the windows share
 the column's rows equally, and each winbar names the command and says
 `running` or `exited {code}`. `\X` adds an interactive shell to the stack
@@ -743,7 +762,7 @@ attaches a new tab to it, or with `claude attach <id>` outside aineo.
 
 ## The office
 
-When you leave the right side of the layout alone for three minutes
+When you leave the panes column of the layout alone for three minutes
 (`office.idle_ms`), a screensaver covers it: an office where your Claude Code
 is a jelly bean at a desk and each subagent is another, acting out what the
 session does. It types while a tool call runs, goes to the whiteboard to
@@ -753,7 +772,7 @@ looks at the screens of its subagents and writes on the whiteboard while they
 work, and, when it has nothing to do, gets a coffee, naps on the sofa, plays
 table tennis with another idle agent and pets the cat. A subagent stays at its
 desk until it finishes, shown waiting while it says nothing. `\O` or `:Aineo office` shows it at once, and the
-cursor entering the right side closes it. A report that comes in shows as a
+cursor entering the panes column closes it. A report that comes in shows as a
 card in its corner.
 
 It runs on what Claude Code already writes: the session's transcript, and the
@@ -878,9 +897,9 @@ vim.g.aineo = {
 | `prefix` | `'\'` | The key sequence before each of aineo's Normal-mode keys. `false` maps no key; `:Aineo` and the `<Plug>` mappings remain. |
 | `terminal_prefix` | `'<C-\>'` | The same for Terminal and Insert mode. `false` maps none. |
 | `autostart` | `true` | Whether a bare `nvim` opens the layout by itself. |
-| `claude.cmd` | `{ 'claude' }` | The command run in the left terminal, a list of words, never through a shell. It must not hold `--continue`, `--resume` or `--session-id`: aineo picks the session. |
+| `claude.cmd` | `{ 'claude' }` | The command run in Claude Code's terminal, a list of words, never through a shell. It must not hold `--continue`, `--resume` or `--session-id`: aineo picks the session. |
 | `claude.hide_multiplexer` | `true` | Whether Claude Code starts without the variables that tell it a terminal multiplexer runs it (see below). |
-| `layout.report_height` | `2/3` | The Report's share of the right column, a number strictly between 0 and 1. |
+| `layout.report_height` | `2/3` | The Report's share of the panes column, a number strictly between 0 and 1. |
 | `layout.claude_side` | `'left'` | The side of the screen Claude Code's terminal is on, `'left'` or `'right'`; the panes column is on the other side and the file column between. |
 | `changes.working_branch` | none | The branch work lands in, as git reads a name, such as `origin/dev`. Unset, it is the default branch of the remote `origin`. With none set and no `origin/HEAD`, the changes pane shows no Landed section. aineo never fetches. |
 | `changes.graph_limit` | `1000` | How many commits the commit graph (`t` in the commits window) draws, newest first, a whole number of at least 1. The graph says when older ones are not shown. |
@@ -907,7 +926,7 @@ vim.g.aineo = {
 | `write.deep_model` | `'sonnet'` | The model of the Claude Code that `\W` starts, as `claude --model` takes it, such as `'opus'`. A non-empty string. |
 | `write.deep_effort` | `'high'` | The effort of that Claude Code, as `claude --effort` takes it: `'low'`, `'medium'`, `'high'`, `'xhigh'` or `'max'`. `\w` passes none. |
 | `write.deep_timeout_ms` | `300000` | How long a request of `\W` may run before aineo stops its Claude Code, a whole number of milliseconds of at least 1. |
-| `office.idle_ms` | `180000` | How long the cursor stays out of the right side before the office shows by itself, in milliseconds, a whole number of at least 1; `false` turns that off, and the office then shows only for `\O`. It needs `'termguicolors'`. See `:help aineo-config-office.idle_ms`. |
+| `office.idle_ms` | `180000` | How long the cursor stays out of the panes column before the office shows by itself, in milliseconds, a whole number of at least 1; `false` turns that off, and the office then shows only for `\O`. It needs `'termguicolors'`. See `:help aineo-config-office.idle_ms`. |
 | `office.pack` | `'default'` | The pack the office draws: a name of letters, digits, `_` and `-`, or a list of names, one picked at random each time the office shows. `'default'` and `'space_station'` ship with aineo; others are found on `'runtimepath'` under `aineo-office/<name>/`. A pack that cannot be used gives way to the default, with a warning. `:Aineo office pack <name>` replaces it for this Neovim. See `:help aineo-config-office.pack`. |
 | `office.pieces` | `{}` | Art files of your own that replace pieces of the pack, by piece name: `{ desk = '~/art/desk.txt' }`. A file with a problem is left out, with a warning. See `:help aineo-config-office.pieces`. |
 | `office.commands` | the four lists in the example above | How the office tells what a shell command does: `tests`, `committing`, `searching` and `reading`, each a list of matches. A match is plain words (`'make test'`, whole words), a glob (`'cat *.md'`) or `{ lua_pattern = '^make%s+test' }`, a Lua pattern that may repeat (`*`, `+`, `-`) once at most. Heredoc bodies are not read. A command is split at `&&`, `\|\|`, `;` and `\|`, and the first class any part matches names it. A class left out has no match. See `:help aineo-config-office.commands`. |

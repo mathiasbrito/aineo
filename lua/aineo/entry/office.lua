@@ -1,6 +1,6 @@
 --- The office of each tab, in the composition root: makes a tab's office as
 --- the tab's layout opens, so that it counts the user's idleness from then on,
---- hands it what it is not to reach for — the layout's right side, the folders
+--- hands it what it is not to reach for — the layout's panes column, the folders
 --- packs are in, the clock, the settings and the transcript of the tab's
 --- session — and shows it when asked. It keeps the transcript path the tab's
 --- `SessionStart` hooks name, tells the office the tab's permission waits,
@@ -228,7 +228,7 @@ function M.let_go(tab)
   end
 end
 
---- Shows the office of `tab` over the right side of its layout.
+--- Shows the office of `tab` over the panes column of its layout.
 ---
 ---@param tab aineo.entry.Tab
 function M.show(tab)
@@ -236,7 +236,7 @@ function M.show(tab)
   office.show_now()
 end
 
---- Shows the office of `tab` over the right side of its layout as if its
+--- Shows the office of `tab` over the panes column of its layout as if its
 --- session began now: every agent forgotten, the main agent walking in.
 ---
 ---@param tab aineo.entry.Tab
@@ -245,7 +245,7 @@ function M.reset(tab)
 end
 
 --- Previews the pack `name`, or the one the settings name, in the office of
---- `tab`, over the right side of its layout.
+--- `tab`, over the panes column of its layout.
 ---
 ---@param tab aineo.entry.Tab
 ---@param name? string
