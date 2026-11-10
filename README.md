@@ -924,7 +924,7 @@ vim.g.aineo = {
 | `claude.hide_multiplexer` | `true` | Whether Claude Code starts without the variables that tell it a terminal multiplexer runs it (see below). |
 | `layout.report_height` | `2/3` | The Report's share of the panes column, a number strictly between 0 and 1. |
 | `layout.claude_side` | `'left'` | The side of the screen Claude Code's terminal is on, `'left'` or `'right'`; the panes column is on the other side and the file column between. |
-| `layout.explorer_column` | `false` | Where the explorer column is: `'left'` or `'right'` keeps the explorer always visible as a column the full height of the screen at that side, beside the other three, and `\e` moves into it; `false` keeps the explorer a pane that `\e` shows. |
+| `layout.explorer_column` | `false` | Where the explorer column is: `'left'` or `'right'` keeps the explorer always visible as a column the full height of the screen at that side, beside the other three, and `\e` moves into it; `false` keeps the explorer a pane that `\e` shows. A call to `setup()` applies it at once in every tab. |
 | `layout.explorer_width` | `30` | The explorer column's width in columns, a whole number of at least 1; it does nothing while `layout.explorer_column` is `false`. |
 | `changes.working_branch` | none | The branch work lands in, as git reads a name, such as `origin/dev`. Unset, it is the default branch of the remote `origin`. With none set and no `origin/HEAD`, the changes pane shows no Landed section. aineo never fetches. |
 | `changes.graph_limit` | `1000` | How many commits the commit graph (`t` in the commits window) draws, newest first, a whole number of at least 1. The graph says when older ones are not shown. |

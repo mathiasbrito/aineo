@@ -19,6 +19,7 @@
 local actions = require('aineo.entry.actions')
 local errors = require('aineo.entry.errors')
 local explaining = require('aineo.entry.explaining')
+local explorer_column = require('aineo.entry.explorer_column')
 local office_authoring = require('aineo.entry.office_authoring')
 local office_check = require('aineo.entry.office_check')
 local office_pack_choice = require('aineo.entry.office_pack_choice')
@@ -33,6 +34,7 @@ M.act = actions.act
 M.send_visual_selection = actions.send_visual_selection
 M.claim_in_current_tab = actions.claim_in_current_tab
 M.preview_office = actions.preview_office
+M.apply_explorer_column_setting = explorer_column.apply
 M.reset_office = actions.reset_office
 M.jump_to_tab = actions.jump_to_tab
 M.running_sessions_here = places.running_sessions_here

@@ -93,6 +93,7 @@ local zoom = require('aineo.layout.zoom')
 ---@field set_claude_side fun(claude_side: aineo.layout.Side)
 ---@field explorer_column fun(): aineo.layout.Side|false
 ---@field focus_explorer_column fun(arrangement: aineo.layout.Arrangement|fun(): aineo.layout.Arrangement)
+---@field set_explorer_column fun(explorer_column: aineo.layout.Side|false, explorer_width: integer)
 ---@field let_go? fun() only on a layout `M.new()` made: removes its handlers and wipes its Input
 
 --- Makes a layout: its state, and the functions that act on it, and the
@@ -3111,6 +3112,61 @@ local function make_layout(input_name, group_name)
     if claude_side ~= state.claude_side then
       move_columns_to(claude_side)
     end
+  end
+
+  --- Makes the explorer column `explorer_column` at `explorer_width` cells in
+  --- the layout's tab page whether or not it is shown, as handing the
+  --- arrangement again does but without moving the cursor or the tab page: a
+  --- column that is not open opens, one that is open moves to the other side,
+  --- takes the width, or closes when it is `false`, and the other columns
+  --- take the layout's proportions. A zoom ends first, its sizes not given
+  --- back (`M.toggle_zoom()`, `M.toggle_full_zoom()`), and the explorer pane
+  --- gives way to the agent pane while the column is a side. With none of the
+  --- layout's windows open, only the column is recorded, for the layout to
+  --- open with (`M.open()`). The explorer's buffer must have been handed
+  --- (`M.open()`, `M.keep_pane_buffer()`) when the column is a side.
+  ---
+  --- Raises an error naming `explorer_column` when it is neither a side nor
+  --- `false`, `explorer_width` when it is not a positive whole number, and the
+  --- explorer's buffer when the column is a side and none was handed, before
+  --- changing anything.
+  ---
+  ---@param explorer_column aineo.layout.Side|false
+  ---@param explorer_width integer
+  function M.set_explorer_column(explorer_column, explorer_width)
+    vim.validate(
+      'explorer_column',
+      explorer_column,
+      is_explorer_column,
+      false,
+      "'left', 'right' or false"
+    )
+    vim.validate(
+      'explorer_width',
+      explorer_width,
+      is_column_width,
+      false,
+      'a positive whole number'
+    )
+    if explorer_column then
+      vim.validate('explorer buffer', state.buffers.explorer, is_buffer, false, 'a buffer')
+    end
+    state.explorer_column = explorer_column
+    state.explorer_width = explorer_width
+    if not has_any_window() then
+      return
+    end
+    vim.api.nvim_win_call(existing_windows()[1], function()
+      end_full_zoom()
+      end_zoom()
+      if explorer_column and state.pane == 'explorer' then
+        switch_pane('agent')
+      end
+      keep_explorer_column()
+      if is_open() then
+        apply_proportions()
+      end
+    end)
   end
 
   --- Lets the layout go, as its tab page closes: removes its handlers, by

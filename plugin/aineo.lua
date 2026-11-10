@@ -844,6 +844,17 @@ local function start_up()
   open_after_dashboards()
 end
 
+vim.api.nvim_create_autocmd('User', {
+  group = vim.api.nvim_create_augroup('aineo.setup', {}),
+  pattern = 'AineoSetup',
+  desc = 'aineo: make the explorer column of every tab what setup() set',
+  callback = function()
+    if package.loaded['aineo.entry'] then
+      require('aineo.entry').apply_explorer_column_setting()
+    end
+  end,
+})
+
 if vim.v.vim_did_enter == 1 then
   record_startup('mapping-late')
   vim.schedule(function()

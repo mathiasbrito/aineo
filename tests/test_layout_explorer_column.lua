@@ -611,6 +611,122 @@ T['opening the layout again']['keeps the explorer, the column and its width when
   eq({ explorer.col + explorer.width, explorer.width }, { layout.COLUMNS, 24 })
 end
 
+--- Sets the explorer column of the child's layout to `column` at `width`.
+---
+---@param column string|false
+---@param width integer
+local function set_explorer_column(column, width)
+  child.lua([[require('aineo.layout').set_explorer_column(...)]], { column, width })
+end
+
+T['set_explorer_column()'] = MiniTest.new_set()
+
+T['set_explorer_column()']['opens the column of a layout that is open, the cursor staying'] = function()
+  local buffers, arrangement = arrangement_with_column(false)
+  layout.open(child, arrangement)
+  local current = current_window()
+
+  set_explorer_column('left', 24)
+
+  local explorer = box_of(buffers.explorer)
+  eq({ explorer.col, explorer.width, layout.window_count(child) }, { 0, 24, 4 })
+  eq(current_window(), current)
+  eq(child.lua_get([[require('aineo.layout').explorer_column()]]), 'left')
+end
+
+T['set_explorer_column()']['closes the column, the other columns taking its cells'] = function()
+  local buffers, arrangement = arrangement_with_column('left')
+  layout.open(child, arrangement)
+
+  set_explorer_column(false, WIDTH)
+
+  eq(layout.window_count(child), 3)
+  layout.expect_near(box_of(buffers.claude).width, layout.COLUMNS / 2)
+  eq(child.lua_get([[require('aineo.layout').explorer_column()]]), false)
+end
+
+T['set_explorer_column()']['moves the column to the other side and gives it the width'] = function()
+  local buffers, arrangement = arrangement_with_column('left')
+  layout.open(child, arrangement)
+  local window = layout.window_showing(child, buffers.explorer)
+
+  set_explorer_column('right', 20)
+
+  local explorer = box_of(buffers.explorer)
+  eq(layout.window_showing(child, buffers.explorer), window)
+  eq({ explorer.col + explorer.width, explorer.width }, { layout.COLUMNS, 20 })
+end
+
+T['set_explorer_column()']['gives the explorer pane’s place to the agent pane while the column is set'] = function()
+  local buffers, arrangement = arrangement_with_column(false)
+  layout.open(child, arrangement)
+  child.lua([[require('aineo.layout').show_pane('explorer', ...)]], { arrangement })
+
+  set_explorer_column('left', WIDTH)
+
+  eq(child.lua_get([[require('aineo.layout').shown_pane()]]), 'agent')
+  eq(layout.window_count(child), 4)
+  eq(
+    child.lua_get('vim.api.nvim_win_get_buf(...)', { layout.window_showing(child, buffers.report) }),
+    buffers.report
+  )
+end
+
+T['set_explorer_column()']['changes the layout of a tab page that is not shown, leaving the shown one alone'] = function()
+  local buffers, arrangement = arrangement_with_column(false)
+  layout.open(child, arrangement)
+  child.cmd('tabnew')
+  local shown = child.lua_get('vim.api.nvim_get_current_tabpage()')
+  local windows_shown = child.lua_get('#vim.api.nvim_tabpage_list_wins(0)')
+
+  set_explorer_column('left', WIDTH)
+
+  eq(child.lua_get('vim.api.nvim_get_current_tabpage()'), shown)
+  eq(child.lua_get('#vim.api.nvim_tabpage_list_wins(0)'), windows_shown)
+  eq(#child.lua_get('vim.fn.win_findbuf(...)', { buffers.explorer }), 1)
+  eq(
+    child.lua_get(
+      '#vim.api.nvim_tabpage_list_wins(vim.api.nvim_win_get_tabpage(vim.fn.win_findbuf(...)[1]))',
+      { buffers.explorer }
+    ),
+    4
+  )
+end
+
+T['set_explorer_column()']['only records the column while no window of the layout is open'] = function()
+  local buffers, arrangement = arrangement_with_column(false)
+  layout.open(child, arrangement)
+  buffers.input = layout.input_buffer(child)
+  child.cmd('botright new')
+  layout.close_windows(child, buffers, { 'claude', 'report', 'input' })
+  arrangement.explorer_column = nil
+
+  set_explorer_column('right', WIDTH)
+  layout.open(child, arrangement)
+
+  eq(child.lua_get([[require('aineo.layout').explorer_column()]]), 'right')
+  local explorer = box_of(buffers.explorer)
+  eq(explorer.col + explorer.width, layout.COLUMNS)
+end
+
+T['set_explorer_column()']['refuses a column that is neither a side nor false, naming it'] = function()
+  local _, arrangement = arrangement_with_column(false)
+  layout.open(child, arrangement)
+
+  expect.error(function()
+    set_explorer_column('middle', WIDTH)
+  end, "explorer_column: expected 'left', 'right' or false")
+end
+
+T['set_explorer_column()']['refuses a width that is not a positive whole number, naming it'] = function()
+  local _, arrangement = arrangement_with_column(false)
+  layout.open(child, arrangement)
+
+  expect.error(function()
+    set_explorer_column('left', 0)
+  end, 'explorer_width: expected a positive whole number')
+end
+
 T['a full zoom of the layout with the explorer column'] = MiniTest.new_set()
 
 T['a full zoom of the layout with the explorer column']['gives the column its width back when it ends after a resize'] = function()
