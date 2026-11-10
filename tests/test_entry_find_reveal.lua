@@ -237,6 +237,8 @@ T['a picker that stays open'] = MiniTest.new_set()
 
 T['a search'] = MiniTest.new_set()
 
+T['an asynchronous picker'] = MiniTest.new_set()
+
 T['a picker that raises'] = MiniTest.new_set()
 
 T['a picker that opens nothing'] = MiniTest.new_set()
@@ -410,6 +412,90 @@ T['a picker that raises']['has its error told to the user once'] = function()
   eq(#messages, 1)
   eq(vim.endswith(messages[1].message, 'the picker broke'), true)
   eq(messages[1].level, vim.log.levels.ERROR)
+end
+
+--- Makes the fake snacks picker of the child work as snacks.nvim's does: it
+--- opens its floating window on a later tick than the call that asked for it
+--- (`_G.picker_float`), and `_G.close_picker(path)` closes that window and
+--- puts the cursor in the window showing `top`, where a file column's file
+--- is, as the picker's own jump does, and opens `path` there when given.
+---
+---@param top string the file the file column shows, a path
+local function install_an_asynchronous_picker(top)
+  child.lua(
+    [[
+      local top = ...
+      package.preload['snacks'] = function()
+        return {
+          picker = {
+            files = function()
+              vim.schedule(function()
+                local buffer = vim.api.nvim_create_buf(false, true)
+                _G.picker_float = vim.api.nvim_open_win(buffer, true, {
+                  relative = 'editor',
+                  row = 1,
+                  col = 1,
+                  width = 20,
+                  height = 3,
+                })
+              end)
+            end,
+          },
+        }
+      end
+      _G.close_picker = function(path)
+        vim.api.nvim_win_close(_G.picker_float, true)
+        vim.api.nvim_set_current_win(vim.fn.win_findbuf(vim.fn.bufnr(top))[1])
+        if path then
+          vim.cmd.edit(vim.fn.fnameescape(path))
+        end
+      end
+    ]],
+    { top }
+  )
+end
+
+--- Opens the layout as `open_with_column()` does, shows `top.txt` in the file
+--- column, installs the asynchronous picker (`install_an_asynchronous_picker()`),
+--- starts the search from Input and waits for the picker's window; returns the
+--- repository's top.
+---
+---@param name string
+---@return string top
+local function search_with_an_asynchronous_picker(name)
+  local top = open_with_column(name, 'sub/note.txt')
+  wait_for_tree()
+  local top_file = vim.fs.joinpath(top, 'top.txt')
+  child.cmd('edit ' .. vim.fn.fnameescape(top_file))
+  wait_for_current_window(top_file)
+  install_an_asynchronous_picker(top_file)
+  entry.press(child, '\\i')
+  put_explorer_cursor_on_the_first_line()
+  entry.press(child, '\\f')
+  wait_for_the_picker()
+  return top
+end
+
+T['an asynchronous picker']['reveals the file it opens in the window it returns to'] = function()
+  local top = search_with_an_asynchronous_picker('async-confirm')
+
+  child.lua('_G.close_picker(...)', { vim.fs.joinpath(top, 'sub', 'note.txt') })
+
+  vim.wait(PATIENCE_MS, function()
+    return explorer_cursor_is_on('note.txt')
+  end, 20)
+  eq(explorer_cursor_is_on('note.txt'), true)
+end
+
+T['an asynchronous picker']['reveals nothing when cancelled, though the cursor returns to a file'] = function()
+  local top = search_with_an_asynchronous_picker('async-cancel')
+
+  child.lua('_G.close_picker()')
+  vim.wait(300)
+  child.cmd('edit ' .. vim.fn.fnameescape(vim.fs.joinpath(top, 'sub', 'other.txt')))
+
+  vim.wait(300)
+  eq({ explorer_cursor_is_on('top.txt'), explorer_cursor_is_on('other.txt') }, { false, false })
 end
 
 T['a search']['is not ended by the cancel of the search before it'] = function()
