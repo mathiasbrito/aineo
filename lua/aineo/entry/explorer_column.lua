@@ -10,9 +10,8 @@ local M = {}
 
 --- Hands `tab`'s layout the explorer's buffer, made for the column when the
 --- column is a side, and the column and width the settings name
---- (`aineo.layout`'s `set_explorer_column()`), and has the explorer read its
---- tree again for the window the column opened (`aineo.explorer`'s
---- `refresh()`).
+--- (`aineo.layout`'s `set_explorer_column()`), which changes nothing for the
+--- column and width the layout has.
 ---
 ---@param tab aineo.entry.Tab
 ---@param layout_settings table the resolved `layout` settings
@@ -24,7 +23,6 @@ local function apply_to(tab, layout_settings)
     layout_settings.explorer_column,
     layout_settings.explorer_width
   )
-  tab.homes.explorer.refresh()
 end
 
 --- Makes the explorer column of every aineo tab whose tab page exists the one

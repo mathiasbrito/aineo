@@ -232,6 +232,62 @@ T['setup()']['opens the column at once when it turns it on, the cursor staying']
   eq(wait_for_tree(), FOLDED_TREE)
 end
 
+--- The number of running file system watches in the child, which the
+--- explorer starts while a window shows it.
+local FS_EVENT_HANDLES = [[(function()
+  local count = 0
+  vim.uv.walk(function(handle)
+    if handle:get_type() == 'fs_event' and not handle:is_closing() then
+      count = count + 1
+    end
+  end)
+  return count
+end)()]]
+
+T['setup()']['runs the autocommands of the window it opens, so the explorer reads its tree'] = function()
+  open_in_repository('setup-nested')
+  child.lua([[
+    _G.window_entries = 0
+    vim.api.nvim_create_autocmd('BufWinEnter', {
+      pattern = 'aineo://explorer',
+      callback = function()
+        _G.window_entries = _G.window_entries + 1
+      end,
+    })
+  ]])
+
+  setup_layout({ explorer_column = 'left' })
+
+  eq(child.lua_get('_G.window_entries'), 1)
+end
+
+T['setup()']['releases the explorer’s file system watches when it turns the column off'] = function()
+  open_in_repository('setup-watch')
+  local without_explorer = child.lua_get(FS_EVENT_HANDLES)
+  setup_layout({ explorer_column = 'left' })
+  wait_for_tree()
+  local with_explorer = child.lua_get(FS_EVENT_HANDLES)
+
+  setup_layout({ explorer_column = false })
+  vim.wait(PATIENCE_MS, function()
+    return child.lua_get(FS_EVENT_HANDLES) == without_explorer
+  end, 20)
+
+  eq(with_explorer > without_explorer, true)
+  eq(child.lua_get(FS_EVENT_HANDLES), without_explorer)
+end
+
+T['setup()']['leaves a zoom of the whole window when it changes no explorer setting'] = function()
+  open_with_column('setup-unrelated', 'left')
+  entry.press(child, '\\Z')
+
+  child.lua(
+    [[require('aineo').setup({ layout = { explorer_column = 'left' }, find = { picker = 'auto' } })]]
+  )
+
+  eq(child.lua_get([[require('aineo.layout').is_zoomed()]]), true)
+end
+
 T['setup()']['closes the column at once when it turns it off'] = function()
   open_with_column('setup-off', 'left')
 

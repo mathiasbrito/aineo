@@ -3123,7 +3123,9 @@ local function make_layout(input_name, group_name)
   --- back (`M.toggle_zoom()`, `M.toggle_full_zoom()`), and the explorer pane
   --- gives way to the agent pane while the column is a side. With none of the
   --- layout's windows open, only the column is recorded, for the layout to
-  --- open with (`M.open()`). The explorer's buffer must have been handed
+  --- open with (`M.open()`). Asked for the column it has, at the width it has,
+  --- it changes nothing, a zoom staying and a column closed by hand staying
+  --- closed. The explorer's buffer must have been handed
   --- (`M.open()`, `M.keep_pane_buffer()`) when the column is a side.
   ---
   --- Raises an error naming `explorer_column` when it is neither a side nor
@@ -3151,9 +3153,11 @@ local function make_layout(input_name, group_name)
     if explorer_column then
       vim.validate('explorer buffer', state.buffers.explorer, is_buffer, false, 'a buffer')
     end
+    local changes_the_column = explorer_column ~= state.explorer_column
+      or (explorer_column and explorer_width ~= state.explorer_width)
     state.explorer_column = explorer_column
     state.explorer_width = explorer_width
-    if not has_any_window() then
+    if not changes_the_column or not has_any_window() then
       return
     end
     vim.api.nvim_win_call(existing_windows()[1], function()
