@@ -1,0 +1,182 @@
+local MiniTest = require('mini.test')
+local layout = dofile('tests/helpers/layout.lua')
+
+local eq = MiniTest.expect.equality
+local expect = MiniTest.expect
+
+local child = MiniTest.new_child_neovim()
+
+local T = MiniTest.new_set({ hooks = { post_once = child.stop } })
+
+--- The width the explorer column is handed unless a test chooses another.
+local WIDTH = 30
+
+--- The arrangement the layout opens with in a fresh child: the stand-ins, an
+--- explorer buffer, the explorer column on `column` at `width` when `column`
+--- is given, and Claude's column on `claude_side` when given.
+---
+---@param column? string|false
+---@param claude_side? string
+---@param width? integer
+---@return table buffers `claude`, `report` and `explorer`
+---@return table arrangement
+local function arrangement_with_column(column, claude_side, width)
+  layout.start(child)
+  local buffers = layout.stand_ins(child)
+  buffers.explorer = layout.named_scratch(child, 'aineo://explorer')
+  local arrangement = layout.arrangement(buffers, claude_side)
+  arrangement.explorer = buffers.explorer
+  arrangement.explorer_column = column
+  arrangement.explorer_width = width or WIDTH
+  return buffers, arrangement
+end
+
+--- Opens the layout in a fresh child as `arrangement_with_column()` shapes it;
+--- returns the buffers of the layout's windows and the explorer's.
+---
+---@param column? string|false
+---@param claude_side? string
+---@param width? integer
+---@return table buffers `claude`, `report`, `input` and `explorer`
+local function open_with_column(column, claude_side, width)
+  local buffers, arrangement = arrangement_with_column(column, claude_side, width)
+  layout.open(child, arrangement)
+  buffers.input = layout.input_buffer(child)
+  return buffers
+end
+
+--- The box of the window showing `buffer` in the child's current tab.
+---
+---@param buffer integer
+---@return table box
+local function box_of(buffer)
+  return layout.box(child, layout.window_showing(child, buffer))
+end
+
+T['open() with the explorer column'] = MiniTest.new_set()
+
+T['open() with the explorer column']['puts the explorer at the far left, full height, at the width handed'] = function()
+  local buffers = open_with_column('left')
+
+  local explorer, claude = box_of(buffers.explorer), box_of(buffers.claude)
+  eq({ explorer.row, explorer.col, explorer.width }, { 0, 0, WIDTH })
+  eq(explorer.height, claude.height)
+  eq(layout.window_count(child), 4)
+end
+
+T['open() with the explorer column']['puts the explorer at the far right, full height, at the width handed'] = function()
+  local buffers = open_with_column('right', nil, 24)
+
+  local explorer, claude = box_of(buffers.explorer), box_of(buffers.claude)
+  eq({ explorer.row, explorer.col + explorer.width, explorer.width }, { 0, layout.COLUMNS, 24 })
+  eq(explorer.height, claude.height)
+end
+
+T['open() with the explorer column']['is outermost whichever side Claude and the explorer are on'] =
+  MiniTest.new_set({
+    parametrize = {
+      { 'left', 'left', { 'explorer', 'claude', 'report' } },
+      { 'left', 'right', { 'explorer', 'report', 'claude' } },
+      { 'right', 'left', { 'claude', 'report', 'explorer' } },
+      { 'right', 'right', { 'report', 'claude', 'explorer' } },
+    },
+  })
+
+T['open() with the explorer column']['is outermost whichever side Claude and the explorer are on']['in order'] = function(
+  column,
+  claude_side,
+  order
+)
+  local buffers = open_with_column(column, claude_side)
+
+  local columns_in_order = vim.deepcopy(order)
+  table.sort(columns_in_order, function(a, b)
+    return box_of(buffers[a]).col < box_of(buffers[b]).col
+  end)
+  eq(columns_in_order, order)
+end
+
+T['open() with the explorer column']['keeps the explorer’s width and shares the rest by halves without a file column'] = function()
+  local buffers = open_with_column('left')
+
+  local rest = layout.COLUMNS - WIDTH - 1
+  layout.expect_near(box_of(buffers.explorer).width, WIDTH)
+  layout.expect_near(box_of(buffers.claude).width, rest / 2)
+end
+
+T['open() with the explorer column']['shares the rest by thirds with a file column'] = function()
+  local buffers, arrangement = arrangement_with_column('right', 'left')
+  child.cmd('edit ' .. layout.file('first.txt'))
+
+  layout.open(child, arrangement)
+
+  local rest = layout.COLUMNS - WIDTH - 1
+  layout.expect_near(box_of(buffers.explorer).width, WIDTH)
+  layout.expect_near(box_of(buffers.claude).width, (rest - 2) / 3)
+  layout.expect_near(box_of(buffers.report).width, (rest - 2) / 3)
+end
+
+T['open() with the explorer column']['fixes the explorer window’s width'] = function()
+  local buffers = open_with_column('left')
+
+  local window = layout.window_showing(child, buffers.explorer)
+  eq(child.lua_get('vim.wo[...].winfixwidth', { window }), true)
+end
+
+T['open() with the explorer column']['adds no window when the column is false'] = function()
+  open_with_column(false)
+
+  eq(layout.window_count(child), 3)
+end
+
+T['open() with the explorer column']['adds no window when no column is handed'] = function()
+  open_with_column(nil)
+
+  eq(layout.window_count(child), 3)
+end
+
+T['open() with the explorer column']['refuses a column that is neither a side nor false, naming the setting'] = function()
+  local _, arrangement = arrangement_with_column('middle')
+
+  expect.error(function()
+    layout.open(child, arrangement)
+  end, 'arrangement%.explorer_column')
+end
+
+T['open() with the explorer column']['refuses a width that is not a positive whole number, naming the setting'] =
+  MiniTest.new_set({
+    parametrize = { { 0 }, { 1.5 }, { -3 }, { 'wide' } },
+  })
+
+T['open() with the explorer column']['refuses a width that is not a positive whole number, naming the setting']['as'] = function(
+  width
+)
+  local _, arrangement = arrangement_with_column('left')
+  arrangement.explorer_width = width
+
+  expect.error(function()
+    layout.open(child, arrangement)
+  end, 'arrangement%.explorer_width')
+end
+
+T['open() with the explorer column']['refuses a column without the explorer’s buffer, naming it'] = function()
+  local _, arrangement = arrangement_with_column('left')
+  arrangement.explorer = nil
+
+  expect.error(function()
+    layout.open(child, arrangement)
+  end, 'arrangement%.explorer:')
+end
+
+T['explorer_column()'] = MiniTest.new_set()
+
+T['explorer_column()']['is false before a column was handed and the side after'] = function()
+  open_with_column(false)
+  local before = child.lua_get([[require('aineo.layout').explorer_column()]])
+  open_with_column('right')
+  local after = child.lua_get([[require('aineo.layout').explorer_column()]])
+
+  eq({ before, after }, { false, 'right' })
+end
+
+return T
