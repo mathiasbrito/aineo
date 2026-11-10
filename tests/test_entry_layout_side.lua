@@ -138,6 +138,17 @@ T['putting Claude Code on the left']['moves its column back to the left of the s
   eq(entry.windows(child), CLAUDE_LEFT)
 end
 
+--- Whether the window showing `buffer` lies left of the window showing
+--- `other` in the child's current tab.
+---
+---@param buffer integer
+---@param other integer
+---@return boolean
+local function lies_left_of(buffer, other)
+  return layout.box(child, layout.window_showing(child, buffer)).col
+    < layout.box(child, layout.window_showing(child, other)).col
+end
+
 T['swapping the layout'] = MiniTest.new_set()
 
 T['swapping the layout']['moves Claude Code to the other side each time, by :Aineo layout swap'] = function()
@@ -170,10 +181,11 @@ T['swapping the layout']['ends a zoom of the right column'] = function()
   open_layout('layout-side-swap-zoom')
   entry.press(child, '\\r')
   entry.press(child, '\\z')
+  local zoomed_before = child.lua_get([[require('aineo.layout').is_zoomed()]])
 
   entry.command(child, 'Aineo layout swap')
 
-  eq(child.lua_get([[require('aineo.layout').is_zoomed()]]), false)
+  eq({ zoomed_before, child.lua_get([[require('aineo.layout').is_zoomed()]]) }, { true, false })
 end
 
 T['swapping the layout']['moves the layout of every aineo tab'] = function()
@@ -306,6 +318,38 @@ T[':Aineo layout']['completes swap, left and right'] = function()
     child.lua_get([[vim.fn.getcompletion('Aineo layout ', 'cmdline')]]),
     { 'swap', 'left', 'right' }
   )
+end
+
+T['swapping the layout']['swaps from the side the layout is on, whatever the setting says now'] = function()
+  open_layout('layout-side-swap-setup')
+  child.lua([[require('aineo').setup({ layout = { claude_side = 'right' } })]])
+
+  entry.command(child, 'Aineo layout swap')
+
+  eq(entry.windows(child), CLAUDE_RIGHT)
+end
+
+T['swapping the layout']['with a window across the screen keeps the file column between the columns'] =
+  MiniTest.new_set({
+    parametrize = { { 'botright 6new' }, { 'help' } },
+  })
+
+T['swapping the layout']['with a window across the screen keeps the file column between the columns']['opened by'] = function(
+  command
+)
+  open_layout('layout-side-swap-across')
+  entry.press(child, '\\i')
+  child.cmd('edit ' .. layout.file('first.txt'))
+  local file = child.lua_get('vim.api.nvim_get_current_buf()')
+  entry.press(child, '\\i')
+  child.cmd(command)
+  local report = child.lua_get([[vim.fn.bufnr('aineo://report')]])
+  local claude = tabs.claude_terminal_of_tab(child, 1)
+
+  entry.command(child, 'Aineo layout swap')
+
+  eq(lies_left_of(report, file), true)
+  eq(lies_left_of(file, claude), true)
 end
 
 return T

@@ -590,7 +590,7 @@ the file column when Claude opens a file, the quickfix list, a split of the
 zoomed window: the sizes recorded no longer fit, and the layout's proportions
 are put back instead, the new windows keeping the size they have. `\Z`
 pressed in another window moves the zoom there; `\Z` in the zoomed window ends
-it. `\z` (|aineo-zoom|) pressed with the cursor in a window of the right
+it. `\z` (|aineo-zoom|) pressed with the cursor in a window of the panes
 column ends the full zoom first and then does what it does; a `\z` zoom that
 was on before the full zoom is on again once it ends. A `\z` that would change
 nothing leaves the full zoom as it is.
@@ -2068,7 +2068,7 @@ AineoChangesGraphLane6   its sixth lane, linked to `Statement`
 The file column ~
                                                           *aineo-file-column*
 A file you open from one of the three windows — `:edit`, a picker, a jump,
-`\f` (|aineo-find|) — moves to a column between Claude's and the right
+`\f` (|aineo-find|) — moves to a column between Claude's and the panes
 column, created on first use and reused afterwards; the aineo window keeps
 its own buffer. While the file column is open, the three columns take a
 third of the screen each. Only file buffers move: help, terminals and
@@ -4676,7 +4676,7 @@ autostart		A boolean. Default: `true`
 
                                                      *aineo-config-claude.cmd*
 claude.cmd		A list of at least one string. Default: `{ 'claude' }`
-			The command run in the left terminal, as a list of
+			The command run in Claude's terminal, as a list of
 			words, never through a shell. aineo appends its own
 			arguments (|aineo-report|). It must not hold
 			`--continue`, `--resume` or `--session-id`, since

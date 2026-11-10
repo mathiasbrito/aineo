@@ -181,10 +181,11 @@ T['set_claude_side()']['ends a zoom of the right column without restoring it'] =
   local buffers = layout.open_with_stand_ins(child)
   layout.enter_window_showing(child, buffers.report)
   child.lua([[require('aineo.layout').toggle_zoom()]])
+  local zoomed_before = child.lua_get([[require('aineo.layout').is_zoomed()]])
 
   set_claude_side('right')
 
-  eq(child.lua_get([[require('aineo.layout').is_zoomed()]]), false)
+  eq({ zoomed_before, child.lua_get([[require('aineo.layout').is_zoomed()]]) }, { true, false })
   local boxes = layout.boxes(child, buffers)
   local rows = boxes.report.height + boxes.input.height
   layout.expect_near(boxes.report.height, layout.REPORT_HEIGHT * rows)
@@ -194,10 +195,11 @@ T['set_claude_side()']['ends a zoom of a whole window without restoring it'] = f
   local buffers = layout.open_with_stand_ins(child)
   layout.enter_window_showing(child, buffers.claude)
   child.lua([[require('aineo.layout').toggle_full_zoom()]])
+  local zoomed_before = child.lua_get([[require('aineo.layout').is_zoomed()]])
 
   set_claude_side('right')
 
-  eq(child.lua_get([[require('aineo.layout').is_zoomed()]]), false)
+  eq({ zoomed_before, child.lua_get([[require('aineo.layout').is_zoomed()]]) }, { true, false })
   local claude = layout.box(child, layout.window_showing(child, buffers.claude))
   layout.expect_near(claude.width, layout.COLUMNS / 2)
 end
@@ -508,6 +510,118 @@ T['the panes column on a swapped layout']['zooms a window of the column to its r
   eq(child.lua_get([[require('aineo.layout').is_zoomed()]]), true)
   local boxes = layout.boxes(child, buffers)
   eq(boxes.input.height > boxes.report.height, true)
+end
+
+--- The width and height of every window of the child's current tab that does
+--- not float, by window ID, written as a string.
+---
+---@return table<string, integer[]> sizes
+local function sizes_of_tab()
+  return child.lua_get([[(function()
+    local sizes = {}
+    for _, window in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+      if vim.api.nvim_win_get_config(window).relative == '' then
+        sizes[tostring(window)] = { vim.api.nvim_win_get_width(window), vim.api.nvim_win_get_height(window) }
+      end
+    end
+    return sizes
+  end)()]])
+end
+
+--- Commands that open a window across the whole screen from Input: an empty
+--- window at the bottom, and help, which opens at the top because no aineo
+--- window is as wide as the screen.
+local WINDOWS_ACROSS_THE_SCREEN = { { 'botright 6new' }, { 'help' } }
+
+T['set_claude_side() with a window across the screen'] = MiniTest.new_set({
+  parametrize = WINDOWS_ACROSS_THE_SCREEN,
+})
+
+T['set_claude_side() with a window across the screen']['keeps the file column between the two columns'] = function(
+  command
+)
+  local buffers = layout.open_with_stand_ins(child)
+  layout.enter_window_showing(child, buffers.input)
+  child.cmd('edit ' .. layout.file('first.txt'))
+  buffers.file = child.lua_get('vim.api.nvim_get_current_buf()')
+  layout.enter_window_showing(child, buffers.input)
+  child.cmd(command)
+  local count = layout.window_count(child)
+
+  set_claude_side('right')
+
+  eq(lies_left_of(buffers.report, buffers.file), true)
+  eq(lies_left_of(buffers.file, buffers.claude), true)
+  eq(layout.box(child, layout.window_showing(child, buffers.input)).col, 0)
+  eq(layout.window_count(child), count)
+end
+
+T['set_claude_side() with a window across the screen']['moves back as it moved'] = function(command)
+  local buffers = layout.open_with_stand_ins(child)
+  layout.enter_window_showing(child, buffers.input)
+  child.cmd('edit ' .. layout.file('first.txt'))
+  buffers.file = child.lua_get('vim.api.nvim_get_current_buf()')
+  layout.enter_window_showing(child, buffers.input)
+  child.cmd(command)
+
+  set_claude_side('right')
+  set_claude_side('left')
+
+  eq(lies_left_of(buffers.claude, buffers.file), true)
+  eq(lies_left_of(buffers.file, buffers.report), true)
+end
+
+T['set_claude_side() sizes'] = MiniTest.new_set()
+
+T['set_claude_side() sizes']['are mirrored with the Report closed and a file column'] = function()
+  local buffers = open_with_a_file_column('left')
+  layout.close_windows(child, buffers, { 'report' })
+  local before = sizes_of_tab()
+
+  set_claude_side('right')
+  local swapped = sizes_of_tab()
+  set_claude_side('left')
+
+  eq({ swapped, sizes_of_tab() }, { before, before })
+end
+
+T['set_claude_side() sizes']['are mirrored with the Report closed and no file column'] = function()
+  local buffers = layout.open_with_stand_ins(child)
+  layout.close_windows(child, buffers, { 'report' })
+  local before = sizes_of_tab()
+
+  set_claude_side('right')
+  local swapped = sizes_of_tab()
+  set_claude_side('left')
+
+  eq({ swapped, sizes_of_tab() }, { before, before })
+end
+
+T['set_claude_side() sizes']['are mirrored with Claude’s window closed'] = function()
+  local buffers = open_with_a_file_column('left')
+  layout.close_windows(child, buffers, { 'claude' })
+  local before = sizes_of_tab()
+
+  set_claude_side('right')
+  local swapped = sizes_of_tab()
+  set_claude_side('left')
+
+  eq({ swapped, sizes_of_tab() }, { before, before })
+end
+
+T['set_claude_side() sizes']['are mirrored with a split of the file column made by hand'] = function()
+  local buffers = open_with_a_file_column('left')
+  layout.enter_window_showing(child, buffers.file)
+  child.cmd('vsplit')
+  child.cmd('vertical resize 5')
+  layout.enter_window_showing(child, buffers.input)
+  local before = sizes_of_tab()
+
+  set_claude_side('right')
+  local swapped = sizes_of_tab()
+  set_claude_side('left')
+
+  eq({ swapped, sizes_of_tab() }, { before, before })
 end
 
 return T
