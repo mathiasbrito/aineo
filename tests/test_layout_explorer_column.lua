@@ -168,6 +168,124 @@ T['open() with the explorer column']['refuses a column without the explorer’s 
   end, 'arrangement%.explorer:')
 end
 
+--- Moves Claude's column to `claude_side` in the child's layout.
+---
+---@param claude_side string
+local function set_claude_side(claude_side)
+  child.lua([[require('aineo.layout').set_claude_side(...)]], { claude_side })
+end
+
+--- The names of `buffers` in the order their windows lie from the left of the
+--- screen.
+---
+---@param buffers table
+---@param names string[]
+---@return string[] names
+local function from_the_left(buffers, names)
+  local ordered = vim.deepcopy(names)
+  table.sort(ordered, function(a, b)
+    return box_of(buffers[a]).col < box_of(buffers[b]).col
+  end)
+  return ordered
+end
+
+T['swapping Claude’s side with the explorer column'] = MiniTest.new_set()
+
+T['swapping Claude’s side with the explorer column']['leaves the explorer outermost where it is and mirrors the other columns'] =
+  MiniTest.new_set({
+    parametrize = {
+      { 'left', 'left', { 'explorer', 'report', 'claude' } },
+      { 'right', 'left', { 'report', 'claude', 'explorer' } },
+      { 'left', 'right', { 'explorer', 'claude', 'report' } },
+      { 'right', 'right', { 'claude', 'report', 'explorer' } },
+    },
+  })
+
+T['swapping Claude’s side with the explorer column']['leaves the explorer outermost where it is and mirrors the other columns']['in order'] = function(
+  column,
+  from,
+  expected
+)
+  local buffers = open_with_column(column, from)
+  local window = layout.window_showing(child, buffers.explorer)
+
+  set_claude_side(from == 'left' and 'right' or 'left')
+
+  eq(from_the_left(buffers, { 'explorer', 'claude', 'report' }), expected)
+  eq(layout.window_showing(child, buffers.explorer), window)
+  eq(box_of(buffers.explorer).width, WIDTH)
+end
+
+T['swapping Claude’s side with the explorer column']['keeps the thirds of the remaining width with a file column'] = function()
+  local buffers, arrangement = arrangement_with_column('left', 'left')
+  child.cmd('edit ' .. layout.file('first.txt'))
+  layout.open(child, arrangement)
+
+  set_claude_side('right')
+
+  local rest = layout.COLUMNS - WIDTH - 1
+  layout.expect_near(box_of(buffers.claude).width, (rest - 2) / 3)
+  layout.expect_near(box_of(buffers.report).width, (rest - 2) / 3)
+  eq(box_of(buffers.explorer).width, WIDTH)
+end
+
+--- Commands that open a window across the whole screen below the columns.
+local WINDOWS_ACROSS_THE_SCREEN = { { 'botright 6new' }, { 'botright copen 6' } }
+
+T['the explorer column with a window across the screen'] = MiniTest.new_set({
+  parametrize = WINDOWS_ACROSS_THE_SCREEN,
+})
+
+T['the explorer column with a window across the screen']['is not spanned by the window'] = function(
+  command
+)
+  local buffers = open_with_column('left')
+
+  child.cmd(command)
+
+  local explorer, claude = box_of(buffers.explorer), box_of(buffers.claude)
+  eq(explorer.height, claude.height)
+  expect.equality(explorer.height < layout.LINES - 2, true)
+end
+
+T['the explorer column with a window across the screen']['stays outermost through a swap'] = function(
+  command
+)
+  local buffers = open_with_column('right', 'left')
+  child.cmd(command)
+  local count = layout.window_count(child)
+
+  set_claude_side('right')
+
+  eq(from_the_left(buffers, { 'explorer', 'claude', 'report' }), { 'report', 'claude', 'explorer' })
+  eq(layout.window_count(child), count)
+end
+
+T['the explorer column'] = MiniTest.new_set()
+
+T['the explorer column']['stays outermost as Claude’s closed window opens again'] =
+  MiniTest.new_set({
+    parametrize = {
+      { 'left', 'left', { 'explorer', 'claude', 'report' } },
+      { 'right', 'right', { 'report', 'claude', 'explorer' } },
+    },
+  })
+
+T['the explorer column']['stays outermost as Claude’s closed window opens again']['in order'] = function(
+  column,
+  claude_side,
+  expected
+)
+  local buffers, arrangement = arrangement_with_column(column, claude_side)
+  layout.open(child, arrangement)
+  buffers.input = layout.input_buffer(child)
+  layout.close_windows(child, buffers, { 'claude' })
+
+  layout.focus(child, 'claude', arrangement)
+
+  eq(from_the_left(buffers, { 'explorer', 'claude', 'report' }), expected)
+end
+
 T['explorer_column()'] = MiniTest.new_set()
 
 T['explorer_column()']['is false before a column was handed and the side after'] = function()

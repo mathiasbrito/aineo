@@ -68,6 +68,25 @@ local function column_holding(columns, window)
   return nil
 end
 
+--- Whether the column holding `window` is the outermost on `edge` in the
+--- deepest row of `tree` that holds every window of `held`. True when no row
+--- holds them all or the row's columns do not hold `window`: nothing is then
+--- out of place for a caller to correct.
+---
+---@param tree table `winlayout()`'s tree of the tab holding `held`
+---@param held integer[] the windows the row must hold, `window` among them
+---@param window integer
+---@param edge 'left'|'right'
+---@return boolean
+function M.is_outermost(tree, held, window, edge)
+  local row = deepest_row_holding(tree, held)
+  local position = row and column_holding(row[2], window)
+  if not position then
+    return true
+  end
+  return position == (edge == 'left' and 1 or #row[2])
+end
+
 --- The windows, left to right and top to bottom, of the column that holds
 --- `window` in the deepest row of `tree` that holds every window of `held`;
 --- none when no row holds them all or the row's columns do not hold `window`.
