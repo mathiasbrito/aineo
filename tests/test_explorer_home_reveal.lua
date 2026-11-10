@@ -124,6 +124,16 @@ T['reveal()']['unfolds for the next time when no window shows the explorer'] = f
   eq(line_ending_with('target.txt') ~= nil, true)
 end
 
+T['reveal()']['changes nothing for a file outside the folder shown after one inside was followed'] = function()
+  local window = vim.api.nvim_get_current_win()
+  explorer.follow('/repo/file60.txt')
+  vim.api.nvim_win_set_cursor(window, { 3, 0 })
+
+  explorer.reveal('/elsewhere/file.txt')
+
+  eq(cursor_line(window), 3)
+end
+
 T['follow()'] = MiniTest.new_set()
 
 T['follow()']['leaves every cursor where it is'] = function()
