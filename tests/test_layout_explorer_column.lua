@@ -473,6 +473,21 @@ T['focus_explorer_column()']['raises an error naming the setting when the layout
   end, 'arrangement%.explorer_column')
 end
 
+T['opening the layout again']['builds around the explorer column when it is the only window left, the cursor in it'] = function()
+  local buffers, arrangement = arrangement_with_column('left')
+  layout.open(child, arrangement)
+  buffers.input = layout.input_buffer(child)
+  focus_explorer_column(arrangement)
+  layout.close_windows(child, buffers, { 'claude', 'report', 'input' })
+
+  layout.open(child, arrangement)
+
+  eq(layout.window_count(child), 4)
+  eq(#child.lua_get('vim.fn.win_findbuf(...)', { buffers.explorer }), 1)
+  eq(box_of(buffers.explorer).col, 0)
+  eq(box_of(buffers.explorer).width, WIDTH)
+end
+
 T['a file opened in the explorer column'] = MiniTest.new_set()
 
 T['a file opened in the explorer column']['moves to the file column, the column showing the explorer again'] = function()
