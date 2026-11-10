@@ -68,6 +68,20 @@ local function column_holding(columns, window)
   return nil
 end
 
+--- The windows, left to right and top to bottom, of the column that holds
+--- `window` in the deepest row of `tree` that holds every window of `held`;
+--- none when no row holds them all or the row's columns do not hold `window`.
+---
+---@param tree table `winlayout()`'s tree of the tab holding `held`
+---@param held integer[] the windows the row must hold, one at least
+---@param window integer
+---@return integer[] windows
+function M.windows_of_column_holding(tree, held, window)
+  local row = deepest_row_holding(tree, held)
+  local position = row and column_holding(row[2], window)
+  return position and windows_of(row[2][position]) or {}
+end
+
 ---@class aineo.layout.ColumnBounds
 ---@field held integer[] the windows the row must hold, one at least
 ---@field left? integer the window whose column bounds the others on the left
