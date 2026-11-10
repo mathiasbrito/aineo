@@ -1,5 +1,5 @@
 --- The office window of one tab, `require('aineo.office')`: a float over the
---- right side of the tab's layout that shows the tab's Claude Code as an
+--- panes column of the tab's layout that shows the tab's Claude Code as an
 --- animated office. It is the only home of the office's context that touches
 --- windows, timers and autocommands; what the office looks like is
 --- `aineo.office_scene`'s, what an agent is doing `aineo.office_states`'s,
@@ -9,7 +9,7 @@
 --- The office reads files Claude Code already writes and nothing else: it
 --- calls no Claude, sends nothing to its terminal and spends no token.
 ---
---- The office shows by itself once the cursor has been out of the right side
+--- The office shows by itself once the cursor has been out of the panes column
 --- for `office.idle_ms`, and when it is asked to. While it is hidden it holds
 --- one timer, that countdown, and a few autocommands that tell where the
 --- cursor is; nothing is read and nothing is drawn. While it shows, one timer
@@ -87,8 +87,8 @@ local MOST_PROBLEMS_LISTED = 5
 local FRAME_MS = 83
 
 --- What `show_now()` tells the user, as a warning, when the layout shows no
---- right side to cover.
-local NO_RIGHT_SIDE = "aineo: the office has no right side of aineo's layout to cover"
+--- panes column to cover.
+local NO_RIGHT_SIDE = "aineo: the office has no panes column of aineo's layout to cover"
 
 --- What the status list says of each state: the words of the vocabulary.
 ---
@@ -102,7 +102,7 @@ local function state_labels()
 end
 
 ---@class aineo.office.Options
----@field right_side fun(): aineo.layout.Area|nil the screen cells the layout's right side takes now, nil when it shows none
+---@field right_side fun(): aineo.layout.Area|nil the screen cells the layout's panes column takes now, nil when it shows none
 ---@field pack_folders fun(): string[] the `aineo-office` folders the office's packs are searched in, asked each time the office shows
 ---@field clock fun(): number the time in seconds, from any origin, that only grows
 ---@field report_tool? string the name of aineo's report tool, as Claude Code calls it; none, and no call is a report
@@ -117,25 +117,25 @@ end
 ---@field pack string|string[] the pack to draw, or packs to pick one from at random each time
 ---@field pieces table<string, string> art files of the user's own, by the name of the piece each replaces
 ---@field commands? aineo.office_states.CommandClasses the classes of shell commands that tell what an agent running one does (`office.commands`); none, and every command is a command run
----@field idle_ms? integer|false how long the cursor stays out of the right side before the office shows by itself, in milliseconds; none or `false`, and it shows only when asked to
+---@field idle_ms? integer|false how long the cursor stays out of the panes column before the office shows by itself, in milliseconds; none or `false`, and it shows only when asked to
 
 ---@class aineo.office.Office
 ---@field permission_wait fun(agent: string) tells the office the agent, `main` or a subagent's id, waits for the user to answer a permission prompt, until its next line in the transcript; it is kept, and handed over each time the office starts running unless the transcript shows the agent went on since
----@field report_arrived fun(report: aineo.office.Report) keeps the report as a card the office draws in its bottom right corner until the cursor enters the right side, and starts the idle countdown again; keeps nothing when the cursor is in the right side and the office is hidden, where the Report shows it
+---@field report_arrived fun(report: aineo.office.Report) keeps the report as a card the office draws in its bottom right corner until the cursor enters the panes column, and starts the idle countdown again; keeps nothing when the cursor is in the panes column and the office is hidden, where the Report shows it
 ---@field session_changed fun() tells the office the session it acts out is another now: the agents of the old session leave, its permission waits are forgotten, and an office that is running follows the transcript `options.transcript` names now at once, its main agent walking in when the old session had ended (`session_ended()`); one that is hidden or paused follows it when it next starts
 ---@field session_ended fun() tells the office the session it acts out has ended: its main agent leaves, and leaves again each time the office starts following it, a reset included, until a session starts (`session_started()`, `session_changed()`)
 ---@field session_started fun() tells the office the session it acts out has started again after it ended (`session_ended()`): an office that is running has its main agent walk in, as when a session begins, the session's earlier agents forgotten; nothing when it had not ended
 ---@field follows_session fun(session: string): boolean whether `session` is one of the sessions of the chain the office followed last: the session of the transcript it was given and those it went on in; false before it has followed any
----@field show_now fun() shows the office over the right side at once, and does nothing when it shows
----@field preview fun(pack?: string) shows the pack, or the one the settings name, over the right side with every state of the vocabulary acted out in turn, each named, in place of the office that shows, which stays when the pack cannot be shown; the preview follows no transcript
----@field reload fun() shows the office again with what the settings name now, when it shows, and does nothing when it is hidden, previews a pack or has no right side; a pack that cannot be shown is told, and the office that shows stays
----@field reset fun() shows the office over the right side as if the session began now: every agent is forgotten but for a permission wait not answered, the main agent walks in (or, once the session has ended, `session_ended()`, stays gone until a session starts), and only what the transcripts say from then on is acted out, then and whenever an office of this Neovim follows the session again; with no right side, a pack that cannot be loaded or a stage that cannot be made, it tells the user why and the office that shows stays
+---@field show_now fun() shows the office over the panes column at once, and does nothing when it shows
+---@field preview fun(pack?: string) shows the pack, or the one the settings name, over the panes column with every state of the vocabulary acted out in turn, each named, in place of the office that shows, which stays when the pack cannot be shown; the preview follows no transcript
+---@field reload fun() shows the office again with what the settings name now, when it shows, and does nothing when it is hidden, previews a pack or has no panes column; a pack that cannot be shown is told, and the office that shows stays
+---@field reset fun() shows the office over the panes column as if the session began now: every agent is forgotten but for a permission wait not answered, the main agent walks in (or, once the session has ended, `session_ended()`, stays gone until a session starts), and only what the transcripts say from then on is acted out, then and whenever an office of this Neovim follows the session again; with no panes column, a pack that cannot be loaded or a stage that cannot be made, it tells the user why and the office that shows stays
 ---@field let_go fun() closes the office, stops its timer and its watch, and forgets the session
 
 --- Makes the office of one tab.
 ---
 --- It counts the user's idleness from then on: once the cursor has been out of
---- the right side for the settings' `idle_ms`, the office shows. Until it
+--- the panes column for the settings' `idle_ms`, the office shows. Until it
 --- shows it has no window, no frame timer and no watch.
 ---
 ---@param options aineo.office.Options
@@ -215,7 +215,7 @@ function M.new_office(options)
   --- Whether the user was told that the settings cannot be read.
   local settings_unreadable_told = false
 
-  --- Decides, from the cursor and the right side, whether the countdown runs
+  --- Decides, from the cursor and the panes column, whether the countdown runs
   --- and whether the office shows; assigned below, after the functions it
   --- needs.
   ---@type fun()
@@ -230,9 +230,9 @@ function M.new_office(options)
 
   --- Why the office cannot show over `area` now: the editor draws no true
   --- colours, draws the half blocks two cells wide, or the layout shows no
-  --- right side; nil when it can.
+  --- panes column; nil when it can.
   ---
-  ---@param area aineo.layout.Area|nil the right side now
+  ---@param area aineo.layout.Area|nil the panes column now
   ---@return string|nil
   local function why_it_cannot_show(area)
     if not vim.o.termguicolors then
@@ -322,7 +322,7 @@ function M.new_office(options)
   --- Closes the office once the current event is over: a window cannot be
   --- closed from the autocommand that enters it. When the cursor is in the
   --- office's own window, it goes first to the window the office covers, so
-  --- that it ends in the right side and not in the window it came from.
+  --- that it ends in the panes column and not in the window it came from.
   local function close_soon()
     vim.schedule(function()
       local open = showing
@@ -460,8 +460,8 @@ function M.new_office(options)
       and vim.api.nvim_win_get_tabpage(open.float.window) == vim.api.nvim_get_current_tabpage()
   end
 
-  --- Moves the office to where the right side is now, and resizes the stage
-  --- to it; closes it when the layout shows no right side. Does nothing from
+  --- Moves the office to where the panes column is now, and resizes the stage
+  --- to it; closes it when the layout shows no panes column. Does nothing from
   --- another tab page, whose cells are not the office's.
   ---
   ---@param open { float: aineo.cover.Cover, stage: aineo.office_scene.Stage, area: aineo.layout.Area }
@@ -480,7 +480,7 @@ function M.new_office(options)
   end
 
   --- Closes the office when the cursor enters a window the office covers, in
-  --- its own tab page; keeps it over the right side as the screen changes;
+  --- its own tab page; keeps it over the panes column as the screen changes;
   --- closes it when its window closes; and makes its colours again after a
   --- colorscheme cleared them.
   ---
@@ -702,7 +702,7 @@ function M.new_office(options)
     end
   end
 
-  --- How long the cursor must stay out of the right side before the office
+  --- How long the cursor must stay out of the panes column before the office
   --- shows by itself, in milliseconds; nil when the settings turn that off or
   --- cannot be read.
   ---
@@ -713,9 +713,9 @@ function M.new_office(options)
     return type(idle_ms) == 'number' and idle_ms or nil
   end
 
-  --- Whether the cursor is in a window of the right side now.
+  --- Whether the cursor is in a window of the panes column now.
   ---
-  ---@param area aineo.layout.Area|nil the right side now
+  ---@param area aineo.layout.Area|nil the panes column now
   ---@return boolean
   local function cursor_is_in(area)
     return area ~= nil and cover_module.area_holds(area, vim.api.nvim_get_current_win())
@@ -736,7 +736,7 @@ function M.new_office(options)
   --- side say: while the office shows, nothing; with the cursor in the right
   --- side, no countdown and no card; otherwise the countdown runs, if the
   --- settings give an idle time, and when it has run out the office shows as
-  --- soon as there is a right side. The settings are read only when a
+  --- soon as there is a panes column. The settings are read only when a
   --- countdown is to start.
   function settle()
     if showing or has_been_let_go then
@@ -779,7 +779,7 @@ function M.new_office(options)
   })
   settle()
 
-  --- Shows the office over the right side. With no right side, a pack that
+  --- Shows the office over the panes column. With no panes column, a pack that
   --- cannot be loaded or a stage that cannot be made, it tells the user why and
   --- shows nothing.
   function office.show_now()

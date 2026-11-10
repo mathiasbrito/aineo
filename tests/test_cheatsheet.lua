@@ -178,7 +178,7 @@ T['opening']['tells why and shows nothing when the layout shows no right side to
 
   eq(sheet_window(), vim.NIL)
   eq(child.lua_get([[_G.told]]), {
-    { message = "aineo: the cheatsheet has no right side of aineo's layout to cover", level = 3 },
+    { message = "aineo: the cheatsheet has no panes column of aineo's layout to cover", level = 3 },
   })
 end
 

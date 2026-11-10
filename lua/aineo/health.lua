@@ -1219,7 +1219,7 @@ local function check_office(resolved_config)
   local idle_ms = resolved_config.office.idle_ms
   if idle_ms then
     vim.health.info(
-      ('the office shows by itself after %g s without the cursor in the right side (office.idle_ms), and for :Aineo office and \\O: :help |aineo-office|'):format(
+      ('the office shows by itself after %g s without the cursor in the panes column (office.idle_ms), and for :Aineo office and \\O: :help |aineo-office|'):format(
         idle_ms / 1000
       )
     )
