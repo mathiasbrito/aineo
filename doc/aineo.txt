@@ -328,25 +328,32 @@ to you. `\pa`, `\g`, `\pt`, `\x` and `\pw` swap it out as they swap each
 other, and `\z` and `\Z` zoom it as any window of the column. Each tab has its
 own explorer, whose folds, toggles and filter last as long as the tab.
 
-    ~/project  ·  ignored hidden  ·  dotfiles shown
-    ▾ • lua/
-      ▸   aineo/
-        M init.lua
+    ~/project · main · 2 changed · 1 new     ignored hidden · dotfiles shown
+    ▾ •2 lua/
+      ├ ▸   aineo/
+      └ ✦ M init.lua                                                 +3 −1
     ▸   tests/
         .gitignore
       ? notes.md
 
-The first line names what the tree shows and the toggles, and the filter
-when there is one. Folders come first, then files, each alphabetically,
-`▸` before a folded folder and `▾` before an unfolded one. In a repository
-git's mark sits before a file's name: `M` modified, `A` added, `D` deleted
-(a file gone from disk still shows, with its mark), `R` renamed, `T` its
-type changed, `?` untracked; a folder holding a change, at any depth, has
-`•`. A submodule, and a repository nested in it, is a folder listed from
-disk as it unfolds (|aineo-limits|). What git ignores is hidden, dotfiles
-show, and `.git` never does, a folder or a file. A name holding a control
-character shows quoted, as the changes pane shows such a path. While the
-explorer shows, the tree is read again whenever the repository changes (a
+The first line names what the tree shows, on the left: the folder, its
+branch when it is the folder Claude works in and HEAD is on one, and a
+summary of the changes (`2 changed · 1 new`, the files git sees as new apart
+from the others); and on the right the toggles and the filter, when there is
+one. When the window is too narrow for both sides, the toggles go first, then
+the summary, then the branch, and a folder still too long is cut from its
+start, behind `…`: the line never wraps. A worktree or branch picked with `s`
+keeps the heading the changes pane gives it. Folders come first, then files,
+each alphabetically, `▸` before a folded folder and `▾` before an unfolded
+one. In a repository git's mark sits before a file's name: `M` modified,
+`A` added, `D` deleted (a file gone from disk still shows, with its mark),
+`R` renamed, `T` its type changed, `?` untracked; a folder holding a change,
+at any depth, has `•`, followed by the number of changed files below it
+(`•2`). A submodule, and a repository nested in it, is a folder listed
+from disk as it unfolds (|aineo-limits|). What git ignores is hidden,
+dotfiles show, and `.git` never does, a folder or a file. A name holding a
+control character shows quoted, as the changes pane shows such a path. While
+the explorer shows, the tree is read again whenever the repository changes (a
 file written, a commit, a checkout), the folds, the filter and each
 cursor's entry kept; hidden, it watches nothing, and reads the tree again
 as it shows.
@@ -356,7 +363,11 @@ mark; `R` reads it again.
 
 The keys of the tree, in Normal mode, in its buffer alone:
 
-    `l`        unfold a folder, or fold it again
+    `l`        unfold a folder, or fold it again; on a file, show it in the
+             file column as `<CR>` opens it, the cursor staying in the
+             tree, on that line, in Normal mode, as `l` in the changes
+             pane does (|aineo-changes|); moving the cursor shows
+             nothing, the next `l` or `<CR>` shows the next file
     `<CR>`     unfold or fold a folder; on a file, open it in the file
              column and move the cursor there, as a link opens
              (|aineo-links|): a text file in aineo, anything else with
@@ -397,6 +408,50 @@ The changes pane's default view (`\g` in that pane) shows the folder Claude
 works in again. A worktree shown that is gone from disk gives way to the
 folder Claude works in, and aineo tells you once.
 
+The looks. Everything below is display only: the buffer's text, and so the
+cursor and every key, are as without it. Each can be turned off under the
+explorer's settings (|aineo-config-explorer|); all but the marks of Claude's
+work and of unsaved edits are on by default.
+
+    Guides             `│ `, `├ ` and `└ ` over the indent, in
+                       |hl-AineoExplorerGuide|.
+    Compact chains     a folder whose only entry, as the tree shows it, is
+                       a folder takes one line with it, `lua/aineo/explorer/`.
+                       `l`, `<CR>`, `h` and `@` act on the deepest folder of
+                       the chain; the current file and the filter unfold
+                       through it.
+    Icons              the icon of a file before its name, from mini.icons
+                       when it is installed and set up, else from
+                       nvim-web-devicons when it is installed, in the group
+                       the plugin gives; neither is a dependency, and with
+                       neither the tree looks as without. A folder keeps its
+                       sign and has no icon.
+    Counts             `•2` after a folder's mark, and `+3 −1` at the right
+                       of a file that differs from `HEAD`, the lines added
+                       and removed (one `git diff --numstat` for each read of
+                       the tree), in |hl-AineoExplorerAdded| and
+                       |hl-AineoExplorerRemoved|. A binary file and an
+                       untracked file show none, and a count that would not
+                       fit on its line is left out.
+    Dimming            while a changed file shows, the name of a file git
+                       sees unchanged shows in |hl-AineoExplorerUnchanged|.
+    Diagnostics        `E2 W1` at the right of a file the editor has loaded
+                       and has errors or warnings for, before its line
+                       counts, in the groups of the diagnostics. A folder
+                       shows none.
+    Unsaved edits      ` ●` after the name of a file whose buffer, loaded in
+                       this Neovim, is modified, in
+                       |hl-AineoExplorerModified|.
+    Claude's work      `✦ ` before the name of each file the changes pane
+                       lists under Session work (|aineo-changes|), after
+                       git's mark and before the icon, in
+                       |hl-AineoExplorerClaude|. A file that newly joins that
+                       work, or whose change is read anew, shows its line in
+                       |hl-AineoExplorerClaudeFlash| for 1.5 seconds; the
+                       cursor never moves. It reads nothing but what aineo
+                       already reads, bar the files of Session work, one
+                       more diff for each read of the tree.
+
 The tree shows in colour. A file git sees changed has its mark and its name
 in the group the changes pane gives that kind of change, the groups `\g`
 shows its files in (|hl-AineoChangesAdded|, |hl-AineoChangesModified|,
@@ -409,17 +464,38 @@ show in |hl-AineoExplorerFolder|, and the `•` of a folder holding a change in
 explorer's groups is a default link, which a colour scheme or you may
 replace.
 
+                                                       *hl-AineoExplorerAdded*
+AineoExplorerAdded	The lines added at a changed file's right, linked to
+			|hl-AineoChangesAdded|.
                                                      *hl-AineoExplorerChanged*
 AineoExplorerChanged	The `•` of a folder holding a change, linked to
 			|hl-AineoChangesModified|.
+                                                      *hl-AineoExplorerClaude*
+AineoExplorerClaude	The `✦` before a file in the work of the session,
+			linked to |hl-Special|.
+                                                 *hl-AineoExplorerClaudeFlash*
+AineoExplorerClaudeFlash
+			The line of a file that joins the work of the
+			session, for 1.5 seconds, linked to |hl-IncSearch|.
                                                       *hl-AineoExplorerFolder*
 AineoExplorerFolder	A folder's sign and name, linked to |hl-Directory|.
                                                     *hl-AineoExplorerFollowed*
 AineoExplorerFollowed	The line of the current file in the tree.
+                                                       *hl-AineoExplorerGuide*
+AineoExplorerGuide	The guides over the indent, linked to |hl-NonText|.
                                                       *hl-AineoExplorerHeader*
 AineoExplorerHeader	The tree's first line.
                                                      *hl-AineoExplorerIgnored*
 AineoExplorerIgnored	An entry git ignores, whole, linked to |hl-Comment|.
+                                                    *hl-AineoExplorerModified*
+AineoExplorerModified	The ` ●` of a file with unsaved edits, linked to
+			|hl-WarningMsg|.
+                                                     *hl-AineoExplorerRemoved*
+AineoExplorerRemoved	The lines removed at a changed file's right, linked to
+			|hl-AineoChangesDeleted|.
+                                                   *hl-AineoExplorerUnchanged*
+AineoExplorerUnchanged	The name of a file git sees unchanged, while a changed
+			file shows, linked to |hl-Comment|.
 
 The explorer opens, renames and deletes no file. See |aineo-limits| for what
 it does not show.
@@ -1888,7 +1964,8 @@ when the pane writes its first list, and again at every list it writes.
                                                         *hl-AineoChangesAdded*
 AineoChangesAdded        an added file, linked to `Added`
                                                     *hl-AineoChangesUntracked*
-AineoChangesUntracked    a new file git does not track, linked to `Added`
+AineoChangesUntracked    a new file git does not track, linked to
+                         `DiagnosticHint`, a colour of its own
                                                      *hl-AineoChangesModified*
 AineoChangesModified     a modified file, linked to `Changed`
                                                       *hl-AineoChangesRenamed*
@@ -4656,6 +4733,39 @@ tabs.always_show	A boolean. Default: `true`
 			tab pages on by default. The setting takes effect at
 			the first aineo tab: a change made after it, by
 			|aineo.setup()| or `vim.g.aineo`, needs a restart.
+
+                        *aineo-config-explorer* *aineo-config-explorer.guides*
+explorer.guides		A boolean. Default: `true`
+			Whether the explorer lays `│ `, `├ ` and `└ ` over the
+			indent of its entries (|aineo-explorer|).
+
+                                                 *aineo-config-explorer.icons*
+explorer.icons		A boolean. Default: `true`
+			Whether the explorer shows the icons mini.icons or
+			nvim-web-devicons gives the files, when either is
+			installed.
+
+                                                   *aineo-config-explorer.dim*
+explorer.dim		A boolean. Default: `true`
+			Whether the names of the files git sees unchanged are
+			dimmed while a changed file shows.
+
+                                                *aineo-config-explorer.counts*
+explorer.counts		A boolean. Default: `true`
+			Whether a folder shows the number of changed files
+			below it, and a changed file the lines added and
+			removed in it. With `false` aineo does not run the
+			`git diff --numstat` that reads them.
+
+                                               *aineo-config-explorer.compact*
+explorer.compact	A boolean. Default: `true`
+			Whether a chain of folders each holding a folder alone
+			shows on one line.
+
+                                           *aineo-config-explorer.diagnostics*
+explorer.diagnostics	A boolean. Default: `true`
+			Whether a file shows the errors and warnings the
+			editor's diagnostics hold for it.
 
                                 *aineo-config-find* *aineo-config-find.picker*
 find.picker		One of `'auto'`, `'snacks'`, `'fzf-lua'`,

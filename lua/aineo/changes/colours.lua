@@ -81,7 +81,7 @@ M.GRAPH_LANE_GROUPS = {
 ---@type table<string, string>
 local DEFAULT_LINKS = {
   [M.KIND_GROUPS.added] = 'Added',
-  [M.KIND_GROUPS.untracked] = 'Added',
+  [M.KIND_GROUPS.untracked] = 'DiagnosticHint',
   [M.KIND_GROUPS.modified] = 'Changed',
   [M.KIND_GROUPS.renamed] = 'Changed',
   [M.KIND_GROUPS.type_changed] = 'Changed',

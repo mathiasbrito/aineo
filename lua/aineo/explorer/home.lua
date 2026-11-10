@@ -1,7 +1,12 @@
 --- One explorer: its buffer, the tree it reads of the folder it shows, and
 --- the state the user gives it — folds, toggles, filter — for a tab's life.
 
+local claude_work = require('aineo.explorer.claude_work')
+local decorate = require('aineo.explorer.decorate')
 local folders = require('aineo.explorer.folders')
+local icons = require('aineo.explorer.icons')
+local look = require('aineo.explorer.look')
+local open_buffers = require('aineo.explorer.open_buffers')
 local tree = require('aineo.explorer.tree')
 
 local M = {}
@@ -14,6 +19,7 @@ local M = {}
 ---@field uncommitted_files fun(found: aineo.git.Repository, done: fun(failure: aineo.git.Failure|nil, changes: aineo.git.Change[]|nil))
 ---@field ignored_files fun(found: aineo.git.Repository, done: fun(failure: aineo.git.Failure|nil, paths: string[]|nil))
 ---@field submodule_paths fun(found: aineo.git.Repository, done: fun(failure: aineo.git.Failure|nil, paths: string[]|nil))
+---@field line_counts fun(found: aineo.git.Repository, done: fun(failure: aineo.git.Failure|nil, counts: table<string, aineo.git.LineCount>|nil))
 ---@field list_worktrees fun(found: aineo.git.Repository, done: fun(failure: aineo.git.Failure|nil, worktrees: aineo.git.Worktree[]|nil))
 ---@field watch_repository fun(found: aineo.git.Repository, on_change: fun(failure: aineo.git.Failure|nil, change: aineo.git.RepositoryChange|nil)): aineo.git.Watch|nil
 
@@ -29,6 +35,7 @@ local M = {}
 ---@class aineo.explorer.Place
 ---@field directory string absolute
 ---@field title string
+---@field shows_branch? boolean whether the header names the branch the folder is on: for the folder Claude works in, not for what the changes pane shows alone
 
 --- What an explorer is handed.
 ---@class aineo.explorer.Settings
@@ -40,7 +47,14 @@ local M = {}
 ---@field paste fun(text: string) pastes `text` into Claude Code's prompt, with no Enter
 ---@field quote_name fun(name: string): string how a name shows on its line, a control character in it escaped
 ---@field change_groups table<string, string> the highlight group a file's mark and name show in, by the kind of its change (`'added'`, `'modified'`, `'deleted'`, `'renamed'`, `'type_changed'`, `'untracked'`)
+---@field look? fun(): table<string, boolean>, string[]|nil which looks of the tree are on, by name (`aineo.explorer.Look`), and the problems of the values that were wrong, asked at each read of the tree; every look is on when not given, and a look not named is on
+---@field session_work? fun(done: fun(work: aineo.explorer.SessionWork|nil)) the files in the work of the Claude Code session, their repository's top and their paths from it (`aineo.changes`' `session_work_files()`), nil when they are not known; none given, no file is marked as Claude's
 ---@field define_change_groups fun() defines `change_groups`' groups as default links, as the pane that owns them does
+
+--- The files in the work of the Claude Code session.
+---@class aineo.explorer.SessionWork
+---@field top string the top of their repository, absolute
+---@field paths string[] from it
 
 --- The functions of an explorer, as `M.new()` gives them.
 ---@class aineo.explorer.Home
@@ -58,6 +72,13 @@ local HIGHLIGHTS = {
   AineoExplorerFolder = 'Directory',
   AineoExplorerChanged = 'AineoChangesModified',
   AineoExplorerIgnored = 'Comment',
+  AineoExplorerGuide = 'NonText',
+  AineoExplorerUnchanged = 'Comment',
+  AineoExplorerAdded = 'AineoChangesAdded',
+  AineoExplorerRemoved = 'AineoChangesDeleted',
+  AineoExplorerModified = 'WarningMsg',
+  AineoExplorerClaude = 'Special',
+  AineoExplorerClaudeFlash = 'IncSearch',
 }
 
 --- The group each role of a span that is not the kind of a change shows in
@@ -66,6 +87,14 @@ local ROLE_GROUPS = {
   folder = 'AineoExplorerFolder',
   changed_folder = 'AineoExplorerChanged',
   ignored = 'AineoExplorerIgnored',
+  guide = 'AineoExplorerGuide',
+  unchanged = 'AineoExplorerUnchanged',
+  added_lines = 'AineoExplorerAdded',
+  removed_lines = 'AineoExplorerRemoved',
+  unsaved = 'AineoExplorerModified',
+  claude = 'AineoExplorerClaude',
+  diagnostic_error = 'DiagnosticError',
+  diagnostic_warn = 'DiagnosticWarn',
 }
 
 --- The namespace of the explorer's highlights.
@@ -148,6 +177,15 @@ function M.new(settings)
     tree = { children = {} },
     ---@type table<string, string>
     marks = {},
+    ---@type table<string, aineo.git.LineCount>
+    line_counts = {},
+    ---@type string|nil
+    branch = nil,
+    ---@type integer|nil
+    drawn_width = nil,
+    looks = look.ALL_ON,
+    ---@type (fun(entry: aineo.explorer.Entry): aineo.explorer.Icon|nil)|nil
+    icon_for = nil,
     ---@type string|nil
     failure = nil,
     ---@type table<string, true>
@@ -177,10 +215,45 @@ function M.new(settings)
   --- The group each role of a span shows in (`aineo.explorer.Span`).
   local role_groups = vim.tbl_extend('force', ROLE_GROUPS, settings.change_groups)
 
+  --- Reads the looks as they are set, at each read of the tree; a wrong
+  --- value is told to the user once.
+  local read_looks = look.reader(settings.look or function()
+    return {}
+  end, function(problem)
+    vim.notify(
+      ('aineo: the explorer’s looks: %s; the default applies'):format(problem),
+      vim.log.levels.WARN
+    )
+  end)
+
+  local redraw_when_shown
+
+  --- The work of the Claude Code session, followed from read to read.
+  local session_work = claude_work.new(function()
+    redraw_when_shown()
+  end)
+
+  --- The cells a line of the explorer has in its narrowest window, nil while
+  --- no window shows it.
+  ---
+  ---@return integer|nil
+  local function shown_width()
+    local width
+    for _, window in ipairs(state.buffer and vim.fn.win_findbuf(state.buffer) or {}) do
+      local text_width = vim.api.nvim_win_get_width(window) - vim.fn.getwininfo(window)[1].textoff
+      width = width and math.min(width, text_width) or text_width
+    end
+    return width
+  end
+
   --- The view the tree renders under.
   ---
   ---@return aineo.explorer.View
   local function view()
+    local looks = state.looks
+    local buffers = open_buffers.read(function(file)
+      return state.place and path_from(state.place.directory, file)
+    end)
     return {
       open = state.open,
       marks = state.marks,
@@ -188,7 +261,19 @@ function M.new(settings)
       show_dotfiles = state.show_dotfiles,
       filter = state.filter,
       title = state.place and state.place.title or '',
+      branch = state.branch,
       quote = settings.quote_name,
+      guides = looks.guides,
+      compact = looks.compact,
+      counts = looks.counts,
+      dim = looks.dim,
+      line_counts = state.line_counts,
+      icons = looks.icons and state.icon_for or nil,
+      claude = session_work.files(),
+      flash = session_work.flashing(),
+      modified = buffers.modified,
+      diagnostics = looks.diagnostics and buffers.diagnostics or nil,
+      width = shown_width(),
     }
   end
 
@@ -227,17 +312,22 @@ function M.new(settings)
       return
     end
     local windows = vim.fn.win_findbuf(buffer)
-    local paths = {}
+    local paths, columns = {}, {}
     for _, window in ipairs(windows) do
       local entry = entry_in(window)
       paths[window] = entry and entry.path
+      columns[window] = vim.api.nvim_win_get_cursor(window)[2]
     end
-    local rendering = tree.render(state.tree, view())
+    local shown = view()
+    state.drawn_width = shown.width
+    local rendering = tree.render(state.tree, shown)
     if state.failure then
       rendering = {
         lines = { rendering.lines[1], '  ' .. state.failure },
         entries = {},
         spans = {},
+        virtual = {},
+        flashed = {},
       }
     end
     state.rendering = rendering
@@ -245,16 +335,10 @@ function M.new(settings)
     vim.api.nvim_buf_set_lines(buffer, 0, -1, false, rendering.lines)
     vim.bo[buffer].modifiable = false
     vim.bo[buffer].modified = false
-    vim.api.nvim_buf_clear_namespace(buffer, NAMESPACE, 0, -1)
-    vim.api.nvim_buf_set_extmark(buffer, NAMESPACE, 0, 0, { line_hl_group = 'AineoExplorerHeader' })
-    for line, spans in pairs(rendering.spans) do
-      for _, span in ipairs(spans) do
-        vim.api.nvim_buf_set_extmark(buffer, NAMESPACE, line - 1, span.first_column, {
-          end_col = span.end_column,
-          hl_group = role_groups[span.role],
-        })
-      end
-    end
+    decorate.draw(buffer, NAMESPACE, rendering, role_groups, {
+      header = 'AineoExplorerHeader',
+      flash = 'AineoExplorerClaudeFlash',
+    })
     local followed_line = state.followed and line_of(rendering, state.followed)
     if followed_line then
       vim.api.nvim_buf_set_extmark(
@@ -268,7 +352,8 @@ function M.new(settings)
     for _, window in ipairs(windows) do
       local line = paths[window] and line_of(rendering, paths[window])
       if line then
-        vim.api.nvim_win_set_cursor(window, { line, 0 })
+        local column = math.min(columns[window], #rendering.lines[line])
+        vim.api.nvim_win_set_cursor(window, { line, column })
       end
     end
   end
@@ -287,23 +372,6 @@ function M.new(settings)
   ---@return boolean
   local function is_last_read(read)
     return read == state.reads
-  end
-
-  --- Takes a folder's tree from the disk: the shown folder's entries, and
-  --- those of each folder unfolded whose own folder is known, from the root
-  --- down. Nothing is ignored there, and nothing is marked.
-  ---
-  ---@param directory string
-  local function take_folders(directory)
-    stop_watch()
-    local read = tree.add_listing({ children = {} }, '', folders.list_folder(directory))
-    local unfolded = vim.tbl_keys(state.open)
-    table.sort(unfolded)
-    for _, folder in ipairs(unfolded) do
-      read = tree.add_listing(read, folder, folders.list_folder(vim.fs.joinpath(directory, folder)))
-    end
-    state.tree, state.marks, state.failure, state.in_git = read, {}, nil, false
-    render()
   end
 
   local read_tree
@@ -326,7 +394,11 @@ function M.new(settings)
   local function claude_place(note)
     local directory = settings.claude_folder()
     local title = vim.fn.fnamemodify(directory, ':~')
-    return { directory = directory, title = note and ('%s (%s)'):format(title, note) or title }
+    return {
+      directory = directory,
+      title = note and ('%s (%s)'):format(title, note) or title,
+      shows_branch = note == nil,
+    }
   end
 
   --- Calls `done` with the place of the worktree of `repository` that has
@@ -416,6 +488,22 @@ function M.new(settings)
       and #vim.fn.win_findbuf(state.buffer) > 0
   end
 
+  --- Draws the explorer again, once the commands in flight are done, while
+  --- a window shows it, however many times it is asked for meanwhile.
+  local redraw_asked = false
+  redraw_when_shown = function()
+    if redraw_asked then
+      return
+    end
+    redraw_asked = true
+    vim.schedule(function()
+      redraw_asked = false
+      if is_shown() then
+        render()
+      end
+    end)
+  end
+
   --- Starts the watch of `repository`, which reads the tree again at each
   --- change, unless one watches its top already; while no window shows the
   --- explorer, it watches nothing.
@@ -438,6 +526,25 @@ function M.new(settings)
     end)
   end
 
+  --- Takes a folder's tree from the disk: the shown folder's entries, and
+  --- those of each folder unfolded whose own folder is known, from the root
+  --- down. Nothing is ignored there, and nothing is marked.
+  ---
+  ---@param directory string
+  local function take_folders(directory)
+    stop_watch()
+    local read = tree.add_listing({ children = {} }, '', folders.list_folder(directory))
+    local unfolded = vim.tbl_keys(state.open)
+    table.sort(unfolded)
+    for _, folder in ipairs(unfolded) do
+      read = tree.add_listing(read, folder, folders.list_folder(vim.fs.joinpath(directory, folder)))
+    end
+    state.tree, state.marks, state.line_counts, state.failure, state.in_git =
+      read, {}, {}, nil, false
+    session_work.take({ claude = {}, marks = {}, line_counts = {} }, directory, false)
+    render()
+  end
+
   --- Takes the tree `listing` gives of the folder `prefix` of `repository`,
   --- and the entries of each ignored folder unfolded from the disk, then
   --- watches the repository.
@@ -446,6 +553,7 @@ function M.new(settings)
   ---@param prefix string
   ---@param listing aineo.explorer.RepositoryListing
   local function take_repository(repository, prefix, listing)
+    listing.session_paths = claude_work.paths_in(listing.session_work, repository)
     local read = tree.from_repository(listing, prefix)
     local unfolded = vim.tbl_keys(state.open)
     table.sort(unfolded)
@@ -456,6 +564,8 @@ function M.new(settings)
       end
     end
     state.tree, state.marks, state.failure, state.in_git = read.tree, read.marks, nil, true
+    state.line_counts = read.line_counts
+    session_work.take(read, state.place.directory, listing.session_paths ~= nil)
     render()
     watch(repository)
   end
@@ -476,23 +586,37 @@ function M.new(settings)
     if state.show_ignored then
       table.insert(asked, 'ignored')
     end
+    local counts_shown = state.looks.counts
+    if counts_shown then
+      table.insert(asked, 'line_counts')
+    end
+    if settings.session_work then
+      table.insert(asked, 'session_work')
+    end
     local remaining, failed = #asked, nil
+    local function one_answered()
+      remaining = remaining - 1
+      if remaining > 0 or not is_last_read(read) then
+        return
+      end
+      if failed then
+        state.failure = ('git could not list the files: %s'):format(failed.message or failed.reason)
+        render()
+        return
+      end
+      take_repository(repository, prefix, listing)
+    end
     local function answered(field)
       return function(failure, answer)
         failed = failed or failure
         listing[field] = answer
-        remaining = remaining - 1
-        if remaining > 0 or not is_last_read(read) then
-          return
-        end
-        if failed then
-          state.failure = ('git could not list the files: %s'):format(
-            failed.message or failed.reason
-          )
-          render()
-          return
-        end
-        take_repository(repository, prefix, listing)
+        one_answered()
+      end
+    end
+    local function answered_when_able(field)
+      return function(_, answer)
+        listing[field] = answer
+        one_answered()
       end
     end
     git.list_files(repository, answered('files'))
@@ -500,6 +624,14 @@ function M.new(settings)
     git.submodule_paths(repository, answered('submodules'))
     if state.show_ignored then
       git.ignored_files(repository, answered('ignored'))
+    end
+    if counts_shown then
+      git.line_counts(repository, answered_when_able('line_counts'))
+    end
+    if settings.session_work then
+      settings.session_work(function(work)
+        answered_when_able('session_work')(nil, work)
+      end)
     end
   end
 
@@ -509,13 +641,16 @@ function M.new(settings)
   read_tree = function()
     state.reads = state.reads + 1
     local read = state.reads
+    state.looks = read_looks()
+    local provider = state.looks.icons and icons.from_plugins()
+    state.icon_for = provider and icons.once_per_path(provider)
     state.place_key = place_key()
     resolve_place(function(place)
       if not is_last_read(read) then
         return
       end
       local directory = place.directory
-      state.place = place
+      state.place, state.branch = place, nil
       if state.pending_follow then
         take_followed(state.pending_follow)
         state.pending_follow = nil
@@ -524,6 +659,7 @@ function M.new(settings)
         if not is_last_read(read) then
           return
         end
+        state.branch = repository and place.shows_branch and repository.branch or nil
         local prefix = repository and path_from(repository.top, directory)
         if not prefix then
           take_folders(directory)
@@ -577,27 +713,55 @@ function M.new(settings)
     end
   end
 
+  --- The deepest folder of the chain `folder` starts, once the entries of
+  --- each folder along it are known, read from the disk when git does not
+  --- list them.
+  ---
+  ---@param folder aineo.explorer.Entry
+  ---@return aineo.explorer.Entry
+  local function known_chain_end(folder)
+    local deepest
+    repeat
+      list_when_unknown(folder.path)
+      deepest = tree.deepest_folder(state.tree, view(), folder)
+      local extended = deepest.path ~= folder.path
+      folder = deepest
+    until not extended
+    return deepest
+  end
+
   --- Unfolds the folder under the cursor, its entries read from the disk
-  --- when git does not list them, or folds it when it is unfolded.
+  --- when git does not list them, or folds it when it is unfolded. A chain
+  --- of folders on one line unfolds with every folder of it, so that it stays
+  --- unfolded when it breaks, and folds as its deepest folder.
   ---
   ---@param folder aineo.explorer.Entry
   local function toggle_folder(folder)
     if state.open[folder.path] then
       state.open[folder.path] = nil
     else
-      list_when_unknown(folder.path)
-      state.open[folder.path] = true
+      local deepest = known_chain_end(folder)
+      state.open[deepest.path] = true
+      for _, above in ipairs(tree.folders_above(deepest.path)) do
+        state.open[above] = true
+      end
     end
     render()
   end
 
-  --- What `l` does: unfolds or folds the folder under the cursor; nothing
-  --- on a file or the header.
-  local function on_l()
-    local entry = entry_in(0)
-    if entry and entry.kind == 'folder' then
-      toggle_folder(entry)
+  --- The folder that holds `path` nearest to it that has a line of its own:
+  --- a folder inside a chain on one line has none, the chain's has.
+  ---
+  ---@param path string
+  ---@return string|nil
+  local function nearest_shown_folder_above(path)
+    local above = tree.folders_above(path)
+    for index = #above, 1, -1 do
+      if line_of(state.rendering, above[index]) then
+        return above[index]
+      end
     end
+    return nil
   end
 
   --- What `h` does: folds the folder under the cursor when it is unfolded;
@@ -612,8 +776,7 @@ function M.new(settings)
       toggle_folder(entry)
       return
     end
-    local parent = tree.folders_above(entry.path)
-    local folder = parent[#parent]
+    local folder = nearest_shown_folder_above(entry.path)
     if folder then
       state.open[folder] = nil
       render()
@@ -621,36 +784,79 @@ function M.new(settings)
     end
   end
 
+  --- Puts the cursor of `window` on line `line`, while it shows the
+  --- explorer's buffer and the line is still there.
+  ---
+  ---@param window integer
+  ---@param line integer
+  local function put_cursor_on_line(window, line)
+    if
+      vim.api.nvim_win_is_valid(window)
+      and vim.api.nvim_win_get_buf(window) == state.buffer
+      and line <= vim.api.nvim_buf_line_count(state.buffer)
+    then
+      vim.api.nvim_win_set_cursor(window, { line, 0 })
+    end
+  end
+
   --- Puts the cursor of `window` back on line `line` once the commands in
-  --- flight are done, while it shows the explorer's buffer: a file opened
-  --- in that window moves to the file column once its command is done, and
-  --- the buffer it gets back would show its first line.
+  --- flight are done: a file opened in that window moves to the file column
+  --- once its command is done, and the buffer it gets back would show its
+  --- first line.
   ---
   ---@param window integer
   ---@param line integer
   local function keep_cursor_line(window, line)
     vim.schedule(function()
-      if
-        vim.api.nvim_win_is_valid(window)
-        and vim.api.nvim_win_get_buf(window) == state.buffer
-        and line <= vim.api.nvim_buf_line_count(state.buffer)
-      then
-        vim.api.nvim_win_set_cursor(window, { line, 0 })
-      end
+      put_cursor_on_line(window, line)
     end)
   end
 
-  --- What Enter tells the user on a file git sees deleted, by its path.
+  --- Moves the cursor back to `window`, the explorer's, onto line `line`,
+  --- once the commands in flight are done: the file just shown has taken the
+  --- cursor to the file column by then (`keep_cursor_line()`).
+  ---
+  ---@param window integer
+  ---@param line integer
+  local function return_cursor_to_tree(window, line)
+    vim.schedule(function()
+      if vim.api.nvim_win_is_valid(window) then
+        vim.api.nvim_set_current_win(window)
+      end
+      put_cursor_on_line(window, line)
+    end)
+  end
+
+  --- What opening a file git sees deleted tells the user, by its path.
   local DELETED = 'aineo: %s is deleted; \\g shows its diff'
 
-  --- What Enter tells the user on a file that is a folder on disk, as a
+  --- What opening a file that is a folder on disk tells the user, as a
   --- tracked file turned into a link to a folder is, by its path.
   local A_FOLDER = 'aineo: %s is a folder on disk, not a file to open'
 
+  --- Opens the file `entry` lists in the file column (`settings.open_file`),
+  --- the cursor going there. A file git sees deleted, and one that is a
+  --- folder on disk, opens nothing: the user is told why.
+  ---
+  ---@param entry aineo.explorer.Entry a file
+  ---@return boolean opened whether `settings.open_file` was called
+  local function open_file_of(entry)
+    local file = vim.fs.joinpath(state.place.directory, entry.path)
+    if state.marks[entry.path] == 'D' then
+      vim.notify(DELETED:format(entry.path), vim.log.levels.INFO)
+      return false
+    end
+    if vim.fn.isdirectory(file) == 1 then
+      vim.notify(A_FOLDER:format(entry.path), vim.log.levels.INFO)
+      return false
+    end
+    settings.open_file(file)
+    return true
+  end
+
   --- What Enter does: unfolds or folds the folder under the cursor, or opens
-  --- the file under it (`settings.open_file`), the explorer's cursor kept
-  --- on its line; nothing on the header. A file git sees deleted, and one
-  --- that is a folder on disk, opens nothing: the user is told why.
+  --- the file under it (`open_file_of()`), the explorer's cursor kept on its
+  --- line; nothing on the header.
   local function on_enter()
     local entry = entry_in(0)
     if not entry then
@@ -660,18 +866,28 @@ function M.new(settings)
       toggle_folder(entry)
       return
     end
-    local file = vim.fs.joinpath(state.place.directory, entry.path)
-    if state.marks[entry.path] == 'D' then
-      vim.notify(DELETED:format(entry.path), vim.log.levels.INFO)
+    local window, line = vim.api.nvim_get_current_win(), vim.api.nvim_win_get_cursor(0)[1]
+    if open_file_of(entry) then
+      keep_cursor_line(window, line)
+    end
+  end
+
+  --- What `l` does: unfolds or folds the folder under the cursor, or shows
+  --- the file under it as Enter opens it (`open_file_of()`), the cursor
+  --- staying in the tree, on its line; nothing on the header.
+  local function on_l()
+    local entry = entry_in(0)
+    if not entry then
       return
     end
-    if vim.fn.isdirectory(file) == 1 then
-      vim.notify(A_FOLDER:format(entry.path), vim.log.levels.INFO)
+    if entry.kind == 'folder' then
+      toggle_folder(entry)
       return
     end
     local window, line = vim.api.nvim_get_current_win(), vim.api.nvim_win_get_cursor(0)[1]
-    settings.open_file(file)
-    keep_cursor_line(window, line)
+    if open_file_of(entry) then
+      return_cursor_to_tree(window, line)
+    end
   end
 
   --- What the explorer tells the user as `I` is pressed over a folder
@@ -733,7 +949,11 @@ function M.new(settings)
   --- The keys of the explorer's buffer, by what they do.
   ---@type { lhs: string, rhs: fun(), desc: string }[]
   local KEYS = {
-    { lhs = 'l', rhs = on_l, desc = 'unfold or fold the folder' },
+    {
+      lhs = 'l',
+      rhs = on_l,
+      desc = 'unfold or fold the folder, or show the file, the cursor staying in the tree',
+    },
     { lhs = '<CR>', rhs = on_enter, desc = 'unfold or fold the folder, or open the file' },
     { lhs = 'h', rhs = on_h, desc = 'fold the folder, or the folder above' },
     {
@@ -757,6 +977,41 @@ function M.new(settings)
       desc = 'pick the worktree or branch to show, as the changes pane does',
     },
   }
+
+  --- Has the explorer of `buffer` follow the editor while a window shows it:
+  --- it is laid out again for the width of its window as that changes, and
+  --- drawn again as a buffer is modified or written and as diagnostics
+  --- change. It stops once `buffer` is wiped.
+  ---
+  ---@param buffer integer
+  local function watch_editor(buffer)
+    local group = vim.api.nvim_create_augroup('aineo.explorer.' .. buffer, {})
+    vim.api.nvim_create_autocmd('WinResized', {
+      group = group,
+      desc = 'aineo: lay the explorer out again for the width of its window',
+      callback = function()
+        if state.buffer == buffer and is_shown() and shown_width() ~= state.drawn_width then
+          render()
+        end
+      end,
+    })
+    vim.api.nvim_create_autocmd({ 'BufModifiedSet', 'BufWritePost', 'DiagnosticChanged' }, {
+      group = group,
+      desc = 'aineo: draw the explorer again for the unsaved edits and diagnostics of the editor',
+      callback = function(event)
+        if vim.api.nvim_buf_is_valid(event.buf) and vim.bo[event.buf].buftype == '' then
+          redraw_when_shown()
+        end
+      end,
+    })
+    vim.api.nvim_create_autocmd('BufWipeout', {
+      buffer = buffer,
+      desc = 'aineo: stop following the editor for the explorer',
+      callback = function()
+        pcall(vim.api.nvim_del_augroup_by_name, 'aineo.explorer.' .. buffer)
+      end,
+    })
+  end
 
   --- Makes the explorer's buffer: a scratch buffer no one edits, named
   --- `aineo://explorer`, or with a number after it for the explorers after
@@ -788,6 +1043,7 @@ function M.new(settings)
         read_tree()
       end,
     })
+    watch_editor(buffer)
     vim.api.nvim_create_autocmd('BufWinLeave', {
       buffer = buffer,
       desc = 'aineo: stop watching while the explorer is hidden',

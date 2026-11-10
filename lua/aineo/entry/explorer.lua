@@ -28,6 +28,11 @@ function M.make_explorer(homes)
       return homes.claude.session_directory() or vim.fn.getcwd()
     end,
     focused_work = homes.changes.focused_work,
+    session_work = homes.changes.session_work_files,
+    look = function()
+      local config = require('aineo.config')
+      return config.explorer_looks(vim.g.aineo, config.recorded_setup_options())
+    end,
     offer_work = function()
       if homes.claude.session_status() == nil then
         vim.notify(NOT_STARTED, vim.log.levels.INFO)
