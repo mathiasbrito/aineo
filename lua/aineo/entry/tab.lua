@@ -1099,7 +1099,9 @@ local function make_tab(homes, key, callbacks)
   --- otherwise; the terminals of the tab's run pane, with the winbar that
   --- names each process (`aineo.run`'s `buffers()`, `WINBAR`), none while it
   --- runs nothing; the explorer's buffer once it was made
-  --- (`aineo.explorer`'s `made_buffer()`), none before; the walkthrough
+  --- (`aineo.explorer`'s `made_buffer()`), none before, and made for the
+  --- explorer column when `config` sets one, with the column's side and
+  --- width; the walkthrough
   --- pane's once the tab was sent a plan (`aineo.entry.walkthrough_plan`'s
   --- `buffer_of()`), none before; with the Report's
   --- share from `config`, and the status line
@@ -1119,7 +1121,10 @@ local function make_tab(homes, key, callbacks)
       changes = changes_pane(),
       shell = homes.shell.shell_buffer(),
       run = run_stack(),
-      explorer = homes.explorer.made_buffer(),
+      explorer = config.layout.explorer_column and homes.explorer.buffer()
+        or homes.explorer.made_buffer(),
+      explorer_column = config.layout.explorer_column,
+      explorer_width = config.layout.explorer_width,
       walkthrough = walkthrough_plans.buffer_of(tab),
       claude_statusline = require('aineo.claude').session_statusline(),
     }
@@ -1211,6 +1216,25 @@ local function make_tab(homes, key, callbacks)
     end
     with_pane_arrangement(function(make_arrangement)
       homes.layout.focus_pane(pane, make_arrangement)
+    end)
+  end
+
+  --- Moves the cursor into the layout's explorer column
+  --- (`aineo.layout`'s `focus_explorer_column()`), opening the layout first as
+  --- `focus_pane()` does when it must.
+  local function focus_explorer_column()
+    with_pane_arrangement(function(make_arrangement)
+      homes.layout.focus_explorer_column(make_arrangement)
+    end)
+  end
+
+  --- Opens the layout again with the settings as they are now
+  --- (`aineo.layout`'s `open()`), around the Claude session's terminal as it
+  --- is, so that the explorer column the layout holds becomes the one the
+  --- settings name.
+  local function apply_explorer_column_setting()
+    with_pane_arrangement(function(make_arrangement)
+      homes.layout.open(make_arrangement())
     end)
   end
 
@@ -1974,7 +1998,15 @@ local function make_tab(homes, key, callbacks)
     ['pane run'] = run.run_command,
     ['pane explorer'] = function()
       homes.explorer.buffer()
-      focus_pane('explorer')
+      local column = resolved_config().layout.explorer_column
+      if homes.layout.explorer_column() ~= column then
+        apply_explorer_column_setting()
+      end
+      if column then
+        focus_explorer_column()
+      else
+        focus_pane('explorer')
+      end
     end,
     ['pane walkthrough'] = function()
       walkthrough_plans.focus(tab)
