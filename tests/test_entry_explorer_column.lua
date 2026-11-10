@@ -1,0 +1,334 @@
+local MiniTest = require('mini.test')
+local claude_session = dofile('tests/helpers/claude_session.lua')
+local entry = dofile('tests/helpers/entry.lua')
+local git_repo = dofile('tests/helpers/git_repo.lua')
+local layout = dofile('tests/helpers/layout.lua')
+local tabs = dofile('tests/helpers/entry_tabs.lua')
+
+local eq = MiniTest.expect.equality
+
+local child = MiniTest.new_child_neovim()
+
+--- How long a case waits for the child to reach a state, in milliseconds.
+local PATIENCE_MS = 10000
+
+--- The Lua that ends, in the child, the process of every terminal by a
+--- hangup, and waits for each to end, at most 5 s each.
+local END_TERMINALS = [[
+  for _, buffer in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.bo[buffer].buftype == 'terminal' then
+      local job = vim.b[buffer].terminal_job_id
+      vim.fn.jobstop(job)
+      vim.fn.jobwait({ job }, 5000)
+    end
+  end
+]]
+
+--- Stops the child, once the fake Claude Code it runs, if any, has ended by
+--- a hangup (`END_TERMINALS`).
+local function stop_the_child()
+  if child.is_running() then
+    pcall(child.lua, END_TERMINALS)
+  end
+  pcall(child.stop)
+end
+
+--- Takes on the git isolation of the git home's suites
+--- (`git_repo.ENVIRONMENT`) in this file's own Neovim, which every child it
+--- starts inherits.
+local function isolate_git()
+  for name, value in pairs(git_repo.ENVIRONMENT) do
+    vim.env[name] = value
+  end
+end
+
+local T = MiniTest.new_set({
+  hooks = {
+    pre_once = isolate_git,
+    pre_case = function()
+      stop_the_child()
+      entry.restart(child)
+    end,
+    post_once = stop_the_child,
+  },
+})
+
+--- The files of the repository the cases explore.
+local FILES = {
+  ['README.md'] = { 'readme' },
+  ['src/main.lua'] = { 'main' },
+  ['docs/guide.md'] = { 'guide' },
+}
+
+--- The tree of `FILES`, nothing unfolded.
+local FOLDED_TREE = { '▸   docs/', '▸   src/', '    README.md' }
+
+--- Makes the repository `explorer-column-<name>` of `FILES`, moves the
+--- child's working directory there and opens the layout with aineo running
+--- the fake `claude` in its `ready` mode and `settings` as `vim.g.aineo`,
+--- once Claude Code is ready; returns the repository's top.
+---
+---@param name string
+---@param settings? table
+---@return string top
+local function open_in_repository(name, settings)
+  local top = git_repo.create('explorer-column-' .. name, FILES)
+  child.cmd('cd ' .. vim.fn.fnameescape(top))
+  entry.use_fake(child, claude_session.fake('explorer-column-' .. name, 'ready'), settings)
+  child.cmd('Aineo open')
+  claude_session.wait_for_status(child, 'ready')
+  return top
+end
+
+--- Opens the layout as `open_in_repository()` does, with the explorer column
+--- on `column` (`'left'` or `'right'`).
+---
+---@param name string
+---@param column string
+---@return string top
+local function open_with_column(name, column)
+  return open_in_repository(name, { layout = { explorer_column = column } })
+end
+
+--- The lines of the explorer's buffer in the child, the header first.
+---
+---@return string[]
+local function explorer_lines()
+  return child.lua_get([[(function()
+    for _, buffer in ipairs(vim.api.nvim_list_bufs()) do
+      if vim.api.nvim_buf_get_name(buffer) == 'aineo://explorer' then
+        return vim.api.nvim_buf_get_lines(buffer, 0, -1, false)
+      end
+    end
+    return {}
+  end)()]])
+end
+
+--- Waits, at most `PATIENCE_MS`, until the explorer's lines below its header
+--- are `FOLDED_TREE`, and returns them as they are then.
+---
+---@return string[]
+local function wait_for_tree()
+  local lines
+  vim.wait(PATIENCE_MS, function()
+    lines = vim.list_slice(explorer_lines(), 2)
+    return vim.deep_equal(lines, FOLDED_TREE)
+  end, 20)
+  return lines
+end
+
+--- What the layout's windows show with the explorer column on the left and
+--- Claude Code on the left.
+local COLUMN_LEFT = { 'aineo://explorer', 'terminal', 'aineo://report', 'aineo://input' }
+
+--- What they show with the explorer column on the right.
+local COLUMN_RIGHT = { 'terminal', 'aineo://report', 'aineo://input', 'aineo://explorer' }
+
+T['a layout with the explorer column'] = MiniTest.new_set({
+  parametrize = { { 'left', COLUMN_LEFT }, { 'right', COLUMN_RIGHT } },
+})
+
+T['a layout with the explorer column']['shows the explorer’s tree in a column of its own, the cursor staying in Input'] = function(
+  column,
+  windows
+)
+  open_with_column('opens-' .. column, column)
+
+  eq(entry.windows(child), windows)
+  eq(wait_for_tree(), FOLDED_TREE)
+  eq(entry.current_window(child), 'aineo://input')
+  eq(entry.messages(child), {})
+end
+
+--- Each door to the explorer, as a set's `parametrize`: its name, and the
+--- function that opens it.
+local DOORS = {
+  {
+    'pressing \\e',
+    function()
+      entry.press(child, '\\e')
+    end,
+  },
+  {
+    'pressing <Plug>(aineo-pane-explorer)',
+    function()
+      entry.press(child, '<Plug>(aineo-pane-explorer)')
+    end,
+  },
+  {
+    'running :Aineo pane explorer',
+    function()
+      entry.command(child, 'Aineo pane explorer')
+    end,
+  },
+  {
+    'pressing <C-\\>e in Claude’s Terminal mode',
+    function()
+      entry.press(child, '\\c')
+      child.type_keys('<C-\\>e')
+    end,
+  },
+}
+
+T['the explorer'] = MiniTest.new_set({ parametrize = DOORS })
+
+T['the explorer']['takes the cursor into the column without changing the other windows, by'] = function(
+  _,
+  door
+)
+  open_with_column('doors', 'left')
+
+  door()
+
+  eq(entry.windows(child), COLUMN_LEFT)
+  eq(entry.current_window(child), 'aineo://explorer')
+  eq(entry.messages(child), {})
+end
+
+T['the explorer']['stays in the column where the cursor is when asked for again, by'] = function(
+  _,
+  door
+)
+  open_with_column('again', 'right')
+  door()
+
+  door()
+
+  eq(entry.windows(child), COLUMN_RIGHT)
+  eq(entry.current_window(child), 'aineo://explorer')
+end
+
+T['\\e'] = MiniTest.new_set()
+
+T['\\e']['opens a column that was closed, in place, and takes the cursor into it'] = function()
+  open_with_column('reopen', 'right')
+  child.lua(
+    'vim.api.nvim_win_close(vim.fn.win_findbuf(vim.fn.bufnr("aineo://explorer"))[1], false)'
+  )
+  eq(entry.windows(child), { 'terminal', 'aineo://report', 'aineo://input' })
+
+  entry.press(child, '\\e')
+
+  eq(entry.windows(child), COLUMN_RIGHT)
+  eq(entry.current_window(child), 'aineo://explorer')
+end
+
+T['\\e']['opens the column when setup() turned it on after the layout opened'] = function()
+  open_in_repository('late')
+  child.lua([[require('aineo').setup({ layout = { explorer_column = 'left' } })]])
+
+  entry.press(child, '\\e')
+
+  eq(entry.windows(child), COLUMN_LEFT)
+  eq(entry.current_window(child), 'aineo://explorer')
+end
+
+T['\\e']['shows the pane in the panes column once setup() turned the column off'] = function()
+  open_with_column('off', 'left')
+  child.lua([[require('aineo').setup({ layout = { explorer_column = false } })]])
+
+  entry.press(child, '\\e')
+
+  eq(entry.windows(child), { 'terminal', 'aineo://explorer' })
+  eq(entry.current_window(child), 'aineo://explorer')
+end
+
+--- Waits, at most `PATIENCE_MS`, until the child's current window shows a
+--- buffer named `name`, and returns what it shows then.
+---
+---@param name string
+---@return string
+local function wait_for_current_window(name)
+  vim.wait(PATIENCE_MS, function()
+    return entry.current_window(child) == name
+  end, 20)
+  return entry.current_window(child)
+end
+
+T['a file opened from the column'] = MiniTest.new_set()
+
+T['a file opened from the column']['opens in the file column between Claude Code and the panes'] = function()
+  local top = open_with_column('file', 'left')
+  entry.press(child, '\\e')
+  wait_for_tree()
+  child.lua([[(function()
+    for line, shown in ipairs(vim.api.nvim_buf_get_lines(0, 0, -1, false)) do
+      if vim.endswith(shown, 'README.md') then
+        vim.api.nvim_win_set_cursor(0, { line, 0 })
+      end
+    end
+  end)()]])
+  local readme = vim.fs.joinpath(top, 'README.md')
+
+  entry.press(child, '<CR>')
+
+  eq(wait_for_current_window(readme), readme)
+  eq(
+    entry.windows(child),
+    { 'aineo://explorer', 'terminal', readme, 'aineo://report', 'aineo://input' }
+  )
+end
+
+--- The width of the window showing `name` in the child.
+---
+---@param name string
+---@return integer
+local function width_of(name)
+  return child.lua_get(
+    [[vim.api.nvim_win_get_width(vim.fn.win_findbuf(vim.fn.bufnr(...))[1])]],
+    { name }
+  )
+end
+
+T['a new aineo tab'] = MiniTest.new_set()
+
+T['a new aineo tab']['has an explorer column of its own'] = function()
+  tabs.use_own_state(child, 'explorer-column-tabs')
+  entry.use_fake(
+    child,
+    tabs.fake('explorer-column-tabs-first'),
+    { layout = { explorer_column = 'left' } }
+  )
+  child.cmd('Aineo open')
+  claude_session.wait_for_status(child, 'ready')
+  entry.use_fake(
+    child,
+    tabs.fake('explorer-column-tabs-second'),
+    { layout = { explorer_column = 'left' } }
+  )
+
+  child.cmd('Aineo tab new')
+  claude_session.wait_for_status(child, 'ready')
+
+  eq(tabs.windows_of_tab(child, 1), COLUMN_LEFT)
+  eq(tabs.windows_of_tab(child, 2), COLUMN_LEFT)
+end
+
+T['restoring the layout'] = MiniTest.new_set()
+
+T['restoring the layout']['opens the column again, at its width'] = function()
+  open_with_column('restore', 'left')
+  child.lua(
+    'vim.api.nvim_win_close(vim.fn.win_findbuf(vim.fn.bufnr("aineo://explorer"))[1], false)'
+  )
+
+  entry.press(child, '\\o')
+
+  eq(entry.windows(child), COLUMN_LEFT)
+  eq(width_of('aineo://explorer'), 30)
+end
+
+T['a zoom of the whole window'] = MiniTest.new_set()
+
+T['a zoom of the whole window']['covers the column and gives it its width back'] = function()
+  open_with_column('zoom', 'left')
+  local before = width_of('aineo://explorer')
+
+  entry.press(child, '\\Z')
+  local zoomed = layout.box(child, child.lua_get('vim.api.nvim_get_current_win()')).width
+  entry.press(child, '\\Z')
+
+  eq({ before, zoomed > before, width_of('aineo://explorer') }, { 30, true, 30 })
+end
+
+return T

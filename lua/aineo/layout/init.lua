@@ -919,9 +919,25 @@ local function make_layout(input_name, group_name)
     )
   end
 
-  --- Moves `file` from the layout's `window` to the file column (see
-  --- `place_in_file_column()`), with the cursor there on the position it had in
-  --- `window`, gives `window` its own buffer back, and puts the proportions back
+  --- The buffer that belongs in `window` when it is one of the layout's
+  --- windows that exists: Claude's, the Report's or Input's, each with its
+  --- own buffer under the pane shown (`own_buffer()`), or the explorer
+  --- column's with the explorer's. `nil` for any other window.
+  ---
+  ---@param window integer
+  ---@return integer|nil buffer
+  local function own_buffer_in(window)
+    if has_explorer_column() and window == state.explorer_window then
+      return state.buffers.explorer
+    end
+    local role = role_of(window)
+    return role and has_window(role) and own_buffer(role) or nil
+  end
+
+  --- Moves `file` from one of the layout's windows, the explorer column's
+  --- included, to the file column (see `place_in_file_column()`), with the
+  --- cursor there on the position it had in `window`, gives `window` its own
+  --- buffer back, and puts the proportions back
   --- while the layout is open (`is_open()`). When the file column has no
   --- room for `file`, leaves it in `window` and warns. Does nothing when
   --- `window` is no longer one of the layout's windows — closed, or replaced
@@ -931,12 +947,11 @@ local function make_layout(input_name, group_name)
   ---@param window integer
   ---@param file integer
   local function redirect(window, file)
-    local role = role_of(window)
+    local own = own_buffer_in(window)
     if
-      not role
-      or not has_window(role)
+      not own
       or vim.api.nvim_win_get_buf(window) ~= file
-      or not vim.api.nvim_buf_is_valid(own_buffer(role))
+      or not vim.api.nvim_buf_is_valid(own)
     then
       return
     end
@@ -947,7 +962,7 @@ local function make_layout(input_name, group_name)
       return
     end
     vim.api.nvim_win_set_cursor(file_window, cursor)
-    vim.api.nvim_win_set_buf(window, own_buffer(role))
+    vim.api.nvim_win_set_buf(window, own)
     keep_proportions()
   end
 
@@ -958,8 +973,8 @@ local function make_layout(input_name, group_name)
   ---@param event { buf: integer }
   local function redirect_when_file(event)
     local window = vim.api.nvim_get_current_win()
-    local role = role_of(window)
-    if not role or event.buf == own_buffer(role) or not is_file(event.buf) then
+    local own = own_buffer_in(window)
+    if not own or event.buf == own or not is_file(event.buf) then
       return
     end
     vim.schedule(function()
