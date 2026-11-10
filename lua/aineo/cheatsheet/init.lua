@@ -1,13 +1,13 @@
 --- The cheatsheet of one tab, `require('aineo.cheatsheet')`: a window over the
---- whole right column of the tab's layout that lists aineo's keys in a
+--- whole panes column of the tab's layout that lists aineo's keys in a
 --- colourful sheet, written from the groups of keys it is asked for.
 ---
 --- The cursor moves into the sheet when it opens, so that `/` and the keys
 --- that scroll work in it; `q` and `<Esc>` close it, and so does toggling it
 --- again, each giving the cursor back to the window it came from. It closes,
 --- leaving the cursor where the user moved it, when the cursor leaves it, and
---- follows the right column as the screen changes, writing the sheet again for
---- the column's new width, and closes when the layout shows no right column.
+--- follows the panes column as the screen changes, writing the sheet again for
+--- the column's new width, and closes when the layout shows no panes column.
 ---
 --- It runs nothing and starts no request: what it shows is text.
 
@@ -19,7 +19,7 @@ local M = {}
 
 --- What `open()` tells the user, as a warning, when the layout shows no right
 --- side to cover.
-local NO_RIGHT_SIDE = "aineo: the cheatsheet has no right side of aineo's layout to cover"
+local NO_RIGHT_SIDE = "aineo: the cheatsheet has no panes column of aineo's layout to cover"
 
 --- How the sheet's window opens (`aineo.cover`): its buffer is of the
 --- filetype `aineo-cheatsheet`, the cursor moves into it, and the mouse
@@ -43,11 +43,11 @@ local sheets_made = 0
 M.compose = compose.compose
 
 ---@class aineo.cheatsheet.Options
----@field right_side fun(): aineo.layout.Area|nil the screen cells the layout's right side takes now, nil when it shows none
+---@field right_side fun(): aineo.layout.Area|nil the screen cells the layout's panes column takes now, nil when it shows none
 ---@field groups fun(): aineo.cheatsheet.Group[] the keys the sheet lists, asked each time it is written
 
 ---@class aineo.cheatsheet.Cheatsheet
----@field open fun() shows the sheet over the right side and moves the cursor into it; does nothing when it shows, and tells the user when there is no right side
+---@field open fun() shows the sheet over the panes column and moves the cursor into it; does nothing when it shows, and tells the user when there is no panes column
 ---@field close fun() closes the sheet, if it shows; the cursor, in the sheet, goes back to the window it came from
 ---@field toggle fun() closes the sheet when it shows and opens it otherwise
 
@@ -99,8 +99,8 @@ function M.new_cheatsheet(options)
     cover_module.close(open.cover)
   end
 
-  --- Moves the sheet to where the right side is now and writes it for that
-  --- width; closes it when the layout shows no right side. Does nothing from
+  --- Moves the sheet to where the panes column is now and writes it for that
+  --- width; closes it when the layout shows no panes column. Does nothing from
   --- another tab page, whose cells are not the sheet's.
   ---
   ---@param open table what exists while the sheet shows

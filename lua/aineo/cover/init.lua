@@ -1,6 +1,6 @@
 --- A cover of a rectangle of the screen, `require('aineo.cover')`: a floating
 --- window with a scratch buffer of its own, placed over the cells of a part of
---- aineo's layout — the right column, in the office's case and the
+--- aineo's layout — the panes column, in the office's case and the
 --- cheatsheet's — so that what is under it stays as it is and shows again when
 --- the cover closes.
 ---

@@ -2593,7 +2593,7 @@ local function make_layout(input_name, group_name)
   --- What `M.toggle_zoom()` tells the user, as a warning, when the cursor is
   --- in none of the right column's windows.
   local NOT_IN_THE_COLUMN =
-    'aineo: nothing zoomed — the cursor is in none of the windows aineo shows in the right column (the agent, changes, terminal, run and explorer panes)'
+    'aineo: nothing zoomed — the cursor is in none of the windows aineo shows in the panes column (the agent, changes, terminal, run and explorer panes)'
 
   --- Whether the layout is zoomed now: a window of the right column
   --- (`M.toggle_zoom()`), or a window over the whole tab page
@@ -2793,6 +2793,15 @@ end
 local layouts_made = 1
 
 local M = make_layout('aineo://input', 'aineo.layout')
+
+--- The side of the screen across from `claude_side`, where the right column
+--- is when Claude's column is on `claude_side`.
+---
+---@param claude_side aineo.layout.Side
+---@return aineo.layout.Side
+function M.opposite_side(claude_side)
+  return side.opposite(claude_side)
+end
 
 --- Whether the autocommand group `name` exists.
 ---

@@ -9,6 +9,7 @@ local errors = require('aineo.entry.errors')
 local explorer = require('aineo.entry.explorer')
 local folder_tabs = require('aineo.entry.folder_tabs')
 local input_carry = require('aineo.entry.input_carry')
+local layout_side = require('aineo.entry.layout_side')
 local links = require('aineo.entry.links')
 local cheatsheets = require('aineo.entry.cheatsheet')
 local offices = require('aineo.entry.office')
@@ -164,7 +165,7 @@ end
 ---@field homes aineo.entry.Homes
 ---@field running_processes fun(): string[] the names of the processes the tab's run pane runs, the oldest first
 ---@field start_in_run_stack fun(command: string, options: { name: string, directory: string? }): integer starts `command` at the bottom of the tab's run stack as a call of a run tool asks, the run pane shown when the tab page is the current one, the cursor staying where it is (`aineo.entry.run_pane`'s `start_in_stack()`)
----@field show_pane fun(pane: aineo.layout.Pane) shows `pane` in the layout's right column, the cursor staying where it is (`aineo.layout`'s `show_pane()`), the layout opened first when it must
+---@field show_pane fun(pane: aineo.layout.Pane) shows `pane` in the layout's panes column, the cursor staying where it is (`aineo.layout`'s `show_pane()`), the layout opened first when it must
 ---@field focus_pane fun(pane: aineo.layout.Pane) shows `pane` and moves the cursor into it (`aineo.layout`'s `focus_pane()`)
 ---@field actions table<string, fun(origin: integer)> what each of `:Aineo`'s arguments that acts on a tab does, by the argument, given the buffer the key was pressed in
 ---@field send_selection fun() what Send does in Visual mode
@@ -357,7 +358,7 @@ local function make_tab(homes, key, callbacks)
   ---@type fun()
   local write_entry
 
-  --- Shows the changes pane in the layout's right column, the cursor staying
+  --- Shows the changes pane in the layout's panes column, the cursor staying
   --- where it is (`show_pane()`). Defined below, with it.
   ---@type fun()
   local show_changes_pane
@@ -1114,6 +1115,7 @@ local function make_tab(homes, key, callbacks)
       claude = claude_buffer,
       report = homes.report.report_buffer(),
       report_height = config.layout.report_height,
+      claude_side = layout_side.current(config),
       changes = changes_pane(),
       shell = homes.shell.shell_buffer(),
       run = run_stack(),
@@ -1189,7 +1191,7 @@ local function make_tab(homes, key, callbacks)
     end
   end
 
-  --- Shows `pane` in the layout's right column and moves the cursor into it
+  --- Shows `pane` in the layout's panes column and moves the cursor into it
   --- (`aineo.layout`'s `focus_pane()`): into the Report under the agent pane,
   --- into the commits window under the changes pane, into the Report's window
   --- under the terminal pane, which shows the shell there (Terminal mode is
@@ -1212,7 +1214,7 @@ local function make_tab(homes, key, callbacks)
     end)
   end
 
-  --- Shows `pane` in the layout's right column as `focus_pane()` shows it,
+  --- Shows `pane` in the layout's panes column as `focus_pane()` shows it,
   --- the cursor staying where it is (`aineo.layout`'s `show_pane()`).
   ---
   ---@param pane aineo.layout.Pane
