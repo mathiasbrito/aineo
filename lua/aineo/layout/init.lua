@@ -1139,8 +1139,13 @@ local function make_layout(input_name, group_name)
   --- starts from (see `starting_window()`) becomes the one in Input's place,
   --- unless it shows a file (`is_file_to_keep()`), which it keeps as the file
   --- column.
+  --- When that window is the explorer column's, the column is given up and
+  --- opens again as a window of its own (`keep_explorer_column()`).
   local function build()
     local start = starting_window()
+    if start == state.explorer_window then
+      state.explorer_window = nil
+    end
     local shown = vim.api.nvim_win_get_buf(start)
     hide_other_windows(start)
     local input = take_input_buffer(shown)
