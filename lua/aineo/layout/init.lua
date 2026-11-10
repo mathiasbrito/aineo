@@ -684,19 +684,30 @@ local function make_layout(input_name, group_name)
     end
   end
 
-  --- Moves the column holding `window` to the outer edge of the screen on
-  --- `edge`, window by window, each below the one before it: the windows keep
-  --- their buffers, jobs, cursors and IDs, and take the sizes the screen
-  --- gives them. A window of the column split further than a column holds
-  --- comes with it, below the window before it. Does nothing when no row of
-  --- the tab holds the layout's windows.
+  --- The windows, top to bottom, of the column that holds `window`, in the
+  --- row of the tab that holds the layout's windows; none when no row does.
+  --- Read from the tab as it is now, so that it is read for both columns
+  --- before either moves: a window across the screen below the row turns the
+  --- column the other moves to the edge into the whole old row.
   ---
   ---@param window integer
-  ---@param edge aineo.layout.Side
-  local function move_column_holding(window, edge)
+  ---@return integer[] members
+  local function column_members(window)
     local tree = vim.fn.winlayout(vim.api.nvim_tabpage_get_number(layout_tab()))
+    return columns.windows_of_column_holding(tree, existing_windows(), window)
+  end
+
+  --- Moves the windows of a column, as `column_members()` listed them, to the
+  --- outer edge of the screen on `edge`, window by window, each below the one
+  --- before it: the windows keep their buffers, jobs, cursors and IDs. A
+  --- window of the column split further than a column holds comes with it,
+  --- below the window before it.
+  ---
+  ---@param members integer[]
+  ---@param edge aineo.layout.Side
+  local function move_column(members, edge)
     local above = nil
-    for _, member in ipairs(columns.windows_of_column_holding(tree, existing_windows(), window)) do
+    for _, member in ipairs(members) do
       vim.api.nvim_win_set_config(
         member,
         above and { split = 'below', win = above } or { split = edge, win = -1 }
@@ -705,13 +716,42 @@ local function make_layout(input_name, group_name)
     end
   end
 
+  --- The width and height of each window of the layout's tab page that does
+  --- not float, by window.
+  ---
+  ---@return table<integer, integer[]> sizes
+  local function sizes_of_tab_windows()
+    local sizes = {}
+    for _, window in ipairs(tab_windows()) do
+      sizes[window] = { vim.api.nvim_win_get_width(window), vim.api.nvim_win_get_height(window) }
+    end
+    return sizes
+  end
+
+  --- Gives each window of `sizes` that exists the width and height it had.
+  --- Done twice over, since a window given its size takes the cells of its
+  --- neighbours, which the next window then gives back.
+  ---
+  ---@param sizes table<integer, integer[]>
+  local function restore_sizes(sizes)
+    for _ = 1, 2 do
+      for window, size in pairs(sizes) do
+        if vim.api.nvim_win_is_valid(window) then
+          vim.api.nvim_win_set_width(window, size[1])
+          vim.api.nvim_win_set_height(window, size[2])
+        end
+      end
+    end
+  end
+
   --- Moves Claude's column to `target` and the right column across from it,
   --- the file column staying between them, in the tab page of the layout
   --- whether or not it is the one shown. The windows move, never their
   --- buffers or jobs, and the cursor stays in the window it was in. A zoom
-  --- ends first, its sizes not given back, and the layout's proportions are
-  --- put back once the columns have moved. With no window of the layout open,
-  --- only the side is recorded, for the layout to open on.
+  --- ends first, its sizes not given back; every window of the tab page then
+  --- gets the size it had, which mirrors the columns, and the layout's
+  --- proportions are put back while the layout is open. With no window of the
+  --- layout open, only the side is recorded, for the layout to open on.
   ---
   ---@param target aineo.layout.Side
   local function move_columns_to(target)
@@ -722,13 +762,13 @@ local function make_layout(input_name, group_name)
     vim.api.nvim_win_call(existing_windows()[1], function()
       end_full_zoom()
       end_zoom()
-      if has_window('claude') then
-        move_column_holding(state.windows.claude, claude_edge())
-      end
+      local sizes = sizes_of_tab_windows()
+      local claude_members = has_window('claude') and column_members(state.windows.claude) or {}
       local right_column = right_column_window()
-      if right_column then
-        move_column_holding(right_column, right_column_edge())
-      end
+      local right_members = right_column and column_members(right_column) or {}
+      move_column(claude_members, claude_edge())
+      move_column(right_members, right_column_edge())
+      restore_sizes(sizes)
       if is_open() then
         apply_proportions()
       end
