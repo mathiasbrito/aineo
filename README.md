@@ -40,6 +40,22 @@ the left, the file column in the middle, Claude Code on the right.
 +--------------------+--------------------+--------------------+
 ```
 
+`layout.explorer_column` (`'left'` or `'right'`) keeps the explorer always
+visible, as a fourth column the full height of the screen at the far side you
+name, whichever side Claude Code is on; `layout.explorer_width` sets its width
+(30 by default). `\e` then moves the cursor into it and is never a toggle, and
+`:Aineo layout swap` leaves it where it is:
+
+```
++----------+--------------------+--------------------+--------------------+
+| Explorer | Claude Code        | lua/auth.lua       | Agent Report       |
+| ▾ lua/   | (terminal)         |                    | 10:42 [started] .. |
+|   auth.. |                    | a file, or a diff  |                    |
+| ▸ tests/ | your prompt and    | of one, opened by  +--------------------+
+| README.md| its dialogs        | \f, Enter or gf    | Input              |
++----------+--------------------+--------------------+--------------------+
+```
+
 The panes column shows one pane at a time, each behind a key; the run
 pane stacks one window per process, each with a winbar naming the command
 and its state:
@@ -187,7 +203,7 @@ resumes it.
 | Keys | Does |
 |---|---|
 | `\o` | opens or restores the layout |
-| `\f` | finds a file under the folder Claude works in and opens it in the file column |
+| `\f` | finds a file under the folder Claude works in and opens it in the file column, revealing it in the explorer when that shows |
 | `\T` | opens a tab with a Claude Code session of its own |
 | `\1` to `\9` | move to the tab page of that number |
 | `\Q` | closes the current tab; on the last aineo tab, quits Neovim as `:qa` does |
@@ -275,12 +291,14 @@ and, in Terminal mode, `<C-\>Z` do the same.
 
 | Keys | Does |
 |---|---|
-| `\e` | shows the explorer, a tree of the folder Claude works in, and moves into it |
+| `\e` | shows the explorer, a tree of the folder Claude works in, and moves into it; with `layout.explorer_column` set, moves into the explorer's column instead, which is always visible and not a toggle |
 | `l`, Enter | in the tree: unfold or fold a folder; on a file, Enter opens it in the file column and moves there, `l` shows it there and keeps the cursor in the tree |
 | `h` | folds the folder, or the folder above |
 | `@` | pastes `@path ` into Claude's prompt, with no Enter |
 | `I`, `H`, `f`, `R` | show ignored files, hide dotfiles, filter by path, read again |
 | `s` | picks the worktree or branch shown, the same pick as the changes pane's `s` |
+
+A file opened with `\f` is revealed in the explorer when it shows: its folders unfold, the explorer's window scrolls to the line and its own cursor goes there, while the cursor stays in the file. Entering a file any other way moves no cursor.
 
 What the tree shows besides the names, each a look that `explorer.*` turns off (see Settings below), display only, so the keys read the same lines:
 
@@ -853,7 +871,12 @@ vim.g.aineo = {
     cmd = { 'claude' },
     hide_multiplexer = true,
   },
-  layout = { report_height = 2 / 3, claude_side = 'left' },
+  layout = {
+    report_height = 2 / 3,
+    claude_side = 'left',
+    explorer_column = false,
+    explorer_width = 30,
+  },
   changes = {
     -- working_branch = 'origin/dev',
     graph_limit = 1000,
@@ -901,6 +924,8 @@ vim.g.aineo = {
 | `claude.hide_multiplexer` | `true` | Whether Claude Code starts without the variables that tell it a terminal multiplexer runs it (see below). |
 | `layout.report_height` | `2/3` | The Report's share of the panes column, a number strictly between 0 and 1. |
 | `layout.claude_side` | `'left'` | The side of the screen Claude Code's terminal is on, `'left'` or `'right'`; the panes column is on the other side and the file column between. |
+| `layout.explorer_column` | `false` | Where the explorer column is: `'left'` or `'right'` keeps the explorer always visible as a column the full height of the screen at that side, beside the other three, and `\e` moves into it; `false` keeps the explorer a pane that `\e` shows. |
+| `layout.explorer_width` | `30` | The explorer column's width in columns, a whole number of at least 1; it does nothing while `layout.explorer_column` is `false`. |
 | `changes.working_branch` | none | The branch work lands in, as git reads a name, such as `origin/dev`. Unset, it is the default branch of the remote `origin`. With none set and no `origin/HEAD`, the changes pane shows no Landed section. aineo never fetches. |
 | `changes.graph_limit` | `1000` | How many commits the commit graph (`t` in the commits window) draws, newest first, a whole number of at least 1. The graph says when older ones are not shown. |
 | `tabs.padding` | `2` | Spaces either side of each title in aineo's tab line, from 0 to 8. |

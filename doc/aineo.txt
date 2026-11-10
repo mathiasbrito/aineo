@@ -24,7 +24,9 @@ interactive CLI runs in a terminal on one side of the screen, the left by
 default; across from it the Agent Report shows what Claude says it is doing,
 above an Input buffer where you write your next message. Files you open land
 in a column between the two. `:Aineo layout swap` puts Claude Code on the
-other side (|aineo-layout-swap|).
+other side (|aineo-layout-swap|), and `layout.explorer_column` keeps the
+explorer in a column of its own at the far side of the screen
+(|aineo-explorer-column|).
 
 Every command sits behind one prefix key, `\` by default, in Normal mode (and
 most behind its twin in Terminal and Insert mode, below):
@@ -174,6 +176,46 @@ side the layout opens on, and you can change it at will:
 - Whatever shows over or in the panes column follows it: the Report and
   Input, `\g`, `\pt`, `\x`, `\e` and the other panes, the office
   (|aineo-office|) and the cheatsheet (|aineo-cheatsheet|).
+
+                                                       *aineo-explorer-column*
+The explorer column ~
+`layout.explorer_column` (|aineo-config-layout.explorer_column|) set to
+`'left'` or `'right'` keeps the explorer (|aineo-explorer|) always visible, as
+a fourth column the full height of the screen at the far side you name,
+beside the other three. Here with Claude Code on the left, the panes column
+on the right and the explorer column on the left:
+
+    +----------+----------------+----------------+----------------+
+    |          |                |                |  Agent Report  |
+    | Explorer |  Claude Code   |  File column   |                |
+    |  (tree)  |  (terminal)    |                +----------------+
+    |          |                |                |     Input      |
+    +----------+----------------+----------------+----------------+
+
+- It is independent of the side Claude Code is on: `:Aineo layout swap`,
+  `left` and `right` (|aineo-layout-swap|) move Claude Code's column and the
+  panes column and leave the explorer column where it is, outermost on its
+  side. A window across the whole screen, such as the quickfix window or help
+  opened at the bottom, is not spanned by it.
+- Its width is `layout.explorer_width` (|aineo-config-layout.explorer_width|),
+  30 columns by default, kept ('winfixwidth') while the other three columns
+  share the rest as they do without it: half each without a file column, a
+  third each with one.
+- `\e` (|aineo-\e|) moves the cursor into it; it reopens the column in
+  place when you closed it, does nothing with the cursor in it already, and is
+  never a toggle. The explorer is not also offered in the panes column while
+  the column is set: `\e` does not swap the panes.
+- It shows the same explorer as the pane does, with its keys, looks and
+  worktree pick (|aineo-explorer|). A file opened from it, or any file shown
+  in its window, opens in the file column.
+- Each aineo tab has a column of its own, and a tab opened later and the
+  layout restored by `\o`, `\r`, `\i` or `\c` include it. `\Z` zooms over it
+  with the other columns and gives it back its width (|aineo-zoom-full|). The
+  office, the cheatsheet, the walkthrough and the explanations, placed over
+  the panes column, stay where they were.
+- The setting is read each time the layout opens or is restored, so a call to
+  `setup()` that turns the column on, off or to the other side, or changes its
+  width, takes effect at the next `\o`, or at the next `\e` (|aineo-\e|).
 
 The Report and Input wrap long lines between words, a wrapped line keeping
 its indent ('wrap', 'linebreak', 'breakindent'), whatever your own settings.
@@ -356,6 +398,12 @@ to you. `\pa`, `\g`, `\pt`, `\x` and `\pw` swap it out as they swap each
 other, and `\z` and `\Z` zoom it as any window of the column. Each tab has its
 own explorer, whose folds, toggles and filter last as long as the tab.
 
+With `layout.explorer_column` set, the explorer is not a pane: it shows all
+the time in a column of its own at the far side of the screen
+(|aineo-explorer-column|), and `\e` moves the cursor into that column
+instead, opening it again where it was if you closed it. Everything below is
+the same in both.
+
     ~/project · main · 2 changed · 1 new     ignored hidden · dotfiles shown
     ▾ •2 lua/
       ├ ▸   aineo/
@@ -423,6 +471,13 @@ The current file: when the file column shows a file under the folder
 shown, the tree unfolds the folders above it and highlights its line
 (|hl-AineoExplorerFollowed|, linked to |hl-Visual|); the cursors stay where
 they are. A file elsewhere changes nothing.
+
+A file opened with `\f` (|aineo-find|) is revealed as well: the explorer's
+window, the column's or the pane's, scrolls to show its line and its own
+cursor goes to it, while the cursor you are working with stays in the file.
+Only `\f` reveals; entering a file any other way moves no cursor. An explorer
+that is not showing at that moment reveals nothing, and highlights the file
+when it next shows.
 
 One pick for both panes: what the explorer shows follows the worktree or
 branch the changes pane shows alone (|aineo-changes-s|), picked with `s` in
@@ -2092,7 +2147,8 @@ where its twin `<C-\>f` leaves Terminal mode first (|aineo-terminal-keys|);
 from a floating window, a picker's own among them, it starts nothing and
 tells you, with one warning, `aineo: a file is found from a window of the tab,
 not from a floating one`. A diff shown in the file column gives its place to
-the file as it does to any other file. From a tab page that is none of
+the file as it does to any other file. The explorer, when it shows, reveals
+the file (|aineo-explorer|). From a tab page that is none of
 aineo's it acts on the aineo tab used last and moves you there; with no
 aineo tab it tells you, with one warning, `aineo: there is no aineo tab to
 find a file in`, and opens nothing (|:Aineo-find|).
@@ -3775,7 +3831,8 @@ keeps the tab's claim, and the next start takes it up again (|aineo-tabs|).
 			folder is in, with the picker `find.picker` names
 			(|aineo-config-find.picker|), and opens the file
 			picked in the file column, from any window of the
-			tab but a floating one (|aineo-find|). From a tab page
+			tab but a floating one, the explorer revealing it
+			when it shows (|aineo-find|). From a tab page
 			that is none of aineo's it acts on the aineo tab used
 			last and moves you there (|aineo-tabs|); with no aineo
 			tab it makes none and tells you, with one warning,
@@ -4752,6 +4809,25 @@ layout.claude_side	`'left'` or `'right'`. Default: `'left'`
 			the panes column (|aineo-layout|) is on the other
 			side and the file column between them. `'right'`
 			mirrors the layout: panes, files, Claude Code.
+
+                                         *aineo-config-layout.explorer_column*
+layout.explorer_column	`'left'`, `'right'` or `false`. Default: `false`
+			Where the explorer column is: `'left'` or `'right'`
+			keeps the explorer always visible, as a column the
+			full height of the screen at that side, beside the
+			other three, whichever side Claude Code is on, and
+			`\e` moves the cursor into it
+			(|aineo-explorer-column|). `false` keeps the explorer
+			a pane of the panes column, which `\e` shows
+			(|aineo-explorer|). Read each time the layout
+			opens or is restored.
+
+                                          *aineo-config-layout.explorer_width*
+layout.explorer_width	A whole number of at least 1. Default: `30`
+			The explorer column's width in columns, kept
+			while the other columns share the rest
+			(|aineo-explorer-column|). It does nothing while
+			`layout.explorer_column` is `false`.
 
                   *aineo-config-changes* *aineo-config-changes.working_branch*
 changes.working_branch	A non-empty string.
