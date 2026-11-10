@@ -10,7 +10,9 @@
 --- explorer pane, a tree of files in the Report's window alone, taking the
 --- whole column, Input's window closed as under the terminal pane; or the
 --- walkthrough pane, the plan of a code walkthrough in the Report's window
---- with Input's window kept below it.
+--- with Input's window kept below it. Beside these columns the layout can
+--- hold a column of the explorer's tree, at the outer edge of one side of the
+--- screen, as tall as the screen, whichever side Claude's column is on.
 ---
 --- The layout shows the Claude and Report buffers, the changes pane's, the
 --- shell's terminal, the run pane's terminals, and the diffs it is asked to
@@ -40,6 +42,8 @@ local zoom = require('aineo.layout.zoom')
 ---@field shell? integer the terminal pane's buffer, the terminal of a shell, shown alone in the right column, in the Report's window; without it the layout keeps the one it was handed last, if its shell lives
 ---@field run? aineo.layout.RunPane the run pane's terminals; without them the run pane has nothing to show, and the layout shows the agent pane in its place
 ---@field explorer? integer the explorer pane's buffer, the tree of the folder Claude works in, shown alone in the right column, in the Report's window; without it the layout keeps the one it was handed last
+---@field explorer_column? aineo.layout.Side|false the side of the screen the explorer column is on, a column of its own the full height of the screen beside the other columns showing `explorer`, whichever side Claude's column is on; `false` for none; without it the layout keeps what it was handed last, none before any
+---@field explorer_width? integer the explorer column's width in cells, a positive whole number; without it the layout keeps the one it was handed last, and a side for the column needs one
 ---@field walkthrough? integer the walkthrough pane's buffer, the plan of a code walkthrough, shown in the Report's window above Input's; without it the layout keeps the one it was handed last
 ---@field claude_statusline? string the 'statusline' Claude's window draws for Claude's terminal; without it the layout keeps the one it was handed last, and before any, Claude's window draws the user's own
 
@@ -87,6 +91,7 @@ local zoom = require('aineo.layout.zoom')
 ---@field right_column_area fun(): aineo.layout.Area|nil
 ---@field claude_side fun(): aineo.layout.Side
 ---@field set_claude_side fun(claude_side: aineo.layout.Side)
+---@field explorer_column fun(): aineo.layout.Side|false
 ---@field let_go? fun() only on a layout `M.new()` made: removes its handlers and wipes its Input
 
 --- Makes a layout: its state, and the functions that act on it, and the
@@ -170,6 +175,12 @@ local function make_layout(input_name, group_name)
     zoom = nil,
     ---@type aineo.layout.FullZoom|nil
     full_zoom = nil,
+    ---@type aineo.layout.Side|false
+    explorer_column = false,
+    ---@type integer|nil
+    explorer_width = nil,
+    ---@type integer|nil
+    explorer_window = nil,
   }
 
   --- The role of `window` in the layout, or `nil` when it is not one of its
@@ -374,17 +385,30 @@ local function make_layout(input_name, group_name)
     end)
   end
 
-  --- Sizes the columns. With the file column open, Claude's column and the right
-  --- one take a third each of the screen's columns, the two separators taken
-  --- out, and the file column the rest; without it, Claude's column takes half
-  --- and the right one the rest.
+  --- Whether the explorer column's window exists.
+  ---
+  ---@return boolean
+  local function has_explorer_column()
+    return state.explorer_window ~= nil and vim.api.nvim_win_is_valid(state.explorer_window)
+  end
+
+  --- Sizes the columns. The explorer column, when it is open, takes its width
+  --- and a separator. Of the screen's columns that remain, with the file column
+  --- open, Claude's column and the right one take a third each, the two
+  --- separators taken out, and the file column the rest; without it, Claude's
+  --- column takes half and the right one the rest.
   local function size_columns()
+    local available = vim.o.columns
+    if has_explorer_column() then
+      vim.api.nvim_win_set_width(state.explorer_window, state.explorer_width)
+      available = available - state.explorer_width - 1
+    end
     if has_file_column() then
-      local third = math.floor((vim.o.columns - 2) / 3)
+      local third = math.floor((available - 2) / 3)
       vim.api.nvim_win_set_width(state.windows.claude, third)
       vim.api.nvim_win_set_width(state.windows.report, third)
     else
-      vim.api.nvim_win_set_width(state.windows.claude, math.floor(vim.o.columns / 2))
+      vim.api.nvim_win_set_width(state.windows.claude, math.floor(available / 2))
     end
   end
 
@@ -1135,6 +1159,26 @@ local function make_layout(input_name, group_name)
     end
   end
 
+  --- Opens the explorer column: a window showing the explorer's buffer, as
+  --- tall as the screen, at the outer edge on the side the column is on, its
+  --- width fixed. The cursor stays where it is.
+  local function open_explorer_column()
+    state.explorer_window = vim.api.nvim_open_win(
+      state.buffers.explorer,
+      false,
+      { split = state.explorer_column, win = -1 }
+    )
+    vim.wo[state.explorer_window].winfixwidth = true
+  end
+
+  --- Makes the explorer column what the layout was handed: open when it is on
+  --- a side, closed when it is not.
+  local function keep_explorer_column()
+    if not has_explorer_column() and state.explorer_column then
+      open_explorer_column()
+    end
+  end
+
   --- Whether `buffer`, shown in one of the layout's windows in place of the
   --- layout's own buffer, is a file that moves to the file column rather than
   --- leave the screen: a file to keep (`is_file_to_keep()`), not the unnamed,
@@ -1342,6 +1386,10 @@ local function make_layout(input_name, group_name)
     end
     state.buffers.shell = arrangement.shell or state.buffers.shell
     state.buffers.explorer = arrangement.explorer or state.buffers.explorer
+    if arrangement.explorer_column ~= nil then
+      state.explorer_column = arrangement.explorer_column
+    end
+    state.explorer_width = arrangement.explorer_width or state.explorer_width
     state.buffers.walkthrough = arrangement.walkthrough or state.buffers.walkthrough
     take_run(arrangement.run)
     if state.pane == 'run' and not arrangement.run then
@@ -1374,6 +1422,66 @@ local function make_layout(input_name, group_name)
     return type(value) == 'number' and value > 0 and value < 1
   end
 
+  --- Whether `value` names how the explorer column is: a side, or `false` for
+  --- none.
+  ---
+  ---@param value any
+  ---@return boolean
+  local function is_explorer_column(value)
+    return value == false or side.is_side(value)
+  end
+
+  --- Whether `value` is a width in cells: a whole number from 1.
+  ---
+  ---@param value any
+  ---@return boolean
+  local function is_column_width(value)
+    return type(value) == 'number' and value >= 1 and value % 1 == 0
+  end
+
+  --- Raises an error naming the first of the explorer column's settings of
+  --- `arrangement` the layout cannot show: the column, which is a side or
+  --- `false`, its width, and, when the column is a side, the explorer's buffer
+  --- and a width, handed now or kept from before.
+  ---
+  ---@param arrangement table
+  local function validate_explorer_column(arrangement)
+    vim.validate(
+      'arrangement.explorer_column',
+      arrangement.explorer_column,
+      is_explorer_column,
+      true,
+      "'left', 'right' or false"
+    )
+    vim.validate(
+      'arrangement.explorer_width',
+      arrangement.explorer_width,
+      is_column_width,
+      true,
+      'a positive whole number'
+    )
+    local column = arrangement.explorer_column
+    if column == nil then
+      column = state.explorer_column
+    end
+    if column then
+      vim.validate(
+        'arrangement.explorer',
+        arrangement.explorer or state.buffers.explorer,
+        is_buffer,
+        false,
+        'a buffer'
+      )
+      vim.validate(
+        'arrangement.explorer_width',
+        arrangement.explorer_width or state.explorer_width,
+        is_column_width,
+        false,
+        'a positive whole number'
+      )
+    end
+  end
+
   --- Raises an error naming the first setting of `arrangement` the layout
   --- cannot show.
   ---
@@ -1401,6 +1509,7 @@ local function make_layout(input_name, group_name)
     vim.validate('arrangement.shell', arrangement.shell, is_buffer, true, 'a buffer')
     vim.validate('arrangement.explorer', arrangement.explorer, is_buffer, true, 'a buffer')
     vim.validate('arrangement.walkthrough', arrangement.walkthrough, is_buffer, true, 'a buffer')
+    validate_explorer_column(arrangement)
     vim.validate('arrangement.run', arrangement.run, 'table', true)
     if arrangement.run then
       vim.validate(
@@ -2174,6 +2283,13 @@ local function make_layout(input_name, group_name)
   --- any was handed, and one that names the other side moves the columns of
   --- a layout that is open (`M.set_claude_side()`).
   ---
+  --- With `arrangement.explorer_column` a side, a fourth window shows
+  --- `arrangement.explorer` as a column of its own at the outer edge of that
+  --- side, as tall as the screen, `arrangement.explorer_width` cells wide and
+  --- fixed there; the other three columns share the screen's remaining cells
+  --- as they do without it. Claude's column being on either side leaves it
+  --- where it is (`M.explorer_column()`).
+  ---
   --- While any of the three windows exists, opening again restores the layout
   --- instead, in the tab that holds it: it creates only the windows that were
   --- closed, in their places, Input's not under the terminal pane, shows in
@@ -2231,9 +2347,12 @@ local function make_layout(input_name, group_name)
   --- Raises an error naming the setting, before changing anything, when
   --- `arrangement` is not a table, `claude` or `report` is not an existing
   --- buffer, `report_height` is not a number strictly between 0 and 1,
-  --- `claude_side`, when given, is neither `'left'` nor `'right'`, or
-  --- `changes`, when given, is not a table whose `files` and `commits` are
-  --- existing buffers, or `shell`, when given, is not an existing buffer, or
+  --- `claude_side`, when given, is neither `'left'` nor `'right'`,
+  --- `explorer_column`, when given, is neither a side nor `false`,
+  --- `explorer_width`, when given, is not a positive whole number, the
+  --- explorer column is a side and no explorer buffer or width was handed,
+  --- now or before, or `changes`, when given, is not a table whose `files` and
+  --- `commits` are existing buffers, or `shell`, when given, is not an existing buffer, or
   --- `run`, when given, is not a table whose `buffers` are at least one
   --- existing buffer and whose `winbar` is a string, or `explorer`, when
   --- given, is not an existing buffer, or `claude_statusline`, when given, is
@@ -2259,6 +2378,7 @@ local function make_layout(input_name, group_name)
       state.claude_side = wanted_side
       build()
     end
+    keep_explorer_column()
     state.report_height = arrangement.report_height
     pin_windows()
     wrap_agent_pane()
@@ -2792,6 +2912,14 @@ local function make_layout(input_name, group_name)
   ---@return aineo.layout.Side
   function M.claude_side()
     return state.claude_side
+  end
+
+  --- The side of the screen the explorer column is on, or `false` when the
+  --- layout has none.
+  ---
+  ---@return aineo.layout.Side|false
+  function M.explorer_column()
+    return state.explorer_column
   end
 
   --- Moves Claude's column to `claude_side`, the right column across the
