@@ -159,6 +159,15 @@ T['open() with the explorer column']['refuses a width that is not a positive who
   end, 'arrangement%.explorer_width')
 end
 
+T['open() with the explorer column']['refuses a column without a width, naming it'] = function()
+  local _, arrangement = arrangement_with_column('left')
+  arrangement.explorer_width = nil
+
+  expect.error(function()
+    layout.open(child, arrangement)
+  end, 'arrangement%.explorer_width')
+end
+
 T['open() with the explorer column']['refuses a column without the explorer’s buffer, naming it'] = function()
   local _, arrangement = arrangement_with_column('left')
   arrangement.explorer = nil
@@ -390,6 +399,18 @@ local function focus_explorer_column(arrangement)
   child.lua([[require('aineo.layout').focus_explorer_column(...)]], { arrangement })
 end
 
+--- Whether moving the child's cursor into the explorer column with
+--- `arrangement` raised no error.
+---
+---@param arrangement table
+---@return boolean
+local function focuses_explorer_column(arrangement)
+  return child.lua_get(
+    [[(pcall(require('aineo.layout').focus_explorer_column, ...))]],
+    { arrangement }
+  )
+end
+
 T['focus_explorer_column()'] = MiniTest.new_set()
 
 T['focus_explorer_column()']['moves the cursor into the column'] = function()
@@ -407,8 +428,9 @@ T['focus_explorer_column()']['opens a column that was closed, in place, and move
   layout.open(child, arrangement)
   child.lua('vim.api.nvim_win_close(vim.fn.win_findbuf(...)[1], false)', { buffers.explorer })
 
-  focus_explorer_column(arrangement)
+  local focused = focuses_explorer_column(arrangement)
 
+  eq(focused, true)
   local explorer = box_of(buffers.explorer)
   eq(explorer.col + explorer.width, layout.COLUMNS)
   eq(current_window(), layout.window_showing(child, buffers.explorer))
@@ -428,16 +450,16 @@ end
 T['focus_explorer_column()']['opens the layout first when none is open, with the arrangement it is handed'] = function()
   local buffers, arrangement = arrangement_with_column('left')
 
-  child.lua(
-    [[
-      local arrangement = ...
-      require('aineo.layout').focus_explorer_column(function()
+  local focused = child.lua_get(
+    [[(function(arrangement)
+      return (pcall(require('aineo.layout').focus_explorer_column, function()
         return arrangement
-      end)
-    ]],
+      end))
+    end)(...)]],
     { arrangement }
   )
 
+  eq(focused, true)
   eq(current_window(), layout.window_showing(child, buffers.explorer))
   eq(layout.window_count(child), 4)
 end
@@ -457,11 +479,13 @@ T['a file opened in the explorer column']['moves to the file column, the column 
   local buffers, arrangement = arrangement_with_column('left')
   layout.open(child, arrangement)
   focus_explorer_column(arrangement)
+  local explorer_window = current_window()
 
   child.cmd('edit ' .. layout.file('first.txt'))
   local file = child.lua_get('vim.fn.bufnr(...)', { layout.file('first.txt') })
   layout.wait_until(child, '#vim.api.nvim_tabpage_list_wins(0) == 5')
 
+  eq(child.lua_get('vim.api.nvim_win_get_buf(...)', { explorer_window }), buffers.explorer)
   local explorer, file_box = box_of(buffers.explorer), box_of(file)
   eq(explorer.col, 0)
   expect.equality(file_box.col > box_of(buffers.claude).col, true)

@@ -235,6 +235,12 @@ end
 
 T['a picker that stays open'] = MiniTest.new_set()
 
+T['a search'] = MiniTest.new_set()
+
+T['a picker that raises'] = MiniTest.new_set()
+
+T['a picker that opens nothing'] = MiniTest.new_set()
+
 T['a picker that stays open']['reveals the file it opens once it closes'] = function()
   local top = open_with_column('async', 'sub/note.txt')
   wait_for_tree()
@@ -276,6 +282,182 @@ T['a picker that stays open']['reveals nothing once it was cancelled, whatever f
 
   vim.wait(300)
   eq(explorer_cursor_is_on('other.txt'), false)
+end
+
+T['a picker that stays open']['reveals nothing once it was cancelled from a file window'] = function()
+  local top = open_with_column('cancel-file', 'sub/note.txt')
+  wait_for_tree()
+  local top_file = vim.fs.joinpath(top, 'top.txt')
+  child.cmd('edit ' .. vim.fn.fnameescape(top_file))
+  wait_for_current_window(top_file)
+  install_a_picker_that_stays_open()
+  put_explorer_cursor_on_the_first_line()
+  entry.press(child, '\\f')
+  wait_for_the_picker()
+
+  child.lua('vim.api.nvim_win_close(_G.picker_float, true)')
+
+  vim.wait(300)
+  eq(explorer_cursor_is_on('top.txt'), false)
+end
+
+T['a picker that stays open']['reveals nothing for a file its preview shows in a float'] = function()
+  local top = open_with_column('preview', 'sub/note.txt')
+  wait_for_tree()
+  install_a_picker_that_stays_open()
+  put_explorer_cursor_on_the_first_line()
+  entry.press(child, '\\f')
+  wait_for_the_picker()
+  local previewed = vim.fs.joinpath(top, 'docs', 'guide.md')
+
+  child.lua(
+    [[
+      local path = ...
+      vim.cmd.badd(vim.fn.fnameescape(path))
+      local buffer = vim.fn.bufnr(path)
+      vim.api.nvim_open_win(buffer, true, {
+        relative = 'editor',
+        row = 5,
+        col = 5,
+        width = 20,
+        height = 3,
+      })
+    ]],
+    { previewed }
+  )
+
+  vim.wait(300)
+  eq(explorer_cursor_is_on('guide.md'), false)
+end
+
+T['a picker that opens nothing']['reveals nothing for the file entered next'] = function()
+  local top = open_with_column('nothing', 'sub/note.txt')
+  wait_for_tree()
+  find_pickers.install(child, { 'snacks' })
+  put_explorer_cursor_on_the_first_line()
+  entry.press(child, '\\f')
+  vim.wait(PATIENCE_MS, function()
+    return #find_pickers.calls(child) > 0
+  end, 20)
+
+  child.cmd('edit ' .. vim.fn.fnameescape(vim.fs.joinpath(top, 'sub', 'other.txt')))
+
+  vim.wait(300)
+  eq(explorer_cursor_is_on('other.txt'), false)
+end
+
+T['a picker that stays open']['reveals nothing for a file entered in another tab page'] = function()
+  local top = open_with_column('other-page', 'sub/note.txt')
+  wait_for_tree()
+  install_a_picker_that_stays_open()
+  put_explorer_cursor_on_the_first_line()
+  entry.press(child, '\\f')
+  wait_for_the_picker()
+
+  child.cmd('tabnew')
+  child.cmd('edit ' .. vim.fn.fnameescape(vim.fs.joinpath(top, 'sub', 'other.txt')))
+
+  vim.wait(300)
+  eq(explorer_cursor_is_on('other.txt'), false)
+end
+
+T['a picker that stays open']['reveals the file it opens after an empty buffer was entered'] = function()
+  local top = open_with_column('empty-first', 'sub/note.txt')
+  wait_for_tree()
+  install_a_picker_that_stays_open()
+  put_explorer_cursor_on_the_first_line()
+  entry.press(child, '\\f')
+  wait_for_the_picker()
+  local note = vim.fs.joinpath(top, 'sub', 'note.txt')
+
+  child.lua(
+    [[
+      local path = ...
+      vim.api.nvim_win_close(_G.picker_float, true)
+      vim.cmd.enew()
+      vim.cmd.edit(vim.fn.fnameescape(path))
+    ]],
+    { note }
+  )
+
+  vim.wait(PATIENCE_MS, function()
+    return explorer_cursor_is_on('note.txt')
+  end, 20)
+  eq(explorer_cursor_is_on('note.txt'), true)
+end
+
+T['a picker that raises']['has its error told to the user once'] = function()
+  open_with_column('raises', 'sub/note.txt')
+  wait_for_tree()
+  child.lua([[
+    package.preload['snacks'] = function()
+      return {
+        picker = {
+          files = function()
+            error('the picker broke')
+          end,
+        },
+      }
+    end
+  ]])
+
+  entry.press(child, '\\f')
+  vim.wait(PATIENCE_MS, function()
+    return #entry.messages(child) > 0
+  end, 20)
+
+  local messages = entry.messages(child)
+  eq(#messages, 1)
+  eq(vim.endswith(messages[1].message, 'the picker broke'), true)
+  eq(messages[1].level, vim.log.levels.ERROR)
+end
+
+T['a search']['is not ended by the cancel of the search before it'] = function()
+  local top = open_with_column('stale', 'sub/note.txt')
+  wait_for_tree()
+  put_explorer_cursor_on_the_first_line()
+  local note = vim.fs.joinpath(top, 'sub', 'note.txt')
+
+  child.lua(
+    [[
+      local path = ...
+      local watching = require('aineo.entry.find_reveal').watching
+      local reveal = function(file)
+        _G.revealed = file
+      end
+      local function open_float()
+        local buffer = vim.api.nvim_create_buf(false, true)
+        return vim.api.nvim_open_win(buffer, true, {
+          relative = 'editor', row = 1, col = 1, width = 20, height = 3,
+        })
+      end
+      local first
+      watching(reveal, function()
+        first = open_float()
+      end)
+      vim.api.nvim_win_close(first, true)
+      local second
+      watching(reveal, function()
+        second = open_float()
+      end)
+      _G.second_float = second
+    ]],
+    { note }
+  )
+  vim.wait(300)
+  child.lua(
+    [[
+      local path = ...
+      vim.api.nvim_win_close(_G.second_float, true)
+      vim.cmd.edit(vim.fn.fnameescape(path))
+    ]],
+    { note }
+  )
+
+  vim.wait(PATIENCE_MS, function()
+    return child.lua_get('_G.revealed ~= nil')
+  end, 20)
+  eq(child.lua_get('_G.revealed'), note)
 end
 
 return T
