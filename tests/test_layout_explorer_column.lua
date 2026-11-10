@@ -286,6 +286,171 @@ T['the explorer column']['stays outermost as Claude’s closed window opens agai
   eq(from_the_left(buffers, { 'explorer', 'claude', 'report' }), expected)
 end
 
+--- Opens the layout again in the child as `arrangement` is, with `column` and
+--- `width` in place of the ones it carries.
+---
+---@param arrangement table
+---@param column string|false
+---@param width? integer
+local function open_again(arrangement, column, width)
+  local changed = vim.deepcopy(arrangement)
+  changed.explorer_column = column
+  changed.explorer_width = width or arrangement.explorer_width
+  layout.open(child, changed)
+end
+
+T['opening the layout again'] = MiniTest.new_set()
+
+T['opening the layout again']['opens the column when it is handed one now'] = function()
+  local buffers, arrangement = arrangement_with_column(false)
+  layout.open(child, arrangement)
+
+  open_again(arrangement, 'left')
+
+  eq({ box_of(buffers.explorer).col, layout.window_count(child) }, { 0, 4 })
+end
+
+T['opening the layout again']['closes the column when it is handed false now'] = function()
+  local buffers, arrangement = arrangement_with_column('left')
+  layout.open(child, arrangement)
+  buffers.input = layout.input_buffer(child)
+  local current = child.lua_get('vim.api.nvim_get_current_win()')
+
+  open_again(arrangement, false)
+
+  eq(layout.window_count(child), 3)
+  eq(child.lua_get('vim.api.nvim_get_current_win()'), current)
+  layout.expect_near(box_of(buffers.claude).width, layout.COLUMNS / 2)
+  eq(child.lua_get([[require('aineo.layout').explorer_column()]]), false)
+end
+
+T['opening the layout again']['moves the column to the side it is handed now, the window staying'] = function()
+  local buffers, arrangement = arrangement_with_column('left')
+  layout.open(child, arrangement)
+  local window = layout.window_showing(child, buffers.explorer)
+
+  open_again(arrangement, 'right')
+
+  local explorer = box_of(buffers.explorer)
+  eq(layout.window_showing(child, buffers.explorer), window)
+  eq(explorer.col + explorer.width, layout.COLUMNS)
+  eq(layout.window_count(child), 4)
+end
+
+T['opening the layout again']['gives the column the width it is handed now'] = function()
+  local buffers, arrangement = arrangement_with_column('left')
+  layout.open(child, arrangement)
+
+  open_again(arrangement, 'left', 20)
+
+  layout.expect_near(box_of(buffers.explorer).width, 20)
+  layout.expect_near(box_of(buffers.claude).width, (layout.COLUMNS - 20 - 1) / 2)
+end
+
+T['opening the layout again']['opens a column that was closed by hand, in place'] = function()
+  local buffers, arrangement = arrangement_with_column('right', 'left')
+  layout.open(child, arrangement)
+  child.lua('vim.api.nvim_win_close(vim.fn.win_findbuf(...)[1], false)', { buffers.explorer })
+
+  layout.open(child, arrangement)
+
+  local explorer = box_of(buffers.explorer)
+  eq(explorer.col + explorer.width, layout.COLUMNS)
+  eq(layout.window_count(child), 4)
+end
+
+T['opening the layout again']['gives way the explorer pane to the agent pane when the column opens'] = function()
+  local buffers, arrangement = arrangement_with_column(false)
+  layout.open(child, arrangement)
+  buffers.input = layout.input_buffer(child)
+  child.lua([[require('aineo.layout').show_pane('explorer', ...)]], { arrangement })
+
+  open_again(arrangement, 'left')
+
+  eq(child.lua_get([[require('aineo.layout').shown_pane()]]), 'agent')
+  eq(layout.window_count(child), 4)
+  eq(
+    child.lua_get('vim.api.nvim_win_get_buf(...)', { layout.window_showing(child, buffers.report) }),
+    buffers.report
+  )
+  expect.equality(layout.window_showing(child, buffers.input) ~= nil, true)
+end
+
+--- The window the child's cursor is in.
+---
+---@return integer window
+local function current_window()
+  return child.lua_get('vim.api.nvim_get_current_win()')
+end
+
+--- Moves the child's layout cursor into the explorer column.
+---
+---@param arrangement table|string a table, or the Lua of a function that returns one
+local function focus_explorer_column(arrangement)
+  child.lua([[require('aineo.layout').focus_explorer_column(...)]], { arrangement })
+end
+
+T['focus_explorer_column()'] = MiniTest.new_set()
+
+T['focus_explorer_column()']['moves the cursor into the column'] = function()
+  local buffers, arrangement = arrangement_with_column('left')
+  layout.open(child, arrangement)
+
+  focus_explorer_column(arrangement)
+
+  eq(current_window(), layout.window_showing(child, buffers.explorer))
+  eq(layout.window_count(child), 4)
+end
+
+T['focus_explorer_column()']['opens a column that was closed, in place, and moves the cursor into it'] = function()
+  local buffers, arrangement = arrangement_with_column('right')
+  layout.open(child, arrangement)
+  child.lua('vim.api.nvim_win_close(vim.fn.win_findbuf(...)[1], false)', { buffers.explorer })
+
+  focus_explorer_column(arrangement)
+
+  local explorer = box_of(buffers.explorer)
+  eq(explorer.col + explorer.width, layout.COLUMNS)
+  eq(current_window(), layout.window_showing(child, buffers.explorer))
+end
+
+T['focus_explorer_column()']['does nothing with the cursor in the column already'] = function()
+  local _, arrangement = arrangement_with_column('left')
+  layout.open(child, arrangement)
+  focus_explorer_column(arrangement)
+  local window = current_window()
+
+  focus_explorer_column(arrangement)
+
+  eq({ current_window(), layout.window_count(child) }, { window, 4 })
+end
+
+T['focus_explorer_column()']['opens the layout first when none is open, with the arrangement it is handed'] = function()
+  local buffers, arrangement = arrangement_with_column('left')
+
+  child.lua(
+    [[
+      local arrangement = ...
+      require('aineo.layout').focus_explorer_column(function()
+        return arrangement
+      end)
+    ]],
+    { arrangement }
+  )
+
+  eq(current_window(), layout.window_showing(child, buffers.explorer))
+  eq(layout.window_count(child), 4)
+end
+
+T['focus_explorer_column()']['raises an error naming the setting when the layout has no column to focus'] = function()
+  local _, arrangement = arrangement_with_column(false)
+  layout.open(child, arrangement)
+
+  expect.error(function()
+    focus_explorer_column(arrangement)
+  end, 'arrangement%.explorer_column')
+end
+
 T['explorer_column()'] = MiniTest.new_set()
 
 T['explorer_column()']['is false before a column was handed and the side after'] = function()
