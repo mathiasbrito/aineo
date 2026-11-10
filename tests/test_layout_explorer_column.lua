@@ -709,6 +709,35 @@ T['set_explorer_column()']['only records the column while no window of the layou
   eq(explorer.col + explorer.width, layout.COLUMNS)
 end
 
+T['set_explorer_column()']['gives the width alone to a column that stays on its side'] = function()
+  local buffers, arrangement = arrangement_with_column('left')
+  layout.open(child, arrangement)
+
+  set_explorer_column('left', 20)
+
+  eq(box_of(buffers.explorer).width, 20)
+end
+
+T['set_explorer_column()']['changes nothing when asked for what the layout has, a zoom staying'] = function()
+  local _, arrangement = arrangement_with_column('left')
+  layout.open(child, arrangement)
+  child.lua('require("aineo.layout").toggle_full_zoom()')
+
+  set_explorer_column('left', WIDTH)
+
+  eq(child.lua_get([[require('aineo.layout').is_zoomed()]]), true)
+end
+
+T['set_explorer_column()']['changes nothing for no column asked for again, a zoom staying'] = function()
+  local _, arrangement = arrangement_with_column(false)
+  layout.open(child, arrangement)
+  child.lua('require("aineo.layout").toggle_full_zoom()')
+
+  set_explorer_column(false, 40)
+
+  eq(child.lua_get([[require('aineo.layout').is_zoomed()]]), true)
+end
+
 T['set_explorer_column()']['refuses a column that is neither a side nor false, naming it'] = function()
   local _, arrangement = arrangement_with_column(false)
   layout.open(child, arrangement)
