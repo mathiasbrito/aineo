@@ -244,6 +244,8 @@ local WINDOWS_ACROSS_THE_SCREEN = {
   { 'botright copen 6' },
   { 'topleft 6new' },
   { 'help' },
+  { 'topleft 3new | topleft 4new' },
+  { 'botright 3new | botright 4new' },
 }
 
 --- The row, width and height of each window of the child's current tab that
