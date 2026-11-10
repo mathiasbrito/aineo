@@ -834,7 +834,7 @@ vim.g.aineo = {
     cmd = { 'claude' },
     hide_multiplexer = true,
   },
-  layout = { report_height = 2 / 3 },
+  layout = { report_height = 2 / 3, claude_side = 'left' },
   changes = {
     -- working_branch = 'origin/dev',
     graph_limit = 1000,
@@ -881,6 +881,7 @@ vim.g.aineo = {
 | `claude.cmd` | `{ 'claude' }` | The command run in the left terminal, a list of words, never through a shell. It must not hold `--continue`, `--resume` or `--session-id`: aineo picks the session. |
 | `claude.hide_multiplexer` | `true` | Whether Claude Code starts without the variables that tell it a terminal multiplexer runs it (see below). |
 | `layout.report_height` | `2/3` | The Report's share of the right column, a number strictly between 0 and 1. |
+| `layout.claude_side` | `'left'` | The side of the screen Claude Code's terminal is on, `'left'` or `'right'`; the panes column is on the other side and the file column between. |
 | `changes.working_branch` | none | The branch work lands in, as git reads a name, such as `origin/dev`. Unset, it is the default branch of the remote `origin`. With none set and no `origin/HEAD`, the changes pane shows no Landed section. aineo never fetches. |
 | `changes.graph_limit` | `1000` | How many commits the commit graph (`t` in the commits window) draws, newest first, a whole number of at least 1. The graph says when older ones are not shown. |
 | `tabs.padding` | `2` | Spaces either side of each title in aineo's tab line, from 0 to 8. |
