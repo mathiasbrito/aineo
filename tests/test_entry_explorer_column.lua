@@ -2,7 +2,6 @@ local MiniTest = require('mini.test')
 local claude_session = dofile('tests/helpers/claude_session.lua')
 local entry = dofile('tests/helpers/entry.lua')
 local git_repo = dofile('tests/helpers/git_repo.lua')
-local layout = dofile('tests/helpers/layout.lua')
 local tabs = dofile('tests/helpers/entry_tabs.lua')
 
 local eq = MiniTest.expect.equality
@@ -325,10 +324,20 @@ T['a zoom of the whole window']['covers the column and gives it its width back']
   local before = width_of('aineo://explorer')
 
   entry.press(child, '\\Z')
-  local zoomed = layout.box(child, child.lua_get('vim.api.nvim_get_current_win()')).width
+  local while_zoomed = width_of('aineo://explorer')
   entry.press(child, '\\Z')
 
-  eq({ before, zoomed > before, width_of('aineo://explorer') }, { 30, true, 30 })
+  eq({ before, while_zoomed, width_of('aineo://explorer') }, { 30, 1, 30 })
+end
+
+T['a zoom of the whole window']['gives the column its width back after the screen was resized meanwhile'] = function()
+  open_with_column('zoom-resize', 'left')
+  entry.press(child, '\\Z')
+
+  child.o.columns = 120
+  entry.press(child, '\\Z')
+
+  eq(width_of('aineo://explorer'), 30)
 end
 
 return T

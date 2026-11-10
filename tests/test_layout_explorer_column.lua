@@ -239,7 +239,49 @@ T['swapping Claude’s side with the explorer column']['keeps the thirds of the 
 end
 
 --- Commands that open a window across the whole screen below the columns.
-local WINDOWS_ACROSS_THE_SCREEN = { { 'botright 6new' }, { 'botright copen 6' } }
+local WINDOWS_ACROSS_THE_SCREEN = {
+  { 'botright 6new' },
+  { 'botright copen 6' },
+  { 'topleft 6new' },
+  { 'help' },
+}
+
+--- The row, width and height of each window of the child's current tab that
+--- does not float and is as wide as the screen, top to bottom.
+local ACROSS_THE_SCREEN = [[(function()
+  local across = {}
+  for _, window in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    if
+      vim.api.nvim_win_get_config(window).relative == ''
+      and vim.api.nvim_win_get_width(window) == vim.o.columns
+    then
+      table.insert(across, {
+        row = vim.api.nvim_win_get_position(window)[1],
+        width = vim.api.nvim_win_get_width(window),
+        height = vim.api.nvim_win_get_height(window),
+      })
+    end
+  end
+  table.sort(across, function(a, b)
+    return a.row < b.row
+  end)
+  return across
+end)()]]
+
+--- The windows of the child's current tab as wide as the screen
+--- (`ACROSS_THE_SCREEN`).
+---
+---@return table[] boxes
+local function windows_across_the_screen()
+  return child.lua_get(ACROSS_THE_SCREEN)
+end
+
+--- The rows 'cmdheight' gives the command line in the child.
+---
+---@return integer
+local function command_line_rows()
+  return child.lua_get('vim.o.cmdheight')
+end
 
 T['the explorer column with a window across the screen'] = MiniTest.new_set({
   parametrize = WINDOWS_ACROSS_THE_SCREEN,
@@ -268,6 +310,72 @@ T['the explorer column with a window across the screen']['stays outermost throug
 
   eq(from_the_left(buffers, { 'explorer', 'claude', 'report' }), { 'report', 'claude', 'explorer' })
   eq(layout.window_count(child), count)
+end
+
+T['the explorer column with a window across the screen']['keeps the window across the screen, and the command line, through a swap'] = function(
+  command
+)
+  local buffers = open_with_column('right', 'left')
+  child.cmd(command)
+  local across, rows = windows_across_the_screen(), command_line_rows()
+
+  set_claude_side('right')
+
+  eq(windows_across_the_screen(), across)
+  eq(command_line_rows(), rows)
+  local explorer, claude = box_of(buffers.explorer), box_of(buffers.claude)
+  eq(explorer.height, claude.height)
+  expect.equality(explorer.height < layout.LINES - 2, true)
+end
+
+T['the explorer column with a window across the screen']['keeps the window across the screen when it opens again'] = function(
+  command
+)
+  local buffers, arrangement = arrangement_with_column('left')
+  layout.open(child, arrangement)
+  child.lua('vim.api.nvim_win_close(vim.fn.win_findbuf(...)[1], false)', { buffers.explorer })
+  child.cmd(command)
+  local across = windows_across_the_screen()
+
+  layout.open(child, arrangement)
+
+  eq(windows_across_the_screen(), across)
+  local explorer, claude = box_of(buffers.explorer), box_of(buffers.claude)
+  eq(explorer.height, claude.height)
+  expect.equality(explorer.height < layout.LINES - 2, true)
+end
+
+T['the explorer column with a window across the screen']['keeps the window across the screen as Claude’s window opens beyond the column'] = function(
+  command
+)
+  local buffers, arrangement = arrangement_with_column('left', 'left')
+  layout.open(child, arrangement)
+  buffers.input = layout.input_buffer(child)
+  layout.close_windows(child, buffers, { 'claude' })
+  child.cmd(command)
+  local across = windows_across_the_screen()
+
+  layout.focus(child, 'claude', arrangement)
+
+  eq(from_the_left(buffers, { 'explorer', 'claude', 'report' }), { 'explorer', 'claude', 'report' })
+  eq(windows_across_the_screen(), across)
+end
+
+T['claude_side() with a window across the screen and no explorer column'] = MiniTest.new_set({
+  parametrize = WINDOWS_ACROSS_THE_SCREEN,
+})
+
+T['claude_side() with a window across the screen and no explorer column']['keeps the window and the command line through a swap'] = function(
+  command
+)
+  open_with_column(false)
+  child.cmd(command)
+  local across, rows = windows_across_the_screen(), command_line_rows()
+
+  set_claude_side('right')
+
+  eq(windows_across_the_screen(), across)
+  eq(command_line_rows(), rows)
 end
 
 T['the explorer column'] = MiniTest.new_set()
@@ -485,6 +593,34 @@ T['opening the layout again']['builds around the explorer column when it is the 
   eq(layout.window_count(child), 4)
   eq(#child.lua_get('vim.fn.win_findbuf(...)', { buffers.explorer }), 1)
   eq(box_of(buffers.explorer).col, 0)
+  eq(box_of(buffers.explorer).width, WIDTH)
+end
+
+T['opening the layout again']['keeps the explorer, the column and its width when it is handed none of them'] = function()
+  local buffers, arrangement = arrangement_with_column('right', 'left', 24)
+  layout.open(child, arrangement)
+  local kept = vim.deepcopy(arrangement)
+  kept.explorer = nil
+  kept.explorer_column = nil
+  kept.explorer_width = nil
+
+  local opened = child.lua_get([[(pcall(require('aineo.layout').open, ...))]], { kept })
+
+  eq(opened, true)
+  local explorer = box_of(buffers.explorer)
+  eq({ explorer.col + explorer.width, explorer.width }, { layout.COLUMNS, 24 })
+end
+
+T['a full zoom of the layout with the explorer column'] = MiniTest.new_set()
+
+T['a full zoom of the layout with the explorer column']['gives the column its width back when it ends after a resize'] = function()
+  local buffers, arrangement = arrangement_with_column('left')
+  layout.open(child, arrangement)
+  child.lua('require("aineo.layout").toggle_full_zoom()')
+
+  child.o.columns = 120
+  child.lua('require("aineo.layout").toggle_full_zoom()')
+
   eq(box_of(buffers.explorer).width, WIDTH)
 end
 
