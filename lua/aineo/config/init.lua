@@ -123,6 +123,15 @@ local function is_claude_side(value)
   return vim.list_contains(CLAUDE_SIDES, value)
 end
 
+--- Whether `value` names where the explorer column is: a side of the screen,
+--- or `false` for none.
+---
+---@param value any
+---@return boolean
+local function is_explorer_column(value)
+  return value == false or is_claude_side(value)
+end
+
 --- The values of `find.picker`: `auto`, which takes the first third-party
 --- picker installed, and the name of each picker that can be forced.
 local FIND_PICKERS = { 'auto', 'snacks', 'fzf-lua', 'telescope', 'mini.pick' }
@@ -266,6 +275,18 @@ local SETTINGS = {
     default = 'left',
     validator = is_claude_side,
     expected = "'left' or 'right'",
+  },
+  {
+    name = 'layout.explorer_column',
+    default = false,
+    validator = is_explorer_column,
+    expected = "'left', 'right' or false",
+  },
+  {
+    name = 'layout.explorer_width',
+    default = 30,
+    validator = is_positive_count,
+    expected = 'a whole number of at least 1',
   },
   {
     name = 'changes.working_branch',
