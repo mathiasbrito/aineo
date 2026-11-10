@@ -92,6 +92,7 @@ local zoom = require('aineo.layout.zoom')
 ---@field claude_side fun(): aineo.layout.Side
 ---@field set_claude_side fun(claude_side: aineo.layout.Side)
 ---@field explorer_column fun(): aineo.layout.Side|false
+---@field focus_explorer_column fun(arrangement: aineo.layout.Arrangement|fun(): aineo.layout.Arrangement)
 ---@field let_go? fun() only on a layout `M.new()` made: removes its handlers and wipes its Input
 
 --- Makes a layout: its state, and the functions that act on it, and the
@@ -676,7 +677,7 @@ local function make_layout(input_name, group_name)
   --- is left alone while it is outermost, or when no row of the tab holds the
   --- layout's windows and it.
   local function keep_explorer_outermost()
-    if not has_explorer_column() then
+    if not has_explorer_column() or not state.explorer_column then
       return
     end
     local held = vim.list_extend(existing_windows(), { state.explorer_window })
@@ -1192,9 +1193,12 @@ local function make_layout(input_name, group_name)
   end
 
   --- Makes the explorer column what the layout was handed: open when it is on
-  --- a side, closed when it is not.
+  --- a side, closed when it is not, on that side, showing the explorer's
+  --- buffer. A column on the other side moves there (`keep_explorer_outermost()`).
   local function keep_explorer_column()
-    if not has_explorer_column() and state.explorer_column then
+    if has_explorer_column() and not state.explorer_column then
+      vim.api.nvim_win_close(state.explorer_window, false)
+    elseif not has_explorer_column() and state.explorer_column then
       open_explorer_column()
     end
   end
@@ -1410,6 +1414,10 @@ local function make_layout(input_name, group_name)
       state.explorer_column = arrangement.explorer_column
     end
     state.explorer_width = arrangement.explorer_width or state.explorer_width
+    if state.explorer_column and state.pane == 'explorer' then
+      state.pane = 'agent'
+      state.input_closed_by_user = nil
+    end
     state.buffers.walkthrough = arrangement.walkthrough or state.buffers.walkthrough
     take_run(arrangement.run)
     if state.pane == 'run' and not arrangement.run then
@@ -2308,7 +2316,10 @@ local function make_layout(input_name, group_name)
   --- side, as tall as the screen, `arrangement.explorer_width` cells wide and
   --- fixed there; the other three columns share the screen's remaining cells
   --- as they do without it. Claude's column being on either side leaves it
-  --- where it is (`M.explorer_column()`).
+  --- where it is (`M.explorer_column()`). Handed again with another side or
+  --- width the column moves or resizes, with `false` it closes, and a column
+  --- closed by hand opens again in place. While the column is a side the
+  --- explorer pane gives way to the agent pane.
   ---
   --- While any of the three windows exists, opening again restores the layout
   --- instead, in the tab that holds it: it creates only the windows that were
@@ -2637,6 +2648,35 @@ local function make_layout(input_name, group_name)
   function M.focus_pane(pane, arrangement)
     M.show_pane(pane, arrangement)
     vim.api.nvim_set_current_win(state.windows[PANE_LANDING[pane]])
+  end
+
+  --- What `M.focus_explorer_column()` raises when, the layout opened, it has
+  --- no explorer column to move the cursor to.
+  local NO_EXPLORER_COLUMN =
+    'arrangement.explorer_column: expected a side, the explorer column was asked for'
+
+  --- Moves the cursor into the explorer column, opening the layout with
+  --- `arrangement` first when the layout is not open or the column is gone, in
+  --- which case the column opens in place, at the outer edge of its side.
+  --- With the cursor in the column already, it changes nothing. `arrangement`
+  --- may be a function that returns it, which is called only when the layout
+  --- must open.
+  ---
+  --- Raises an error naming `arrangement.explorer_column` when the layout has
+  --- no column once it is open, after opening it and before moving the cursor.
+  ---
+  ---@param arrangement aineo.layout.Arrangement|fun(): aineo.layout.Arrangement
+  function M.focus_explorer_column(arrangement)
+    if not (is_open() and has_explorer_column()) then
+      if type(arrangement) == 'function' then
+        arrangement = arrangement()
+      end
+      M.open(arrangement)
+    end
+    if not has_explorer_column() then
+      error(NO_EXPLORER_COLUMN, 0)
+    end
+    vim.api.nvim_set_current_win(state.explorer_window)
   end
 
   --- Shows `buffer` in the file column, as a file opened from one of the
