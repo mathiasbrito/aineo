@@ -145,6 +145,7 @@ local TAGS = {
   'aineo-config-layout.report_height',
   'aineo-config-layout.explorer_column',
   'aineo-config-layout.explorer_width',
+  'aineo-config-layout.file_beside_explorer',
   'aineo-explorer-column',
   ':Aineo-explorer',
   '<Plug>(aineo-explorer-column)',
