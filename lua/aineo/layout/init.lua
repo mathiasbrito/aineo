@@ -94,6 +94,8 @@ local zoom = require('aineo.layout.zoom')
 ---@field explorer_column fun(): aineo.layout.Side|false
 ---@field focus_explorer_column fun(arrangement: aineo.layout.Arrangement|fun(): aineo.layout.Arrangement)
 ---@field set_explorer_column fun(explorer_column: aineo.layout.Side|false, explorer_width: integer)
+---@field explorer_column_is_open fun(): boolean
+---@field reopen_explorer_column fun()
 ---@field let_go? fun() only on a layout `M.new()` made: removes its handlers and wipes its Input
 
 --- Makes a layout: its state, and the functions that act on it, and the
@@ -3192,6 +3194,34 @@ local function make_layout(input_name, group_name)
       if explorer_column and state.pane == 'explorer' then
         switch_pane('agent')
       end
+      keep_explorer_column()
+      if is_open() then
+        apply_proportions()
+      end
+    end)
+  end
+
+  --- Whether the explorer column's window exists: false for a layout that has
+  --- no column and for one whose column the user closed.
+  ---
+  ---@return boolean
+  function M.explorer_column_is_open()
+    return has_explorer_column()
+  end
+
+  --- Opens the explorer column again, in place, in the layout's tab page
+  --- whether or not it is shown, when the layout has one (`M.explorer_column()`)
+  --- and its window was closed, as `set_explorer_column()` opens one: the cursor
+  --- and the tab page shown stay and the other columns take the layout's
+  --- proportions. Changes nothing otherwise, and while no window of the layout
+  --- is open.
+  function M.reopen_explorer_column()
+    if not state.explorer_column or has_explorer_column() or not has_any_window() then
+      return
+    end
+    vim.api.nvim_win_call(existing_windows()[1], function()
+      end_full_zoom()
+      end_zoom()
       keep_explorer_column()
       if is_open() then
         apply_proportions()

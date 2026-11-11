@@ -541,6 +541,52 @@ T['the explorer column key’s choice']['changes every aineo tab, the tab page s
   eq(tabs.current_tab(child), shown)
 end
 
+T['the explorer column key’s choice']['opens a column closed by hand again, in place, keeping the choice on'] = function()
+  open_with_column('key-closed', 'right')
+  child.lua(
+    'vim.api.nvim_win_close(vim.fn.win_findbuf(vim.fn.bufnr("aineo://explorer"))[1], false)'
+  )
+  eq(entry.windows(child), NO_COLUMN)
+
+  entry.press(child, '\\E')
+  local reopened = entry.windows(child)
+  entry.press(child, '\\E')
+
+  eq(reopened, COLUMN_RIGHT)
+  eq(entry.windows(child), NO_COLUMN)
+end
+
+T['the explorer column key’s choice']['opens a column closed by hand again in every tab that lost it'] = function()
+  tabs.use_own_state(child, 'explorer-column-key-closed-tabs')
+  entry.use_fake(
+    child,
+    tabs.fake('explorer-column-key-closed-tabs-first'),
+    { layout = { explorer_column = 'left' } }
+  )
+  child.cmd('Aineo open')
+  claude_session.wait_for_status(child, 'ready')
+  entry.use_fake(
+    child,
+    tabs.fake('explorer-column-key-closed-tabs-second'),
+    { layout = { explorer_column = 'left' } }
+  )
+  child.cmd('Aineo tab new')
+  claude_session.wait_for_status(child, 'ready')
+  child.lua([[
+    for _, page in ipairs(vim.api.nvim_list_tabpages()) do
+      for _, window in ipairs(vim.api.nvim_tabpage_list_wins(page)) do
+        if vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(window)):find('aineo://explorer', 1, true) then
+          vim.api.nvim_win_close(window, false)
+        end
+      end
+    end
+  ]])
+
+  entry.press(child, '\\E')
+
+  eq({ tabs.windows_of_tab(child, 1), tabs.windows_of_tab(child, 2) }, { COLUMN_LEFT, COLUMN_LEFT })
+end
+
 T['the explorer column key’s choice']['ends a zoom of the whole window'] = function()
   open_in_repository('key-zoom')
   entry.press(child, '\\Z')

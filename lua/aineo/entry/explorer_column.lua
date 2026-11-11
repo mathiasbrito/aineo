@@ -66,13 +66,40 @@ local function is_on_screen(config)
   return explorer_choice.current(config) ~= false
 end
 
+--- Whether the screen the user sees has the explorer column on but its window
+--- closed, as `:quit` in it leaves it.
+---
+---@return boolean
+local function is_closed_by_hand()
+  local tab = registry.tab_of_current_page() or registry.last_used_tab
+  return tab ~= nil
+    and tab.is_bound()
+    and tab.homes.layout.explorer_column() ~= false
+    and not tab.homes.layout.explorer_column_is_open()
+end
+
+--- Opens the column again, in place, in every aineo tab that lost its window.
+local function reopen_in_every_tab()
+  for _, tab in ipairs(registry.tab_list) do
+    if tab.is_bound() then
+      tab.homes.layout.reopen_explorer_column()
+    end
+  end
+end
+
 --- What `\E` does: turns the explorer column off in every aineo tab when it
 --- is on in the screen the user sees, and on when it is off, at the side the
---- setting names, else the one `\E` last used, else the left. The choice lasts
---- for the editor's life (`aineo.entry.explorer_choice`); turned off, `\e`
---- shows the explorer as a pane again.
+--- setting names, else the one `\E` last used, else the left. A column the
+--- user closed by hand is on still: `\E` opens it again in every tab that lost
+--- it, the choice staying on. The choice lasts for the editor's life
+--- (`aineo.entry.explorer_choice`); turned off, `\e` shows the explorer as a
+--- pane again.
 function M.toggle()
   errors.run(function()
+    if is_closed_by_hand() then
+      reopen_in_every_tab()
+      return
+    end
     local config = settings.resolved()
     local column = not is_on_screen(config) and explorer_choice.side_to_turn_on(config)
     explorer_choice.choose(column, config)
