@@ -1855,8 +1855,9 @@ local function make_layout(input_name, group_name)
     end)
   end
 
-  --- The size Claude's window gives its terminal: the columns of the window
-  --- without its gutter, and its lines; `nil` when the layout has no Claude
+  --- The size Neovim gives Claude's terminal: the most columns, without the
+  --- gutter, and the most lines of the windows that show it, in every tab page,
+  --- Claude's window and any other; `nil` when the layout has no Claude
   --- window.
   ---
   ---@return integer|nil width
@@ -1865,8 +1866,13 @@ local function make_layout(input_name, group_name)
     if not has_window('claude') then
       return nil, nil
     end
-    local info = vim.fn.getwininfo(state.windows.claude)[1]
-    return info.width - info.textoff, info.height
+    local width, height = 0, 0
+    for _, window in ipairs(vim.fn.win_findbuf(vim.api.nvim_win_get_buf(state.windows.claude))) do
+      local info = vim.fn.getwininfo(window)[1]
+      width = math.max(width, info.width - info.textoff)
+      height = math.max(height, info.height)
+    end
+    return width, height
   end
 
   --- Tells Claude's terminal the size of its window once more
@@ -1905,6 +1911,18 @@ local function make_layout(input_name, group_name)
       vim.defer_fn(give_claude_terminal_a_fresh_size, fresh_size.SETTLE_DELAY_MS)
   end
 
+  --- Puts the layout's proportions back when the editor is resized, unless the
+  --- layout's tab page is not the one shown: its windows still have the sizes
+  --- of the old editor, and the proportions of the new one would squeeze them
+  --- and tell Claude's terminal a width the window never has. They are put back
+  --- when the tab is entered.
+  local function keep_proportions_of_the_tab_shown()
+    if has_any_window() and layout_tab() ~= vim.api.nvim_get_current_tabpage() then
+      return
+    end
+    keep_proportions()
+  end
+
   --- Keeps Input a scratch buffer and redirects the files shown in the layout's
   --- windows; keeps Claude's terminal in Normal mode once its process has ended
   --- (`leave_terminal_mode_as_claude_exits()`, `remember_claude_exit()`,
@@ -1915,7 +1933,8 @@ local function make_layout(input_name, group_name)
   --- size of its window again once Claude's window changed size
   --- (`give_claude_terminal_a_fresh_size_when_resized()`); and puts the
   --- proportions back whenever a window that is not a float closes, the editor
-  --- is resized or a tab is entered, replacing what an earlier call set up.
+  --- is resized while the layout's tab is shown (`keep_proportions_of_the_tab_shown()`)
+  --- or a tab is entered, replacing what an earlier call set up.
   --- Input is made a scratch buffer first, so the redirect never takes it for
   --- a file. A window is still in the layout while `WinClosed` runs, so the
   --- proportions are put back after it; a tab that is not shown is resized
@@ -1946,7 +1965,10 @@ local function make_layout(input_name, group_name)
         vim.schedule(keep_proportions)
       end,
     })
-    vim.api.nvim_create_autocmd('VimResized', { group = group, callback = keep_proportions })
+    vim.api.nvim_create_autocmd('VimResized', {
+      group = group,
+      callback = keep_proportions_of_the_tab_shown,
+    })
     vim.api.nvim_create_autocmd(
       'WinResized',
       { group = group, callback = give_claude_terminal_a_fresh_size_when_resized }
