@@ -613,6 +613,163 @@ T['a file column split side by side']['stays side by side as the explorer column
   eq(file_windows_are_side_by_side(buffers), true)
 end
 
+T['the parts of a file column split side by side'] = MiniTest.new_set({
+  parametrize = {
+    { 'left', 'left' },
+    { 'left', 'right' },
+    { 'right', 'left' },
+    { 'right', 'right' },
+  },
+})
+
+--- The widths of the windows showing `buffers.files`, left to right.
+---
+---@param buffers table
+---@return integer[] widths
+local function file_part_widths(buffers)
+  return child.lua_get(
+    [=[(function(buffer)
+      local parts = {}
+      for _, window in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+        if vim.api.nvim_win_get_buf(window) == buffer then
+          table.insert(parts, {
+            left = vim.api.nvim_win_get_position(window)[2],
+            width = vim.api.nvim_win_get_width(window),
+          })
+        end
+      end
+      table.sort(parts, function(a, b)
+        return a.left < b.left
+      end)
+      return vim.tbl_map(function(part)
+        return part.width
+      end, parts)
+    end)(...)]=],
+    { buffers.files }
+  )
+end
+
+--- Opens the layout at 240 columns with the explorer column on `column` and
+--- the file column beside it as `beside` says, and splits the file column
+--- by hand into two parts of unequal width; returns the buffers and the
+--- parts' widths, left to right.
+---
+---@param column string|false
+---@param claude_side string
+---@param beside boolean
+---@return table buffers
+---@return integer[] widths
+---@return table arrangement
+local function open_with_split_file_column(column, claude_side, beside)
+  local buffers, arrangement = arrangement_with(column, claude_side, beside)
+  child.o.columns = 240
+  child.cmd('edit ' .. layout.file('first.txt'))
+  buffers.files = child.lua_get('vim.api.nvim_get_current_buf()')
+  layout.open(child, arrangement)
+  child.lua([[vim.api.nvim_set_current_win(...)]], { layout.window_showing(child, buffers.files) })
+  child.cmd('vsplit')
+  child.cmd('vertical resize 20')
+  return buffers, file_part_widths(buffers), arrangement
+end
+
+--- Expects a measured width to lie within two cells of its share.
+local expect_within_two_cells = MiniTest.new_expectation(
+  'a width within two cells of its share',
+  function(actual, share)
+    return math.abs(actual - share) <= 2
+  end,
+  function(actual, share)
+    return string.format('Measured: %s\nShare: %s', vim.inspect(actual), vim.inspect(share))
+  end
+)
+
+--- Expects the parts of the file column split side by side to have kept
+--- their shares of its width, within two cells, whatever the file column's
+--- width became.
+---
+---@param buffers table
+---@param before integer[] the parts' widths before the move
+local function expect_the_split_kept(buffers, before)
+  local after = file_part_widths(buffers)
+  local share = before[1] / (before[1] + before[2])
+  eq(#after, 2)
+  expect_within_two_cells(after[1], share * (after[1] + after[2]))
+end
+
+T['the parts of a file column split side by side']['keep their shares as the explorer column turns on'] = function(
+  column,
+  claude_side
+)
+  local buffers, before = open_with_split_file_column(false, claude_side, true)
+
+  set_explorer_column(column, true)
+
+  expect_the_split_kept(buffers, before)
+end
+
+T['the parts of a file column split side by side']['keep their shares as the explorer column turns off'] = function(
+  column,
+  claude_side
+)
+  local buffers, before = open_with_split_file_column(column, claude_side, true)
+
+  set_explorer_column(false, true)
+
+  expect_the_split_kept(buffers, before)
+end
+
+T['the parts of a file column split side by side']['keep their shares as the option turns off'] = function(
+  column,
+  claude_side
+)
+  local buffers, before = open_with_split_file_column(column, claude_side, true)
+
+  set_explorer_column(column, false)
+
+  expect_the_split_kept(buffers, before)
+end
+
+T['the parts of a file column split side by side']['keep their shares through a mirror'] = function(
+  column,
+  claude_side
+)
+  local buffers, before = open_with_split_file_column(column, claude_side, true)
+
+  child.lua(
+    [[(function(claude_side, explorer_side)
+      require('aineo.layout').set_column_sides(claude_side, explorer_side)
+    end)(...)]],
+    { claude_side == 'left' and 'right' or 'left', column == 'left' and 'right' or 'left' }
+  )
+  expect_the_split_kept(buffers, before)
+end
+
+T['the parts of a file column split side by side']['keep their shares as an arrangement turns the explorer column on'] = function(
+  column,
+  claude_side
+)
+  local buffers, before, arrangement = open_with_split_file_column(false, claude_side, true)
+
+  arrangement.explorer_column = column
+  layout.open(child, arrangement)
+
+  expect_the_split_kept(buffers, before)
+end
+
+T['the parts of a file column split side by side']['keep the shares the user gave them after the first move, in the next'] = function(
+  column,
+  claude_side
+)
+  local buffers = open_with_split_file_column(false, claude_side, true)
+  set_explorer_column(column, true)
+  child.lua([[vim.api.nvim_win_set_width(vim.fn.win_findbuf(...)[1], 45)]], { buffers.files })
+  local before = file_part_widths(buffers)
+
+  set_explorer_column(false, true)
+
+  expect_the_split_kept(buffers, before)
+end
+
 T['a layout with a window closed'] = MiniTest.new_set()
 
 T['a layout with a window closed']['finds the file column in the centre with Claude’s window closed, Claude on the left'] = function()
