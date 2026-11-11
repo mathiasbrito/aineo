@@ -15,6 +15,7 @@ local DEFAULTS = {
     explorer_column = 'right',
     explorer_width = 40,
     file_beside_explorer = true,
+    panel_numbers = false,
   },
   changes = { graph_limit = 1000 },
   tabs = { padding = 2, always_show = true },
@@ -326,6 +327,26 @@ T['resolve_config()']['refuses a file_beside_explorer that is not a boolean']['a
   end, 'layout%.file_beside_explorer: expected boolean')
 end
 
+T['resolve_config()']['takes layout.panel_numbers from either source, off by default'] = function()
+  local from_global = config.resolve_config({ layout = { panel_numbers = true } }, nil)
+  local from_setup = config.resolve_config(nil, { layout = { panel_numbers = true } })
+
+  eq({ from_global.layout.panel_numbers, from_setup.layout.panel_numbers }, { true, true })
+  eq(config.resolve_config(nil, nil).layout.panel_numbers, false)
+end
+
+T['resolve_config()']['refuses a panel_numbers that is not a boolean'] = MiniTest.new_set({
+  parametrize = { { 'left' }, { 'yes' }, { 1 }, { {} } },
+})
+
+T['resolve_config()']['refuses a panel_numbers that is not a boolean']['as layout.panel_numbers'] = function(
+  value
+)
+  expect.error(function()
+    config.resolve_config({ layout = { panel_numbers = value } }, nil)
+  end, 'layout%.panel_numbers: expected boolean')
+end
+
 T['resolve_config()']['takes the padding of the tab titles from either source, 2 by default'] = function()
   local from_global = config.resolve_config({ tabs = { padding = 0 } }, nil)
   local from_setup = config.resolve_config({ tabs = { padding = 0 } }, { tabs = { padding = 4 } })
@@ -411,6 +432,11 @@ T['resolve_config()']['refuses a look of the explorer that is not a boolean']['a
   end, 'explorer%.' .. look .. ': expected boolean')
 end
 
+--- The defaults of the looks of the explorer: its settings but `numbers`, the
+--- old name of `layout.panel_numbers`, which is no look.
+local LOOK_DEFAULTS = vim.deepcopy(DEFAULTS.explorer)
+LOOK_DEFAULTS.numbers = nil
+
 T['explorer_looks()'] = MiniTest.new_set()
 
 T['explorer_looks()']['are the looks resolve_config() gives, with no problem, when every value is right'] = function()
@@ -426,7 +452,6 @@ T['explorer_looks()']['are the looks resolve_config() gives, with no problem, wh
     counts = true,
     compact = true,
     diagnostics = true,
-    numbers = false,
   })
   eq(problems, {})
 end
@@ -444,8 +469,8 @@ end
 T['explorer_looks()']['keep every default when the explorer section is no table, saying so once for each look'] = function()
   local looks, problems = config.explorer_looks({ explorer = 'no' }, nil)
 
-  eq(looks, DEFAULTS.explorer)
-  eq(#problems, 7)
+  eq(looks, LOOK_DEFAULTS)
+  eq(#problems, 6)
 end
 
 T['explorer_looks()']['keep every default, telling so, for a source that is no table'] =
@@ -459,8 +484,8 @@ T['explorer_looks()']['keep every default, telling so, for a source that is no t
   local from_global, global_problems = config.explorer_looks(source, nil)
   local from_setup, setup_problems = config.explorer_looks(nil, source)
 
-  eq(from_global, DEFAULTS.explorer)
-  eq(from_setup, DEFAULTS.explorer)
+  eq(from_global, LOOK_DEFAULTS)
+  eq(from_setup, LOOK_DEFAULTS)
   eq(#global_problems, 1)
   eq(#setup_problems, 1)
   expect.no_equality(global_problems[1]:find('vim.g.aineo', 1, true), nil)
@@ -477,7 +502,7 @@ end
 T['explorer_looks()']['ignore a setting that is wrong elsewhere'] = function()
   local looks, problems = config.explorer_looks({ tabs = { padding = 'wide' } }, nil)
 
-  eq(looks, DEFAULTS.explorer)
+  eq(looks, LOOK_DEFAULTS)
   eq(problems, {})
 end
 

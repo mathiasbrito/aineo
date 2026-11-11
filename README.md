@@ -62,6 +62,12 @@ between Claude Code and the panes. With the explorer on the left:
 +-----------+----------------+----------------+----------------+
 ```
 
+Panels, which are all the windows of the layout that show no file, take no
+room for line numbers, sign column or fold column: only the thin separator
+between windows is left. A file keeps your own settings wherever it shows.
+`\tn` brings the numbers back in every panel at once and takes them out again;
+`layout.panel_numbers = true` starts with them shown.
+
 With `layout.explorer_column = false` there is no explorer column: three
 columns, the file column between Claude Code and the panes, and `\e` shows the
 explorer as a pane:
@@ -248,6 +254,7 @@ resumes it.
 | `]v`, `[v` | jump to the next and the previous explanation or issue of the buffer |
 | `\z` | zooms the window of the panes column the cursor is in, and gives the heights back when pressed again |
 | `\Z` | zooms the window the cursor is in to the whole tab page, and gives the sizes back when pressed again |
+| `\tn` | shows or hides the line numbers, sign column, fold column and status column of every panel, in every tab, for the session (`layout.panel_numbers` sets where it starts); Claude Code's window alone has `\tcn` (`:Aineo panel-numbers`, `<Plug>(aineo-panel-numbers)`) |
 | `\E` | turns the explorer column on and off in every tab at once, for the session: on at the side `layout.explorer_column` names, else the side it last used, else the left; off, `\e` shows the explorer as a pane again (`:Aineo explorer column`, `<Plug>(aineo-explorer-column)`) |
 | `\O` | shows the office, an animation of your Claude Code at work over the panes column, which also shows by itself after `office.idle_ms` without the cursor in the panes column; the cursor entering a window it covers closes it. A report that comes in shows as a card in its corner |
 | `\?` | shows a cheatsheet of aineo's keys over the panes column, in two colourful columns when it is wide enough: each key as you type it, what it does and, dimmed, the `:Aineo` command that does the same. `q`, `<Esc>` or `\?` closes it, and the column is as it was; it and the office never show together. `:help aineo-cheatsheet` has the details |
@@ -900,6 +907,7 @@ vim.g.aineo = {
     explorer_column = 'right',
     explorer_width = 40,
     file_beside_explorer = true,
+    panel_numbers = false,
   },
   changes = {
     -- working_branch = 'origin/dev',
@@ -951,6 +959,7 @@ vim.g.aineo = {
 | `layout.explorer_column` | `'right'` | Where the explorer column is: `'left'` or `'right'` keeps the explorer always visible as a column the full height of the screen at that side, beside the other three, and `\e` moves into it; `false` keeps the explorer a pane that `\e` shows. A call to `setup()` applies it at once in every tab. |
 | `layout.explorer_width` | `40` | The explorer column's width in columns, a whole number of at least 1; it does nothing while `layout.explorer_column` is `false`. |
 | `layout.file_beside_explorer` | `true` | Whether the file column opens beside the explorer column while it is shown (on its right when the explorer column is at the left edge, on its left when at the right edge); `false` keeps it between Claude Code and the panes column. `\E` and a live `setup()` move an open file column to where it belongs. |
+| `layout.panel_numbers` | `false` | Whether the panels, the windows of the layout that show no file (Claude Code, the Report, Input, the explorer, the changes, terminal, run and walkthrough panes), show your line numbers, sign column, fold column and status column. With `false` they show none, only the separator between windows, whatever your global settings say, and files keep yours; `true` starts with them shown. `\tn` toggles it live in every tab. |
 | `changes.working_branch` | none | The branch work lands in, as git reads a name, such as `origin/dev`. Unset, it is the default branch of the remote `origin`. With none set and no `origin/HEAD`, the changes pane shows no Landed section. aineo never fetches. |
 | `changes.graph_limit` | `1000` | How many commits the commit graph (`t` in the commits window) draws, newest first, a whole number of at least 1. The graph says when older ones are not shown. |
 | `tabs.padding` | `2` | Spaces either side of each title in aineo's tab line, from 0 to 8. |
@@ -962,7 +971,7 @@ vim.g.aineo = {
 | `explorer.counts` | `true` | Whether folders show the number of changed files below them and changed files the lines added and removed; `false` also stops the `git diff --numstat` that reads them. |
 | `explorer.compact` | `true` | Whether a chain of folders each holding a folder alone shows on one line. |
 | `explorer.diagnostics` | `true` | Whether files show their errors and warnings. |
-| `explorer.numbers` | `false` | Whether a window showing the explorer keeps your line numbers; with `false` its `number` and `relativenumber` are off there, whatever your global settings say. The sign and fold columns stay as they are. |
+| `explorer.numbers` | `false` | The old name of `layout.panel_numbers`: `true` here does what `true` there does. |
 | `explain.model` | `'sonnet'` | The model of the Claude Code that `\v` and `\V` start to explain code, as `claude --model` takes it: an alias such as `'opus'` or a full name. A non-empty string. |
 | `explain.timeout_ms` | `180000` | How long a request to explain code may run before aineo stops its Claude Code, a whole number of milliseconds of at least 1. |
 | `explain.deep_model` | `'sonnet'` | The model of the Claude Code that `\VV` and `\VVI` start, as `claude --model` takes it. A non-empty string. |
