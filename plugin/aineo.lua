@@ -106,7 +106,7 @@ local SUBCOMMAND_WORDS = {
   tab = { 'new', 'close', '1', '2', '3', '4', '5', '6', '7', '8', '9' },
   diff = { 'close' },
   zoom = { 'full' },
-  layout = { 'swap', 'left', 'right' },
+  layout = { 'swap', 'left', 'right', 'mirror' },
   explain = EXPLAIN_WORDS,
   write = { 'deep' },
 }

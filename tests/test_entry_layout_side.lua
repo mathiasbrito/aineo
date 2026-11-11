@@ -307,16 +307,16 @@ T[':Aineo layout']['tells the user the words it takes when given another or none
 
   eq(entry.messages(child), {
     {
-      message = 'aineo: :Aineo layout takes one of swap, left, right',
+      message = 'aineo: :Aineo layout takes one of swap, left, right, mirror',
       level = vim.log.levels.ERROR,
     },
   })
 end
 
-T[':Aineo layout']['completes swap, left and right'] = function()
+T[':Aineo layout']['completes swap, left, right and mirror'] = function()
   eq(
     child.lua_get([[vim.fn.getcompletion('Aineo layout ', 'cmdline')]]),
-    { 'swap', 'left', 'right' }
+    { 'swap', 'left', 'right', 'mirror' }
   )
 end
 

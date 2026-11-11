@@ -322,6 +322,29 @@ ACTIONS['layout swap'] = function()
   put_claude_on(require('aineo.layout').opposite_side(side_on_screen()))
 end
 
+--- What `:Aineo layout mirror` does: flips the whole row end to end as the
+--- user sees it, Claude Code's column to the side it is not on and the
+--- explorer column, when it is on, to the side it is not on, in every aineo
+--- tab whose tab page exists, in one move of the windows for each tab, and
+--- records both sides for the editor's life (`aineo.entry.layout_side`,
+--- `aineo.entry.explorer_choice`). With no explorer column it does what
+--- `:Aineo layout swap` does.
+ACTIONS['layout mirror'] = function()
+  local layout = require('aineo.layout')
+  local claude_side = layout.opposite_side(side_on_screen())
+  local explorer_side = explorer_column.side_on_screen()
+  explorer_side = explorer_side and layout.opposite_side(explorer_side) or nil
+  layout_side.choose(claude_side)
+  if explorer_side then
+    explorer_column.record_side(explorer_side)
+  end
+  for _, tab in ipairs(registry.tab_list) do
+    if tab.is_bound() then
+      tab.homes.layout.set_column_sides(claude_side, explorer_side)
+    end
+  end
+end
+
 --- What `:Aineo explorer column` does: turns the explorer column on or off in
 --- every aineo tab, as `\E` does (`aineo.entry.explorer_column`'s `toggle()`).
 ACTIONS['explorer column'] = explorer_column.toggle
