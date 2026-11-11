@@ -18,6 +18,10 @@ local PATIENCE_MS = 4000
 --- How long a wait for something that should not happen lasts, in milliseconds.
 local QUIET_MS = 400
 
+--- How long the layout may take to tell Claude's terminal its size again after
+--- the screen was resized, in milliseconds: it holds a timer meanwhile.
+local LAYOUT_SETTLE_MS = 1000
+
 --- The recorded turn: a prompt, a call, its result and the turn's end.
 local RECORDED_TURN = fake_transcript.lines_of('turn-with-a-command-2.1.308.jsonl')
 
@@ -39,9 +43,9 @@ local function transcript_path()
 end
 
 --- Starts the child with aineo's layout open and an office over its right
---- column, following `path` when it is given. The office is `_G.office` in the
---- child, and what it told the user through `vim.notify()` is
---- `_G.told`.
+--- column, following `path` when it is given, once the layout's own timers are
+--- closed. The office is `_G.office` in the child, and what it told the user
+--- through `vim.notify()` is `_G.told`.
 ---
 ---@param path? string the transcript to follow
 ---@param pack_folders? string[] the folders the office's packs are searched in, those of 'runtimepath' by default
@@ -76,6 +80,9 @@ local function open_office(path, pack_folders, more_options)
   ]],
     { { path = path, folders = pack_folders, more_options = more_options } }
   )
+  vim.wait(LAYOUT_SETTLE_MS, function()
+    return office_cells.open_handles(child, 'timer') == 0
+  end, 10)
   return buffers
 end
 

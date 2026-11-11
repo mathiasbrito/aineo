@@ -912,7 +912,7 @@ T['the pane']['names a step past the last one of the plan without a total, and m
 end
 
 T['the pane']['leaves the options of the shell’s window as the user’s, when the shell shows there next'] = function()
-  local token = open_layout('options-shell')
+  local token = open_layout('options-shell', { layout = { panel_numbers = true } })
   plan(token)
 
   entry.press(child, '\\pt')
