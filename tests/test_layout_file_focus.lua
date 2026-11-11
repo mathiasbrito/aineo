@@ -207,14 +207,16 @@ T['the file focus']['leaves the cursor where it is outside the panes column'] = 
   eq(current_buffer(), buffers.explorer)
 end
 
-T['the file focus']['starting it again changes nothing'] = function()
+T['the file focus']["starting it again keeps the width Claude's column had as it began"] = function()
   local buffers = open_with_file('left', false, false)
+  local claude_width = box_of(buffers.claude).width
   start_file_focus()
-  local file_box = box_of(buffers.file)
+  child.lua('vim.api.nvim_win_set_width(vim.fn.bufwinid(...), 10)', { buffers.claude })
 
   start_file_focus()
+  child.o.columns = 100
 
-  eq(box_of(buffers.file), file_box)
+  eq(box_of(buffers.claude).width, claude_width)
 end
 
 T['the file focus']['ends a zoom of the window it starts from'] = function()
