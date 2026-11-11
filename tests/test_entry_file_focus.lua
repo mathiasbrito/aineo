@@ -253,6 +253,32 @@ T['<C-l> in the explorer column']['on a folder only turns the focus on, opening 
   eq(wait_for_windows({ 'terminal', 'aineo://explorer' }), { 'terminal', 'aineo://explorer' })
   eq(vim.list_slice(explorer_lines(), 2), tree)
   eq(is_focused(), true)
+  eq(entry.messages(child), {})
+end
+
+T['<C-l> in the explorer column']['of a second tab turns the focus on for that tab alone'] = function()
+  tabs.use_own_state(child, 'file-focus-explorer-tabs')
+  local top = git_repo.create('file-focus-explorer-tabs', FILES)
+  child.cmd('cd ' .. vim.fn.fnameescape(top))
+  local settings = { layout = { explorer_column = 'right' } }
+  entry.use_fake(child, tabs.fake('file-focus-explorer-tabs-first'), settings)
+  child.cmd('Aineo open')
+  claude_session.wait_for_status(child, 'ready')
+  entry.use_fake(child, tabs.fake('file-focus-explorer-tabs-second'), settings)
+  child.cmd('Aineo tab new')
+  claude_session.wait_for_status(child, 'ready')
+  entry.press(child, '\\e')
+
+  entry.press(child, '<C-l>')
+
+  vim.wait(PATIENCE_MS, function()
+    return #tabs.windows_of_tab(child, 2) == 2
+  end, 20)
+  eq(tabs.windows_of_tab(child, 2), { 'terminal', 'aineo://explorer' })
+  eq(
+    tabs.windows_of_tab(child, 1),
+    { 'terminal', 'aineo://report', 'aineo://input', 'aineo://explorer' }
+  )
 end
 
 T['<C-l> in the explorer column']['again, on a file, turns the focus off and opens nothing'] = function()
