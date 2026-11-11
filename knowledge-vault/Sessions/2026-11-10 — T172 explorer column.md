@@ -68,6 +68,10 @@ Six findings, each fixed test first and seen failing; the reviewer's measured pr
 
 Open thread, **N6**: a window across the screen split vertically (`botright 4new` then `vnew`) is not detected, so a swap absorbs both halves and `'cmdheight'` grows (12); skipping the heights of windows that span the tab in `restore_sizes()`, as `full_zoom` does, is the lead.
 
+## A729: `\E` turns the explorer column on and off
+
+`\E`, its twin, `<Plug>(aineo-explorer-column)` and `:Aineo explorer column` (a subcommand of its own, so the `<Plug>` has the name the ruling gave) toggle the column on every aineo tab through `set_explorer_column()`. The session's choice is `aineo.entry.explorer_choice` (the choice, the side last turned on, the setting as it was when chosen), read by the tab arrangement and `\e`; on uses the setting's side, else the last, else the left. A `setup()` that changes `layout.explorer_column` ends the choice; one that changes the width alone keeps the column and resizes it (a first draft ended the choice on a width change, which closed the column just opened; a case killed that). The layout moves the cursor of a closing column's tab page, shown or not, to the file column (it is moved before `set_explorer_column()`'s `nvim_win_call`, which makes another window current). Red first: 2 layout, 15 entry cases; the plugin, completion and help lists that enumerate keys and subcommands were red until updated. Mutants E1-E9 and X1-X4 killed; X5 (the on-screen test reading the choice instead of the tab's layout) is equivalent while a tab's layout follows the choice.
+
 ## Open threads
 
 - A reveal asked before the explorer's first tree read moves no cursor; the file is highlighted once it is read.
