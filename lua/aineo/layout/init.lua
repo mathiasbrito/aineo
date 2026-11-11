@@ -463,12 +463,29 @@ local function make_layout(input_name, group_name)
     end)
   end
 
-  --- Sizes the columns. The explorer column, when it is open, takes its width
-  --- and a separator. Of the screen's columns that remain, with the file column
-  --- open, Claude's column and the right one take a third each, the two
-  --- separators taken out, and the file column the rest; without it, Claude's
-  --- column takes half and the right one the rest.
-  local function size_columns()
+  --- Gives the file column `width` cells, unless it was split into more than one
+  --- column by hand, whose widths are the user's own.
+  ---
+  ---@param width integer
+  local function size_file_column(width)
+    local windows = file_column_windows()
+    local lefts = {}
+    for _, window in ipairs(windows) do
+      lefts[vim.api.nvim_win_get_position(window)[2]] = true
+    end
+    if #vim.tbl_keys(lefts) == 1 then
+      vim.api.nvim_win_set_width(windows[1], width)
+    end
+  end
+
+  --- Sets the columns' widths once: the explorer column, when it is open,
+  --- takes its width and a separator. Of the screen's columns that remain,
+  --- with the file column open, Claude's column and the right one take a third
+  --- each, the two separators taken out, and the file column the rest, set
+  --- too, since a window next to a fixed one keeps whatever width a neighbour
+  --- leaves it; without it, Claude's column takes half and the right one the
+  --- rest.
+  local function set_column_widths()
     local available = vim.o.columns
     if has_explorer_column() then
       vim.api.nvim_win_set_width(state.explorer_window, state.explorer_width)
@@ -476,11 +493,20 @@ local function make_layout(input_name, group_name)
     end
     if has_file_column() then
       local third = math.floor((available - 2) / 3)
+      size_file_column(available - 2 * third - 2)
       vim.api.nvim_win_set_width(state.windows.claude, third)
       vim.api.nvim_win_set_width(state.windows.report, third)
     else
       vim.api.nvim_win_set_width(state.windows.claude, math.floor(available / 2))
     end
+  end
+
+  --- Sizes the columns (`set_column_widths()`), twice, since a window given
+  --- its width takes the cells of its neighbours, which the next window then
+  --- gives back.
+  local function size_columns()
+    set_column_widths()
+    set_column_widths()
   end
 
   --- Gives the Report its share of the rows the Report and Input hold together.
