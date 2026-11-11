@@ -720,6 +720,45 @@ T['set_explorer_column()']['gives the width alone to a column that stays on its 
   eq(box_of(buffers.explorer).width, 20)
 end
 
+T['set_explorer_column()']['moves the cursor to the file column when the column closes under it'] = function()
+  local buffers, arrangement = arrangement_with_column('left')
+  child.cmd('edit ' .. layout.file('first.txt'))
+  buffers.file = child.lua_get('vim.api.nvim_get_current_buf()')
+  layout.open(child, arrangement)
+  focus_explorer_column(arrangement)
+
+  set_explorer_column(false, WIDTH)
+
+  eq(child.lua_get('vim.api.nvim_get_current_buf()'), buffers.file)
+end
+
+T['set_explorer_column()']['moves the cursor of a tab page that is not shown out of the closing column'] = function()
+  local buffers, arrangement = arrangement_with_column('right')
+  child.cmd('edit ' .. layout.file('first.txt'))
+  buffers.file = child.lua_get('vim.api.nvim_get_current_buf()')
+  layout.open(child, arrangement)
+  focus_explorer_column(arrangement)
+  local page = child.lua_get('vim.api.nvim_get_current_tabpage()')
+  child.cmd('tabnew')
+
+  set_explorer_column(false, WIDTH)
+
+  eq(
+    child.lua_get('vim.api.nvim_win_get_buf(vim.api.nvim_tabpage_get_win(...))', { page }),
+    buffers.file
+  )
+end
+
+T['set_explorer_column()']['leaves the cursor where it is when it is not in the closing column'] = function()
+  local buffers, arrangement = arrangement_with_column('left')
+  layout.open(child, arrangement)
+  buffers.input = layout.input_buffer(child)
+
+  set_explorer_column(false, WIDTH)
+
+  eq(child.lua_get('vim.api.nvim_get_current_buf()'), buffers.input)
+end
+
 T['set_explorer_column()']['changes nothing when asked for what the layout has, a zoom staying'] = function()
   local _, arrangement = arrangement_with_column('left')
   layout.open(child, arrangement)
