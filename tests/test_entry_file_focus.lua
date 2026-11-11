@@ -699,4 +699,33 @@ T['the explorer pane under the file focus']['comes back with the cursor on the e
   eq(child.lua_get(explorer_cursor), line)
 end
 
+--- Each key that shows a pane of the panes column, as a set's `parametrize`,
+--- with the pane that shows once the key ran.
+local ARMED_PANE_KEYS = {
+  { '\\r', 'agent' },
+  { '\\i', 'agent' },
+  { '\\g', 'changes' },
+  { '\\pa', 'agent' },
+  { '\\pt', 'terminal' },
+}
+
+T['a pane key while the file focus is armed'] = MiniTest.new_set({ parametrize = ARMED_PANE_KEYS })
+
+T['a pane key while the file focus is armed']['ends it, and a file opened later leaves the pane in place'] = function(
+  keys,
+  pane
+)
+  local top = open_with_column('armed-key', 'right')
+  child.o.shell = '/bin/sh'
+  put_cursor_on('src/')
+  entry.press(child, '<C-l>')
+  vim.wait(PATIENCE_MS, is_focused, 20)
+
+  entry.press(child, keys)
+  open_file(vim.fs.joinpath(top, 'README.md'))
+
+  eq(is_focused(), false)
+  eq(entry.windows(child), showing_pane(top, pane))
+end
+
 return T
