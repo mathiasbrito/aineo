@@ -432,6 +432,42 @@ T['while the file focus is on']['a file shown in the file column leaves the pane
   eq(box_of(second).width, layout.COLUMNS - claude_width - 1)
 end
 
+T['while the file focus is on']['a file shown with no file column open takes the cells Claude leaves, beside the explorer'] = function()
+  layout.start(child)
+  local buffers = layout.stand_ins(child)
+  buffers.explorer = layout.named_scratch(child, 'aineo://explorer')
+  local arrangement = layout.arrangement(buffers, 'left')
+  arrangement.explorer = buffers.explorer
+  arrangement.explorer_column = 'right'
+  arrangement.explorer_width = EXPLORER_WIDTH
+  arrangement.file_beside_explorer = true
+  layout.open(child, arrangement)
+  start_file_focus()
+  local claude_width = box_of(buffers.claude).width
+  local second = child.lua_get(
+    [[(function(path)
+      local buffer = vim.fn.bufadd(path)
+      vim.fn.bufload(buffer)
+      return buffer
+    end)(...)]],
+    { layout.file('second.txt') }
+  )
+
+  child.lua([[require('aineo.layout').show_file(...)]], { second })
+
+  eq(
+    from_the_left({ claude = buffers.claude, file = second, explorer = buffers.explorer }, {
+      'claude',
+      'file',
+      'explorer',
+    }),
+    { 'claude', 'file', 'explorer' }
+  )
+  eq(box_of(buffers.claude).width, claude_width)
+  eq(box_of(second).width, layout.COLUMNS - claude_width - EXPLORER_CELLS - 1)
+  eq(is_file_focused(), true)
+end
+
 T['while the file focus is on']['closing the file column keeps it on, and ending it brings the panes back'] = function()
   local buffers, arrangement = open_with_file('left', false, false)
   start_file_focus()
