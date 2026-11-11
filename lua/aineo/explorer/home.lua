@@ -44,6 +44,8 @@ local M = {}
 ---@field focused_work? fun(): aineo.explorer.Work|nil what the changes pane's focused view shows alone, nil for its default view
 ---@field offer_work? fun() offers the changes pane's list of worktrees, branches and reported work, whose pick it shows alone
 ---@field open_file fun(path: string) opens the file `path`, absolute, in the file column
+---@field is_file_focused? fun(): boolean whether the file focus of the explorer's tab is on; with `toggle_file_focus`, what `<C-l>` acts on, and none given, `<C-l>` does nothing
+---@field toggle_file_focus? fun() turns the file focus of the explorer's tab on, or off when it is on
 ---@field paste fun(text: string) pastes `text` into Claude Code's prompt, with no Enter
 ---@field quote_name fun(name: string): string how a name shows on its line, a control character in it escaped
 ---@field change_groups table<string, string> the highlight group a file's mark and name show in, by the kind of its change (`'added'`, `'modified'`, `'deleted'`, `'renamed'`, `'type_changed'`, `'untracked'`)
@@ -912,6 +914,25 @@ function M.new(settings)
     end
   end
 
+  --- What `<C-l>` does: with the file focus off, shows the file under the
+  --- cursor as `l` does (`open_file_of()`), nothing for a folder or the
+  --- header, and turns the file focus on; with it on, turns it off, on any
+  --- line (`settings.toggle_file_focus`). The focus is turned once the file
+  --- has taken its place in the file column, after the commands in flight
+  --- are done (`return_cursor_to_tree()`). Does nothing when the explorer
+  --- was handed no file focus.
+  local function on_file_focus()
+    if not (settings.toggle_file_focus and settings.is_file_focused) then
+      return
+    end
+    local entry = not settings.is_file_focused() and entry_in(0) or nil
+    local window, line = vim.api.nvim_get_current_win(), vim.api.nvim_win_get_cursor(0)[1]
+    if entry and entry.kind ~= 'folder' and open_file_of(entry) then
+      return_cursor_to_tree(window, line)
+    end
+    vim.schedule(settings.toggle_file_focus)
+  end
+
   --- What the explorer tells the user as `I` is pressed over a folder
   --- outside git.
   local NOTHING_IGNORED = 'aineo: the explorer shows a folder outside git, where nothing is ignored'
@@ -977,6 +998,11 @@ function M.new(settings)
       desc = 'unfold or fold the folder, or show the file, the cursor staying in the tree',
     },
     { lhs = '<CR>', rhs = on_enter, desc = 'unfold or fold the folder, or open the file' },
+    {
+      lhs = '<C-l>',
+      rhs = on_file_focus,
+      desc = 'show the file and hide the panes column, or bring it back',
+    },
     { lhs = 'h', rhs = on_h, desc = 'fold the folder, or the folder above' },
     {
       lhs = 'R',

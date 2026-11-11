@@ -499,6 +499,10 @@ The keys of the tree, in Normal mode, in its buffer alone:
              (|aineo-links|): a text file in aineo, anything else with
              your system; a deleted file, or one that is a folder on
              disk, opens nothing, and aineo says why
+    `<C-l>`    show a file as `l` does and turn the file focus on, which
+             closes the panes column and gives its cells to the file
+             column; on a folder or the header, only turn it on; with
+             it on, turn it off, on any line (|aineo-focus|)
     `h`        fold an unfolded folder; on a file or a folded folder, fold
              the folder that holds it and move to it
     `@`        paste `@` and the path of the entry under the cursor, from
@@ -727,6 +731,47 @@ screen out for the size it has now. A window that keeps its size, as in a
 swap or a mirror, gets nothing. When the editor is resized, the layout of a
 tab that is not shown keeps the sizes of its windows until the tab is entered,
 so that its Claude Code is not told a width the window never has.
+
+File focus ~
+                                                                 *aineo-focus*
+`<C-l>` in the explorer (|aineo-explorer|), the column's or the pane's, on a
+file shows it in the file column as `l` does, the cursor staying in the tree,
+and turns the file focus on for the tab: the panes column closes, with
+the Report, Input and whichever pane it shows, and its cells go to the file
+column, so that the row is Claude Code, the files and the explorer column
+(mirrored when Claude Code is on the right). Claude's column and the explorer
+column keep their widths; the pane that showed stays the pane shown, and shows
+again when the focus ends. On a folder, or on the header, `<C-l>` only turns
+the focus on and opens nothing.
+
+While the focus is on, every file opened in the tab — by `l` or `<CR>` in the
+explorer, by `\f`, by a link — shows in the file column and leaves the panes
+column closed, so that you read the files at their width; `l` and `<CR>` do
+nothing else. `<C-l>` in the explorer again, on any line, `:Aineo focus`
+(|:Aineo-focus|) and `<Plug>(aineo-focus)` turn it off: the panes column opens
+again at the layout's proportions, showing the pane it showed, the file stays
+in the file column and the cursor where it was.
+
+A key that shows a pane of the panes column ends the focus, as the column
+is what shows the pane: `\r`, `\i`, `\g`, `\pa`, `\pt`, `\pw`, `\x`, `\o` and
+their `:Aineo` commands bring the column back with that pane, the cursor
+going where the key puts it. A process of the run pane that ends, or whose
+terminal you wipe, while the focus is on changes nothing meanwhile, and one
+that had ended keeps its place in the stack as the focus starts. The agent's
+run tools (|aineo-run-tools|) show the stack when they start a process, which
+ends the focus as `\x` does. `\e` with the explorer column on only moves the
+cursor into the column, and keeps the focus.
+
+The focus belongs to the tab: another tab keeps its own panes column. A swap
+or a mirror of the layout (|:Aineo-layout|), `\E`
+(|aineo-explorer-column|) and a resize of the editor keep it on, the file
+column taking the cells the columns leave. `\z` pressed with it on says the
+cursor is in none of the windows of the panes column; `\Z` zooms any window
+of the tab as ever, and the focus starting ends a zoom, without giving its
+sizes back. Closing the file column keeps the focus on, Claude's column alone
+left beside the explorer column: `:Aineo focus` or any pane key brings the
+panes column back. Claude's column keeps its width, so that Claude Code is
+told no new size as the column closes or comes back.
 
 The agent's run tools ~
                                                              *aineo-run-tools*
@@ -3970,6 +4015,19 @@ keeps the tab's claim, and the next start takes it up again (|aineo-tabs|).
 			and, in Terminal mode and in Insert mode, `<C-\>Z`
 			do the same (|aineo-keys|).
 
+                                                              *:Aineo-focus*
+:Aineo focus		Turns the file focus of the aineo tab of the current
+			tab page on, closing the panes column so that the
+			file column takes its cells, or, with it on, off,
+			bringing the panes column back (|aineo-focus|). It
+			makes no tab: from a tab page that is none of aineo's
+			it changes nothing and tells you, with one warning,
+			that the layout is not open there. With any word
+			after `focus` it tells you, with one error, what
+			`:Aineo` takes. It has no key of its own: `<C-l>` in
+			the explorer turns it on and off, and
+			`<Plug>(aineo-focus)` is yours to map.
+
                                                             *:Aineo-explorer*
 :Aineo explorer column
 			Turns the explorer column on in every aineo tab at
@@ -4542,6 +4600,11 @@ you turn the prefix off, or when a prefix key is yours: >lua
 			Does what `:Aineo zoom full` does
 			(|:Aineo-zoom-full|).
 
+                                                         *<Plug>(aineo-focus)*
+<Plug>(aineo-focus)
+			Does what `:Aineo focus` does (|:Aineo-focus|). No
+			key is mapped to it.
+
                                               *<Plug>(aineo-explorer-column)*
 <Plug>(aineo-explorer-column)
 			Does what `:Aineo explorer column` does
@@ -4577,10 +4640,10 @@ you turn the prefix off, or when a prefix key is yours: >lua
 Prefix keys ~
                                                                   *aineo-keys*
 Once the editor has started, aineo maps the prefix (|aineo-config-prefix|)
-followed by these keys to each `<Plug>` mapping but `<Plug>(aineo-claim)`,
-which has none, and those of a fix shown, whose keys are local to its buffer
-(|aineo-explain-fix|), globally, in Normal mode, and `\s`, `\v`, `\V`, `\vi`,
-`\VI`, `\VV`, `\VVI` and `\vm` in Visual mode too:
+followed by these keys to each `<Plug>` mapping but `<Plug>(aineo-claim)` and
+`<Plug>(aineo-focus)`, which have none, and those of a fix shown, whose keys
+are local to its buffer (|aineo-explain-fix|), globally, in Normal mode, and
+`\s`, `\v`, `\V`, `\vi`, `\VI`, `\VV`, `\VVI` and `\vm` in Visual mode too:
 
                                                                     *aineo-\s*
 \s		|<Plug>(aineo-send)|

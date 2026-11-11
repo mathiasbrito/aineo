@@ -277,6 +277,24 @@ ACTIONS['zoom full'] = function()
   end
 end
 
+--- What `:Aineo focus` tells the user, as a warning, when the current tab
+--- page is none of aineo's.
+local NO_TAB_TO_FOCUS = 'aineo: no file focus — the current tab page is not an aineo tab'
+
+--- What `:Aineo focus` does: turns the file focus of the aineo tab of the
+--- current tab page on, or off when it is on (`aineo.layout`'s
+--- `start_file_focus()` and `end_file_focus()`), and never makes a tab. From
+--- a tab page that is none of aineo's it tells the user so and changes
+--- nothing.
+ACTIONS.focus = function()
+  local tab = registry.tab_of_current_page()
+  if tab then
+    tab.actions.focus()
+  else
+    vim.notify(NO_TAB_TO_FOCUS, vim.log.levels.WARN)
+  end
+end
+
 --- Puts Claude Code's column on `side` in every aineo tab whose tab page
 --- exists, and records it as the side for the tabs opened later and the
 --- layouts restored (`aineo.entry.layout_side`).

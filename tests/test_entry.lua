@@ -76,14 +76,14 @@ end
 
 T[':Aineo'] = MiniTest.new_set()
 
-T[':Aineo']['without an argument tells the user its twenty-two subcommands and does nothing else'] = function()
+T[':Aineo']['without an argument tells the user its twenty-three subcommands and does nothing else'] = function()
   child.cmd('Aineo')
 
   eq(entry.messages(child), { { message = entry.USAGE, level = vim.log.levels.ERROR } })
   eq(entry.windows(child), { '' })
 end
 
-T[':Aineo']['completes its argument to its twenty-two subcommands'] = function()
+T[':Aineo']['completes its argument to its twenty-three subcommands'] = function()
   eq(child.fn.getcompletion('Aineo ', 'cmdline'), {
     'send',
     'open',
@@ -102,6 +102,7 @@ T[':Aineo']['completes its argument to its twenty-two subcommands'] = function()
     'diff',
     'find',
     'zoom',
+    'focus',
     'layout',
     'explain',
     'write',
@@ -113,7 +114,7 @@ end
 T[':Aineo']['is described with every subcommand it takes'] = function()
   eq(
     child.lua_get('vim.api.nvim_get_commands({}).Aineo.definition'),
-    'aineo: send, open, report, input, claude, claude-numbers, panel-numbers, sessions, new, pane agent|changes|terminal|run|explorer, explorer column, run shell, claim [id], tab new|close|{n}, diff close, find, zoom or zoom full, layout swap|left|right, [range]explain [issues] [tools] [new]|clear, [range]write [deep], office [check|states|preview [name]|new name|pack [name]|reset], cheatsheet'
+    'aineo: send, open, report, input, claude, claude-numbers, panel-numbers, sessions, new, pane agent|changes|terminal|run|explorer, explorer column, run shell, claim [id], tab new|close|{n}, diff close, find, zoom or zoom full, focus, layout swap|left|right, [range]explain [issues] [tools] [new]|clear, [range]write [deep], office [check|states|preview [name]|new name|pack [name]|reset], cheatsheet'
   )
 end
 
@@ -121,14 +122,14 @@ T[':Aineo']['completes the subcommands that begin with what is typed'] = functio
   eq(child.fn.getcompletion('Aineo re', 'cmdline'), { 'report' })
 end
 
-T[':Aineo']['with another argument tells the user its twenty-two subcommands and does nothing else'] = function()
+T[':Aineo']['with another argument tells the user its twenty-three subcommands and does nothing else'] = function()
   child.cmd('Aineo reports')
 
   eq(entry.messages(child), { { message = entry.USAGE, level = vim.log.levels.ERROR } })
   eq(entry.windows(child), { '' })
 end
 
-T[':Aineo']['with a subcommand and more tells the user its twenty-two subcommands and does nothing else'] = function()
+T[':Aineo']['with a subcommand and more tells the user its twenty-three subcommands and does nothing else'] = function()
   local fake = claude_session.fake('entry-usage-extra', 'ready')
   entry.use_fake(child, fake)
 

@@ -139,6 +139,7 @@ T['plugin/aineo.lua']['defines :Aineo, their <Plug> mappings, the prefix mapping
       'n <Plug>(aineo-fix-accept)',
       'n <Plug>(aineo-fix-diff)',
       'n <Plug>(aineo-fix-reject)',
+      'n <Plug>(aineo-focus)',
       'n <Plug>(aineo-input)',
       'n <Plug>(aineo-layout-left)',
       'n <Plug>(aineo-layout-mirror)',
