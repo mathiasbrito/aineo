@@ -189,6 +189,8 @@ local function make_layout(input_name, group_name)
     explorer_window = nil,
     ---@type boolean
     file_beside_explorer = false,
+    ---@type aineo.layout.FilePart[]|nil
+    file_parts = nil,
   }
 
   --- The role of `window` in the layout, or `nil` when it is not one of its
@@ -468,18 +470,70 @@ local function make_layout(input_name, group_name)
     end)
   end
 
-  --- Gives the file column `width` cells, unless it was split into more than one
-  --- column by hand, whose widths are the user's own.
+  --- A column of the file column that the user split side by side: the first
+  --- of its windows, and the width it had.
+  ---@class aineo.layout.FilePart
+  ---@field window integer
+  ---@field width integer
+
+  --- The columns of the file column, left to right, each with the first of its
+  --- windows and its width: more than one when the user split the file column
+  --- side by side.
+  ---
+  ---@return aineo.layout.FilePart[] parts
+  local function file_column_parts()
+    local by_left = {}
+    for _, window in ipairs(file_column_windows()) do
+      local left = vim.api.nvim_win_get_position(window)[2]
+      by_left[left] = by_left[left]
+        or { window = window, width = vim.api.nvim_win_get_width(window) }
+    end
+    local lefts = vim.tbl_keys(by_left)
+    table.sort(lefts)
+    return vim.tbl_map(function(left)
+      return by_left[left]
+    end, lefts)
+  end
+
+  --- Records the widths of the columns of a file column the user split side by
+  --- side, for the sizing that follows (`size_file_column()`), unless they are
+  --- recorded already: a window that opens or moves at the edge of the screen
+  --- changes them before the columns are placed, so the first record is the
+  --- one that counts. Does nothing while no window of the layout is open.
+  local function remember_file_parts()
+    if state.file_parts or not has_any_window() then
+      return
+    end
+    local parts = file_column_parts()
+    if #parts > 1 then
+      state.file_parts = parts
+    end
+  end
+
+  --- Gives the file column `width` cells in all. A file column the user split
+  --- side by side gives each of its columns the share of the cells it had
+  --- before the columns moved (`state.file_parts`, recorded by
+  --- `place_columns()`), the separators between them taken out; one split that
+  --- way and not moved keeps the widths the user gave it.
   ---
   ---@param width integer
   local function size_file_column(width)
-    local windows = file_column_windows()
-    local lefts = {}
-    for _, window in ipairs(windows) do
-      lefts[vim.api.nvim_win_get_position(window)[2]] = true
+    local parts = file_column_parts()
+    if #parts == 1 then
+      vim.api.nvim_win_set_width(parts[1].window, width)
+      return
     end
-    if #vim.tbl_keys(lefts) == 1 then
-      vim.api.nvim_win_set_width(windows[1], width)
+    local before = state.file_parts
+    if not before or #before ~= #parts then
+      return
+    end
+    local cells = width - (#parts - 1)
+    local total = vim.iter(before):fold(0, function(sum, part)
+      return sum + part.width
+    end)
+    for index = 1, #parts - 1 do
+      local share = math.max(1, math.floor(cells * before[index].width / total + 0.5))
+      vim.api.nvim_win_set_width(parts[index].window, share)
     end
   end
 
@@ -508,10 +562,12 @@ local function make_layout(input_name, group_name)
 
   --- Sizes the columns (`set_column_widths()`), twice, since a window given
   --- its width takes the cells of its neighbours, which the next window then
-  --- gives back.
+  --- gives back, and forgets the widths of the file column's parts
+  --- (`state.file_parts`) once they are given.
   local function size_columns()
     set_column_widths()
     set_column_widths()
+    state.file_parts = nil
   end
 
   --- Gives the Report its share of the rows the Report and Input hold together.
@@ -895,11 +951,13 @@ local function make_layout(input_name, group_name)
   --- around it, which leaves it between them or, with `plan.beside`, next to
   --- the explorer column. The windows of a column move together, in their
   --- order, so that a file column split by hand keeps its splits, and every
-  --- window keeps its buffer, job and cursor. Windows across the screen keep
-  --- their place.
+  --- window keeps its buffer, job and cursor, and the widths of a file column's
+  --- parts are recorded for the sizing that follows (`remember_file_parts()`).
+  --- Windows across the screen keep their place.
   ---
   ---@param plan aineo.layout.ColumnPlan
   local function place_columns(plan)
+    remember_file_parts()
     local claude_members = has_window('claude') and column_members(state.windows.claude) or {}
     local right_column = right_column_window()
     local right_members = right_column and column_members(right_column) or {}
@@ -2795,6 +2853,7 @@ local function make_layout(input_name, group_name)
       state.claude_side = wanted_side
       build()
     end
+    remember_file_parts()
     keep_explorer_column()
     state.report_height = arrangement.report_height
     pin_windows()
@@ -3494,6 +3553,7 @@ local function make_layout(input_name, group_name)
       if explorer_column and state.pane == 'explorer' then
         switch_pane('agent')
       end
+      remember_file_parts()
       keep_explorer_column()
       if is_open() then
         apply_proportions()
