@@ -1,4 +1,5 @@
 local MiniTest = require('mini.test')
+local office_cells = dofile('tests/helpers/office_cells.lua')
 local pty = dofile('tests/helpers/pty_recorder.lua')
 
 local eq = MiniTest.expect.equality
@@ -60,6 +61,46 @@ T['the pty of Claude Code']['is given a fresh resize at its window’s size once
 
   eq(was_given_a_fresh_resize(sizes), true)
   eq(#sizes.seen <= 4, true)
+end
+
+--- The changes that make Claude's window change size, whether or not the
+--- layout then tells its terminal the size again, as a set's `parametrize`:
+--- the name of the case and the Lua chunk that makes the change.
+local CHANGES_OF_CLAUDES_WINDOW = {
+  { 'it is told', [[require('aineo.layout').set_explorer_column(false, 20)]] },
+  {
+    'a full zoom skips it',
+    [[vim.api.nvim_set_current_win(vim.fn.bufwinid('aineo://report'))
+      require('aineo.layout').toggle_full_zoom()]],
+  },
+  {
+    'the window is one column wide',
+    [[for _, buffer in ipairs(vim.api.nvim_list_bufs()) do
+        if vim.bo[buffer].buftype == 'terminal' then
+          vim.api.nvim_win_set_width(vim.fn.bufwinid(buffer), 1)
+        end
+      end]],
+  },
+}
+
+T['the layout’s timers for the fresh size'] = MiniTest.new_set({
+  parametrize = CHANGES_OF_CLAUDES_WINDOW,
+})
+
+T['the layout’s timers for the fresh size']['are all closed once the size was given or skipped'] = function(
+  case,
+  change
+)
+  local record = pty.open_around_recorder(child, 'fresh-timers-' .. case:gsub('%W', '-'))
+  local timers_before = office_cells.open_handles(child, 'timer')
+  child.lua(change)
+  pty.wait_for_window_size(child, record)
+
+  vim.wait(pty.QUIET_PERIOD_MS, function()
+    return false
+  end, 20)
+
+  eq(office_cells.open_handles(child, 'timer'), timers_before)
 end
 
 T['the pty of Claude Code']['is not resized again once it has its window’s size'] = function()
