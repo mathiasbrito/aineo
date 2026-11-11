@@ -185,15 +185,23 @@ The explorer column ~
 `'left'` or `'right'` keeps the explorer (|aineo-explorer|) always visible, as
 a fourth column the full height of the screen at the far side you name,
 beside the other three. Here with Claude Code on the left, the panes column
-on the right and the explorer column on the left:
+on the right and the explorer column on the left, the file column beside the
+explorer column:
 
     +----------+----------------+----------------+----------------+
     |          |                |                |  Agent Report  |
-    | Explorer |  Claude Code   |  File column   |                |
-    |  (tree)  |  (terminal)    |                +----------------+
+    | Explorer |  File column   |  Claude Code   |                |
+    |  (tree)  |                |  (terminal)    +----------------+
     |          |                |                |     Input      |
     +----------+----------------+----------------+----------------+
 
+- The file column opens beside it, on the inner side: on its right when the
+  column is at the left edge, on its left when it is at the right edge, and
+  Claude Code's column and the panes column keep their order. An open file
+  column moves there as the column turns on, and back between Claude Code and
+  the panes column as it turns off, with its buffers, splits and cursors;
+  `layout.file_beside_explorer` (|aineo-config-layout.file_beside_explorer|)
+  set to `false` keeps the file column between them.
 - It is independent of the side Claude Code is on: `:Aineo layout swap`,
   `left` and `right` (|aineo-layout-swap|) move Claude Code's column and the
   panes column and leave the explorer column where it is, outermost on its
@@ -2133,9 +2141,13 @@ The file column ~
 A file you open from one of the three windows — `:edit`, a picker, a jump,
 `\f` (|aineo-find|) — moves to a column between Claude's and the panes
 column, created on first use and reused afterwards; the aineo window keeps
-its own buffer. While the file column is open, the three columns take a
-third of the screen each. Only file buffers move: help, terminals and
-scratch buffers stay where they were opened until `\o` restores the layout.
+its own buffer. While the explorer column is shown (|aineo-explorer-column|)
+the file column lies beside it instead, unless
+`layout.file_beside_explorer` is `false`
+(|aineo-config-layout.file_beside_explorer|). While the file column is open,
+the three columns take a third of the screen each. Only file buffers move:
+help, terminals and scratch buffers stay where they were opened until `\o`
+restores the layout.
 
 A diff Enter shows from the changes pane (|aineo-changes|) takes the file
 column's window as a file does, and the next file or diff takes its place:
