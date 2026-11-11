@@ -157,6 +157,28 @@ T['the line numbers']['stay as the user’s settings make them when the numbers 
   eq({ vim.wo.number, vim.wo.relativenumber }, { true, true })
 end
 
+T['the line numbers']['leave the user’s global settings alone, so that no other window loses its numbers'] = function()
+  turn_on_the_users_columns()
+
+  show_with_looks(function()
+    return {}
+  end)
+
+  eq({ vim.go.number, vim.go.relativenumber }, { true, true })
+end
+
+T['the line numbers']['are on in a window of a new tab page after the explorer showed'] = function()
+  turn_on_the_users_columns()
+  show_with_looks(function()
+    return {}
+  end)
+
+  vim.cmd('tabnew')
+
+  eq({ vim.wo.number, vim.wo.relativenumber }, { true, true })
+  vim.cmd('tabclose')
+end
+
 T['the line numbers']['leave the sign column and the fold column alone'] = function()
   turn_on_the_users_columns()
 

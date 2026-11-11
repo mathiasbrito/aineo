@@ -1036,16 +1036,18 @@ function M.new(settings)
   end
 
   --- Turns off the line numbers of `window`, which has come to show the
-  --- explorer, unless the looks leave the user's own (`numbers`). The sign
-  --- column and the fold column stay as they are.
+  --- explorer, unless the looks leave the user's own (`numbers`), as
+  --- `:setlocal` does: the global values, which other windows and the buffers
+  --- first shown in them take, stay the user's. The sign column and the fold
+  --- column stay as they are.
   ---
   ---@param window integer
   local function hide_line_numbers(window)
     if state.looks.numbers then
       return
     end
-    vim.wo[window].number = false
-    vim.wo[window].relativenumber = false
+    vim.wo[window][0].number = false
+    vim.wo[window][0].relativenumber = false
   end
 
   --- Makes the explorer's buffer: a scratch buffer no one edits, named
