@@ -3893,12 +3893,15 @@ keeps the tab's claim, and the next start takes it up again (|aineo-tabs|).
 			side `layout.explorer_column` names, when it names
 			one, else at the side this command last turned it on
 			at, else on the left; off, `\e` shows the explorer
-			as a pane again. A zoom ends, the cursor stays, and
-			the tab page you are in, and a window across the
-			screen keeps its place; the cursor goes to the file
-			column when it was in the column that closes. The
-			choice lasts for the editor's life, tabs opened later
-			and restored layouts included; a `setup()` that
+			as a pane again. A column you closed by hand counts
+			as on: the command opens it again in place, in every
+			tab that lost it, and the next one turns it off. A
+			zoom ends, the cursor stays, and the tab page you are
+			in, and a window across the screen keeps its place;
+			the cursor goes to the file column when it was in the
+			column that closes. The choice lasts for the editor's
+			life, tabs opened later and restored layouts
+			included; a `setup()` that
 			changes `layout.explorer_column` takes over from it,
 			and the setting is where a lasting choice lives.
 			`\E` and, in Terminal mode and in Insert mode,

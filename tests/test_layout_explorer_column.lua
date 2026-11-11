@@ -759,6 +759,46 @@ T['set_explorer_column()']['leaves the cursor where it is when it is not in the 
   eq(child.lua_get('vim.api.nvim_get_current_buf()'), buffers.input)
 end
 
+T['reopen_explorer_column()'] = MiniTest.new_set()
+
+T['reopen_explorer_column()']['opens a column closed by hand again in place, the cursor staying'] = function()
+  local buffers, arrangement = arrangement_with_column('right')
+  layout.open(child, arrangement)
+  child.lua('vim.api.nvim_win_close(vim.fn.win_findbuf(...)[1], false)', { buffers.explorer })
+  local current = current_window()
+
+  child.lua([[require('aineo.layout').reopen_explorer_column()]])
+
+  local explorer = box_of(buffers.explorer)
+  eq({ explorer.col + explorer.width, layout.window_count(child) }, { layout.COLUMNS, 4 })
+  eq(current_window(), current)
+end
+
+T['reopen_explorer_column()']['changes nothing for a column that is open or that the layout has none of'] = function()
+  local _, arrangement = arrangement_with_column('left')
+  layout.open(child, arrangement)
+  child.lua([[require('aineo.layout').reopen_explorer_column()]])
+  local open_count = layout.window_count(child)
+  set_explorer_column(false, WIDTH)
+
+  child.lua([[require('aineo.layout').reopen_explorer_column()]])
+
+  eq({ open_count, layout.window_count(child) }, { 4, 3 })
+end
+
+T['explorer_column_is_open()'] = MiniTest.new_set()
+
+T['explorer_column_is_open()']['says whether the column’s window exists'] = function()
+  local buffers, arrangement = arrangement_with_column('left')
+  layout.open(child, arrangement)
+  local open = child.lua_get([[require('aineo.layout').explorer_column_is_open()]])
+  child.lua('vim.api.nvim_win_close(vim.fn.win_findbuf(...)[1], false)', { buffers.explorer })
+
+  local closed = child.lua_get([[require('aineo.layout').explorer_column_is_open()]])
+
+  eq({ open, closed }, { true, false })
+end
+
 T['set_explorer_column()']['changes nothing when asked for what the layout has, a zoom staying'] = function()
   local _, arrangement = arrangement_with_column('left')
   layout.open(child, arrangement)
