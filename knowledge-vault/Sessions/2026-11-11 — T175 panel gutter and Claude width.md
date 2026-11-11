@@ -118,4 +118,4 @@ Two survivors of the first run (the full-zoom guard and `width < 0`) were killed
 
 ## Commits
 
-*Recorded after the merge.* Pre-rebase hashes of the branch, for the PR's reviewers only: `9dbe4c31` (pins), `6076c309` (panel gutter and fresh size), `3f92b722` (office timer and walkthrough cases); the round that adds the hidden tab's resize guard follows them.
+*Recorded after the merge.*

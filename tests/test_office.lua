@@ -44,7 +44,8 @@ end
 
 --- Starts the child with aineo's layout open and an office over its right
 --- column, following `path` when it is given, once the layout's own timers are
---- closed. The office is `_G.office` in the child, and what it told the user
+--- closed and before the office is made, so that what the office starts is
+--- counted. The office is `_G.office` in the child, and what it told the user
 --- through `vim.notify()` is `_G.told`.
 ---
 ---@param path? string the transcript to follow
@@ -56,6 +57,9 @@ local function open_office(path, pack_folders, more_options)
   child.o.columns = office_child.COLUMNS
   child.o.lines = office_child.LINES
   child.o.termguicolors = true
+  vim.wait(LAYOUT_SETTLE_MS, function()
+    return office_cells.open_handles(child, 'timer') == 0
+  end, 10)
   child.lua(
     [[
     local given = ...
@@ -80,9 +84,6 @@ local function open_office(path, pack_folders, more_options)
   ]],
     { { path = path, folders = pack_folders, more_options = more_options } }
   )
-  vim.wait(LAYOUT_SETTLE_MS, function()
-    return office_cells.open_handles(child, 'timer') == 0
-  end, 10)
   return buffers
 end
 
@@ -1043,6 +1044,7 @@ T['the office’s timer and watch'] = MiniTest.new_set()
 T['the office’s timer and watch']['runs none while the office is hidden'] = function()
   open_office(transcript_path())
   local timers, watches = open_handles('timer'), open_handles('fs_event')
+  eq({ timers, watches }, { 0, 0 })
 
   vim.wait(QUIET_MS)
 
