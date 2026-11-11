@@ -537,4 +537,90 @@ T['swapping Claude’s side']['keeps a window across the screen where it is'] = 
   eq(from_the_left(buffers, COLUMN_NAMES), { 'explorer', 'files', 'report', 'claude' })
 end
 
+--- Expects the columns of the child to have the widths the layout gives them
+--- at `layout.COLUMNS` cells with the explorer column open: the explorer
+--- `WIDTH`, and of the rest, with the two separators of the other columns
+--- taken out, a third each for Claude's column and the Report's, the file
+--- column what remains.
+---
+---@param buffers table the buffers of `explorer`, `files`, `claude` and `report`
+local function expect_the_layouts_widths(buffers)
+  local rest = layout.COLUMNS - WIDTH - 1
+  local third = math.floor((rest - 2) / 3)
+  eq(box_of(buffers.explorer).width, WIDTH)
+  layout.expect_near(box_of(buffers.claude).width, third)
+  layout.expect_near(box_of(buffers.report).width, third)
+  layout.expect_near(box_of(buffers.files).width, rest - 2 - 2 * third)
+end
+
+T['the file column’s width'] = MiniTest.new_set({ parametrize = PLACES })
+
+T['the file column’s width']['is its share when the layout is built with it beside the explorer'] = function(
+  column,
+  claude_side
+)
+  local buffers = open_with(column, claude_side, true, true)
+
+  expect_the_layouts_widths(buffers)
+end
+
+T['the file column’s width']['is its share once the explorer column turned on'] = function(
+  column,
+  claude_side
+)
+  local buffers = open_with_file(false, claude_side, true)
+
+  set_explorer_column(column, true)
+
+  expect_the_layouts_widths(buffers)
+end
+
+T['the file column’s width']['is its share once the explorer column turned on with a window across the screen'] = function(
+  column,
+  claude_side
+)
+  local buffers = open_with_file(false, claude_side, true)
+  child.cmd('botright copen 6')
+
+  set_explorer_column(column, true)
+
+  expect_the_layouts_widths(buffers)
+end
+
+T['the file column’s width']['is its share after a swap'] = function(column, claude_side)
+  local buffers = open_with_file(column, claude_side, true)
+
+  set_claude_side(claude_side == 'left' and 'right' or 'left')
+
+  expect_the_layouts_widths(buffers)
+end
+
+T['the file column’s width']['is its share after the screen shrank'] = function(
+  column,
+  claude_side
+)
+  local buffers, arrangement = arrangement_with(column, claude_side, true)
+  child.o.columns = 160
+  child.cmd('edit ' .. layout.file('first.txt'))
+  buffers.files = child.lua_get('vim.api.nvim_get_current_buf()')
+  layout.open(child, arrangement)
+
+  child.o.columns = layout.COLUMNS
+  vim.wait(200)
+
+  expect_the_layouts_widths(buffers)
+end
+
+T['the file column’s width']['is its share once the explorer column changed sides, which ends a full zoom'] = function(
+  column,
+  claude_side
+)
+  local buffers = open_with_file(column, claude_side, true)
+  child.lua('require("aineo.layout").toggle_full_zoom()')
+
+  set_explorer_column(column == 'left' and 'right' or 'left', true)
+
+  expect_the_layouts_widths(buffers)
+end
+
 return T
