@@ -44,7 +44,7 @@ the left, the file column in the middle, Claude Code on the right.
 visible, as a fourth column the full height of the screen at the far side you
 name, whichever side Claude Code is on; `layout.explorer_width` sets its width
 (30 by default). `\e` then moves the cursor into it and is never a toggle, and
-`:Aineo layout swap` leaves it where it is:
+`:Aineo layout swap` leaves it where it is; `\E` turns it on and off at will, in every tab, for the session:
 
 ```
 +----------+--------------------+--------------------+--------------------+
@@ -226,6 +226,7 @@ resumes it.
 | `]v`, `[v` | jump to the next and the previous explanation or issue of the buffer |
 | `\z` | zooms the window of the panes column the cursor is in, and gives the heights back when pressed again |
 | `\Z` | zooms the window the cursor is in to the whole tab page, and gives the sizes back when pressed again |
+| `\E` | turns the explorer column on and off in every tab at once, for the session: on at the side `layout.explorer_column` names, else the side it last used, else the left; off, `\e` shows the explorer as a pane again (`:Aineo explorer column`, `<Plug>(aineo-explorer-column)`) |
 | `\O` | shows the office, an animation of your Claude Code at work over the panes column, which also shows by itself after `office.idle_ms` without the cursor in the panes column; the cursor entering a window it covers closes it. A report that comes in shows as a card in its corner |
 | `\?` | shows a cheatsheet of aineo's keys over the panes column, in two colourful columns when it is wide enough: each key as you type it, what it does and, dimmed, the `:Aineo` command that does the same. `q`, `<Esc>` or `\?` closes it, and the column is as it was; it and the office never show together. `:help aineo-cheatsheet` has the details |
 

@@ -262,6 +262,13 @@ local ROWS = vim.list_extend(
     ),
     global_with_twin('office', 'z', 'zoom', 'zoom', 'zoom the window of the panes column'),
     global_with_twin('office', 'Z', 'zoom-full', 'zoom full', 'zoom the window to the whole tab'),
+    global_with_twin(
+      'explorer',
+      'E',
+      'explorer-column',
+      'explorer column',
+      'turn the explorer column on or off'
+    ),
     global_with_twin('office', 'O', 'office', 'office', 'show the office'),
     global('layout', '?', 'cheatsheet', 'cheatsheet', 'show this sheet of keys'),
     in_section(
