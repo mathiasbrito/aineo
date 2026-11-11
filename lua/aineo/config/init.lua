@@ -284,7 +284,7 @@ local SETTINGS = {
   },
   {
     name = 'layout.explorer_width',
-    default = 30,
+    default = 40,
     validator = is_positive_count,
     expected = 'a whole number of at least 1',
   },
@@ -320,6 +320,7 @@ local SETTINGS = {
   { name = 'explorer.counts', default = true, validator = 'boolean' },
   { name = 'explorer.compact', default = true, validator = 'boolean' },
   { name = 'explorer.diagnostics', default = true, validator = 'boolean' },
+  { name = 'explorer.numbers', default = false, validator = 'boolean' },
   {
     name = 'office.idle_ms',
     default = 180000,

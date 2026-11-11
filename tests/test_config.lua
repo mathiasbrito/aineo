@@ -13,7 +13,7 @@ local DEFAULTS = {
     report_height = 2 / 3,
     claude_side = 'left',
     explorer_column = false,
-    explorer_width = 30,
+    explorer_width = 40,
     file_beside_explorer = true,
   },
   changes = { graph_limit = 1000 },
@@ -26,6 +26,7 @@ local DEFAULTS = {
     counts = true,
     compact = true,
     diagnostics = true,
+    numbers = false,
   },
   explain = {
     model = 'sonnet',
@@ -276,13 +277,13 @@ T['resolve_config()']['refuses an explorer column that is not left, right or fal
   end, "layout%.explorer_column: expected 'left', 'right' or false")
 end
 
-T['resolve_config()']['takes the width of the explorer column from either source, 30 by default'] = function()
+T['resolve_config()']['takes the width of the explorer column from either source, 40 by default'] = function()
   local from_global = config.resolve_config({ layout = { explorer_width = 40 } }, nil)
   local from_setup = config.resolve_config(nil, { layout = { explorer_width = 12 } })
 
   eq(from_global.layout.explorer_width, 40)
   eq(from_setup.layout.explorer_width, 12)
-  eq(config.resolve_config(nil, nil).layout.explorer_width, 30)
+  eq(config.resolve_config(nil, nil).layout.explorer_width, 40)
 end
 
 T['resolve_config()']['refuses an explorer width that is not a whole number from 1'] =
@@ -371,7 +372,19 @@ T['resolve_config()']['turns off one look of the explorer and keeps the others']
     counts = true,
     compact = true,
     diagnostics = true,
+    numbers = false,
   })
+end
+
+T['resolve_config()']['takes explorer.numbers from either source, off by default'] = function()
+  local from_global = config.resolve_config({ explorer = { numbers = true } }, nil)
+  local from_setup = config.resolve_config(
+    { explorer = { numbers = true } },
+    { explorer = { numbers = false } }
+  )
+
+  eq({ from_global.explorer.numbers, from_setup.explorer.numbers }, { true, false })
+  eq(config.resolve_config(nil, nil).explorer.numbers, false)
 end
 
 T['resolve_config()']['refuses a look of the explorer that is not a boolean'] = MiniTest.new_set({
@@ -382,6 +395,7 @@ T['resolve_config()']['refuses a look of the explorer that is not a boolean'] = 
     { 'counts' },
     { 'compact' },
     { 'diagnostics' },
+    { 'numbers' },
   },
 })
 
@@ -408,6 +422,7 @@ T['explorer_looks()']['are the looks resolve_config() gives, with no problem, wh
     counts = true,
     compact = true,
     diagnostics = true,
+    numbers = false,
   })
   eq(problems, {})
 end
@@ -426,7 +441,7 @@ T['explorer_looks()']['keep every default when the explorer section is no table,
   local looks, problems = config.explorer_looks({ explorer = 'no' }, nil)
 
   eq(looks, DEFAULTS.explorer)
-  eq(#problems, 6)
+  eq(#problems, 7)
 end
 
 T['explorer_looks()']['keep every default, telling so, for a source that is no table'] =
