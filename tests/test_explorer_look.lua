@@ -382,7 +382,7 @@ end
 
 T['the looks'] = MiniTest.new_set()
 
-T['the looks']['are the tree’s looks on and the line numbers off when no setting is given'] = function()
+T['the looks']['are the tree’s looks, all on, when no setting is given'] = function()
   local defaults = {
     guides = true,
     icons = true,
@@ -390,7 +390,6 @@ T['the looks']['are the tree’s looks on and the line numbers off when no setti
     counts = true,
     compact = true,
     diagnostics = true,
-    numbers = false,
   }
 
   eq(look.resolve(nil), defaults)
@@ -407,7 +406,6 @@ T['the looks']['are the defaults but the ones a setting changes'] = function()
     counts = false,
     compact = true,
     diagnostics = true,
-    numbers = false,
   })
 end
 
