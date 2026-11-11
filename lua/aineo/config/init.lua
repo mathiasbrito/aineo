@@ -288,6 +288,7 @@ local SETTINGS = {
     validator = is_positive_count,
     expected = 'a whole number of at least 1',
   },
+  { name = 'layout.file_beside_explorer', default = true, validator = 'boolean' },
   {
     name = 'changes.working_branch',
     default = nil,
