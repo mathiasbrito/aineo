@@ -25,7 +25,8 @@ local function settings_arguments(settings)
 end
 
 --- How `entry_editor` starts an editor as a user starts `nvim`, with aineo
---- set to run `fake` as Claude, and `start`'s arguments, variables, piped
+--- set to run `fake` as Claude with no explorer column (`layout.explorer_column
+--- = false`, overridable by `start.settings`), and `start`'s arguments, variables, piped
 --- input, settings and terminal size on top.
 ---
 ---@param fake { environment: table<string, string> }
@@ -35,7 +36,7 @@ local function editor_start(fake, start)
   start = start or {}
   local settings = vim.tbl_deep_extend(
     'force',
-    { claude = { cmd = claude_session.fake_command() } },
+    { claude = { cmd = claude_session.fake_command() }, layout = { explorer_column = false } },
     start.settings or {}
   )
   return {

@@ -5,12 +5,65 @@ Claude Code's own interactive CLI runs in a terminal on one side of the
 screen, the left by default. Across from it, a column of panes you switch
 between: the Agent Report, which shows what Claude says it is doing, above an
 Input buffer where you write your next message; what changed in your
-repository; a shell; and the services you run. Files you open land in a
-column between the two. Each tab page is a session of its own, and a tab line
+repository; a shell; and the services you run. By default the explorer is a
+column of its own at the far right, and the files you open land in a column
+beside it. Each tab page is a session of its own, and a tab line
 tells which ones are working.
 
 ```
  1: Fix the login ◒    2: Add tests ●    3: Notes
++----------------+----------------+----------------+-----------+
+| Claude Code    | Agent Report   | lua/auth.lua   | Explorer  |
+| (terminal)     | 10:42 [start.. |                | ▾ lua/    |
+|                | 10:51 [done].. | a file, or a   |   auth..  |
+| your prompt    +----------------+ diff of one,   | ▸ tests/  |
+| and its        | Input          | opened by \f,  | README.md |
+| dialogs        | \s sends it    | Enter or gf    |           |
++----------------+----------------+----------------+-----------+
+```
+
+`:Aineo layout swap` mirrors Claude Code's column and the panes column, live
+and in every tab: the panes column on the left, Claude Code next to it, the
+file column and the explorer staying where they are. `:Aineo layout left` and
+`:Aineo layout right` name the side, and the setting `layout.claude_side` is
+where a lasting choice lives:
+
+```
++----------------+----------------+----------------+-----------+
+| Agent Report   | Claude Code    | lua/auth.lua   | Explorer  |
+| 10:42 [start.. | (terminal)     |                | ▾ lua/    |
+| 10:51 [done].. |                | a file, or a   |   auth..  |
++----------------+ your prompt    | diff of one,   | ▸ tests/  |
+| Input          | and its        | opened by \f,  | README.md |
+| \s sends it    | dialogs        | Enter or gf    |           |
++----------------+----------------+----------------+-----------+
+```
+
+`layout.explorer_column` (`'right'` by default, `'left'`, or `false`) keeps the
+explorer always visible, as a fourth column the full height of the screen at
+the far side you name, whichever side Claude Code is on; `layout.explorer_width`
+sets its width (40 by default). `\e` then moves the cursor into it and is never
+a toggle, and `:Aineo layout swap` leaves it where it is; `\E` turns it on and
+off at will, in every tab, for the session. The file column opens beside it, on
+its inner side, unless `layout.file_beside_explorer` is `false`, which keeps it
+between Claude Code and the panes. With the explorer on the left:
+
+```
++-----------+----------------+----------------+----------------+
+| Explorer  | lua/auth.lua   | Claude Code    | Agent Report   |
+| ▾ lua/    |                | (terminal)     | 10:42 [start.. |
+|   auth..  | a file, or a   |                | 10:51 [done].. |
+| ▸ tests/  | diff of one,   | your prompt    +----------------+
+| README.md | opened by \f,  | and its        | Input          |
+|           | Enter or gf    | dialogs        | \s sends it    |
++-----------+----------------+----------------+----------------+
+```
+
+With `layout.explorer_column = false` there is no explorer column: three
+columns, the file column between Claude Code and the panes, and `\e` shows the
+explorer as a pane:
+
+```
 +--------------------+--------------------+--------------------+
 | Claude Code        | lua/auth.lua       | Agent Report       |
 | (terminal)         |                    | 10:42 [started] .. |
@@ -20,40 +73,6 @@ tells which ones are working.
 |                    |                    | Input              |
 |                    |                    | \s sends it        |
 +--------------------+--------------------+--------------------+
-```
-
-`:Aineo layout swap` mirrors it, live and in every tab: the panes column on
-the left, the file column in the middle, Claude Code on the right.
-`:Aineo layout left` and `:Aineo layout right` name the side, and the setting
-`layout.claude_side` is where a lasting choice lives:
-
-```
- 1: Fix the login ◒    2: Add tests ●    3: Notes
-+--------------------+--------------------+--------------------+
-| Agent Report       | lua/auth.lua       | Claude Code        |
-| 10:42 [started] .. |                    | (terminal)         |
-| 10:51 [done] ..    | a file, or a diff  |                    |
-|                    | of one, opened by  | your prompt and    |
-+--------------------+ \f, Enter or gf    | its dialogs        |
-| Input              |                    |                    |
-| \s sends it        |                    |                    |
-+--------------------+--------------------+--------------------+
-```
-
-`layout.explorer_column` (`'left'` or `'right'`) keeps the explorer always
-visible, as a fourth column the full height of the screen at the far side you
-name, whichever side Claude Code is on; `layout.explorer_width` sets its width
-(40 by default). `\e` then moves the cursor into it and is never a toggle, and
-`:Aineo layout swap` leaves it where it is; `\E` turns it on and off at will, in every tab, for the session. The file column opens beside it, on its inner side, unless `layout.file_beside_explorer` is `false`, which keeps it between Claude Code and the panes:
-
-```
-+----------+--------------------+--------------------+--------------------+
-| Explorer | lua/auth.lua       | Claude Code        | Agent Report       |
-| ▾ lua/   |                    | (terminal)         | 10:42 [started] .. |
-|   auth.. | a file, or a diff  |                    |                    |
-| ▸ tests/ | of one, opened by  | your prompt and    +--------------------+
-| README.md| \f, Enter or gf    | its dialogs        | Input              |
-+----------+--------------------+--------------------+--------------------+
 ```
 
 The panes column shows one pane at a time, each behind a key; the run
@@ -89,8 +108,8 @@ and its state:
 - **Claude terminal.** The real Claude Code CLI. aineo answers none of its
   questions: permission prompts and dialogs are yours to answer there.
 - **File column.** Files you open, and the diffs the changes pane shows, take
-  a column between Claude's terminal and the panes column. `\f` finds a file
-  to open there.
+  a column beside the explorer column, or between Claude's terminal and the
+  panes column without one. `\f` finds a file to open there.
 - **Agent pane.** The Agent Report over Input.
   - *Agent Report.* Claude Code calls a report tool aineo gives it, and each
     report shows as a line: time, status (`started`, `progress`, `blocked`,
@@ -292,7 +311,7 @@ and, in Terminal mode, `<C-\>Z` do the same.
 
 | Keys | Does |
 |---|---|
-| `\e` | shows the explorer, a tree of the folder Claude works in, and moves into it; with `layout.explorer_column` set, moves into the explorer's column instead, which is always visible and not a toggle |
+| `\e` | shows the explorer, a tree of the folder Claude works in, and moves into it; with the explorer column on (`layout.explorer_column`, `'right'` by default), moves into it instead, which is always visible and not a toggle; with `false`, `\e` shows the pane |
 | `l`, Enter | in the tree: unfold or fold a folder; on a file, Enter opens it in the file column and moves there, `l` shows it there and keeps the cursor in the tree |
 | `h` | folds the folder, or the folder above |
 | `@` | pastes `@path ` into Claude's prompt, with no Enter |
@@ -875,7 +894,7 @@ vim.g.aineo = {
   layout = {
     report_height = 2 / 3,
     claude_side = 'left',
-    explorer_column = false,
+    explorer_column = 'right',
     explorer_width = 40,
     file_beside_explorer = true,
   },
@@ -926,7 +945,7 @@ vim.g.aineo = {
 | `claude.hide_multiplexer` | `true` | Whether Claude Code starts without the variables that tell it a terminal multiplexer runs it (see below). |
 | `layout.report_height` | `2/3` | The Report's share of the panes column, a number strictly between 0 and 1. |
 | `layout.claude_side` | `'left'` | The side of the screen Claude Code's terminal is on, `'left'` or `'right'`; the panes column is on the other side and the file column between. |
-| `layout.explorer_column` | `false` | Where the explorer column is: `'left'` or `'right'` keeps the explorer always visible as a column the full height of the screen at that side, beside the other three, and `\e` moves into it; `false` keeps the explorer a pane that `\e` shows. A call to `setup()` applies it at once in every tab. |
+| `layout.explorer_column` | `'right'` | Where the explorer column is: `'left'` or `'right'` keeps the explorer always visible as a column the full height of the screen at that side, beside the other three, and `\e` moves into it; `false` keeps the explorer a pane that `\e` shows. A call to `setup()` applies it at once in every tab. |
 | `layout.explorer_width` | `40` | The explorer column's width in columns, a whole number of at least 1; it does nothing while `layout.explorer_column` is `false`. |
 | `layout.file_beside_explorer` | `true` | Whether the file column opens beside the explorer column while it is shown (on its right when the explorer column is at the left edge, on its left when at the right edge); `false` keeps it between Claude Code and the panes column. `\E` and a live `setup()` move an open file column to where it belongs. |
 | `changes.working_branch` | none | The branch work lands in, as git reads a name, such as `origin/dev`. Unset, it is the default branch of the remote `origin`. With none set and no `origin/HEAD`, the changes pane shows no Landed section. aineo never fetches. |

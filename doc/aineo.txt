@@ -22,11 +22,10 @@ CONTENTS                                                      *aineo-contents*
 aineo turns Neovim into a console for Claude Code. Claude Code's own
 interactive CLI runs in a terminal on one side of the screen, the left by
 default; across from it the Agent Report shows what Claude says it is doing,
-above an Input buffer where you write your next message. Files you open land
-in a column between the two. `:Aineo layout swap` puts Claude Code on the
-other side (|aineo-layout-swap|), and `layout.explorer_column` keeps the
-explorer in a column of its own at the far side of the screen
-(|aineo-explorer-column|).
+above an Input buffer where you write your next message. By default the
+explorer is a column of its own at the far right of the screen, and the files
+you open land in a column beside it (|aineo-explorer-column|). `:Aineo layout
+swap` puts Claude Code on the other side (|aineo-layout-swap|).
 
 Every command sits behind one prefix key, `\` by default, in Normal mode (and
 most behind its twin in Terminal and Insert mode, below):
@@ -114,16 +113,23 @@ aineo works without a `setup()` call. To configure it, see
 ==============================================================================
 3. THE LAYOUT                                                   *aineo-layout*
 
-The layout fills one tab page with three windows, and a file column between
-the two sides while a file or a diff is open; the panes column's two show one
-pane at a time, here the agent pane, with the file column open:
+The layout fills one tab page with three windows, the explorer column at the
+far right and a file column beside it while a file or a diff is open; the
+panes column's two windows show one pane at a time, here the agent pane, with
+the file column open:
 
-    +--------------------+--------------------+--------------------+
-    |                    |                    |    Agent Report    |
-    |    Claude Code     |    File column     |                    |
-    |    (terminal)      |    a file, or a    +--------------------+
-    |                    |    diff of one     |       Input        |
-    +--------------------+--------------------+--------------------+
+    +-------------+-------------+-------------+-------------+
+    |             |             |             |             |
+    |             | Agent Report|             |             |
+    | Claude Code |             | File column |  Explorer   |
+    | (terminal)  +-------------+ a file, or a|   (tree)    |
+    |             |    Input    | diff of one |             |
+    |             |             |             |             |
+    +-------------+-------------+-------------+-------------+
+
+With `layout.explorer_column` set to `false` the explorer column is not there,
+and the file column lies between Claude Code's column and the panes column
+(|aineo-explorer-column|).
 
 The panes column's panes, each behind a key and each filling the column; the
 fifth, `\e`, is the explorer, a tree of the project's folders
@@ -157,10 +163,12 @@ code walkthrough over Input (|aineo-walkthrough-pane|):
                                                           *aineo-layout-swap*
 Swapping the layout ~
 The picture is the layout with Claude Code on the left and the panes column
-on the right, the default. The other layout mirrors it: the panes column on
-the left, the file column in the middle, Claude Code's terminal on the
-right. `layout.claude_side` (|aineo-config-layout.claude_side|) names the
-side the layout opens on, and you can change it at will:
+next to it, the default. The other layout mirrors those two columns: the
+panes column on the left, Claude Code's terminal next to it, the file column
+and the explorer column staying where they are; without an explorer column
+the file column lies between them. `layout.claude_side`
+(|aineo-config-layout.claude_side|) names the side the layout opens on, and
+you can change it at will:
 
 - `:Aineo layout swap` puts Claude Code on the side it is not on,
   `:Aineo layout left` and `:Aineo layout right` put it on the one named
@@ -181,12 +189,13 @@ side the layout opens on, and you can change it at will:
 
                                                        *aineo-explorer-column*
 The explorer column ~
-`layout.explorer_column` (|aineo-config-layout.explorer_column|) set to
-`'left'` or `'right'` keeps the explorer (|aineo-explorer|) always visible, as
+`layout.explorer_column` (|aineo-config-layout.explorer_column|), `'right'` by
+default, or `'left'`, keeps the explorer (|aineo-explorer|) always visible, as
 a fourth column the full height of the screen at the far side you name,
 beside the other three. Here with Claude Code on the left, the panes column
 on the right and the explorer column on the left, the file column beside the
-explorer column:
+explorer column; by default it is the explorer column that is on the right,
+the file column beside it on its left:
 
     +----------+----------------+----------------+----------------+
     |          |                |                |  Agent Report  |
@@ -414,7 +423,8 @@ to you. `\pa`, `\g`, `\pt`, `\x` and `\pw` swap it out as they swap each
 other, and `\z` and `\Z` zoom it as any window of the column. Each tab has its
 own explorer, whose folds, toggles and filter last as long as the tab.
 
-With `layout.explorer_column` set, the explorer is not a pane: it shows all
+With the explorer column on, which it is by default
+(`layout.explorer_column`), the explorer is not a pane: it shows all
 the time in a column of its own at the far side of the screen
 (|aineo-explorer-column|), and `\e` moves the cursor into that column
 instead, opening it again where it was if you closed it. Everything below is
@@ -4869,17 +4879,17 @@ layout.claude_side	`'left'` or `'right'`. Default: `'left'`
 			mirrors the layout: panes, files, Claude Code.
 
                                          *aineo-config-layout.explorer_column*
-layout.explorer_column	`'left'`, `'right'` or `false`. Default: `false`
+layout.explorer_column	`'left'`, `'right'` or `false`. Default: `'right'`
 			Where the explorer column is: `'left'` or `'right'`
 			keeps the explorer always visible, as a column the
 			full height of the screen at that side, beside the
 			other three, whichever side Claude Code is on, and
 			`\e` moves the cursor into it
-			(|aineo-explorer-column|). `false` keeps the explorer
-			a pane of the panes column, which `\e` shows
-			(|aineo-explorer|). `setup()` applies it at
-			once in every tab; `vim.g.aineo` is read when the
-			layout next opens.
+			(|aineo-explorer-column|). `false` has no column
+			and keeps the explorer a pane of the panes column,
+			which `\e` shows (|aineo-explorer|). `setup()`
+			applies it at once in every tab; `vim.g.aineo` is read
+			when the layout next opens.
 
                                           *aineo-config-layout.explorer_width*
 layout.explorer_width	A whole number of at least 1. Default: `40`
