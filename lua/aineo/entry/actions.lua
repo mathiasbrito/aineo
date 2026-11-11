@@ -2,6 +2,7 @@
 --- a tab, claim a session in the current tab, close the current tab.
 
 local cheatsheets = require('aineo.entry.cheatsheet')
+local explorer_column = require('aineo.entry.explorer_column')
 local finding = require('aineo.entry.finding')
 local layout_side = require('aineo.entry.layout_side')
 local offices = require('aineo.entry.office')
@@ -320,6 +321,10 @@ end
 ACTIONS['layout swap'] = function()
   put_claude_on(require('aineo.layout').opposite_side(side_on_screen()))
 end
+
+--- What `:Aineo explorer column` does: turns the explorer column on or off in
+--- every aineo tab, as `\E` does (`aineo.entry.explorer_column`'s `toggle()`).
+ACTIONS['explorer column'] = explorer_column.toggle
 
 ACTIONS['tab new'] = function()
   reopening.reopen_folder_tabs()
