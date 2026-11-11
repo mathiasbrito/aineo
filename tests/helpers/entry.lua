@@ -67,32 +67,54 @@ function M.messages(child)
   return child.lua_get('_G.entry_test_messages')
 end
 
+--- The Lua that makes aineo in a child run the fake `claude`: its first
+--- argument is the fake's environment, its second the value of `vim.g.aineo`.
+local USE_FAKE = [[
+  local environment, settings = ...
+  for name, value in pairs(environment) do
+    vim.env[name] = value
+  end
+  vim.g.aineo = settings
+]]
+
 --- Makes aineo in `child` run the fake `claude` in `fake`'s mode, writing
 --- `fake`'s record (`claude_session.fake()`): the fake's variables go into the
 --- child's environment, which Claude's terminal inherits, and `vim.g.aineo`
---- names the fake as `claude.cmd`, overridden key by key by `settings`.
+--- names the fake as `claude.cmd` and the explorer column off
+--- (`layout.explorer_column = false`, the layout of the suites that are not
+--- about the explorer column), overridden key by key by `settings`. A case
+--- about aineo's default layout runs `M.use_fake_with_default_layout()`.
 ---
 ---@param child table
 ---@param fake { environment: table<string, string> }
 ---@param settings? table more of `vim.g.aineo`
 function M.use_fake(child, fake, settings)
-  child.lua(
-    [[
-      local environment, settings = ...
-      for name, value in pairs(environment) do
-        vim.env[name] = value
-      end
-      vim.g.aineo = settings
-    ]],
-    {
-      fake.environment,
-      vim.tbl_deep_extend(
-        'force',
-        { claude = { cmd = claude_session.fake_command() } },
-        settings or {}
-      ),
-    }
-  )
+  child.lua(USE_FAKE, {
+    fake.environment,
+    vim.tbl_deep_extend(
+      'force',
+      { claude = { cmd = claude_session.fake_command() }, layout = { explorer_column = false } },
+      settings or {}
+    ),
+  })
+end
+
+--- Makes aineo in `child` run the fake `claude` as `M.use_fake()` does, but
+--- leaves every layout setting that `settings` does not name at aineo's
+--- default.
+---
+---@param child table
+---@param fake { environment: table<string, string> }
+---@param settings? table more of `vim.g.aineo`
+function M.use_fake_with_default_layout(child, fake, settings)
+  child.lua(USE_FAKE, {
+    fake.environment,
+    vim.tbl_deep_extend(
+      'force',
+      { claude = { cmd = claude_session.fake_command() } },
+      settings or {}
+    ),
+  })
 end
 
 --- Replaces the text of the layout's Input buffer in `child` with `lines`.
