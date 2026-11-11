@@ -47,7 +47,7 @@ local M = {}
 ---@field paste fun(text: string) pastes `text` into Claude Code's prompt, with no Enter
 ---@field quote_name fun(name: string): string how a name shows on its line, a control character in it escaped
 ---@field change_groups table<string, string> the highlight group a file's mark and name show in, by the kind of its change (`'added'`, `'modified'`, `'deleted'`, `'renamed'`, `'type_changed'`, `'untracked'`)
----@field look? fun(): table<string, boolean>, string[]|nil which looks of the tree are on, by name (`aineo.explorer.Look`), and the problems of the values that were wrong, asked at each read of the tree; every look is on when not given, and a look not named is on
+---@field look? fun(): table<string, boolean>, string[]|nil which looks of the tree are on, by name (`aineo.explorer.Look`), and the problems of the values that were wrong, asked at each read of the tree; every look of the tree is on when not given, and one not named is on; `numbers`, whether a window showing the explorer keeps the user's line numbers, is off when not named
 ---@field session_work? fun(done: fun(work: aineo.explorer.SessionWork|nil)) the files in the work of the Claude Code session, their repository's top and their paths from it (`aineo.changes`' `session_work_files()`), nil when they are not known; none given, no file is marked as Claude's
 ---@field define_change_groups fun() defines `change_groups`' groups as default links, as the pane that owns them does
 
@@ -183,7 +183,7 @@ function M.new(settings)
     branch = nil,
     ---@type integer|nil
     drawn_width = nil,
-    looks = look.ALL_ON,
+    looks = look.DEFAULT,
     ---@type (fun(entry: aineo.explorer.Entry): aineo.explorer.Icon|nil)|nil
     icon_for = nil,
     ---@type string|nil
@@ -1035,6 +1035,19 @@ function M.new(settings)
     })
   end
 
+  --- Turns off the line numbers of `window`, which has come to show the
+  --- explorer, unless the looks leave the user's own (`numbers`). The sign
+  --- column and the fold column stay as they are.
+  ---
+  ---@param window integer
+  local function hide_line_numbers(window)
+    if state.looks.numbers then
+      return
+    end
+    vim.wo[window].number = false
+    vim.wo[window].relativenumber = false
+  end
+
   --- Makes the explorer's buffer: a scratch buffer no one edits, named
   --- `aineo://explorer`, or with a number after it for the explorers after
   --- the first, with its keys (`KEYS`). A buffer made again takes the name
@@ -1060,9 +1073,10 @@ function M.new(settings)
     end
     vim.api.nvim_create_autocmd('BufWinEnter', {
       buffer = buffer,
-      desc = 'aineo: read the explorer again as it shows',
+      desc = 'aineo: read the explorer again as it shows, without line numbers',
       callback = function()
         read_tree()
+        hide_line_numbers(vim.api.nvim_get_current_win())
       end,
     })
     watch_editor(buffer)

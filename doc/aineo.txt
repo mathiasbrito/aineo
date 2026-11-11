@@ -208,7 +208,7 @@ explorer column:
   side. A window across the whole screen, such as the quickfix window or help
   opened at the bottom, is not spanned by it.
 - Its width is `layout.explorer_width` (|aineo-config-layout.explorer_width|),
-  30 columns by default, kept ('winfixwidth') while the other three columns
+  40 columns by default, kept ('winfixwidth') while the other three columns
   share the rest as they do without it: half each without a file column, a
   third each with one.
 - `\e` (|aineo-\e|) moves the cursor into it; it reopens the column in
@@ -4882,7 +4882,7 @@ layout.explorer_column	`'left'`, `'right'` or `false`. Default: `false`
 			layout next opens.
 
                                           *aineo-config-layout.explorer_width*
-layout.explorer_width	A whole number of at least 1. Default: `30`
+layout.explorer_width	A whole number of at least 1. Default: `40`
 			The explorer column's width in columns, kept
 			while the other columns share the rest
 			(|aineo-explorer-column|). It does nothing while
@@ -4977,6 +4977,15 @@ explorer.compact	A boolean. Default: `true`
 explorer.diagnostics	A boolean. Default: `true`
 			Whether a file shows the errors and warnings the
 			editor's diagnostics hold for it.
+
+                                               *aineo-config-explorer.numbers*
+explorer.numbers	A boolean. Default: `false`
+			Whether a window showing the explorer, the column or
+			the pane, keeps the line numbers your own settings
+			give it. With `false` its 'number' and
+			'relativenumber' are off there, whatever your global
+			settings say; the sign column and the fold column
+			stay as they are.
 
                                 *aineo-config-find* *aineo-config-find.picker*
 find.picker		One of `'auto'`, `'snacks'`, `'fzf-lua'`,

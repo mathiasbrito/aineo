@@ -711,7 +711,7 @@ T['restoring the layout']['opens the column again, at its width'] = function()
   entry.press(child, '\\o')
 
   eq(entry.windows(child), COLUMN_LEFT)
-  eq(width_of('aineo://explorer'), 30)
+  eq(width_of('aineo://explorer'), 40)
 end
 
 T['a zoom of the whole window'] = MiniTest.new_set()
@@ -724,7 +724,7 @@ T['a zoom of the whole window']['covers the column and gives it its width back']
   local while_zoomed = width_of('aineo://explorer')
   entry.press(child, '\\Z')
 
-  eq({ before, while_zoomed, width_of('aineo://explorer') }, { 30, 1, 30 })
+  eq({ before, while_zoomed, width_of('aineo://explorer') }, { 40, 1, 40 })
 end
 
 T['a zoom of the whole window']['gives the column its width back after the screen was resized meanwhile'] = function()
@@ -734,7 +734,57 @@ T['a zoom of the whole window']['gives the column its width back after the scree
   child.o.columns = 120
   entry.press(child, '\\Z')
 
-  eq(width_of('aineo://explorer'), 30)
+  eq(width_of('aineo://explorer'), 40)
+end
+
+--- The 'number' and 'relativenumber' of the window showing the explorer in the
+--- child.
+local EXPLORER_LINE_NUMBERS = [[(function()
+  local window = vim.fn.win_findbuf(vim.fn.bufnr('aineo://explorer'))[1]
+  return { vim.wo[window].number, vim.wo[window].relativenumber }
+end)()]]
+
+--- Turns the line numbers on as the user's global settings in the child.
+local function turn_on_line_numbers()
+  child.o.number = true
+  child.o.relativenumber = true
+end
+
+T['the explorer’s line numbers'] = MiniTest.new_set()
+
+T['the explorer’s line numbers']['are off in the column, whatever the user’s settings'] = function()
+  turn_on_line_numbers()
+  open_with_column('numbers-column', 'left')
+
+  eq(child.lua_get(EXPLORER_LINE_NUMBERS), { false, false })
+end
+
+T['the explorer’s line numbers']['are off in the pane, whatever the user’s settings'] = function()
+  turn_on_line_numbers()
+  open_in_repository('numbers-pane')
+
+  entry.press(child, '\\e')
+
+  eq(child.lua_get(EXPLORER_LINE_NUMBERS), { false, false })
+end
+
+T['the explorer’s line numbers']['stay the user’s with explorer.numbers on, in the column'] = function()
+  turn_on_line_numbers()
+  open_in_repository(
+    'numbers-kept',
+    { layout = { explorer_column = 'left' }, explorer = { numbers = true } }
+  )
+
+  eq(child.lua_get(EXPLORER_LINE_NUMBERS), { true, true })
+end
+
+T['the explorer’s line numbers']['stay the user’s with explorer.numbers on, in the pane'] = function()
+  turn_on_line_numbers()
+  open_in_repository('numbers-kept-pane', { explorer = { numbers = true } })
+
+  entry.press(child, '\\e')
+
+  eq(child.lua_get(EXPLORER_LINE_NUMBERS), { true, true })
 end
 
 return T

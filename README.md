@@ -43,7 +43,7 @@ the left, the file column in the middle, Claude Code on the right.
 `layout.explorer_column` (`'left'` or `'right'`) keeps the explorer always
 visible, as a fourth column the full height of the screen at the far side you
 name, whichever side Claude Code is on; `layout.explorer_width` sets its width
-(30 by default). `\e` then moves the cursor into it and is never a toggle, and
+(40 by default). `\e` then moves the cursor into it and is never a toggle, and
 `:Aineo layout swap` leaves it where it is; `\E` turns it on and off at will, in every tab, for the session. The file column opens beside it, on its inner side, unless `layout.file_beside_explorer` is `false`, which keeps it between Claude Code and the panes:
 
 ```
@@ -876,7 +876,7 @@ vim.g.aineo = {
     report_height = 2 / 3,
     claude_side = 'left',
     explorer_column = false,
-    explorer_width = 30,
+    explorer_width = 40,
     file_beside_explorer = true,
   },
   changes = {
@@ -927,7 +927,7 @@ vim.g.aineo = {
 | `layout.report_height` | `2/3` | The Report's share of the panes column, a number strictly between 0 and 1. |
 | `layout.claude_side` | `'left'` | The side of the screen Claude Code's terminal is on, `'left'` or `'right'`; the panes column is on the other side and the file column between. |
 | `layout.explorer_column` | `false` | Where the explorer column is: `'left'` or `'right'` keeps the explorer always visible as a column the full height of the screen at that side, beside the other three, and `\e` moves into it; `false` keeps the explorer a pane that `\e` shows. A call to `setup()` applies it at once in every tab. |
-| `layout.explorer_width` | `30` | The explorer column's width in columns, a whole number of at least 1; it does nothing while `layout.explorer_column` is `false`. |
+| `layout.explorer_width` | `40` | The explorer column's width in columns, a whole number of at least 1; it does nothing while `layout.explorer_column` is `false`. |
 | `layout.file_beside_explorer` | `true` | Whether the file column opens beside the explorer column while it is shown (on its right when the explorer column is at the left edge, on its left when at the right edge); `false` keeps it between Claude Code and the panes column. `\E` and a live `setup()` move an open file column to where it belongs. |
 | `changes.working_branch` | none | The branch work lands in, as git reads a name, such as `origin/dev`. Unset, it is the default branch of the remote `origin`. With none set and no `origin/HEAD`, the changes pane shows no Landed section. aineo never fetches. |
 | `changes.graph_limit` | `1000` | How many commits the commit graph (`t` in the commits window) draws, newest first, a whole number of at least 1. The graph says when older ones are not shown. |
@@ -940,6 +940,7 @@ vim.g.aineo = {
 | `explorer.counts` | `true` | Whether folders show the number of changed files below them and changed files the lines added and removed; `false` also stops the `git diff --numstat` that reads them. |
 | `explorer.compact` | `true` | Whether a chain of folders each holding a folder alone shows on one line. |
 | `explorer.diagnostics` | `true` | Whether files show their errors and warnings. |
+| `explorer.numbers` | `false` | Whether a window showing the explorer keeps your line numbers; with `false` its `number` and `relativenumber` are off there, whatever your global settings say. The sign and fold columns stay as they are. |
 | `explain.model` | `'sonnet'` | The model of the Claude Code that `\v` and `\V` start to explain code, as `claude --model` takes it: an alias such as `'opus'` or a full name. A non-empty string. |
 | `explain.timeout_ms` | `180000` | How long a request to explain code may run before aineo stops its Claude Code, a whole number of milliseconds of at least 1. |
 | `explain.deep_model` | `'sonnet'` | The model of the Claude Code that `\VV` and `\VVI` start, as `claude --model` takes it. A non-empty string. |
