@@ -146,6 +146,60 @@ T['a file column shown after the layout opened']['opens beside the explorer colu
   eq(layout.window_count(child), 5)
 end
 
+T['the file column beside the explorer'] = MiniTest.new_set()
+
+T['the file column beside the explorer']['takes the next file in its window rather than open another'] = function()
+  local buffers = open_with('left', 'left', true, true)
+  local second = loaded_file('second.txt')
+  local window = layout.window_showing(child, buffers.files)
+
+  child.lua([[require('aineo.layout').show_file(...)]], { second })
+
+  eq(layout.window_showing(child, second), window)
+  eq(layout.window_count(child), 5)
+end
+
+T['the file column beside the explorer']['takes a diff in its window as a file'] = function()
+  local buffers = open_with('right', 'left', true, true)
+  local diff = layout.named_scratch(child, 'aineo://a-diff')
+  local window = layout.window_showing(child, buffers.files)
+
+  child.lua([[require('aineo.layout').show_diff(...)]], { diff })
+
+  buffers.files = diff
+  eq(layout.window_showing(child, diff), window)
+  eq(from_the_left(buffers, COLUMN_NAMES), { 'claude', 'report', 'files', 'explorer' })
+end
+
+T['the file column beside the explorer']['is the file column the layout reports'] = function()
+  local buffers = open_with('left', 'right', true, true)
+
+  eq(
+    child.lua_get(
+      [[require('aineo.layout').is_file_column_window(...)]],
+      { layout.window_showing(child, buffers.files) }
+    ),
+    true
+  )
+  eq(
+    child.lua_get(
+      [[require('aineo.layout').is_file_column_window(...)]],
+      { layout.window_showing(child, buffers.explorer) }
+    ),
+    false
+  )
+end
+
+T['the file column beside the explorer']['opens again beside it once its last window closed'] = function()
+  local buffers = open_with('right', 'right', true, true)
+  child.lua([[vim.api.nvim_win_close(..., false)]], { layout.window_showing(child, buffers.files) })
+  buffers.files = loaded_file('first.txt')
+
+  child.lua([[require('aineo.layout').show_file(...)]], { buffers.files })
+
+  eq(from_the_left(buffers, COLUMN_NAMES), { 'report', 'claude', 'files', 'explorer' })
+end
+
 T['a file column with the option off'] = MiniTest.new_set({ parametrize = CENTRES })
 
 T['a file column with the option off']['built with the layout stays between Claude and the panes column'] = function(
