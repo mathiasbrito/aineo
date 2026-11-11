@@ -364,6 +364,18 @@ T['changing the option']['by handing the arrangement again moves the file column
   eq(from_the_left(buffers, COLUMN_NAMES), { 'explorer', 'claude', 'files', 'report' })
 end
 
+T['changing the option']['keeps the option it was handed last when an arrangement hands none'] = function()
+  local buffers, arrangement = arrangement_with('left', 'left', true)
+  child.cmd('edit ' .. layout.file('first.txt'))
+  buffers.files = child.lua_get('vim.api.nvim_get_current_buf()')
+  layout.open(child, arrangement)
+
+  arrangement.file_beside_explorer = nil
+  layout.open(child, arrangement)
+
+  eq(from_the_left(buffers, COLUMN_NAMES), { 'explorer', 'files', 'claude', 'report' })
+end
+
 T['changing the explorer column’s side'] = MiniTest.new_set()
 
 T['changing the explorer column’s side']['takes the file column along'] = function()
