@@ -852,4 +852,43 @@ T['the views of the panes under the file focus']["the explorer pane's cursor com
   eq(view_of(buffers.explorer), before)
 end
 
+T['the file focus with no file column']['closes no window as it is armed'] = function()
+  open_without_file('left', 'right')
+  child.lua([[
+    _G.closed_windows = 0
+    vim.api.nvim_create_autocmd('WinClosed', {
+      callback = function()
+        _G.closed_windows = _G.closed_windows + 1
+      end,
+    })
+  ]])
+
+  start_file_focus()
+
+  eq(child.lua_get('_G.closed_windows'), 0)
+end
+
+T['the file focus with no file column']['keeps the width Claude has when the editor was resized while it waited'] = function()
+  local buffers = open_without_file('left', false)
+  start_file_focus()
+  child.o.columns = 100
+  local claude_width = box_of(buffers.claude).width
+
+  show_file(loaded_file('second.txt'))
+
+  eq(box_of(buffers.claude).width, claude_width)
+end
+
+T['the views of the panes under the file focus']["the Report's view comes back as the file column closes, the focus waiting for the next file"] = function()
+  local buffers = open_with_file('left', false, false)
+  fill(buffers.report, 200)
+  put_view(buffers.report, 120, 120)
+  local before = view_of(buffers.report)
+  start_file_focus()
+
+  child.lua('vim.api.nvim_win_close(vim.fn.bufwinid(...), false)', { buffers.file })
+
+  eq(view_of(buffers.report), before)
+end
+
 return T
