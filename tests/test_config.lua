@@ -12,7 +12,7 @@ local DEFAULTS = {
   layout = {
     report_height = 2 / 3,
     claude_side = 'left',
-    explorer_column = false,
+    explorer_column = 'right',
     explorer_width = 40,
     file_beside_explorer = true,
   },
@@ -255,13 +255,17 @@ T['resolve_config()']['refuses a side for Claude Code that is not left or right'
   end, "layout%.claude_side: expected 'left' or 'right'")
 end
 
-T['resolve_config()']['takes the side of the explorer column from either source, none by default'] = function()
+T['resolve_config()']['takes the side of the explorer column from either source, the right by default'] = function()
   local from_global = config.resolve_config({ layout = { explorer_column = 'left' } }, nil)
   local from_setup = config.resolve_config(nil, { layout = { explorer_column = 'right' } })
 
   eq(from_global.layout.explorer_column, 'left')
   eq(from_setup.layout.explorer_column, 'right')
-  eq(config.resolve_config(nil, nil).layout.explorer_column, false)
+  eq(config.resolve_config(nil, nil).layout.explorer_column, 'right')
+  eq(
+    config.resolve_config({ layout = { explorer_column = false } }, nil).layout.explorer_column,
+    false
+  )
 end
 
 T['resolve_config()']['refuses an explorer column that is not left, right or false'] =

@@ -278,7 +278,7 @@ local SETTINGS = {
   },
   {
     name = 'layout.explorer_column',
-    default = false,
+    default = 'right',
     validator = is_explorer_column,
     expected = "'left', 'right' or false",
   },
