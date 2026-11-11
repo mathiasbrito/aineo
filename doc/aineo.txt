@@ -4876,6 +4876,21 @@ layout.explorer_width	A whole number of at least 1. Default: `30`
 			(|aineo-explorer-column|). It does nothing while
 			`layout.explorer_column` is `false`.
 
+                                    *aineo-config-layout.file_beside_explorer*
+layout.file_beside_explorer	A boolean. Default: `true`
+			Whether the file column opens beside the explorer
+			column while that column is shown: on its right when
+			the explorer column is at the left edge, on its left
+			when it is at the right edge
+			(|aineo-explorer-column|). Claude Code's column
+			and the panes column keep their places. `\E`
+			turning the explorer column on moves an open file
+			column beside it, turning it off moves the file
+			column back between them; so does `setup()`
+			changing this option. With `false`, or while there is
+			no explorer column, the file column is between Claude
+			Code's column and the panes column.
+
                   *aineo-config-changes* *aineo-config-changes.working_branch*
 changes.working_branch	A non-empty string.
 			Default: none

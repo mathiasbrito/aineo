@@ -14,6 +14,7 @@ local DEFAULTS = {
     claude_side = 'left',
     explorer_column = false,
     explorer_width = 30,
+    file_beside_explorer = true,
   },
   changes = { graph_limit = 1000 },
   tabs = { padding = 2, always_show = true },
@@ -295,6 +296,29 @@ T['resolve_config()']['refuses an explorer width that is not a whole number from
   expect.error(function()
     config.resolve_config({ layout = { explorer_width = width } }, nil)
   end, 'layout%.explorer_width: expected a whole number of at least 1')
+end
+
+T['resolve_config()']['keeps layout.file_beside_explorer false from either source, true by default'] = function()
+  local from_global = config.resolve_config({ layout = { file_beside_explorer = false } }, nil)
+  local from_setup = config.resolve_config(nil, { layout = { file_beside_explorer = false } })
+
+  eq(
+    { from_global.layout.file_beside_explorer, from_setup.layout.file_beside_explorer },
+    { false, false }
+  )
+  eq(config.resolve_config(nil, nil).layout.file_beside_explorer, true)
+end
+
+T['resolve_config()']['refuses a file_beside_explorer that is not a boolean'] = MiniTest.new_set({
+  parametrize = { { 'left' }, { 'yes' }, { 1 }, { {} } },
+})
+
+T['resolve_config()']['refuses a file_beside_explorer that is not a boolean']['as layout.file_beside_explorer'] = function(
+  value
+)
+  expect.error(function()
+    config.resolve_config({ layout = { file_beside_explorer = value } }, nil)
+  end, 'layout%.file_beside_explorer: expected boolean')
 end
 
 T['resolve_config()']['takes the padding of the tab titles from either source, 2 by default'] = function()
