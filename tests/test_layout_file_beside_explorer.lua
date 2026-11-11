@@ -553,6 +553,171 @@ local function expect_the_layouts_widths(buffers)
   layout.expect_near(box_of(buffers.files).width, rest - 2 - 2 * third)
 end
 
+T['a file column split side by side'] = MiniTest.new_set({
+  parametrize = {
+    { 'left', 'left' },
+    { 'left', 'right' },
+    { 'right', 'left' },
+    { 'right', 'right' },
+  },
+})
+
+--- The rows and columns of the two windows of the file column split by hand,
+--- the first showing `buffers.files`: whether they lie in one row, side by
+--- side.
+---
+---@param buffers table
+---@return boolean side_by_side
+local function file_windows_are_side_by_side(buffers)
+  return child.lua_get(
+    [=[(function(first)
+      local windows = vim.tbl_filter(function(window)
+        return vim.api.nvim_win_get_buf(window) == first
+      end, vim.api.nvim_tabpage_list_wins(0))
+      local rows, lefts = {}, {}
+      for _, window in ipairs(windows) do
+        rows[vim.api.nvim_win_get_position(window)[1]] = true
+        lefts[vim.api.nvim_win_get_position(window)[2]] = true
+      end
+      return #windows == 2 and #vim.tbl_keys(rows) == 1 and #vim.tbl_keys(lefts) == 2
+    end)(...)]=],
+    { buffers.files }
+  )
+end
+
+T['a file column split side by side']['stays side by side as the explorer column turns on and off'] = function(
+  column,
+  claude_side
+)
+  local buffers = open_with_file(false, claude_side, true)
+  child.lua([[vim.api.nvim_set_current_win(...)]], { layout.window_showing(child, buffers.files) })
+  child.cmd('vsplit')
+
+  set_explorer_column(column, true)
+  local turned_on = file_windows_are_side_by_side(buffers)
+  set_explorer_column(false, true)
+
+  eq({ turned_on, file_windows_are_side_by_side(buffers) }, { true, true })
+end
+
+T['a file column split side by side']['stays side by side as the explorer column changes sides'] = function(
+  column,
+  claude_side
+)
+  local buffers = open_with_file(column, claude_side, true)
+  child.lua([[vim.api.nvim_set_current_win(...)]], { layout.window_showing(child, buffers.files) })
+  child.cmd('vsplit')
+
+  set_explorer_column(column == 'left' and 'right' or 'left', true)
+
+  eq(file_windows_are_side_by_side(buffers), true)
+end
+
+T['a layout with a window closed'] = MiniTest.new_set()
+
+T['a layout with a window closed']['finds the file column in the centre with Claude’s window closed, Claude on the left'] = function()
+  local buffers = open_with(false, 'left', true, true)
+  layout.close_windows(child, buffers, { 'claude' })
+  local window = layout.window_showing(child, buffers.files)
+  local second = loaded_file('second.txt')
+
+  child.lua([[require('aineo.layout').show_file(...)]], { second })
+
+  eq(layout.window_showing(child, second), window)
+  eq(layout.window_count(child), 3)
+end
+
+T['a layout with a window closed']['does not take the Report’s window for the file column with Claude’s closed beside a left explorer'] = function()
+  local buffers = open_with('left', 'left', true, true)
+  layout.close_windows(child, buffers, { 'claude' })
+  local window = layout.window_showing(child, buffers.files)
+  local second = loaded_file('second.txt')
+
+  child.lua([[require('aineo.layout').show_file(...)]], { second })
+
+  eq(
+    child.lua_get(
+      [[require('aineo.layout').is_file_column_window(...)]],
+      { layout.window_showing(child, buffers.report) }
+    ),
+    false
+  )
+  eq(
+    child.lua_get(
+      [[require('aineo.layout').is_file_column_window(...)]],
+      { layout.window_showing(child, buffers.explorer) }
+    ),
+    false
+  )
+  eq(layout.window_showing(child, second), window)
+end
+
+T['a layout with a window closed']['does not count the explorer column in the file column with the option off and Claude’s window closed'] = function()
+  local buffers = open_with('left', 'left', false, true)
+  layout.close_windows(child, buffers, { 'claude' })
+
+  eq(
+    child.lua_get(
+      [[require('aineo.layout').is_file_column_window(...)]],
+      { layout.window_showing(child, buffers.explorer) }
+    ),
+    false
+  )
+end
+
+T['a layout with a window closed']['keeps the explorer column outermost as a swap moves columns to its edge, the layout not complete'] = function()
+  local buffers = open_with('left', 'right', false, true)
+  layout.close_windows(child, buffers, { 'report' })
+  child.lua(
+    'vim.api.nvim_win_close(vim.fn.win_findbuf(...)[1], false)',
+    { child.lua_get([[require('aineo.layout').input_buffer()]]) }
+  )
+
+  set_claude_side('left')
+
+  eq(from_the_left(buffers, { 'explorer', 'claude', 'files' }), { 'explorer', 'claude', 'files' })
+end
+
+T['a layout with a window closed']['finds the file column with both of the panes’ windows closed, and keeps it one column as the layout opens again'] = function()
+  local buffers, arrangement = arrangement_with(false, 'left', true)
+  child.cmd('edit ' .. layout.file('first.txt'))
+  buffers.files = child.lua_get('vim.api.nvim_get_current_buf()')
+  layout.open(child, arrangement)
+  layout.close_windows(child, buffers, { 'report' })
+  child.lua(
+    'vim.api.nvim_win_close(vim.fn.win_findbuf(...)[1], false)',
+    { child.lua_get([[require('aineo.layout').input_buffer()]]) }
+  )
+  set_explorer_column('left', true)
+  local window = layout.window_showing(child, buffers.files)
+  local second = loaded_file('second.txt')
+
+  child.lua([[require('aineo.layout').show_file(...)]], { second })
+  buffers.files = second
+  local reused = layout.window_showing(child, second) == window
+  arrangement.explorer_column = 'left'
+  layout.open(child, arrangement)
+
+  eq(reused, true)
+  eq(from_the_left(buffers, COLUMN_NAMES), { 'explorer', 'files', 'claude', 'report' })
+  eq(layout.window_count(child), 5)
+end
+
+T['a layout with a window closed']['brings the file column to Claude’s edge when Claude’s window is closed as the explorer column turns off'] = function()
+  local buffers, arrangement = arrangement_with('right', 'left', true)
+  child.cmd('edit ' .. layout.file('first.txt'))
+  buffers.files = child.lua_get('vim.api.nvim_get_current_buf()')
+  layout.open(child, arrangement)
+  layout.close_windows(child, buffers, { 'claude' })
+
+  set_explorer_column(false, true)
+  arrangement.explorer_column = false
+  layout.open(child, arrangement)
+
+  eq(from_the_left(buffers, { 'claude', 'files', 'report' }), { 'claude', 'files', 'report' })
+  eq(layout.window_count(child), 4)
+end
+
 T['the file column’s width'] = MiniTest.new_set({ parametrize = PLACES })
 
 T['the file column’s width']['is its share when the layout is built with it beside the explorer'] = function(
