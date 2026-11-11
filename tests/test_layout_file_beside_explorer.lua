@@ -376,6 +376,56 @@ T['changing the option']['keeps the option it was handed last when an arrangemen
   eq(from_the_left(buffers, COLUMN_NAMES), { 'explorer', 'files', 'claude', 'report' })
 end
 
+T['changing the option']['by handing the arrangement without a column brings the file column back to the centre'] = function()
+  local buffers, arrangement = arrangement_with('left', 'left', true)
+  child.cmd('edit ' .. layout.file('first.txt'))
+  buffers.files = child.lua_get('vim.api.nvim_get_current_buf()')
+  layout.open(child, arrangement)
+
+  arrangement.explorer_column = false
+  layout.open(child, arrangement)
+
+  eq(from_the_left(buffers, { 'files', 'claude', 'report' }), { 'claude', 'files', 'report' })
+  eq(layout.window_count(child), 4)
+end
+
+T['changing the option']['by handing the arrangement another column side takes the file column along'] = function()
+  local buffers, arrangement = arrangement_with('left', 'left', true)
+  child.cmd('edit ' .. layout.file('first.txt'))
+  buffers.files = child.lua_get('vim.api.nvim_get_current_buf()')
+  layout.open(child, arrangement)
+
+  arrangement.explorer_column = 'right'
+  layout.open(child, arrangement)
+
+  eq(from_the_left(buffers, COLUMN_NAMES), { 'claude', 'report', 'files', 'explorer' })
+end
+
+T['with the layout not complete'] = MiniTest.new_set()
+
+T['with the layout not complete']['a file column opens beside the explorer all the same'] = function()
+  local buffers = open_with('left', 'left', true)
+  layout.close_windows(child, { report = buffers.report }, { 'report' })
+  buffers.files = loaded_file('first.txt')
+
+  child.lua([[require('aineo.layout').show_file(...)]], { buffers.files })
+
+  eq(from_the_left(buffers, { 'explorer', 'files', 'claude' }), { 'explorer', 'files', 'claude' })
+end
+
+T['with the layout not complete']['a file column in the centre is reused rather than a second one opened beside the explorer'] = function()
+  local buffers = open_with(false, 'left', true, true)
+  layout.close_windows(child, { report = buffers.report }, { 'report' })
+  set_explorer_column('left', true)
+  local window = layout.window_showing(child, buffers.files)
+  local second = loaded_file('second.txt')
+
+  child.lua([[require('aineo.layout').show_file(...)]], { second })
+
+  eq(layout.window_showing(child, second), window)
+  eq(layout.window_count(child), 4)
+end
+
 T['changing the explorer column’s side'] = MiniTest.new_set()
 
 T['changing the explorer column’s side']['takes the file column along'] = function()
