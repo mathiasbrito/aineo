@@ -14,8 +14,10 @@ local M = {}
 M.SETTLE_DELAY_MS = 100
 
 --- How long the pty keeps the size one column narrower, in milliseconds, so
---- that the process in it sees two sizes and not one.
-M.GAP_MS = 30
+--- that the process in it sees two sizes and not one: a busy process serves a
+--- signal between its tasks, and sees only the last of the sizes told in that
+--- time.
+M.GAP_MS = 300
 
 --- Tells the pty of the terminal job `job` the size `size_of_window()` gives
 --- now, one column narrower, and, `M.GAP_MS` later, the size it gives then:

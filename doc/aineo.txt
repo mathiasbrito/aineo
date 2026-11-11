@@ -716,13 +716,17 @@ recorded when you zoomed, scaled to the editor's size now, the last window of
 each row and column taking the cells that remain; with the same size as when
 you zoomed they come back exactly.
 
-Claude Code lays its screen out for the size of its terminal. While a window
-is zoomed fully, Claude's window has a sliver of a column and Claude Code is
-told so. Whenever Claude's window has changed size (a zoom ending, a column
-opening or closing, the editor resized), aineo tells Claude's terminal its
-size once more a moment after the last change: one column less, then the size
-of the window, so that Claude Code lays its screen out for the size it has
-now. A window that keeps its size, as in a swap or a mirror, gets nothing.
+Claude Code lays its screen out for the size of its terminal, which Neovim
+sizes to the largest window showing it, in any tab. While a window is zoomed
+fully, Claude's window has a sliver of a column and Claude Code is told so.
+Whenever Claude's window has changed size (a zoom ending, a column opening or
+closing, the editor resized), aineo tells Claude's terminal its size once more
+a moment after the last change: one column less, then, a third of a second
+later, the size of the window, so that Claude Code, busy or not, lays its
+screen out for the size it has now. A window that keeps its size, as in a
+swap or a mirror, gets nothing. When the editor is resized, the layout of a
+tab that is not shown keeps the sizes of its windows until the tab is entered,
+so that its Claude Code is not told a width the window never has.
 
 The agent's run tools ~
                                                              *aineo-run-tools*
