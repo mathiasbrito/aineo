@@ -768,6 +768,47 @@ T['the explorer’s line numbers']['are off in the pane, whatever the user’s s
   eq(child.lua_get(EXPLORER_LINE_NUMBERS), { false, false })
 end
 
+--- Moves the cursor of the explorer in the child to the line of `README.md`.
+local function put_cursor_on_readme()
+  wait_for_tree()
+  child.lua([[(function()
+    for line, shown in ipairs(vim.api.nvim_buf_get_lines(0, 0, -1, false)) do
+      if vim.endswith(shown, 'README.md') then
+        vim.api.nvim_win_set_cursor(0, { line, 0 })
+      end
+    end
+  end)()]])
+end
+
+--- The 'number' and 'relativenumber' of the child's current window.
+local CURRENT_LINE_NUMBERS = [[{ vim.wo.number, vim.wo.relativenumber }]]
+
+T['the explorer’s line numbers']['stay the user’s in a file opened from the column'] = function()
+  turn_on_line_numbers()
+  local top = open_with_column('numbers-file-column', 'left')
+  entry.press(child, '\\e')
+  put_cursor_on_readme()
+  local readme = vim.fs.joinpath(top, 'README.md')
+
+  entry.press(child, '<CR>')
+
+  eq(wait_for_current_window(readme), readme)
+  eq(child.lua_get(CURRENT_LINE_NUMBERS), { true, true })
+end
+
+T['the explorer’s line numbers']['stay the user’s in a file opened from the pane'] = function()
+  turn_on_line_numbers()
+  local top = open_in_repository('numbers-file-pane')
+  entry.press(child, '\\e')
+  put_cursor_on_readme()
+  local readme = vim.fs.joinpath(top, 'README.md')
+
+  entry.press(child, '<CR>')
+
+  eq(wait_for_current_window(readme), readme)
+  eq(child.lua_get(CURRENT_LINE_NUMBERS), { true, true })
+end
+
 T['the explorer’s line numbers']['stay the user’s with explorer.numbers on, in the column'] = function()
   turn_on_line_numbers()
   open_in_repository(
