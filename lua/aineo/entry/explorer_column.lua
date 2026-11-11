@@ -11,30 +11,35 @@ local settings = require('aineo.entry.settings')
 local M = {}
 
 --- Hands `tab`'s layout the explorer's buffer, made for the column when the
---- column is a side, and `column` and `width`
---- (`aineo.layout`'s `set_explorer_column()`), which changes nothing for the
---- column and width the layout has.
+--- column is a side, and `column`, the width and the file column's place from
+--- `config` (`aineo.layout`'s `set_explorer_column()`), which changes nothing
+--- for the column, width and place the layout has.
 ---
 ---@param tab aineo.entry.Tab
 ---@param column aineo.layout.Side|false
----@param width integer
-local function apply_to(tab, column, width)
+---@param config table the resolved configuration, naming the width and the file column's place
+local function apply_to(tab, column, config)
   if column then
     tab.homes.layout.keep_pane_buffer('explorer', tab.homes.explorer.buffer())
   end
-  tab.homes.layout.set_explorer_column(column, width)
+  tab.homes.layout.set_explorer_column(
+    column,
+    config.layout.explorer_width,
+    config.layout.file_beside_explorer
+  )
 end
 
 --- Makes the explorer column of every aineo tab whose tab page exists
---- `column` at the width `config` names: opened, moved, resized or closed,
---- the cursor and the tab page shown staying.
+--- `column` at the width `config` names, the file column beside it as
+--- `config` says: opened, moved, resized or closed, the cursor and the tab
+--- page shown staying.
 ---
 ---@param config table the resolved configuration
 ---@param column aineo.layout.Side|false
 local function apply_to_every_tab(config, column)
   for _, tab in ipairs(registry.tab_list) do
     if tab.is_bound() then
-      apply_to(tab, column, config.layout.explorer_width)
+      apply_to(tab, column, config)
     end
   end
 end

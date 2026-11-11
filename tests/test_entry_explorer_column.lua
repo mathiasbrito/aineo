@@ -388,7 +388,7 @@ end
 
 T['a file opened from the column'] = MiniTest.new_set()
 
-T['a file opened from the column']['opens in the file column between Claude Code and the panes'] = function()
+T['a file opened from the column']['opens in the file column beside the explorer column'] = function()
   local top = open_with_column('file', 'left')
   entry.press(child, '\\e')
   wait_for_tree()
@@ -406,7 +406,7 @@ T['a file opened from the column']['opens in the file column between Claude Code
   eq(wait_for_current_window(readme), readme)
   eq(
     entry.windows(child),
-    { 'aineo://explorer', 'terminal', readme, 'aineo://report', 'aineo://input' }
+    { 'aineo://explorer', readme, 'terminal', 'aineo://report', 'aineo://input' }
   )
 end
 

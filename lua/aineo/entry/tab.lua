@@ -1102,7 +1102,7 @@ local function make_tab(homes, key, callbacks)
   --- runs nothing; the explorer's buffer once it was made
   --- (`aineo.explorer`'s `made_buffer()`), none before, and made for the
   --- explorer column when `config` sets one, with the column's side and
-  --- width; the walkthrough
+  --- width, and whether the file column lies beside it; the walkthrough
   --- pane's once the tab was sent a plan (`aineo.entry.walkthrough_plan`'s
   --- `buffer_of()`), none before; with the Report's
   --- share from `config`, and the status line
@@ -1126,6 +1126,7 @@ local function make_tab(homes, key, callbacks)
         or homes.explorer.made_buffer(),
       explorer_column = explorer_choice.current(config),
       explorer_width = config.layout.explorer_width,
+      file_beside_explorer = config.layout.file_beside_explorer,
       walkthrough = walkthrough_plans.buffer_of(tab),
       claude_statusline = require('aineo.claude').session_statusline(),
     }
