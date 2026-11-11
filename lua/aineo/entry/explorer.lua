@@ -6,9 +6,25 @@
 --- (`aineo.entry.links`), and pastes into that Claude Code's prompt through
 --- the Send home (`aineo.send`'s `paste()`).
 
+local errors = require('aineo.entry.errors')
 local links = require('aineo.entry.links')
+local registry = require('aineo.entry.registry')
 
 local M = {}
+
+--- Turns the file focus of the tab whose homes are `homes` on, or off when it
+--- is on (`aineo.entry.Tab`'s `actions.focus`), and tells the user once the
+--- error it raises. Does nothing while no tab holds `homes`.
+---
+---@param homes aineo.entry.Homes
+local function toggle_file_focus_of(homes)
+  local tab = vim.iter(registry.tab_list):find(function(listed)
+    return listed.homes == homes
+  end)
+  if tab then
+    errors.run(tab.actions.focus)
+  end
+end
 
 --- What the explorer's `s` tells the user before the tab's Claude Code has
 --- started: the changes pane's list is read once it has.
@@ -41,6 +57,12 @@ function M.make_explorer(homes)
       homes.changes.offer_scopes()
     end,
     open_file = links.open_file,
+    is_file_focused = function()
+      return homes.layout.is_file_focused()
+    end,
+    toggle_file_focus = function()
+      toggle_file_focus_of(homes)
+    end,
     quote_name = require('aineo.changes').quoted_path,
     change_groups = require('aineo.changes').kind_groups,
     define_change_groups = require('aineo.changes').define_colours,

@@ -1339,6 +1339,7 @@ local SUBCOMMANDS = {
   'diff',
   'find',
   'zoom',
+  'focus',
   'layout',
   'explain',
   'write',

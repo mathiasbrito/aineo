@@ -183,9 +183,11 @@ function M.make(tab)
   --- Shows the pane again as the processes changed under it: the agent pane
   --- once none is left, else the stack without the process that left. Does
   --- nothing unless the run pane is shown in the tab page the user is in, and
-  --- tells the user once an error showing it raises.
+  --- nothing while the file focus is on, which keeps the panes column closed
+  --- (`aineo.layout`'s `start_file_focus()`); tells the user once an error
+  --- showing it raises.
   local function follow_processes()
-    if tab.layout.shown_pane() ~= 'run' or not tab.is_current() then
+    if tab.layout.shown_pane() ~= 'run' or not tab.is_current() or tab.layout.is_file_focused() then
       return
     end
     errors.run(function()
@@ -196,13 +198,19 @@ function M.make(tab)
   --- Has the process of a window the user closes taken out of the stack once
   --- that closing is done, when it ended: it keeps its window and its output
   --- until then. A process that runs stays, hidden, for the next `:Aineo pane
-  --- run`. A window the layout closes as another pane shows is no closing by
-  --- the user: the layout notes the other pane first.
+  --- run`. A window the layout closes as another pane shows, or as the file
+  --- focus begins, is no closing by the user: the layout notes the other pane
+  --- or the focus first.
   ---
   ---@param event { match: string }
   local function discard_ended_in_closed_window(event)
     local window = tonumber(event.match)
-    if tab.layout.shown_pane() ~= 'run' or not window or not vim.api.nvim_win_is_valid(window) then
+    if
+      tab.layout.shown_pane() ~= 'run'
+      or tab.layout.is_file_focused()
+      or not window
+      or not vim.api.nvim_win_is_valid(window)
+    then
       return
     end
     local buffer = vim.api.nvim_win_get_buf(window)
