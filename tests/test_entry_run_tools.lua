@@ -526,4 +526,17 @@ T['run_stop']['answers a name that two processes have, naming neither, and stops
   eq(process_names(), { 'sleep 30', 'sleep 30' })
 end
 
+T['run']['says the run pane stays hidden while the tab has the file focus on'] = function()
+  start_child_in_repository('run-tools-focus')
+  child.lua([[_G.stub_tab.homes.layout = { is_file_focused = function() return true end }]])
+
+  local answer = call('run', { command = 'sleep 30' })
+
+  eq(answer, {
+    text = 'Started "sleep" in the run pane, which stays hidden while the user\'s file focus is on, the cursor staying where it is.'
+      .. ' Read what it prints with run_output, name "sleep".',
+    is_error = false,
+  })
+end
+
 return T

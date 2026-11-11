@@ -154,11 +154,14 @@ local function open_without_file(claude_side, explorer_side)
   layout.start(child)
   local buffers = layout.stand_ins(child)
   buffers.explorer = layout.named_scratch(child, 'aineo://explorer')
+  buffers.files = layout.named_scratch(child, 'aineo://changes-files')
+  buffers.commits = layout.named_scratch(child, 'aineo://changes-commits')
   local arrangement = layout.arrangement(buffers, claude_side)
   arrangement.explorer = buffers.explorer
   arrangement.explorer_column = explorer_side
   arrangement.explorer_width = EXPLORER_WIDTH
   arrangement.file_beside_explorer = true
+  arrangement.changes = { files = buffers.files, commits = buffers.commits }
   layout.open(child, arrangement)
   buffers.input = layout.input_buffer(child)
   return buffers, arrangement
@@ -889,6 +892,80 @@ T['the views of the panes under the file focus']["the Report's view comes back a
   child.lua('vim.api.nvim_win_close(vim.fn.bufwinid(...), false)', { buffers.file })
 
   eq(view_of(buffers.report), before)
+end
+
+--- Each call that shows a pane of the panes column the user asks for, as a
+--- set's `parametrize`: its name, the Lua that makes it with `...` the
+--- arrangement, and the buffers that show once it has been made.
+local PANE_CALLS = {
+  {
+    'focusing the Report',
+    [[require('aineo.layout').focus('report', ...)]],
+    { 'report', 'input' },
+  },
+  { 'focusing Input', [[require('aineo.layout').focus('input', ...)]], { 'report', 'input' } },
+  {
+    'focusing the agent pane',
+    [[require('aineo.layout').focus_pane('agent', ...)]],
+    { 'report', 'input' },
+  },
+  {
+    'focusing the changes pane',
+    [[require('aineo.layout').focus_pane('changes', ...)]],
+    { 'files', 'commits' },
+  },
+}
+
+T['a pane asked for under an armed file focus'] = MiniTest.new_set({ parametrize = PANE_CALLS })
+
+T['a pane asked for under an armed file focus']['ends it, and a file shown later leaves the pane in place'] = function(
+  _,
+  call,
+  shown
+)
+  local buffers, arrangement = open_without_file('left', 'right')
+  start_file_focus()
+
+  child.lua(call, { arrangement })
+  show_file(loaded_file('second.txt'))
+
+  eq(is_file_focused(), false)
+  eq(
+    vim.tbl_map(function(name)
+      return box_of(buffers[name]) ~= nil
+    end, shown),
+    { true, true }
+  )
+end
+
+T['ending an applied file focus'] = MiniTest.new_set({ parametrize = NO_FILE_ROWS })
+
+--- The boxes of the windows of `buffers` that show, in a fixed order.
+---
+---@param buffers table
+---@return table[] boxes
+local function column_boxes(buffers)
+  return vim.tbl_map(function(name)
+    return box_of(buffers[name]) or vim.NIL
+  end, { 'claude', 'report', 'input', 'file', 'explorer' })
+end
+
+T['ending an applied file focus']['gives the widths the same layout has when it never was focused'] = function(
+  claude_side,
+  explorer_side
+)
+  local never = open_without_file(claude_side, explorer_side)
+  never.file = loaded_file('second.txt')
+  show_file(never.file)
+  local expected = column_boxes(never)
+
+  local buffers, arrangement = open_without_file(claude_side, explorer_side)
+  buffers.file = loaded_file('second.txt')
+  start_file_focus()
+  show_file(buffers.file)
+  end_file_focus(arrangement)
+
+  eq(column_boxes(buffers), expected)
 end
 
 return T
