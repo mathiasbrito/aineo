@@ -63,10 +63,13 @@ local zoom = require('aineo.layout.zoom')
 
 ---@alias aineo.layout.Role 'claude'|'report'|'input'
 
---- The file focus of a layout, while it is on: the panes column is closed and
---- its cells are the file column's.
+--- The file focus of a layout, while it is on. Armed, it waits for a file
+--- column and changes nothing; applied, the panes column is closed and its
+--- cells are the file column's.
 ---@class aineo.layout.FileFocus
----@field claude_width? integer the width Claude's column had as the focus began, kept while it lasts; none when Claude's window was closed
+---@field applied boolean whether the panes column is closed
+---@field claude_width? integer the width Claude's column has while the focus waits, and keeps once it is applied; none when Claude's window is closed
+---@field views? table<integer, table> the view each window of the panes column had as the focus was applied, by the buffer it showed (`winsaveview()`)
 
 --- A rectangle of the screen, in cells counted from the top left of the editor, from 0.
 ---@class aineo.layout.Area
@@ -156,7 +159,8 @@ local function make_layout(input_name, group_name)
   --- the Report's, top to bottom; the zoom of the right column, if it is
   --- zoomed (`M.toggle_zoom()`); the window zoomed fully, if one is
   --- (`M.toggle_full_zoom()`); and the file focus, while it is on, with the
-  --- width Claude's column had as it began (`M.start_file_focus()`).
+  --- width Claude's column keeps and the views the panes column's windows
+  --- had (`M.start_file_focus()`).
   local state = {
     ---@type aineo.layout.Side
     claude_side = side.DEFAULT,
@@ -309,13 +313,21 @@ local function make_layout(input_name, group_name)
     return has_window('claude') and vim.iter(pane_roles(state.pane)):all(has_window)
   end
 
+  --- Whether the file focus is applied: on, with the panes column closed on
+  --- purpose (`M.start_file_focus()`).
+  ---
+  ---@return boolean
+  local function is_file_focus_applied()
+    return state.file_focus ~= nil and state.file_focus.applied
+  end
+
   --- Whether the layout's windows are where it puts them: it is open
-  --- (`is_open()`), or the file focus is on (`M.start_file_focus()`), which
-  --- closes the panes column on purpose and leaves Claude's window.
+  --- (`is_open()`), or the file focus is applied, which leaves Claude's window
+  --- and no panes column.
   ---
   ---@return boolean
   local function is_laid_out()
-    return is_open() or (state.file_focus ~= nil and has_window('claude'))
+    return is_open() or (is_file_focus_applied() and has_window('claude'))
   end
 
   --- Whether any of the layout's three windows exists.
@@ -1221,11 +1233,14 @@ local function make_layout(input_name, group_name)
     end
     keep_explorer_outermost()
     keep_file_column_in_place()
-    if state.file_focus then
+    if is_file_focus_applied() then
       size_focused_columns()
       return
     end
     size_columns()
+    if state.file_focus and has_window('claude') then
+      state.file_focus.claude_width = vim.api.nvim_win_get_width(state.windows.claude)
+    end
     if keep_zoom() then
       return
     end
@@ -1261,12 +1276,36 @@ local function make_layout(input_name, group_name)
     end
   end
 
-  --- Puts the layout's proportions back while it is open, and does nothing
-  --- once a window the pane shown needs is gone. A full zoom whose window is
-  --- gone ends first (`end_full_zoom()`), the layout open or not.
+  --- Closes the panes column and gives its cells to the file column, for a
+  --- file focus that waits for a file column (`M.start_file_focus()`). Defined
+  --- below.
+  ---@type fun()
+  local apply_file_focus
+
+  --- Opens the panes column again, for an applied file focus whose file
+  --- column closed, leaving the focus waiting for the next one. Defined below.
+  ---@type fun()
+  local restore_panes_column
+
+  --- Puts the layout's proportions back while it is laid out
+  --- (`is_laid_out()`), and does nothing once a window the pane shown needs is
+  --- gone. A full zoom whose window is gone ends first (`end_full_zoom()`),
+  --- the layout open or not. A file focus that waits for a file column
+  --- (`M.start_file_focus()`) is applied once one is open, and an applied
+  --- focus whose file column is gone gives the panes column back.
   local function keep_proportions()
     if state.full_zoom and not vim.api.nvim_win_is_valid(state.full_zoom.window) then
       end_full_zoom()
+    end
+    local focus = state.file_focus
+    if focus and has_window('claude') and has_file_column() then
+      if not focus.applied then
+        apply_file_focus()
+        return
+      end
+    elseif focus and focus.applied and has_window('claude') then
+      restore_panes_column()
+      return
     end
     if is_laid_out() then
       apply_proportions()
@@ -2282,6 +2321,43 @@ local function make_layout(input_name, group_name)
     state.report_when_hidden = nil
   end
 
+  --- The view each window of the panes column's two windows that exists has,
+  --- by the buffer it shows.
+  ---
+  ---@return table<integer, table> views
+  local function save_panes_views()
+    local views = {}
+    for _, role in ipairs(RIGHT_COLUMN_ROLES) do
+      if has_window(role) then
+        local window = state.windows[role]
+        views[vim.api.nvim_win_get_buf(window)] = vim.api.nvim_win_call(window, vim.fn.winsaveview)
+      end
+    end
+    return views
+  end
+
+  --- Gives each of the panes column's two windows that exists the view saved
+  --- for the buffer it shows (`save_panes_views()`), but for the Report's when
+  --- a report arrived meanwhile (`report_arrived`), which keeps the line its
+  --- arrival put it on.
+  ---
+  ---@param views table<integer, table>|nil
+  ---@param report_arrived boolean
+  local function restore_panes_views(views, report_arrived)
+    for _, role in ipairs(RIGHT_COLUMN_ROLES) do
+      if has_window(role) then
+        local window = state.windows[role]
+        local buffer = vim.api.nvim_win_get_buf(window)
+        local view = views and views[buffer]
+        if view and not (report_arrived and buffer == state.buffers.report) then
+          vim.api.nvim_win_call(window, function()
+            vim.fn.winrestview(view)
+          end)
+        end
+      end
+    end
+  end
+
   --- Gives `window`, which shows `buffer`, the view kept for `buffer` in
   --- `state.views` when it last left a window, and forgets that view.
   ---
@@ -3082,6 +3158,7 @@ local function make_layout(input_name, group_name)
     local panel_numbers_changed = arrangement.panel_numbers ~= nil
       and arrangement.panel_numbers ~= state.panel_numbers
     take_arrangement(arrangement)
+    local focus_views = is_file_focus_applied() and state.file_focus.views or nil
     state.file_focus = nil
     forget_wiped_shell()
     local wanted_side = arrangement.claude_side or state.claude_side
@@ -3104,6 +3181,7 @@ local function make_layout(input_name, group_name)
     state.report_height = arrangement.report_height
     pin_windows()
     wrap_agent_pane()
+    local report_arrived = state.report_when_hidden ~= nil and has_report_changed_while_hidden()
     follow_reports_shown_again()
     keep_claude_numbers()
     keep_claude_statusline()
@@ -3113,6 +3191,7 @@ local function make_layout(input_name, group_name)
       close_run_windows()
     end
     apply_proportions()
+    restore_panes_views(focus_views, report_arrived)
     watch_windows()
     watch_shell()
     if panel_numbers_changed then
@@ -3803,7 +3882,11 @@ local function make_layout(input_name, group_name)
       end_full_zoom()
       end_zoom()
       if explorer_column and state.pane == 'explorer' then
-        switch_pane('agent')
+        if is_file_focus_applied() then
+          state.pane = 'agent'
+        else
+          switch_pane('agent')
+        end
       end
       remember_file_parts()
       keep_explorer_column()
@@ -3914,21 +3997,73 @@ local function make_layout(input_name, group_name)
     end
   end
 
-  --- Turns the file focus on: the panes column — the Report's and Input's
-  --- windows, and the run pane's — closes, and its cells go to the file
-  --- column, which takes every cell but Claude's column's, whose width stays
-  --- as it was, and the explorer column's, whose width stays too. The pane
-  --- shown stays the pane shown, and its buffers keep their views; they show
-  --- again when the layout opens (`M.open()`), which ends the focus, as does
-  --- `M.end_file_focus()`. While the focus is on, the layout keeps those
-  --- proportions through a resize of the editor, a swap or a mirror of its
-  --- columns and the explorer column opening, closing or moving; a file
-  --- shown in the file column leaves the panes column closed
-  --- (`M.show_file()`); and a zoom, of the panes column or fully, ends first,
-  --- its sizes not given back. The cursor stays where it is, in a window of
-  --- the panes column going to the file column. Changes nothing when the
-  --- focus is on already; warns the user once, and changes nothing, when
-  --- none of the layout's windows is open.
+  --- Applies the file focus (`M.start_file_focus()`) now that a file column is
+  --- open: the cursor leaves the panes column, a zoom ends, the views of the
+  --- panes column's windows are kept and the column closes, and the file
+  --- column takes its cells.
+  apply_file_focus = function()
+    leave_panes_column()
+    vim.api.nvim_win_call(existing_windows()[1], function()
+      end_full_zoom()
+      end_zoom()
+      local focus = state.file_focus
+      focus.claude_width = focus.claude_width
+        or (has_window('claude') and vim.api.nvim_win_get_width(state.windows.claude) or nil)
+      focus.views = save_panes_views()
+      focus.applied = true
+      close_panes_column()
+      apply_proportions()
+    end)
+  end
+
+  --- Opens the panes column again, showing the pane it showed with the views
+  --- it had (`restore_panes_views()`), as the file column closed, and leaves
+  --- the file focus waiting for a file column.
+  restore_panes_column = function()
+    local focus = state.file_focus
+    local views = focus.views
+    focus.applied, focus.views = false, nil
+    vim.api.nvim_win_call(existing_windows()[1], function()
+      reopen_closed_windows()
+      show_buffers()
+      pin_windows()
+      wrap_agent_pane()
+      local report_arrived = state.report_when_hidden ~= nil and has_report_changed_while_hidden()
+      follow_reports_shown_again()
+      if state.pane == 'run' then
+        sync_run_windows()
+      else
+        close_run_windows()
+      end
+      apply_proportions()
+      restore_panes_views(views, report_arrived)
+    end)
+  end
+
+  --- Turns the file focus on, for reading files at the width the panes column
+  --- takes. With a file column open it is applied at once: the panes column
+  --- — the Report's and Input's windows, and the run pane's — closes, and its
+  --- cells go to the file column, which takes every cell but Claude's column's
+  --- and the explorer column's, whose widths stay. With no file column the
+  --- focus is armed instead and changes nothing: no window opens, closes or
+  --- changes size, so that Claude's terminal is told no size; it is applied as
+  --- the first file column opens (`M.show_file()`, or any window that makes
+  --- one), Claude's column keeping the width it has. Closing the file column
+  --- of an applied focus opens the panes column again, the focus armed.
+  ---
+  --- The pane shown stays the pane shown, and the views of its windows
+  --- (`winsaveview()`) are kept; they show again when the layout opens
+  --- (`M.open()`), which ends the focus, as does `M.end_file_focus()`, and
+  --- when the file column closes. While the focus is applied, the layout keeps
+  --- these proportions through a resize of the editor, a swap or a mirror of
+  --- its columns and the explorer column opening, closing or moving, the
+  --- explorer pane giving way to the agent pane unseen as the column opens; a
+  --- file shown in the file column leaves the panes column closed
+  --- (`M.show_file()`); and a zoom, of the panes column or fully, ends as it
+  --- is applied, its sizes not given back. The cursor stays where it is, in a
+  --- window of the panes column going to the file column. Changes nothing
+  --- when the focus is on already; warns the user once, and changes nothing,
+  --- when none of the layout's windows is open.
   function M.start_file_focus()
     if state.file_focus then
       return
@@ -3937,16 +4072,14 @@ local function make_layout(input_name, group_name)
       vim.notify(NO_LAYOUT_TO_FOCUS, vim.log.levels.WARN)
       return
     end
-    leave_panes_column()
-    vim.api.nvim_win_call(existing_windows()[1], function()
-      end_full_zoom()
-      end_zoom()
-      local claude_width = has_window('claude') and vim.api.nvim_win_get_width(state.windows.claude)
-        or nil
-      state.file_focus = { claude_width = claude_width }
-      close_panes_column()
-      apply_proportions()
-    end)
+    state.file_focus = {
+      applied = false,
+      claude_width = has_window('claude') and vim.api.nvim_win_get_width(state.windows.claude)
+        or nil,
+    }
+    if has_window('claude') and has_file_column() then
+      apply_file_focus()
+    end
   end
 
   --- Turns the file focus off, as `M.open()` does with `arrangement`, which
@@ -3966,7 +4099,7 @@ local function make_layout(input_name, group_name)
     M.open(arrangement)
   end
 
-  --- Whether the file focus is on (`M.start_file_focus()`).
+  --- Whether the file focus is on (`M.start_file_focus()`), applied or armed.
   ---
   ---@return boolean
   function M.is_file_focused()
