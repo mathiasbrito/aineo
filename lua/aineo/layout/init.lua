@@ -1302,12 +1302,33 @@ local function make_layout(input_name, group_name)
     vim.wo[state.explorer_window].winfixwidth = true
   end
 
+  --- Moves the cursor of the explorer column's tab page, when it is in the
+  --- column, to the file column, when that is open: the cursor of a tab page
+  --- that is not shown too.
+  local function leave_explorer_column()
+    local page = vim.api.nvim_win_get_tabpage(state.explorer_window)
+    if vim.api.nvim_tabpage_get_win(page) == state.explorer_window then
+      local file_window = file_column_windows()[1]
+      if file_window then
+        vim.api.nvim_tabpage_set_win(page, file_window)
+      end
+    end
+  end
+
+  --- Closes the explorer column, the cursor having left it
+  --- (`leave_explorer_column()`).
+  local function close_explorer_column()
+    leave_explorer_column()
+    vim.api.nvim_win_close(state.explorer_window, false)
+  end
+
   --- Makes the explorer column what the layout was handed: open when it is on
-  --- a side, closed when it is not, on that side, showing the explorer's
-  --- buffer. A column on the other side moves there (`keep_explorer_outermost()`).
+  --- a side, closed when it is not (`close_explorer_column()`), on that side,
+  --- showing the explorer's buffer. A column on the other side moves there
+  --- (`keep_explorer_outermost()`).
   local function keep_explorer_column()
     if has_explorer_column() and not state.explorer_column then
-      vim.api.nvim_win_close(state.explorer_window, false)
+      close_explorer_column()
     elseif not has_explorer_column() and state.explorer_column then
       open_explorer_column()
     end
@@ -2427,8 +2448,9 @@ local function make_layout(input_name, group_name)
   --- fixed there; the other three columns share the screen's remaining cells
   --- as they do without it. Claude's column being on either side leaves it
   --- where it is (`M.explorer_column()`). Handed again with another side or
-  --- width the column moves or resizes, with `false` it closes, and a column
-  --- closed by hand opens again in place. While the column is a side the
+  --- width the column moves or resizes, with `false` it closes, the cursor
+  --- going to the file column when it was in the column, and a column closed
+  --- by hand opens again in place. While the column is a side the
   --- explorer pane gives way to the agent pane.
   ---
   --- While any of the three windows exists, opening again restores the layout
@@ -3118,8 +3140,9 @@ local function make_layout(input_name, group_name)
   --- the layout's tab page whether or not it is shown, as handing the
   --- arrangement again does but without moving the cursor or the tab page: a
   --- column that is not open opens, one that is open moves to the other side,
-  --- takes the width, or closes when it is `false`, and the other columns
-  --- take the layout's proportions. A zoom ends first, its sizes not given
+  --- takes the width, or closes when it is `false`, the cursor of the tab page
+  --- going to the file column first when it was in the column, and the other
+  --- columns take the layout's proportions. A zoom ends first, its sizes not given
   --- back (`M.toggle_zoom()`, `M.toggle_full_zoom()`), and the explorer pane
   --- gives way to the agent pane while the column is a side. With none of the
   --- layout's windows open, only the column is recorded, for the layout to
@@ -3159,6 +3182,9 @@ local function make_layout(input_name, group_name)
     state.explorer_width = explorer_width
     if not changes_the_column or not has_any_window() then
       return
+    end
+    if not explorer_column and has_explorer_column() then
+      leave_explorer_column()
     end
     vim.api.nvim_win_call(existing_windows()[1], function()
       end_full_zoom()
