@@ -740,38 +740,45 @@ and turns the file focus on for the tab: the panes column closes, with
 the Report, Input and whichever pane it shows, and its cells go to the file
 column, so that the row is Claude Code, the files and the explorer column
 (mirrored when Claude Code is on the right). Claude's column and the explorer
-column keep their widths; the pane that showed stays the pane shown, and shows
-again when the focus ends. On a folder, or on the header, `<C-l>` only turns
-the focus on and opens nothing.
+column keep their widths; the pane that showed stays the pane shown, with the
+views its windows had (the Report's top line, the explorer pane's cursor), and
+shows again when the focus ends. On a folder, or on the header, `<C-l>` only
+turns the focus on and opens nothing.
 
-While the focus is on, every file opened in the tab — by `l` or `<CR>` in the
-explorer, by `\f`, by a link — shows in the file column and leaves the panes
-column closed, so that you read the files at their width; `l` and `<CR>` do
-nothing else. `<C-l>` in the explorer again, on any line, `:Aineo focus`
-(|:Aineo-focus|) and `<Plug>(aineo-focus)` turn it off: the panes column opens
-again at the layout's proportions, showing the pane it showed, the file stays
-in the file column and the cursor where it was.
+With no file column open there is nothing to give the panes column's cells to,
+so the focus waits: nothing closes, opens or changes size, and Claude Code is
+told no new size. The next file opened in the tab starts it, the file column
+taking the panes column's width. Closing the file column while the focus is
+applied brings the panes column back and leaves the focus waiting for the
+next file.
 
-A key that shows a pane of the panes column ends the focus, as the column
-is what shows the pane: `\r`, `\i`, `\g`, `\pa`, `\pt`, `\pw`, `\x`, `\o` and
-their `:Aineo` commands bring the column back with that pane, the cursor
-going where the key puts it. A process of the run pane that ends, or whose
-terminal you wipe, while the focus is on changes nothing meanwhile, and one
-that had ended keeps its place in the stack as the focus starts. The agent's
-run tools (|aineo-run-tools|) show the stack when they start a process, which
-ends the focus as `\x` does. `\e` with the explorer column on only moves the
-cursor into the column, and keeps the focus.
+While the focus is applied, every file opened in the tab — by `l` or `<CR>` in
+the explorer, by `\f`, by a link — shows in the file column and leaves the
+panes column closed, so that you read the files at their width; `l` and `<CR>`
+do nothing else. `<C-l>` in the explorer again, on any line, `:Aineo focus`
+(|:Aineo-focus|) and `<Plug>(aineo-focus)` turn it off, applied or waiting:
+the panes column opens again at the layout's proportions, showing the pane it
+showed as it was, the file stays in the file column and the cursor where it
+was.
+
+Only your own pane keys end the focus, as the panes column is what shows the
+pane: `\r`, `\i`, `\g`, `\pa`, `\pt`, `\pw`, `\x`, `\o` and their `:Aineo`
+commands bring the column back with that pane, the cursor going where the key
+puts it. What the agent does leaves it alone: its run tools
+(|aineo-run-tools|) start a process that joins the stack unseen, and a
+process of the run pane that ends, or whose terminal you wipe, changes nothing
+meanwhile; one that had ended keeps its place in the stack as the focus
+starts. `\e` with the explorer column on only moves the cursor into the
+column, and keeps the focus.
 
 The focus belongs to the tab: another tab keeps its own panes column. A swap
-or a mirror of the layout (|:Aineo-layout|), `\E`
-(|aineo-explorer-column|) and a resize of the editor keep it on, the file
-column taking the cells the columns leave. `\z` pressed with it on says the
-cursor is in none of the windows of the panes column; `\Z` zooms any window
-of the tab as ever, and the focus starting ends a zoom, without giving its
-sizes back. Closing the file column keeps the focus on, Claude's column alone
-left beside the explorer column: `:Aineo focus` or any pane key brings the
-panes column back. Claude's column keeps its width, so that Claude Code is
-told no new size as the column closes or comes back.
+or a mirror of the layout (|:Aineo-layout|), `\E` (|aineo-explorer-column|),
+which gives the explorer pane's place to the agent pane unseen, and a resize
+of the editor keep it on, the file column taking the cells the columns leave.
+`\z` pressed with it on says the cursor is in none of the windows of the panes
+column; `\Z` zooms any window of the tab as ever, and the focus applying ends
+a zoom, without giving its sizes back. Claude's column keeps the width it had,
+so that Claude Code is told no new size as the focus starts or ends.
 
 The agent's run tools ~
                                                              *aineo-run-tools*
@@ -797,8 +804,9 @@ asking.
 `\x` does, at the bottom of the stack, and answers at once without waiting for
 it to end. The run pane is shown, in the tab page you are in, and the cursor
 stays where it is; aineo tells you once, `aineo: started backend in the run
-pane`. In another tab page the layout is left as it is, and the pane lists the
-process the next time it is shown. `name`, what `run_output` and
+pane`. In another tab page, or while the tab's file focus is on
+(|aineo-focus|), the layout is left as it is, and the pane lists the process
+the next time it is shown. `name`, what `run_output` and
 `run_stop` call the process and the winbar shows, is the command's first word
 (without its control characters) when not given, and a name the stack holds
 already, a process that ended included, gets `-2`, `-3`: a command called
@@ -4018,8 +4026,9 @@ keeps the tab's claim, and the next start takes it up again (|aineo-tabs|).
                                                               *:Aineo-focus*
 :Aineo focus		Turns the file focus of the aineo tab of the current
 			tab page on, closing the panes column so that the
-			file column takes its cells, or, with it on, off,
-			bringing the panes column back (|aineo-focus|). It
+			file column takes its cells (with no file column
+			open it waits for one), or, with it on, off, bringing
+			the panes column back (|aineo-focus|). It
 			makes no tab: from a tab page that is none of aineo's
 			it changes nothing and tells you, with one warning,
 			that the layout is not open there. With any word
