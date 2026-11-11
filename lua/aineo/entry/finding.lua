@@ -1,9 +1,11 @@
 --- What `:Aineo find` does in an aineo tab: searches the files under the
 --- folder the tab's Claude Code works in, or under the top of the repository
 --- that folder is in, with the picker `find.picker` names
---- (`aineo.find`), and so opens the file picked in the file column.
+--- (`aineo.find`), and so opens the file picked in the file column, which the
+--- tab's explorer then reveals (`aineo.entry.find_reveal`).
 
 local errors = require('aineo.entry.errors')
+local find_reveal = require('aineo.entry.find_reveal')
 
 local M = {}
 
@@ -67,11 +69,17 @@ function M.find_in(tab)
       return
     end
     errors.run(function()
-      require('aineo.find').find_file({
-        directory = repository and repository.top or directory,
-        picker = picker,
-        list_files = repository and list_files_of(repository) or nil,
-      })
+      local reveal = tab.homes.explorer.reveal
+      find_reveal.watching(reveal, function()
+        return require('aineo.find').find_file({
+          directory = repository and repository.top or directory,
+          picker = picker,
+          list_files = repository and list_files_of(repository) or nil,
+          on_open = function(file)
+            find_reveal.reveal_when_settled(reveal, file)
+          end,
+        })
+      end)
     end)
   end)
 end

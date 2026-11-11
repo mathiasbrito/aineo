@@ -9,7 +9,12 @@ local DEFAULTS = {
   terminal_prefix = '<C-\\>',
   autostart = true,
   claude = { cmd = { 'claude' }, hide_multiplexer = true },
-  layout = { report_height = 2 / 3, claude_side = 'left' },
+  layout = {
+    report_height = 2 / 3,
+    claude_side = 'left',
+    explorer_column = false,
+    explorer_width = 30,
+  },
   changes = { graph_limit = 1000 },
   tabs = { padding = 2, always_show = true },
   find = { picker = 'auto' },
@@ -246,6 +251,50 @@ T['resolve_config()']['refuses a side for Claude Code that is not left or right'
   expect.error(function()
     config.resolve_config({ layout = { claude_side = side } }, nil)
   end, "layout%.claude_side: expected 'left' or 'right'")
+end
+
+T['resolve_config()']['takes the side of the explorer column from either source, none by default'] = function()
+  local from_global = config.resolve_config({ layout = { explorer_column = 'left' } }, nil)
+  local from_setup = config.resolve_config(nil, { layout = { explorer_column = 'right' } })
+
+  eq(from_global.layout.explorer_column, 'left')
+  eq(from_setup.layout.explorer_column, 'right')
+  eq(config.resolve_config(nil, nil).layout.explorer_column, false)
+end
+
+T['resolve_config()']['refuses an explorer column that is not left, right or false'] =
+  MiniTest.new_set({
+    parametrize = { { 'middle' }, { '' }, { 'Left' }, { true }, { 1 }, { {} } },
+  })
+
+T['resolve_config()']['refuses an explorer column that is not left, right or false']['as layout.explorer_column'] = function(
+  column
+)
+  expect.error(function()
+    config.resolve_config({ layout = { explorer_column = column } }, nil)
+  end, "layout%.explorer_column: expected 'left', 'right' or false")
+end
+
+T['resolve_config()']['takes the width of the explorer column from either source, 30 by default'] = function()
+  local from_global = config.resolve_config({ layout = { explorer_width = 40 } }, nil)
+  local from_setup = config.resolve_config(nil, { layout = { explorer_width = 12 } })
+
+  eq(from_global.layout.explorer_width, 40)
+  eq(from_setup.layout.explorer_width, 12)
+  eq(config.resolve_config(nil, nil).layout.explorer_width, 30)
+end
+
+T['resolve_config()']['refuses an explorer width that is not a whole number from 1'] =
+  MiniTest.new_set({
+    parametrize = { { 0 }, { -3 }, { 1.5 }, { '30' }, { true }, { math.huge } },
+  })
+
+T['resolve_config()']['refuses an explorer width that is not a whole number from 1']['as layout.explorer_width'] = function(
+  width
+)
+  expect.error(function()
+    config.resolve_config({ layout = { explorer_width = width } }, nil)
+  end, 'layout%.explorer_width: expected a whole number of at least 1')
 end
 
 T['resolve_config()']['takes the padding of the tab titles from either source, 2 by default'] = function()

@@ -233,7 +233,13 @@ local ROWS = vim.list_extend(
       'show the terminal pane, in the shell'
     ),
     global_with_twin('run', 'x', 'pane-run', 'pane run', 'ask for a command and run it'),
-    global_with_twin('explorer', 'e', 'pane-explorer', 'pane explorer', 'show the explorer tree'),
+    global_with_twin(
+      'explorer',
+      'e',
+      'pane-explorer',
+      'pane explorer',
+      'show the explorer tree, or go to its column'
+    ),
     global_with_twin(
       'run',
       'X',
@@ -247,9 +253,22 @@ local ROWS = vim.list_extend(
   },
   vim.list_extend(tab_keys_after_the_first(), {
     global_with_twin('changes', 'd', 'diff-close', 'diff close', 'close the diff'),
-    global_with_twin('explorer', 'f', 'find', 'find', 'find a file and open it'),
+    global_with_twin(
+      'explorer',
+      'f',
+      'find',
+      'find',
+      'find a file and open it, revealed in the explorer'
+    ),
     global_with_twin('office', 'z', 'zoom', 'zoom', 'zoom the window of the panes column'),
     global_with_twin('office', 'Z', 'zoom-full', 'zoom full', 'zoom the window to the whole tab'),
+    global_with_twin(
+      'explorer',
+      'E',
+      'explorer-column',
+      'explorer column',
+      'turn the explorer column on or off'
+    ),
     global_with_twin('office', 'O', 'office', 'office', 'show the office'),
     global('layout', '?', 'cheatsheet', 'cheatsheet', 'show this sheet of keys'),
     in_section(

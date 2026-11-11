@@ -688,18 +688,40 @@ function M.new(settings)
   --- first read, the file is followed once it is.
   ---
   ---@param file string
+  ---@return boolean followed whether the file was followed now: false for a file elsewhere and before the tree is first read
   function home.follow(file)
     if not state.place then
       state.pending_follow = file
-      return
+      return false
     end
     if not take_followed(file) then
-      return
+      return false
     end
     for _, folder in ipairs(tree.folders_above(state.followed)) do
       list_when_unknown(folder)
     end
     render()
+    return true
+  end
+
+  --- Follows `file` as `follow()` does, and moves the cursor of every window
+  --- that shows the explorer to its line, which scrolls the window so the
+  --- line shows. The current window stays. A file elsewhere, and a file revealed
+  --- before the tree is first read, move no cursor: the latter is followed
+  --- once the tree is read, as `follow()` has it.
+  ---
+  ---@param file string
+  function home.reveal(file)
+    if not home.follow(file) then
+      return
+    end
+    local line = state.rendering and line_of(state.rendering, state.followed)
+    if not line then
+      return
+    end
+    for _, window in ipairs(vim.fn.win_findbuf(state.buffer)) do
+      vim.api.nvim_win_set_cursor(window, { line, 0 })
+    end
   end
 
   --- Puts the cursor of the current window on the entry `path`, when it

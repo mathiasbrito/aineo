@@ -76,7 +76,7 @@ local function added(definitions, before)
   end, { commands = 'commands', keymaps = 'keymaps', autocmds = 'autocmds' })
 end
 
-T['plugin/aineo.lua']['defines :Aineo, their <Plug> mappings, the prefix mappings, their twins in Insert and Terminal mode and, once started, the StdinReadPost autocommand alone'] = function()
+T['plugin/aineo.lua']['defines :Aineo, their <Plug> mappings, the prefix mappings, their twins in Insert and Terminal mode and, once started, the StdinReadPost and the setup() autocommands alone'] = function()
   children.restart(child, { '--cmd', 'let g:loaded_aineo = 1' })
   local without_the_file = child.lua_get(DEFINITIONS)
 
@@ -94,6 +94,7 @@ T['plugin/aineo.lua']['defines :Aineo, their <Plug> mappings, the prefix mapping
       'i <C-Bslash>7',
       'i <C-Bslash>8',
       'i <C-Bslash>9',
+      'i <C-Bslash>E',
       'i <C-Bslash>N',
       'i <C-Bslash>O',
       'i <C-Bslash>Q',
@@ -132,6 +133,7 @@ T['plugin/aineo.lua']['defines :Aineo, their <Plug> mappings, the prefix mapping
       'n <Plug>(aineo-explain-next)',
       'n <Plug>(aineo-explain-previous)',
       'n <Plug>(aineo-explain-tools)',
+      'n <Plug>(aineo-explorer-column)',
       'n <Plug>(aineo-find)',
       'n <Plug>(aineo-fix-accept)',
       'n <Plug>(aineo-fix-diff)',
@@ -195,6 +197,7 @@ T['plugin/aineo.lua']['defines :Aineo, their <Plug> mappings, the prefix mapping
       'n \\8',
       'n \\9',
       'n \\?',
+      'n \\E',
       'n \\N',
       'n \\O',
       'n \\Q',
@@ -249,6 +252,7 @@ T['plugin/aineo.lua']['defines :Aineo, their <Plug> mappings, the prefix mapping
       't <C-Bslash>7',
       't <C-Bslash>8',
       't <C-Bslash>9',
+      't <C-Bslash>E',
       't <C-Bslash>N',
       't <C-Bslash>O',
       't <C-Bslash>Q',
@@ -299,7 +303,7 @@ T['plugin/aineo.lua']['defines :Aineo, their <Plug> mappings, the prefix mapping
       'x \\vm',
       'x \\w',
     },
-    autocmds = { 'aineo StdinReadPost' },
+    autocmds = { 'aineo StdinReadPost', 'aineo.setup User' },
   })
 end
 

@@ -10,7 +10,9 @@
 --- explorer pane, a tree of files in the Report's window alone, taking the
 --- whole column, Input's window closed as under the terminal pane; or the
 --- walkthrough pane, the plan of a code walkthrough in the Report's window
---- with Input's window kept below it.
+--- with Input's window kept below it. Beside these columns the layout can
+--- hold a column of the explorer's tree, at the outer edge of one side of the
+--- screen, as tall as the screen, whichever side Claude's column is on.
 ---
 --- The layout shows the Claude and Report buffers, the changes pane's, the
 --- shell's terminal, the run pane's terminals, and the diffs it is asked to
@@ -40,6 +42,8 @@ local zoom = require('aineo.layout.zoom')
 ---@field shell? integer the terminal pane's buffer, the terminal of a shell, shown alone in the right column, in the Report's window; without it the layout keeps the one it was handed last, if its shell lives
 ---@field run? aineo.layout.RunPane the run pane's terminals; without them the run pane has nothing to show, and the layout shows the agent pane in its place
 ---@field explorer? integer the explorer pane's buffer, the tree of the folder Claude works in, shown alone in the right column, in the Report's window; without it the layout keeps the one it was handed last
+---@field explorer_column? aineo.layout.Side|false the side of the screen the explorer column is on, a column of its own the full height of the screen beside the other columns showing `explorer`, whichever side Claude's column is on; `false` for none; without it the layout keeps what it was handed last, none before any
+---@field explorer_width? integer the explorer column's width in cells, a positive whole number; without it the layout keeps the one it was handed last, and a side for the column needs one
 ---@field walkthrough? integer the walkthrough pane's buffer, the plan of a code walkthrough, shown in the Report's window above Input's; without it the layout keeps the one it was handed last
 ---@field claude_statusline? string the 'statusline' Claude's window draws for Claude's terminal; without it the layout keeps the one it was handed last, and before any, Claude's window draws the user's own
 
@@ -87,6 +91,11 @@ local zoom = require('aineo.layout.zoom')
 ---@field right_column_area fun(): aineo.layout.Area|nil
 ---@field claude_side fun(): aineo.layout.Side
 ---@field set_claude_side fun(claude_side: aineo.layout.Side)
+---@field explorer_column fun(): aineo.layout.Side|false
+---@field focus_explorer_column fun(arrangement: aineo.layout.Arrangement|fun(): aineo.layout.Arrangement)
+---@field set_explorer_column fun(explorer_column: aineo.layout.Side|false, explorer_width: integer)
+---@field explorer_column_is_open fun(): boolean
+---@field reopen_explorer_column fun()
 ---@field let_go? fun() only on a layout `M.new()` made: removes its handlers and wipes its Input
 
 --- Makes a layout: its state, and the functions that act on it, and the
@@ -170,6 +179,12 @@ local function make_layout(input_name, group_name)
     zoom = nil,
     ---@type aineo.layout.FullZoom|nil
     full_zoom = nil,
+    ---@type aineo.layout.Side|false
+    explorer_column = false,
+    ---@type integer|nil
+    explorer_width = nil,
+    ---@type integer|nil
+    explorer_window = nil,
   }
 
   --- The role of `window` in the layout, or `nil` when it is not one of its
@@ -374,17 +389,30 @@ local function make_layout(input_name, group_name)
     end)
   end
 
-  --- Sizes the columns. With the file column open, Claude's column and the right
-  --- one take a third each of the screen's columns, the two separators taken
-  --- out, and the file column the rest; without it, Claude's column takes half
-  --- and the right one the rest.
+  --- Whether the explorer column's window exists.
+  ---
+  ---@return boolean
+  local function has_explorer_column()
+    return state.explorer_window ~= nil and vim.api.nvim_win_is_valid(state.explorer_window)
+  end
+
+  --- Sizes the columns. The explorer column, when it is open, takes its width
+  --- and a separator. Of the screen's columns that remain, with the file column
+  --- open, Claude's column and the right one take a third each, the two
+  --- separators taken out, and the file column the rest; without it, Claude's
+  --- column takes half and the right one the rest.
   local function size_columns()
+    local available = vim.o.columns
+    if has_explorer_column() then
+      vim.api.nvim_win_set_width(state.explorer_window, state.explorer_width)
+      available = available - state.explorer_width - 1
+    end
     if has_file_column() then
-      local third = math.floor((vim.o.columns - 2) / 3)
+      local third = math.floor((available - 2) / 3)
       vim.api.nvim_win_set_width(state.windows.claude, third)
       vim.api.nvim_win_set_width(state.windows.report, third)
     else
-      vim.api.nvim_win_set_width(state.windows.claude, math.floor(vim.o.columns / 2))
+      vim.api.nvim_win_set_width(state.windows.claude, math.floor(available / 2))
     end
   end
 
@@ -615,25 +643,6 @@ local function make_layout(input_name, group_name)
     end
   end
 
-  --- Puts the layout's proportions back: the columns' widths, the Report's
-  --- share of the right column's rows when Input's window shows, and the
-  --- equal shares of the run pane's stack; with the right column zoomed, the
-  --- zoom is kept in their place (`keep_zoom()`), and with a window zoomed
-  --- fully, that zoom is kept in place of all of them (`keep_full_zoom()`).
-  local function apply_proportions()
-    if keep_full_zoom() then
-      return
-    end
-    size_columns()
-    if keep_zoom() then
-      return
-    end
-    if has_window('input') then
-      size_right_column()
-    end
-    equalize_run_windows()
-  end
-
   --- Whether `window` is not floating.
   ---
   ---@param window integer
@@ -650,38 +659,81 @@ local function make_layout(input_name, group_name)
     return vim.iter(vim.api.nvim_tabpage_list_wins(layout_tab())):filter(is_tiled):totable()
   end
 
-  --- Ends the full zoom, if a window is zoomed fully. When the tab page holds
-  --- the windows it held as the zoom began, every window gets the size it had
-  --- (a zoom of the right column that was on stays on). When a window opened
-  --- or closed meanwhile, those sizes no longer apply: the layout's
-  --- proportions are put back (`apply_proportions()`), and, while the layout
-  --- is not open, because the zoomed window of the layout closed, the windows
-  --- that remain get the sizes they had.
-  local function end_full_zoom()
-    local zoomed = state.full_zoom
-    if not zoomed then
-      return
+  --- A window that lies across the whole screen, as `:botright split` or
+  --- `:copen` opens one, which the layout's columns end above or below.
+  ---@class aineo.layout.AcrossTheScreen
+  ---@field window integer
+  ---@field edge 'above'|'below' the edge of the screen it lies on
+  ---@field height integer
+
+  --- The windows of the layout's tab page, none of the layout's own, that are
+  --- as wide as the screen, top to bottom: each with the edge it lies on, the
+  --- top one when it lies above the layout's first window, and its height, to put it back with `put_across_the_screen()` after a window
+  --- opened or moved to the screen's edge, which `nvim_open_win()` and
+  --- `nvim_win_set_config()` with `win = -1` do over the whole tab page,
+  --- across such a window too.
+  ---
+  ---@return aineo.layout.AcrossTheScreen[] across
+  local function windows_across_the_screen()
+    local windows = tab_windows()
+    local top = math.huge
+    for _, window in ipairs(existing_windows()) do
+      top = math.min(top, vim.api.nvim_win_get_position(window)[1])
     end
-    state.full_zoom = nil
-    local holds_the_same_windows = has_any_window()
-      and vim.deep_equal(tab_windows(), zoomed.windows)
-    if not holds_the_same_windows and is_open() then
-      apply_proportions()
-    else
-      full_zoom.restore(zoomed)
+    local across = {}
+    for _, window in ipairs(windows) do
+      if
+        not role_of(window)
+        and window ~= state.explorer_window
+        and vim.api.nvim_win_get_width(window) == vim.o.columns
+      then
+        table.insert(across, {
+          window = window,
+          edge = vim.api.nvim_win_get_position(window)[1] < top and 'above' or 'below',
+          height = vim.api.nvim_win_get_height(window),
+        })
+      end
+    end
+    return across
+  end
+
+  --- Puts the windows `windows_across_the_screen()` listed back across the
+  --- screen at their edges and their heights, those on the top edge from the
+  --- bottom one up, those on the bottom edge from the top one down, so that
+  --- they keep their order.
+  ---
+  ---@param across aineo.layout.AcrossTheScreen[]
+  local function put_across_the_screen(across)
+    local ordered = vim.tbl_filter(function(entry)
+      return entry.edge == 'above'
+    end, across)
+    ordered = vim.fn.reverse(ordered)
+    vim.list_extend(
+      ordered,
+      vim.tbl_filter(function(entry)
+        return entry.edge == 'below'
+      end, across)
+    )
+    for _, entry in ipairs(ordered) do
+      if vim.api.nvim_win_is_valid(entry.window) then
+        vim.api.nvim_win_set_config(entry.window, { split = entry.edge, win = -1 })
+        vim.api.nvim_win_set_height(entry.window, entry.height)
+      end
     end
   end
 
-  --- Puts the layout's proportions back while it is open, and does nothing
-  --- once a window the pane shown needs is gone. A full zoom whose window is
-  --- gone ends first (`end_full_zoom()`), the layout open or not.
-  local function keep_proportions()
-    if state.full_zoom and not vim.api.nvim_win_is_valid(state.full_zoom.window) then
-      end_full_zoom()
-    end
-    if is_open() then
-      apply_proportions()
-    end
+  --- Runs `action`, which opens or moves layout windows to the screen's
+  --- edges, and puts the windows across the screen back where they were
+  --- (`put_across_the_screen()`), so that no column spans them.
+  ---
+  ---@generic T
+  ---@param action fun(): T
+  ---@return T result what `action` returns
+  local function keeping_across_the_screen(action)
+    local across = windows_across_the_screen()
+    local result = action()
+    put_across_the_screen(across)
+    return result
   end
 
   --- The windows, top to bottom, of the column that holds `window`, in the
@@ -713,6 +765,81 @@ local function make_layout(input_name, group_name)
         above and { split = 'below', win = above } or { split = edge, win = -1 }
       )
       above = member
+    end
+  end
+
+  --- Moves the explorer column back to the outer edge of its side when a
+  --- column opened beyond it, as Claude's does at the edge of the screen: it
+  --- is left alone while it is outermost, or when no row of the tab holds the
+  --- layout's windows and it.
+  local function keep_explorer_outermost()
+    if not has_explorer_column() or not state.explorer_column then
+      return
+    end
+    local held = vim.list_extend(existing_windows(), { state.explorer_window })
+    local tree = vim.fn.winlayout(vim.api.nvim_tabpage_get_number(layout_tab()))
+    if not columns.is_outermost(tree, held, state.explorer_window, state.explorer_column) then
+      keeping_across_the_screen(function()
+        move_column(column_members(state.explorer_window), state.explorer_column)
+      end)
+    end
+  end
+
+  --- Puts the layout's proportions back: the columns' widths, the Report's
+  --- share of the right column's rows when Input's window shows, and the
+  --- equal shares of the run pane's stack; with the right column zoomed, the
+  --- zoom is kept in their place (`keep_zoom()`), and with a window zoomed
+  --- fully, that zoom is kept in place of all of them (`keep_full_zoom()`).
+  local function apply_proportions()
+    if keep_full_zoom() then
+      return
+    end
+    keep_explorer_outermost()
+    size_columns()
+    if keep_zoom() then
+      return
+    end
+    if has_window('input') then
+      size_right_column()
+    end
+    equalize_run_windows()
+  end
+
+  --- Ends the full zoom, if a window is zoomed fully. When the tab page holds
+  --- the windows it held as the zoom began, every window gets the size it had
+  --- (a zoom of the right column that was on stays on). When a window opened
+  --- or closed meanwhile, those sizes no longer apply: the layout's
+  --- proportions are put back (`apply_proportions()`), and, while the layout
+  --- is not open, because the zoomed window of the layout closed, the windows
+  --- that remain get the sizes they had, but for the explorer column, which
+  --- keeps its width whatever size the screen had.
+  local function end_full_zoom()
+    local zoomed = state.full_zoom
+    if not zoomed then
+      return
+    end
+    state.full_zoom = nil
+    local holds_the_same_windows = has_any_window()
+      and vim.deep_equal(tab_windows(), zoomed.windows)
+    if not holds_the_same_windows and is_open() then
+      apply_proportions()
+    else
+      full_zoom.restore(zoomed)
+      if has_explorer_column() then
+        vim.api.nvim_win_set_width(state.explorer_window, state.explorer_width)
+      end
+    end
+  end
+
+  --- Puts the layout's proportions back while it is open, and does nothing
+  --- once a window the pane shown needs is gone. A full zoom whose window is
+  --- gone ends first (`end_full_zoom()`), the layout open or not.
+  local function keep_proportions()
+    if state.full_zoom and not vim.api.nvim_win_is_valid(state.full_zoom.window) then
+      end_full_zoom()
+    end
+    if is_open() then
+      apply_proportions()
     end
   end
 
@@ -750,8 +877,10 @@ local function make_layout(input_name, group_name)
   --- buffers or jobs, and the cursor stays in the window it was in. A zoom
   --- ends first, its sizes not given back; every window of the tab page then
   --- gets the size it had, which mirrors the columns, and the layout's
-  --- proportions are put back while the layout is open. With no window of the
-  --- layout open, only the side is recorded, for the layout to open on.
+  --- proportions are put back while the layout is open. The explorer column
+  --- moves last, to the edge of its own side, so that it stays outermost
+  --- there. With no window of the layout open, only the side is recorded,
+  --- for the layout to open on.
   ---
   ---@param target aineo.layout.Side
   local function move_columns_to(target)
@@ -766,8 +895,12 @@ local function make_layout(input_name, group_name)
       local claude_members = has_window('claude') and column_members(state.windows.claude) or {}
       local right_column = right_column_window()
       local right_members = right_column and column_members(right_column) or {}
-      move_column(claude_members, claude_edge())
-      move_column(right_members, right_column_edge())
+      local explorer_members = has_explorer_column() and column_members(state.explorer_window) or {}
+      keeping_across_the_screen(function()
+        move_column(claude_members, claude_edge())
+        move_column(right_members, right_column_edge())
+        move_column(explorer_members, state.explorer_column)
+      end)
       restore_sizes(sizes)
       if is_open() then
         apply_proportions()
@@ -874,9 +1007,25 @@ local function make_layout(input_name, group_name)
     )
   end
 
-  --- Moves `file` from the layout's `window` to the file column (see
-  --- `place_in_file_column()`), with the cursor there on the position it had in
-  --- `window`, gives `window` its own buffer back, and puts the proportions back
+  --- The buffer that belongs in `window` when it is one of the layout's
+  --- windows that exists: Claude's, the Report's or Input's, each with its
+  --- own buffer under the pane shown (`own_buffer()`), or the explorer
+  --- column's with the explorer's. `nil` for any other window.
+  ---
+  ---@param window integer
+  ---@return integer|nil buffer
+  local function own_buffer_in(window)
+    if has_explorer_column() and window == state.explorer_window then
+      return state.buffers.explorer
+    end
+    local role = role_of(window)
+    return role and has_window(role) and own_buffer(role) or nil
+  end
+
+  --- Moves `file` from one of the layout's windows, the explorer column's
+  --- included, to the file column (see `place_in_file_column()`), with the
+  --- cursor there on the position it had in `window`, gives `window` its own
+  --- buffer back, and puts the proportions back
   --- while the layout is open (`is_open()`). When the file column has no
   --- room for `file`, leaves it in `window` and warns. Does nothing when
   --- `window` is no longer one of the layout's windows — closed, or replaced
@@ -886,12 +1035,11 @@ local function make_layout(input_name, group_name)
   ---@param window integer
   ---@param file integer
   local function redirect(window, file)
-    local role = role_of(window)
+    local own = own_buffer_in(window)
     if
-      not role
-      or not has_window(role)
+      not own
       or vim.api.nvim_win_get_buf(window) ~= file
-      or not vim.api.nvim_buf_is_valid(own_buffer(role))
+      or not vim.api.nvim_buf_is_valid(own)
     then
       return
     end
@@ -902,7 +1050,7 @@ local function make_layout(input_name, group_name)
       return
     end
     vim.api.nvim_win_set_cursor(file_window, cursor)
-    vim.api.nvim_win_set_buf(window, own_buffer(role))
+    vim.api.nvim_win_set_buf(window, own)
     keep_proportions()
   end
 
@@ -913,8 +1061,8 @@ local function make_layout(input_name, group_name)
   ---@param event { buf: integer }
   local function redirect_when_file(event)
     local window = vim.api.nvim_get_current_win()
-    local role = role_of(window)
-    if not role or event.buf == own_buffer(role) or not is_file(event.buf) then
+    local own = own_buffer_in(window)
+    if not own or event.buf == own or not is_file(event.buf) then
       return
     end
     vim.schedule(function()
@@ -1079,8 +1227,13 @@ local function make_layout(input_name, group_name)
   --- starts from (see `starting_window()`) becomes the one in Input's place,
   --- unless it shows a file (`is_file_to_keep()`), which it keeps as the file
   --- column.
+  --- When that window is the explorer column's, the column is given up and
+  --- opens again as a window of its own (`keep_explorer_column()`).
   local function build()
     local start = starting_window()
+    if start == state.explorer_window then
+      state.explorer_window = nil
+    end
     local shown = vim.api.nvim_win_get_buf(start)
     hide_other_windows(start)
     local input = take_input_buffer(shown)
@@ -1119,19 +1272,67 @@ local function make_layout(input_name, group_name)
   --- right column's side when Input is closed too, and Input below the
   --- Report, unless the pane shown has none for Input.
   local function reopen_closed_windows()
-    if not has_window('claude') then
-      state.windows.claude =
-        vim.api.nvim_open_win(own_buffer('claude'), false, { split = claude_edge(), win = -1 })
-    end
-    if not has_window('report') then
-      open_report_window()
-    end
-    if not has_window('input') and PANE_BUFFERS[state.pane].input then
-      state.windows.input = vim.api.nvim_open_win(
-        own_buffer('input'),
+    keeping_across_the_screen(function()
+      if not has_window('claude') then
+        state.windows.claude =
+          vim.api.nvim_open_win(own_buffer('claude'), false, { split = claude_edge(), win = -1 })
+      end
+      if not has_window('report') then
+        open_report_window()
+      end
+      if not has_window('input') and PANE_BUFFERS[state.pane].input then
+        state.windows.input = vim.api.nvim_open_win(
+          own_buffer('input'),
+          false,
+          { split = 'below', win = state.windows.report }
+        )
+      end
+    end)
+  end
+
+  --- Opens the explorer column: a window showing the explorer's buffer, as
+  --- tall as the screen, at the outer edge on the side the column is on, its
+  --- width fixed. The cursor stays where it is.
+  local function open_explorer_column()
+    state.explorer_window = keeping_across_the_screen(function()
+      return vim.api.nvim_open_win(
+        state.buffers.explorer,
         false,
-        { split = 'below', win = state.windows.report }
+        { split = state.explorer_column, win = -1 }
       )
+    end)
+    vim.wo[state.explorer_window].winfixwidth = true
+  end
+
+  --- Moves the cursor of the explorer column's tab page, when it is in the
+  --- column, to the file column, when that is open: the cursor of a tab page
+  --- that is not shown too.
+  local function leave_explorer_column()
+    local page = vim.api.nvim_win_get_tabpage(state.explorer_window)
+    if vim.api.nvim_tabpage_get_win(page) == state.explorer_window then
+      local file_window = file_column_windows()[1]
+      if file_window then
+        vim.api.nvim_tabpage_set_win(page, file_window)
+      end
+    end
+  end
+
+  --- Closes the explorer column, the cursor having left it
+  --- (`leave_explorer_column()`).
+  local function close_explorer_column()
+    leave_explorer_column()
+    vim.api.nvim_win_close(state.explorer_window, false)
+  end
+
+  --- Makes the explorer column what the layout was handed: open when it is on
+  --- a side, closed when it is not (`close_explorer_column()`), on that side,
+  --- showing the explorer's buffer. A column on the other side moves there
+  --- (`keep_explorer_outermost()`).
+  local function keep_explorer_column()
+    if has_explorer_column() and not state.explorer_column then
+      close_explorer_column()
+    elseif not has_explorer_column() and state.explorer_column then
+      open_explorer_column()
     end
   end
 
@@ -1342,6 +1543,14 @@ local function make_layout(input_name, group_name)
     end
     state.buffers.shell = arrangement.shell or state.buffers.shell
     state.buffers.explorer = arrangement.explorer or state.buffers.explorer
+    if arrangement.explorer_column ~= nil then
+      state.explorer_column = arrangement.explorer_column
+    end
+    state.explorer_width = arrangement.explorer_width or state.explorer_width
+    if state.explorer_column and state.pane == 'explorer' then
+      state.pane = 'agent'
+      state.input_closed_by_user = nil
+    end
     state.buffers.walkthrough = arrangement.walkthrough or state.buffers.walkthrough
     take_run(arrangement.run)
     if state.pane == 'run' and not arrangement.run then
@@ -1374,6 +1583,66 @@ local function make_layout(input_name, group_name)
     return type(value) == 'number' and value > 0 and value < 1
   end
 
+  --- Whether `value` names how the explorer column is: a side, or `false` for
+  --- none.
+  ---
+  ---@param value any
+  ---@return boolean
+  local function is_explorer_column(value)
+    return value == false or side.is_side(value)
+  end
+
+  --- Whether `value` is a width in cells: a whole number from 1.
+  ---
+  ---@param value any
+  ---@return boolean
+  local function is_column_width(value)
+    return type(value) == 'number' and value >= 1 and value % 1 == 0
+  end
+
+  --- Raises an error naming the first of the explorer column's settings of
+  --- `arrangement` the layout cannot show: the column, which is a side or
+  --- `false`, its width, and, when the column is a side, the explorer's buffer
+  --- and a width, handed now or kept from before.
+  ---
+  ---@param arrangement table
+  local function validate_explorer_column(arrangement)
+    vim.validate(
+      'arrangement.explorer_column',
+      arrangement.explorer_column,
+      is_explorer_column,
+      true,
+      "'left', 'right' or false"
+    )
+    vim.validate(
+      'arrangement.explorer_width',
+      arrangement.explorer_width,
+      is_column_width,
+      true,
+      'a positive whole number'
+    )
+    local column = arrangement.explorer_column
+    if column == nil then
+      column = state.explorer_column
+    end
+    if column then
+      vim.validate(
+        'arrangement.explorer',
+        arrangement.explorer or state.buffers.explorer,
+        is_buffer,
+        false,
+        'a buffer'
+      )
+      vim.validate(
+        'arrangement.explorer_width',
+        arrangement.explorer_width or state.explorer_width,
+        is_column_width,
+        false,
+        'a positive whole number'
+      )
+    end
+  end
+
   --- Raises an error naming the first setting of `arrangement` the layout
   --- cannot show.
   ---
@@ -1401,6 +1670,7 @@ local function make_layout(input_name, group_name)
     vim.validate('arrangement.shell', arrangement.shell, is_buffer, true, 'a buffer')
     vim.validate('arrangement.explorer', arrangement.explorer, is_buffer, true, 'a buffer')
     vim.validate('arrangement.walkthrough', arrangement.walkthrough, is_buffer, true, 'a buffer')
+    validate_explorer_column(arrangement)
     vim.validate('arrangement.run', arrangement.run, 'table', true)
     if arrangement.run then
       vim.validate(
@@ -2174,6 +2444,17 @@ local function make_layout(input_name, group_name)
   --- any was handed, and one that names the other side moves the columns of
   --- a layout that is open (`M.set_claude_side()`).
   ---
+  --- With `arrangement.explorer_column` a side, a fourth window shows
+  --- `arrangement.explorer` as a column of its own at the outer edge of that
+  --- side, as tall as the screen, `arrangement.explorer_width` cells wide and
+  --- fixed there; the other three columns share the screen's remaining cells
+  --- as they do without it. Claude's column being on either side leaves it
+  --- where it is (`M.explorer_column()`). Handed again with another side or
+  --- width the column moves or resizes, with `false` it closes, the cursor
+  --- going to the file column when it was in the column, and a column closed
+  --- by hand opens again in place. While the column is a side the
+  --- explorer pane gives way to the agent pane.
+  ---
   --- While any of the three windows exists, opening again restores the layout
   --- instead, in the tab that holds it: it creates only the windows that were
   --- closed, in their places, Input's not under the terminal pane, shows in
@@ -2231,9 +2512,12 @@ local function make_layout(input_name, group_name)
   --- Raises an error naming the setting, before changing anything, when
   --- `arrangement` is not a table, `claude` or `report` is not an existing
   --- buffer, `report_height` is not a number strictly between 0 and 1,
-  --- `claude_side`, when given, is neither `'left'` nor `'right'`, or
-  --- `changes`, when given, is not a table whose `files` and `commits` are
-  --- existing buffers, or `shell`, when given, is not an existing buffer, or
+  --- `claude_side`, when given, is neither `'left'` nor `'right'`,
+  --- `explorer_column`, when given, is neither a side nor `false`,
+  --- `explorer_width`, when given, is not a positive whole number, the
+  --- explorer column is a side and no explorer buffer or width was handed,
+  --- now or before, or `changes`, when given, is not a table whose `files` and
+  --- `commits` are existing buffers, or `shell`, when given, is not an existing buffer, or
   --- `run`, when given, is not a table whose `buffers` are at least one
   --- existing buffer and whose `winbar` is a string, or `explorer`, when
   --- given, is not an existing buffer, or `claude_statusline`, when given, is
@@ -2259,6 +2543,7 @@ local function make_layout(input_name, group_name)
       state.claude_side = wanted_side
       build()
     end
+    keep_explorer_column()
     state.report_height = arrangement.report_height
     pin_windows()
     wrap_agent_pane()
@@ -2497,6 +2782,35 @@ local function make_layout(input_name, group_name)
   function M.focus_pane(pane, arrangement)
     M.show_pane(pane, arrangement)
     vim.api.nvim_set_current_win(state.windows[PANE_LANDING[pane]])
+  end
+
+  --- What `M.focus_explorer_column()` raises when, the layout opened, it has
+  --- no explorer column to move the cursor to.
+  local NO_EXPLORER_COLUMN =
+    'arrangement.explorer_column: expected a side, the explorer column was asked for'
+
+  --- Moves the cursor into the explorer column, opening the layout with
+  --- `arrangement` first when the layout is not open or the column is gone, in
+  --- which case the column opens in place, at the outer edge of its side.
+  --- With the cursor in the column already, it changes nothing. `arrangement`
+  --- may be a function that returns it, which is called only when the layout
+  --- must open.
+  ---
+  --- Raises an error naming `arrangement.explorer_column` when the layout has
+  --- no column once it is open, after opening it and before moving the cursor.
+  ---
+  ---@param arrangement aineo.layout.Arrangement|fun(): aineo.layout.Arrangement
+  function M.focus_explorer_column(arrangement)
+    if not (is_open() and has_explorer_column()) then
+      if type(arrangement) == 'function' then
+        arrangement = arrangement()
+      end
+      M.open(arrangement)
+    end
+    if not has_explorer_column() then
+      error(NO_EXPLORER_COLUMN, 0)
+    end
+    vim.api.nvim_set_current_win(state.explorer_window)
   end
 
   --- Shows `buffer` in the file column, as a file opened from one of the
@@ -2794,12 +3108,21 @@ local function make_layout(input_name, group_name)
     return state.claude_side
   end
 
+  --- The side of the screen the explorer column is on, or `false` when the
+  --- layout has none.
+  ---
+  ---@return aineo.layout.Side|false
+  function M.explorer_column()
+    return state.explorer_column
+  end
+
   --- Moves Claude's column to `claude_side`, the right column across the
   --- screen from it and the file column between them, in the layout's tab
   --- page whether or not it is shown: the windows move, and Claude's terminal
   --- and its job, Input's draft, every pane's buffer, the file column's
   --- buffers and splits, each window's cursor and the window the cursor is in
-  --- stay. A zoom ends first, its sizes not given back (`M.toggle_zoom()`,
+  --- stay, and so does the explorer column, outermost on its side. A zoom ends
+  --- first, its sizes not given back (`M.toggle_zoom()`,
   --- `M.toggle_full_zoom()`), and the columns take the layout's proportions.
   --- With none of the layout's windows open, the layout opens on that side
   --- next (`M.open()`). Asked for the side it is on, it changes nothing.
@@ -2813,6 +3136,97 @@ local function make_layout(input_name, group_name)
     if claude_side ~= state.claude_side then
       move_columns_to(claude_side)
     end
+  end
+
+  --- Makes the explorer column `explorer_column` at `explorer_width` cells in
+  --- the layout's tab page whether or not it is shown, as handing the
+  --- arrangement again does but without moving the cursor or the tab page: a
+  --- column that is not open opens, one that is open moves to the other side,
+  --- takes the width, or closes when it is `false`, the cursor of the tab page
+  --- going to the file column first when it was in the column, and the other
+  --- columns take the layout's proportions. A zoom ends first, its sizes not given
+  --- back (`M.toggle_zoom()`, `M.toggle_full_zoom()`), and the explorer pane
+  --- gives way to the agent pane while the column is a side. With none of the
+  --- layout's windows open, only the column is recorded, for the layout to
+  --- open with (`M.open()`). Asked for the column it has, at the width it has,
+  --- it changes nothing, a zoom staying and a column closed by hand staying
+  --- closed. The explorer's buffer must have been handed
+  --- (`M.open()`, `M.keep_pane_buffer()`) when the column is a side.
+  ---
+  --- Raises an error naming `explorer_column` when it is neither a side nor
+  --- `false`, `explorer_width` when it is not a positive whole number, and the
+  --- explorer's buffer when the column is a side and none was handed, before
+  --- changing anything.
+  ---
+  ---@param explorer_column aineo.layout.Side|false
+  ---@param explorer_width integer
+  function M.set_explorer_column(explorer_column, explorer_width)
+    vim.validate(
+      'explorer_column',
+      explorer_column,
+      is_explorer_column,
+      false,
+      "'left', 'right' or false"
+    )
+    vim.validate(
+      'explorer_width',
+      explorer_width,
+      is_column_width,
+      false,
+      'a positive whole number'
+    )
+    if explorer_column then
+      vim.validate('explorer buffer', state.buffers.explorer, is_buffer, false, 'a buffer')
+    end
+    local changes_the_column = explorer_column ~= state.explorer_column
+      or (explorer_column and explorer_width ~= state.explorer_width)
+    state.explorer_column = explorer_column
+    state.explorer_width = explorer_width
+    if not changes_the_column or not has_any_window() then
+      return
+    end
+    if not explorer_column and has_explorer_column() then
+      leave_explorer_column()
+    end
+    vim.api.nvim_win_call(existing_windows()[1], function()
+      end_full_zoom()
+      end_zoom()
+      if explorer_column and state.pane == 'explorer' then
+        switch_pane('agent')
+      end
+      keep_explorer_column()
+      if is_open() then
+        apply_proportions()
+      end
+    end)
+  end
+
+  --- Whether the explorer column's window exists: false for a layout that has
+  --- no column and for one whose column the user closed.
+  ---
+  ---@return boolean
+  function M.explorer_column_is_open()
+    return has_explorer_column()
+  end
+
+  --- Opens the explorer column again, in place, in the layout's tab page
+  --- whether or not it is shown, when the layout has one (`M.explorer_column()`)
+  --- and its window was closed, as `set_explorer_column()` opens one: the cursor
+  --- and the tab page shown stay and the other columns take the layout's
+  --- proportions. Changes nothing otherwise, and while no window of the layout
+  --- is open.
+  function M.reopen_explorer_column()
+    if not state.explorer_column or has_explorer_column() or not has_any_window() then
+      return
+    end
+    vim.api.nvim_win_call(existing_windows()[1], function()
+      end_full_zoom()
+      end_zoom()
+      keep_explorer_column()
+      if is_open() then
+        apply_proportions()
+      end
+    end)
   end
 
   --- Lets the layout go, as its tab page closes: removes its handlers, by

@@ -1330,6 +1330,7 @@ local SUBCOMMANDS = {
   'sessions',
   'new',
   'pane',
+  'explorer',
   'run',
   'claim',
   'tab',
