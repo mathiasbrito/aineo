@@ -14,6 +14,10 @@ local child = MiniTest.new_child_neovim()
 --- How long a case waits for the child to reach a state, in milliseconds.
 local PATIENCE_MS = 10000
 
+--- How long a case watches a cursor for a move that should not come, in
+--- milliseconds: longer than the explorer takes to read its tree again.
+local CURSOR_SETTLE_MS = 1500
+
 --- The Lua that ends, in the child, the process of every terminal by a
 --- hangup, and waits for each to end, at most 5 s each.
 local END_TERMINALS = [[
@@ -687,12 +691,12 @@ T['the explorer pane under the file focus']['comes back with the cursor on the e
   entry.command(child, 'Aineo focus')
 
   wait_for_windows({ 'terminal', vim.fs.joinpath(top, 'NOTES.md'), 'aineo://explorer' })
-  eq(
-    child.lua_get(
-      [=[vim.api.nvim_win_get_cursor(vim.fn.win_findbuf(vim.fn.bufnr('aineo://explorer'))[1])[1]]=]
-    ),
-    line
-  )
+  local explorer_cursor =
+    [=[vim.api.nvim_win_get_cursor(vim.fn.win_findbuf(vim.fn.bufnr('aineo://explorer'))[1])[1]]=]
+  vim.wait(CURSOR_SETTLE_MS, function()
+    return child.lua_get(explorer_cursor) ~= line
+  end, 20)
+  eq(child.lua_get(explorer_cursor), line)
 end
 
 return T
