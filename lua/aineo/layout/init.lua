@@ -360,20 +360,24 @@ local function make_layout(input_name, group_name)
 
   --- The file column's windows when it lies between Claude's column and the
   --- right one, top to bottom: those of the columns between them, in the row
-  --- that holds the layout's windows; with Claude's window closed, those on
-  --- the file side of the right column, and with both of the right column's
-  --- closed, those on the file side of Claude's. None when no column lies there.
+  --- that holds the layout's windows, the explorer column's not among them;
+  --- with Claude's window closed, those on the file side of the right column,
+  --- and with both of the right column's closed, those on the file side of
+  --- Claude's. None when no column lies there.
   ---
   ---@return integer[] windows
   local function centre_file_column_windows()
     local tree = vim.fn.winlayout(vim.api.nvim_tabpage_get_number(layout_tab()))
-    local claude_window = has_window('claude') and state.windows.claude or nil
-    local claude_is_left = state.claude_side == 'left'
-    return columns.windows_between(tree, {
-      held = existing_windows(),
-      left = claude_is_left and claude_window or right_column_window(),
-      right = claude_is_left and right_column_window() or claude_window,
-    })
+    local left = has_window('claude') and state.windows.claude or nil
+    local right = right_column_window()
+    if state.claude_side ~= 'left' then
+      left, right = right, left
+    end
+    local between =
+      columns.windows_between(tree, { held = existing_windows(), left = left, right = right })
+    return vim.tbl_filter(function(window)
+      return window ~= state.explorer_window
+    end, between)
   end
 
   --- The window standing for the layout's column nearest the edge of the
@@ -878,41 +882,78 @@ local function make_layout(input_name, group_name)
     end
   end
 
+  --- Where `place_columns()` puts the layout's columns.
+  ---@class aineo.layout.ColumnPlan
+  ---@field claude_side aineo.layout.Side the side Claude's column goes to, the right column going across from it
+  ---@field explorer_side aineo.layout.Side|nil the side the explorer column goes to, nil to leave it
+  ---@field beside boolean whether the file column lies beside the explorer column, on its inner side, rather than between Claude's column and the right one
+
+  --- Puts Claude's column, the right column and the explorer column where
+  --- `plan` says, in one pass over the tab page of the layout, the file column
+  --- staying where it is: the other columns move to the edges of the screen
+  --- around it, which leaves it between them or, with `plan.beside`, next to
+  --- the explorer column. The windows of a column move together, in their
+  --- order, so that a file column split by hand keeps its splits, and every
+  --- window keeps its buffer, job and cursor. Windows across the screen keep
+  --- their place.
+  ---
+  ---@param plan aineo.layout.ColumnPlan
+  local function place_columns(plan)
+    local claude_members = has_window('claude') and column_members(state.windows.claude) or {}
+    local right_column = right_column_window()
+    local right_members = right_column and column_members(right_column) or {}
+    local explorer_members = plan.explorer_side
+        and has_explorer_column()
+        and column_members(state.explorer_window)
+      or {}
+    local members = {
+      [plan.claude_side] = claude_members,
+      [side.opposite(plan.claude_side)] = right_members,
+    }
+    keeping_across_the_screen(function()
+      if plan.beside and #explorer_members > 0 then
+        local inner = side.opposite(plan.explorer_side)
+        local first, second = members.left, members.right
+        if inner == 'left' then
+          first, second = second, first
+        end
+        move_column(first, inner)
+        move_column(second, inner)
+      else
+        move_column(members.left, 'left')
+        move_column(members.right, 'right')
+      end
+      move_column(explorer_members, plan.explorer_side)
+    end)
+  end
+
   --- Moves the file column from between Claude's column and the right one to
-  --- the explorer column's inner side, the explorer column moving to the edge
-  --- of its side again beyond it. Changes nothing while the file column lies
-  --- beside the explorer column already or is not open.
+  --- the explorer column's inner side. Changes nothing while the file column
+  --- lies beside the explorer column already or is not open.
   local function move_file_column_beside_explorer()
-    local members = centre_file_column_windows()
-    if #members == 0 or #file_column_windows_beside_explorer() > 0 then
+    if #centre_file_column_windows() == 0 or #file_column_windows_beside_explorer() > 0 then
       return
     end
-    local explorer_members = column_members(state.explorer_window)
-    keeping_across_the_screen(function()
-      move_column(members, state.explorer_column)
-      move_column(explorer_members, state.explorer_column)
-    end)
+    place_columns({
+      claude_side = state.claude_side,
+      explorer_side = state.explorer_column,
+      beside = true,
+    })
   end
 
   --- Moves the file column from beside the explorer column, or from the edge
   --- of the screen the explorer column leaves open, to between Claude's column
   --- and the right one. Changes nothing while the file column lies there
-  --- already or is not open, or while Claude's window is closed, when the
-  --- file column lies at the edge in both places.
+  --- already or is not open.
   local function move_file_column_to_centre()
-    local members = file_column_windows_beside_explorer()
-    if #members == 0 or not has_window('claude') or #centre_file_column_windows() > 0 then
+    if #file_column_windows_beside_explorer() == 0 or #centre_file_column_windows() > 0 then
       return
     end
-    local above = nil
-    for _, member in ipairs(members) do
-      vim.api.nvim_win_set_config(
-        member,
-        above and { split = 'below', win = above }
-          or { split = right_column_edge(), win = state.windows.claude }
-      )
-      above = member
-    end
+    place_columns({
+      claude_side = state.claude_side,
+      explorer_side = state.explorer_column or nil,
+      beside = false,
+    })
   end
 
   --- Puts the file column where it belongs: beside the explorer column
@@ -1054,9 +1095,11 @@ local function make_layout(input_name, group_name)
   --- buffers or jobs, and the cursor stays in the window it was in. A zoom
   --- ends first, its sizes not given back; every window of the tab page then
   --- gets the size it had, which mirrors the columns, and the layout's
-  --- proportions are put back while the layout is open. The explorer column
-  --- moves last, to the edge of its own side, so that it stays outermost
-  --- there. With no window of the layout open, only the side is recorded,
+  --- proportions are put back while the layout is open. The columns move in
+  --- one pass (`place_columns()`): the explorer column, to the edge of its own
+  --- side, stays outermost there, and the file column, which does not move,
+  --- stays between Claude's column and the right one or beside the explorer
+  --- column. With no window of the layout open, only the side is recorded,
   --- for the layout to open on.
   ---
   ---@param target aineo.layout.Side
@@ -1069,15 +1112,11 @@ local function make_layout(input_name, group_name)
       end_full_zoom()
       end_zoom()
       local sizes = sizes_of_tab_windows()
-      local claude_members = has_window('claude') and column_members(state.windows.claude) or {}
-      local right_column = right_column_window()
-      local right_members = right_column and column_members(right_column) or {}
-      local explorer_members = has_explorer_column() and column_members(state.explorer_window) or {}
-      keeping_across_the_screen(function()
-        move_column(claude_members, claude_edge())
-        move_column(right_members, right_column_edge())
-        move_column(explorer_members, state.explorer_column)
-      end)
+      place_columns({
+        claude_side = target,
+        explorer_side = state.explorer_column or nil,
+        beside = wants_file_column_beside_explorer(),
+      })
       restore_sizes(sizes)
       if is_open() then
         apply_proportions()
