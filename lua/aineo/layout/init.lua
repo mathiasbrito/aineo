@@ -3211,6 +3211,16 @@ local function make_layout(input_name, group_name)
     end)
   end
 
+  --- Ends a file focus that waits for a file column, which a pane the user
+  --- asks for (`M.focus()`, `M.focus_pane()`) ends as `M.open()` ends an
+  --- applied one: its panes column is open, so the pane switches in place and
+  --- never reaches `M.open()`. An applied focus is left to `M.open()`.
+  local function end_armed_file_focus()
+    if state.file_focus and not state.file_focus.applied then
+      state.file_focus = nil
+    end
+  end
+
   --- Whether focusing `role` shows the agent pane first: the Report's and
   --- Input's windows always; Claude's never.
   ---
@@ -3278,6 +3288,7 @@ local function make_layout(input_name, group_name)
       state.input_closed_by_user = nil
     end
     if focus_shows_agent_pane(role) then
+      end_armed_file_focus()
       switch_pane('agent')
     end
     vim.api.nvim_set_current_win(state.windows[role])
@@ -3421,6 +3432,7 @@ local function make_layout(input_name, group_name)
   ---@param pane aineo.layout.Pane
   ---@param arrangement aineo.layout.Arrangement|fun(): aineo.layout.Arrangement
   function M.focus_pane(pane, arrangement)
+    end_armed_file_focus()
     M.show_pane(pane, arrangement)
     vim.api.nvim_set_current_win(state.windows[PANE_LANDING[pane]])
   end

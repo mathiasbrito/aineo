@@ -764,7 +764,8 @@ was.
 Only your own pane keys end the focus, as the panes column is what shows the
 pane: `\r`, `\i`, `\g`, `\pa`, `\pt`, `\pw`, `\x`, `\o` and their `:Aineo`
 commands bring the column back with that pane, the cursor going where the key
-puts it. What the agent does leaves it alone: its run tools
+puts it; a waiting focus ends too, and the pane you asked for stays when a
+file opens later. What the agent does leaves it alone: its run tools
 (|aineo-run-tools|) start a process that joins the stack unseen, and a
 process of the run pane that ends, or whose terminal you wipe, changes nothing
 meanwhile; one that had ended keeps its place in the stack as the focus
@@ -777,8 +778,11 @@ which gives the explorer pane's place to the agent pane unseen, and a resize
 of the editor keep it on, the file column taking the cells the columns leave.
 `\z` pressed with it on says the cursor is in none of the windows of the panes
 column; `\Z` zooms any window of the tab as ever, and the focus applying ends
-a zoom, without giving its sizes back. Claude's column keeps the width it had,
-so that Claude Code is told no new size as the focus starts or ends.
+a zoom, without giving its sizes back. The focus changes no width of Claude's
+column or the explorer column, so Claude Code is told no new size as it starts
+or ends; a file column opening sizes the columns as it always does, with the
+focus or without it, so ending the focus leaves the widths the same layout has
+when it was never focused.
 
 The agent's run tools ~
                                                              *aineo-run-tools*
