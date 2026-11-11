@@ -3302,7 +3302,8 @@ local function make_layout(input_name, group_name)
   --- page whether or not it is shown: the windows move, and Claude's terminal
   --- and its job, Input's draft, every pane's buffer, the file column's
   --- buffers and splits, each window's cursor and the window the cursor is in
-  --- stay, and so does the explorer column, outermost on its side. A zoom ends
+  --- stay, and so does the explorer column, outermost on its side, with the
+  --- file column beside it when it lies there (`arrangement.file_beside_explorer`). A zoom ends
   --- first, its sizes not given back (`M.toggle_zoom()`,
   --- `M.toggle_full_zoom()`), and the columns take the layout's proportions.
   --- With none of the layout's windows open, the layout opens on that side
@@ -3329,19 +3330,26 @@ local function make_layout(input_name, group_name)
   --- back (`M.toggle_zoom()`, `M.toggle_full_zoom()`), and the explorer pane
   --- gives way to the agent pane while the column is a side. With none of the
   --- layout's windows open, only the column is recorded, for the layout to
-  --- open with (`M.open()`). Asked for the column it has, at the width it has,
-  --- it changes nothing, a zoom staying and a column closed by hand staying
-  --- closed. The explorer's buffer must have been handed
-  --- (`M.open()`, `M.keep_pane_buffer()`) when the column is a side.
+  --- open with (`M.open()`). `file_beside_explorer`, when given, says whether the
+  --- file column lies beside the explorer column while that is open
+  --- (`arrangement.file_beside_explorer`): an open file column moves to the
+  --- place it belongs, with its windows, buffers and cursors, as the column
+  --- opens, closes, changes sides or the option changes. Asked for the column
+  --- it has, at the width it has, with the option it has, it changes nothing,
+  --- a zoom staying and a column closed by hand staying closed. The
+  --- explorer's buffer must have been handed (`M.open()`,
+  --- `M.keep_pane_buffer()`) when the column is a side.
   ---
   --- Raises an error naming `explorer_column` when it is neither a side nor
-  --- `false`, `explorer_width` when it is not a positive whole number, and the
+  --- `false`, `explorer_width` when it is not a positive whole number,
+  --- `file_beside_explorer` when it is given and not a boolean, and the
   --- explorer's buffer when the column is a side and none was handed, before
   --- changing anything.
   ---
   ---@param explorer_column aineo.layout.Side|false
   ---@param explorer_width integer
-  function M.set_explorer_column(explorer_column, explorer_width)
+  ---@param file_beside_explorer? boolean
+  function M.set_explorer_column(explorer_column, explorer_width, file_beside_explorer)
     vim.validate(
       'explorer_column',
       explorer_column,
@@ -3356,13 +3364,25 @@ local function make_layout(input_name, group_name)
       false,
       'a positive whole number'
     )
+    vim.validate('file_beside_explorer', file_beside_explorer, 'boolean', true)
     if explorer_column then
       vim.validate('explorer buffer', state.buffers.explorer, is_buffer, false, 'a buffer')
     end
     local changes_the_column = explorer_column ~= state.explorer_column
       or (explorer_column and explorer_width ~= state.explorer_width)
+      or (file_beside_explorer ~= nil and file_beside_explorer ~= state.file_beside_explorer)
+    if changes_the_column and has_any_window() then
+      vim.api.nvim_win_call(existing_windows()[1], function()
+        end_full_zoom()
+        end_zoom()
+        leave_explorer_when_settings_change(explorer_column, file_beside_explorer)
+      end)
+    end
     state.explorer_column = explorer_column
     state.explorer_width = explorer_width
+    if file_beside_explorer ~= nil then
+      state.file_beside_explorer = file_beside_explorer
+    end
     if not changes_the_column or not has_any_window() then
       return
     end
