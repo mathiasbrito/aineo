@@ -240,6 +240,10 @@ local function is_command_classes(value)
   return true
 end
 
+--- The old name of the setting `layout.panel_numbers`, read as that setting
+--- is (`aineo.entry.panel_numbers`); it is no look of the explorer.
+local OLD_NAME_OF_PANEL_NUMBERS = 'explorer.numbers'
+
 --- aineo's settings, each named by its path in `vim.g.aineo`, with its
 --- default and the check its value must pass (`vim.validate`'s validator and,
 --- for a function, the words that describe what it expects).
@@ -289,6 +293,7 @@ local SETTINGS = {
     expected = 'a whole number of at least 1',
   },
   { name = 'layout.file_beside_explorer', default = true, validator = 'boolean' },
+  { name = 'layout.panel_numbers', default = false, validator = 'boolean' },
   {
     name = 'changes.working_branch',
     default = nil,
@@ -320,7 +325,7 @@ local SETTINGS = {
   { name = 'explorer.counts', default = true, validator = 'boolean' },
   { name = 'explorer.compact', default = true, validator = 'boolean' },
   { name = 'explorer.diagnostics', default = true, validator = 'boolean' },
-  { name = 'explorer.numbers', default = false, validator = 'boolean' },
+  { name = OLD_NAME_OF_PANEL_NUMBERS, default = false, validator = 'boolean' },
   {
     name = 'office.idle_ms',
     default = 180000,
@@ -718,7 +723,7 @@ function M.explorer_looks(global_settings, setup_options)
     end
   end
   for _, setting in ipairs(SETTINGS) do
-    if vim.startswith(setting.name, 'explorer.') then
+    if vim.startswith(setting.name, 'explorer.') and setting.name ~= OLD_NAME_OF_PANEL_NUMBERS then
       local chosen, wrong = setting.default, nil
       for _, source in ipairs(sources) do
         local value, problem = checked_value_in(source, setting)

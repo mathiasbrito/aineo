@@ -29,7 +29,9 @@
 --- on its own windows and buffers only.
 
 local columns = require('aineo.layout.columns')
+local fresh_size = require('aineo.layout.fresh_size')
 local full_zoom = require('aineo.layout.full_zoom')
+local gutter = require('aineo.layout.gutter')
 local side = require('aineo.layout.side')
 local zoom = require('aineo.layout.zoom')
 
@@ -45,6 +47,7 @@ local zoom = require('aineo.layout.zoom')
 ---@field explorer_column? aineo.layout.Side|false the side of the screen the explorer column is on, a column of its own the full height of the screen beside the other columns showing `explorer`, whichever side Claude's column is on; `false` for none; without it the layout keeps what it was handed last, none before any
 ---@field explorer_width? integer the explorer column's width in cells, a positive whole number; without it the layout keeps the one it was handed last, and a side for the column needs one
 ---@field file_beside_explorer? boolean whether the file column lies beside the explorer column while that column is open, on its inner side, rather than between Claude's column and the right column; without it the layout keeps what it was handed last, false before any
+---@field panel_numbers? boolean whether the layout's panels, its windows that show no file, show the user's own line numbers, sign column, fold column and status column; without it the layout keeps what it was handed last, false before any, which leaves them only the separator between windows
 ---@field walkthrough? integer the walkthrough pane's buffer, the plan of a code walkthrough, shown in the Report's window above Input's; without it the layout keeps the one it was handed last
 ---@field claude_statusline? string the 'statusline' Claude's window draws for Claude's terminal; without it the layout keeps the one it was handed last, and before any, Claude's window draws the user's own
 
@@ -85,6 +88,8 @@ local zoom = require('aineo.layout.zoom')
 ---@field is_file_column_window fun(window: integer): boolean
 ---@field follow_claude_terminal fun(terminal: integer)
 ---@field toggle_claude_numbers fun()
+---@field panel_numbers fun(): boolean
+---@field set_panel_numbers fun(panel_numbers: boolean)
 ---@field toggle_zoom fun()
 ---@field toggle_full_zoom fun()
 ---@field is_zoomed fun(): boolean
@@ -129,8 +134,9 @@ local function make_layout(input_name, group_name)
   --- terminal once Neovim has seen its process end, the line numbers
   --- `M.toggle_claude_numbers()` last set in Claude's window, those it showed
   --- before it hid them, and the window and buffer those line numbers were
-  --- last shown for; the status line Claude's window draws for Claude's
-  --- terminal, the one handed last; the diffs `M.show_diff()` showed, by
+  --- last shown for; whether the panels show the user's own gutter
+  --- (`M.set_panel_numbers()`); the status line Claude's window draws for
+  --- Claude's terminal, the one handed last; the diffs `M.show_diff()` showed, by
   --- buffer; while the Report's window closes with the shell's terminal in
   --- it, whether the cursor was in that window, and the ID of such a window
   --- that closed on its own (`note_shell_window_closing()`); whether Input's
@@ -189,8 +195,12 @@ local function make_layout(input_name, group_name)
     explorer_window = nil,
     ---@type boolean
     file_beside_explorer = false,
+    ---@type boolean
+    panel_numbers = false,
     ---@type aineo.layout.FilePart[]|nil
     file_parts = nil,
+    ---@type uv.uv_timer_t|nil
+    fresh_size_timer = nil,
   }
 
   --- The role of `window` in the layout, or `nil` when it is not one of its
@@ -699,6 +709,98 @@ local function make_layout(input_name, group_name)
     if event.buf == state.buffers.claude then
       keep_claude_numbers()
       keep_claude_statusline()
+    end
+  end
+
+  --- The windows of the layout that are panels': those of its three roles,
+  --- the explorer column's and the run pane's below the Report's, that exist.
+  ---
+  ---@return integer[] windows
+  local function panel_windows()
+    local windows = existing_windows()
+    if state.explorer_window and vim.api.nvim_win_is_valid(state.explorer_window) then
+      table.insert(windows, state.explorer_window)
+    end
+    return vim.list_extend(windows, vim.tbl_filter(vim.api.nvim_win_is_valid, state.run_windows))
+  end
+
+  --- The buffers the layout shows in its panels: Claude's terminal, the
+  --- Report, Input, the changes pane's, the shell's, the explorer's, the
+  --- walkthrough's and the run pane's terminals.
+  ---
+  ---@return integer[] buffers
+  local function panel_buffers()
+    local buffers = vim.tbl_values(state.buffers)
+    return vim.list_extend(buffers, state.run and state.run.buffers or {})
+  end
+
+  --- Whether `window` is a panel: one of the layout's windows (`panel_windows()`),
+  --- or a window of the layout's tab page that shows one of its buffers
+  --- (`panel_buffers()`), as a window just opened for one does before the
+  --- layout has recorded it.
+  ---
+  ---@param window integer
+  ---@return boolean
+  local function is_panel_window(window)
+    if vim.list_contains(panel_windows(), window) then
+      return true
+    end
+    return has_any_window()
+      and vim.api.nvim_win_get_tabpage(window) == layout_tab()
+      and vim.list_contains(panel_buffers(), vim.api.nvim_win_get_buf(window))
+  end
+
+  --- Whether Claude's window keeps the line numbers `M.toggle_claude_numbers()`
+  --- set, which the panels' gutter leaves as they are.
+  ---
+  ---@param window integer
+  ---@return boolean
+  local function keeps_claude_numbers(window)
+    return window == state.windows.claude and state.claude_numbers ~= nil
+  end
+
+  --- Takes the gutter out of the panel `window` while it shows a panel's buffer
+  --- and the panels' numbers are off (`state.panel_numbers`). A file shown in
+  --- the window has the user's own: the options are set for the buffer the
+  --- window shows, as `:setlocal` does, and Neovim gives a buffer shown for
+  --- the first time the window's global values.
+  ---
+  ---@param window integer
+  local function keep_panel_gutter(window)
+    if state.panel_numbers or not gutter.is_panel_buffer(vim.api.nvim_win_get_buf(window)) then
+      return
+    end
+    gutter.hide(window, keeps_claude_numbers(window))
+  end
+
+  --- Keeps the gutter of every panel (`keep_panel_gutter()`).
+  local function keep_panel_gutters()
+    vim.iter(panel_windows()):each(keep_panel_gutter)
+  end
+
+  --- Gives every panel the gutter the panels' numbers ask for, as they were
+  --- just turned on or off: the user's own to each panel that shows a panel's
+  --- buffer once they are on (`keep_panel_gutter()` leaves it as it is), none
+  --- once they are off.
+  local function restyle_panel_gutters()
+    for _, window in ipairs(panel_windows()) do
+      if state.panel_numbers and gutter.is_panel_buffer(vim.api.nvim_win_get_buf(window)) then
+        gutter.show(window, keeps_claude_numbers(window))
+      else
+        keep_panel_gutter(window)
+      end
+    end
+  end
+
+  --- Keeps the gutter of the panels a buffer has just entered
+  --- (`keep_panel_gutter()`).
+  ---
+  ---@param event { buf: integer }
+  local function keep_panel_gutter_on_entry(event)
+    for _, window in ipairs(vim.fn.win_findbuf(event.buf)) do
+      if is_panel_window(window) then
+        keep_panel_gutter(window)
+      end
     end
   end
 
@@ -1621,6 +1723,7 @@ local function make_layout(input_name, group_name)
       close_explorer_column()
     elseif not has_explorer_column() and state.explorer_column then
       open_explorer_column()
+      keep_panel_gutter(state.explorer_window)
     end
   end
 
@@ -1752,15 +1855,67 @@ local function make_layout(input_name, group_name)
     end)
   end
 
+  --- The size Claude's window gives its terminal: the columns of the window
+  --- without its gutter, and its lines; `nil` when the layout has no Claude
+  --- window.
+  ---
+  ---@return integer|nil width
+  ---@return integer|nil height
+  local function claude_terminal_size()
+    if not has_window('claude') then
+      return nil, nil
+    end
+    local info = vim.fn.getwininfo(state.windows.claude)[1]
+    return info.width - info.textoff, info.height
+  end
+
+  --- Tells Claude's terminal the size of its window once more
+  --- (`aineo.layout.fresh_size`), so that Claude Code lays its screen out for
+  --- that size whichever sizes the window took before. Does nothing while a
+  --- window is zoomed fully, which leaves Claude's window the sliver the zoom
+  --- gave it, or while Claude's window shows no terminal of Claude's.
+  local function give_claude_terminal_a_fresh_size()
+    if state.full_zoom or not has_window('claude') then
+      return
+    end
+    local buffer = vim.api.nvim_win_get_buf(state.windows.claude)
+    local job = vim.b[buffer].terminal_job_id
+    if buffer ~= state.buffers.claude or not job then
+      return
+    end
+    fresh_size.give(job, claude_terminal_size)
+  end
+
+  --- Gives Claude's terminal a fresh size once the windows have settled
+  --- (`aineo.layout.fresh_size`'s `SETTLE_DELAY_MS`) when Claude's window
+  --- was one of those that changed size, once for a run of changes
+  --- (`give_claude_terminal_a_fresh_size()`).
+  local function give_claude_terminal_a_fresh_size_when_resized()
+    if
+      not has_window('claude') or not vim.list_contains(vim.v.event.windows, state.windows.claude)
+    then
+      return
+    end
+    local timer = state.fresh_size_timer
+    if timer and not timer:is_closing() then
+      timer:stop()
+      timer:close()
+    end
+    state.fresh_size_timer =
+      vim.defer_fn(give_claude_terminal_a_fresh_size, fresh_size.SETTLE_DELAY_MS)
+  end
+
   --- Keeps Input a scratch buffer and redirects the files shown in the layout's
   --- windows; keeps Claude's terminal in Normal mode once its process has ended
   --- (`leave_terminal_mode_as_claude_exits()`, `remember_claude_exit()`,
   --- `refuse_terminal_mode_once_claude_exited()`) and closes Claude's window
   --- when its terminal is wiped there (`close_claude_window_when_wiped()`);
   --- keeps Claude's line numbers and status line as Claude's terminal enters
-  --- a window (`keep_claude_window_on_entry()`); and puts the proportions back
-  --- whenever a window that is not a float closes, the editor is resized or a
-  --- tab is entered, replacing what an earlier call set up.
+  --- a window (`keep_claude_window_on_entry()`); tells Claude's terminal the
+  --- size of its window again once Claude's window changed size
+  --- (`give_claude_terminal_a_fresh_size_when_resized()`); and puts the
+  --- proportions back whenever a window that is not a float closes, the editor
+  --- is resized or a tab is entered, replacing what an earlier call set up.
   --- Input is made a scratch buffer first, so the redirect never takes it for
   --- a file. A window is still in the layout while `WinClosed` runs, so the
   --- proportions are put back after it; a tab that is not shown is resized
@@ -1769,6 +1924,10 @@ local function make_layout(input_name, group_name)
     local group = vim.api.nvim_create_augroup(group_name, {})
     vim.api.nvim_create_autocmd('BufWinEnter', { group = group, callback = keep_input_scratch })
     vim.api.nvim_create_autocmd('BufWinEnter', { group = group, callback = redirect_when_file })
+    vim.api.nvim_create_autocmd(
+      'BufWinEnter',
+      { group = group, callback = keep_panel_gutter_on_entry }
+    )
     vim.api.nvim_create_autocmd(
       'BufWinEnter',
       { group = group, callback = keep_claude_window_on_entry }
@@ -1788,6 +1947,10 @@ local function make_layout(input_name, group_name)
       end,
     })
     vim.api.nvim_create_autocmd('VimResized', { group = group, callback = keep_proportions })
+    vim.api.nvim_create_autocmd(
+      'WinResized',
+      { group = group, callback = give_claude_terminal_a_fresh_size_when_resized }
+    )
     vim.api.nvim_create_autocmd('TabEnter', { group = group, callback = keep_proportions })
     vim.api.nvim_create_autocmd('TermClose', { group = group, callback = remember_claude_exit })
     vim.api.nvim_create_autocmd(
@@ -1837,6 +2000,9 @@ local function make_layout(input_name, group_name)
     state.explorer_width = arrangement.explorer_width or state.explorer_width
     if arrangement.file_beside_explorer ~= nil then
       state.file_beside_explorer = arrangement.file_beside_explorer
+    end
+    if arrangement.panel_numbers ~= nil then
+      state.panel_numbers = arrangement.panel_numbers
     end
     if state.explorer_column and state.pane == 'explorer' then
       state.pane = 'agent'
@@ -1967,6 +2133,7 @@ local function make_layout(input_name, group_name)
       'boolean',
       true
     )
+    vim.validate('arrangement.panel_numbers', arrangement.panel_numbers, 'boolean', true)
     validate_explorer_column(arrangement)
     vim.validate('arrangement.run', arrangement.run, 'table', true)
     if arrangement.run then
@@ -2836,6 +3003,8 @@ local function make_layout(input_name, group_name)
       arrangement.explorer_column,
       arrangement.file_beside_explorer
     )
+    local panel_numbers_changed = arrangement.panel_numbers ~= nil
+      and arrangement.panel_numbers ~= state.panel_numbers
     take_arrangement(arrangement)
     forget_wiped_shell()
     local wanted_side = arrangement.claude_side or state.claude_side
@@ -2869,6 +3038,11 @@ local function make_layout(input_name, group_name)
     apply_proportions()
     watch_windows()
     watch_shell()
+    if panel_numbers_changed then
+      restyle_panel_gutters()
+    else
+      keep_panel_gutters()
+    end
   end
 
   --- Whether the Report and Input are both loaded: neither wiped nor unloaded,
@@ -3218,7 +3392,8 @@ local function make_layout(input_name, group_name)
     'aineo: no line numbers toggled — there is no Claude window; open aineo’s layout to make one'
 
   --- Hides the line numbers of the layout's Claude window, 'number' and
-  --- 'relativenumber', when it shows either, and shows those it showed before
+  --- 'relativenumber', when it shows either (the panels show none until
+  --- `M.set_panel_numbers()` shows them), and shows those it showed before
   --- they were last hidden otherwise, or 'number' alone when it has hidden
   --- none before. The options are set for the buffer Claude's window shows,
   --- whichever it is, as `:setlocal` does: a file opened from that window
@@ -3569,6 +3744,34 @@ local function make_layout(input_name, group_name)
     return has_explorer_column()
   end
 
+  --- Whether the panels show the user's own line numbers, sign column, fold
+  --- column and status column (`M.set_panel_numbers()`).
+  ---
+  ---@return boolean
+  function M.panel_numbers()
+    return state.panel_numbers
+  end
+
+  --- Shows or hides the gutter of the layout's panels, the windows that show
+  --- no file: Claude's window, the Report's, Input's, the explorer column's,
+  --- the run pane's. `true` gives each the user's own line numbers, sign
+  --- column, fold column and status column, those the global settings give
+  --- every window; `false` takes them out, so that only the separator between
+  --- windows is left, and every panel's buffer entering a window then has none
+  --- either. Files, wherever they are shown, keep the user's own. The line
+  --- numbers `M.toggle_claude_numbers()` set in Claude's window stay as they
+  --- are. Works whether or not the layout is shown, and records the value for
+  --- a layout opened later (`arrangement.panel_numbers`).
+  ---
+  --- Raises an error naming `panel_numbers` when it is not a boolean.
+  ---
+  ---@param panel_numbers boolean
+  function M.set_panel_numbers(panel_numbers)
+    vim.validate('panel_numbers', panel_numbers, 'boolean')
+    state.panel_numbers = panel_numbers
+    restyle_panel_gutters()
+  end
+
   --- Opens the explorer column again, in place, in the layout's tab page
   --- whether or not it is shown, when the layout has one (`M.explorer_column()`)
   --- and its window was closed, as `set_explorer_column()` opens one: the cursor
@@ -3595,6 +3798,11 @@ local function make_layout(input_name, group_name)
   --- a draft saves it first.
   local function let_go()
     pcall(vim.api.nvim_del_augroup_by_name, group_name)
+    local timer = state.fresh_size_timer
+    if timer and not timer:is_closing() then
+      timer:stop()
+      timer:close()
+    end
     if has_input() then
       vim.api.nvim_buf_delete(state.buffers.input, { force = true })
     end

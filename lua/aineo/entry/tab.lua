@@ -12,6 +12,7 @@ local folder_tabs = require('aineo.entry.folder_tabs')
 local input_carry = require('aineo.entry.input_carry')
 local layout_side = require('aineo.entry.layout_side')
 local links = require('aineo.entry.links')
+local panel_numbers = require('aineo.entry.panel_numbers')
 local cheatsheets = require('aineo.entry.cheatsheet')
 local offices = require('aineo.entry.office')
 local places = require('aineo.entry.places')
@@ -1127,6 +1128,7 @@ local function make_tab(homes, key, callbacks)
       explorer_column = explorer_choice.current(config),
       explorer_width = config.layout.explorer_width,
       file_beside_explorer = config.layout.file_beside_explorer,
+      panel_numbers = panel_numbers.current(config),
       walkthrough = walkthrough_plans.buffer_of(tab),
       claude_statusline = require('aineo.claude').session_statusline(),
     }

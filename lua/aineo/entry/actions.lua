@@ -7,9 +7,11 @@ local finding = require('aineo.entry.finding')
 local layout_side = require('aineo.entry.layout_side')
 local offices = require('aineo.entry.office')
 local opening = require('aineo.entry.opening')
+local panel_numbers = require('aineo.entry.panel_numbers')
 local quitting = require('aineo.entry.quitting')
 local registry = require('aineo.entry.registry')
 local reopening = require('aineo.entry.reopening')
+local settings = require('aineo.entry.settings')
 local one_tab = require('aineo.entry.tab')
 
 local M = {}
@@ -341,6 +343,36 @@ ACTIONS['layout mirror'] = function()
   for _, tab in ipairs(registry.tab_list) do
     if tab.is_bound() then
       tab.homes.layout.set_column_sides(claude_side, explorer_side)
+    end
+  end
+end
+
+--- Whether the panels of the aineo tab the user sees show their gutter: that
+--- of the aineo tab of the current tab page, else of the tab used last; what
+--- the user chose or the settings say when there is none
+--- (`aineo.entry.panel_numbers`).
+---
+---@return boolean
+local function panel_numbers_on_screen()
+  local tab = registry.tab_of_current_page() or registry.last_used_tab
+  if tab and tab.is_bound() then
+    return tab.homes.layout.panel_numbers()
+  end
+  return panel_numbers.current(settings.resolved())
+end
+
+--- What `:Aineo panel-numbers` does: shows the user's own line numbers, sign
+--- column, fold column and status column in the panels of every aineo tab
+--- whose tab page exists when the panels in the tab the user sees show none,
+--- and takes them out when they show them, and records the choice for the
+--- editor's life (`aineo.entry.panel_numbers`). Claude's window alone has
+--- `:Aineo claude-numbers`.
+ACTIONS['panel-numbers'] = function()
+  local shown = not panel_numbers_on_screen()
+  panel_numbers.choose(shown)
+  for _, tab in ipairs(registry.tab_list) do
+    if tab.is_bound() then
+      tab.homes.layout.set_panel_numbers(shown)
     end
   end
 end
