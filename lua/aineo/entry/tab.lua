@@ -1256,6 +1256,22 @@ local function make_tab(homes, key, callbacks)
     show_pane('changes')
   end
 
+  --- Turns the tab's file focus on, or off when it is on
+  --- (`aineo.layout`'s `start_file_focus()` and `end_file_focus()`): the
+  --- panes column closes and the file column takes its cells, or the panes
+  --- column opens again around the Claude session's terminal as it is, as
+  --- `focus()` opens the layout, with its pane and the cursor and file where
+  --- they were.
+  local function toggle_file_focus()
+    if not homes.layout.is_file_focused() then
+      homes.layout.start_file_focus()
+      return
+    end
+    with_pane_arrangement(function(make_arrangement)
+      homes.layout.end_file_focus(make_arrangement)
+    end)
+  end
+
   --- Shows the tab's shell in the layout's terminal pane and moves the cursor
   --- into it, in Terminal mode, starting the shell in the folder
   --- (`kept_places()`'s working directory, whatever `:cd` or `:tcd` says) when
@@ -2019,6 +2035,7 @@ local function make_tab(homes, key, callbacks)
     ['diff close'] = function()
       projects.close_shown_diff(tab)
     end,
+    focus = toggle_file_focus,
     zoom = function()
       homes.layout.toggle_zoom()
     end,
