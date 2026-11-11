@@ -25,19 +25,21 @@ local function settings_arguments(settings)
 end
 
 --- How `entry_editor` starts an editor as a user starts `nvim`, with aineo
---- set to run `fake` as Claude, and `start`'s arguments, variables, piped
---- input, settings and terminal size on top.
+--- set to run `fake` as Claude with no explorer column (`layout.explorer_column
+--- = false`, overridable by `start.settings`, and left at aineo's default with
+--- `start.default_layout`), and `start`'s arguments, variables, piped input,
+--- settings and terminal size on top.
 ---
 ---@param fake { environment: table<string, string> }
----@param start? { args?: string[], environment?: table<string, string>, stdin?: string, settings?: table, columns?: integer, lines?: integer }
+---@param start? { args?: string[], environment?: table<string, string>, stdin?: string, settings?: table, default_layout?: boolean, columns?: integer, lines?: integer }
 ---@return aineo.test.EditorStart
 local function editor_start(fake, start)
   start = start or {}
-  local settings = vim.tbl_deep_extend(
-    'force',
-    { claude = { cmd = claude_session.fake_command() } },
-    start.settings or {}
-  )
+  local base = { claude = { cmd = claude_session.fake_command() } }
+  if not start.default_layout then
+    base.layout = { explorer_column = false }
+  end
+  local settings = vim.tbl_deep_extend('force', base, start.settings or {})
   return {
     args = vim.list_extend(settings_arguments(settings), start.args or {}),
     environment = vim.tbl_extend('force', fake.environment, start.environment or {}),
@@ -91,6 +93,18 @@ T['a bare interactive start']['opens the layout around a new Claude'] = function
 
   eq(entry_editor.get(editor, entry.WINDOWS), { 'terminal', 'aineo://report', 'aineo://input' })
   eq(#claude_session.wait_for_starts(fake, 1), 1)
+end
+
+T['a bare interactive start']['opens Claude Code, the panes column and the explorer column with the layout left at its default'] = function()
+  local fake = claude_session.fake('entry-autostart-default-layout', 'ready')
+  local expected = { 'terminal', 'aineo://report', 'aineo://input', 'aineo://explorer' }
+
+  local editor = start_editor(fake, { default_layout = true })
+  vim.wait(claude_session.PATIENCE_MS, function()
+    return vim.deep_equal(entry_editor.get(editor, entry.WINDOWS), expected)
+  end, 50)
+
+  eq(entry_editor.get(editor, entry.WINDOWS), expected)
 end
 
 T['a bare interactive start']["shows the tab line by setting 'showtabline' to 2"] = function()

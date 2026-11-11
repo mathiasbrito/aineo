@@ -1,6 +1,7 @@
---- Which looks of the explorer's tree are on: the guides, the icons, the
---- dimming of unchanged files, the counts, the compact chains and the
---- diagnostics. All are on unless the settings say otherwise.
+--- Which looks of the explorer are on: the guides, the icons, the dimming of
+--- unchanged files, the counts, the compact chains and the diagnostics of its
+--- tree are on unless the settings say otherwise; the line numbers of the
+--- windows that show it are off unless they do.
 
 local M = {}
 
@@ -12,24 +13,27 @@ local M = {}
 ---@field counts boolean
 ---@field compact boolean
 ---@field diagnostics boolean
+---@field numbers boolean whether a window showing the explorer keeps the user's own line numbers
 
---- The looks with every one on.
+--- The looks the settings leave alone: those of the tree on, the line numbers
+--- off.
 ---@type aineo.explorer.Look
-M.ALL_ON = {
+M.DEFAULT = {
   guides = true,
   icons = true,
   dim = true,
   counts = true,
   compact = true,
   diagnostics = true,
+  numbers = false,
 }
 
---- The looks `given` says, each one it does not say on.
+--- The looks `given` says, each one it does not say as `M.DEFAULT` has it.
 ---
 ---@param given table<string, boolean>|nil
 ---@return aineo.explorer.Look
 function M.resolve(given)
-  return vim.tbl_extend('force', M.ALL_ON, given or {})
+  return vim.tbl_extend('force', M.DEFAULT, given or {})
 end
 
 --- Makes the function that reads the looks as they are set: it calls `ask()`

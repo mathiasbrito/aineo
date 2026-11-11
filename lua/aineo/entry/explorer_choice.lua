@@ -15,7 +15,8 @@ local M = {}
 ---@type aineo.layout.Side|false|nil
 local chosen = nil
 
---- The side `\E` last turned the column on at, nil before it did.
+--- The side `\E` last turned the column on at, or `:Aineo layout mirror` last
+--- moved it to, nil before either did.
 ---@type aineo.layout.Side|nil
 local last_side = nil
 
@@ -35,18 +36,19 @@ function M.current(config)
   return config.layout.explorer_column
 end
 
---- The side `\E` turns the column on at: the one the setting names, else the
---- one `\E` last used, else the left.
+--- The side `\E` turns the column on at: the one `\E` or a mirrored layout
+--- last put it on, else the one the setting names, else the left.
 ---
 ---@param config table the resolved configuration
 ---@return aineo.layout.Side
 function M.side_to_turn_on(config)
-  return config.layout.explorer_column or last_side or 'left'
+  return last_side or config.layout.explorer_column or 'left'
 end
 
 --- Records `column`, a side or `false`, as the choice of the user, which
 --- lasts for the editor's life and wins over the setting until a `setup()`
---- changes the setting.
+--- changes the setting; a side is also the one `\E` turns the column on at
+--- next (`M.side_to_turn_on()`).
 ---
 ---@param column aineo.layout.Side|false
 ---@param config table the resolved configuration
@@ -58,12 +60,16 @@ end
 
 --- Ends the choice when `config` names another column than it did when the
 --- choice was made: a `setup()` that changed `layout.explorer_column` says
---- what the user wants now.
+--- what the user wants now; a setting that names a side also ends the side
+--- `\E` last put the column on, one that names none keeps it.
 ---
 ---@param config table the resolved configuration
 function M.end_when_settings_changed(config)
   if settings_then and settings_then.column ~= config.layout.explorer_column then
     chosen = nil
+    if config.layout.explorer_column then
+      last_side = nil
+    end
     settings_then = nil
   end
 end

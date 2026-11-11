@@ -388,7 +388,7 @@ end
 
 T['a file opened from the column'] = MiniTest.new_set()
 
-T['a file opened from the column']['opens in the file column between Claude Code and the panes'] = function()
+T['a file opened from the column']['opens in the file column beside the explorer column'] = function()
   local top = open_with_column('file', 'left')
   entry.press(child, '\\e')
   wait_for_tree()
@@ -406,7 +406,7 @@ T['a file opened from the column']['opens in the file column between Claude Code
   eq(wait_for_current_window(readme), readme)
   eq(
     entry.windows(child),
-    { 'aineo://explorer', 'terminal', readme, 'aineo://report', 'aineo://input' }
+    { 'aineo://explorer', readme, 'terminal', 'aineo://report', 'aineo://input' }
   )
 end
 
@@ -711,7 +711,7 @@ T['restoring the layout']['opens the column again, at its width'] = function()
   entry.press(child, '\\o')
 
   eq(entry.windows(child), COLUMN_LEFT)
-  eq(width_of('aineo://explorer'), 30)
+  eq(width_of('aineo://explorer'), 40)
 end
 
 T['a zoom of the whole window'] = MiniTest.new_set()
@@ -724,7 +724,7 @@ T['a zoom of the whole window']['covers the column and gives it its width back']
   local while_zoomed = width_of('aineo://explorer')
   entry.press(child, '\\Z')
 
-  eq({ before, while_zoomed, width_of('aineo://explorer') }, { 30, 1, 30 })
+  eq({ before, while_zoomed, width_of('aineo://explorer') }, { 40, 1, 40 })
 end
 
 T['a zoom of the whole window']['gives the column its width back after the screen was resized meanwhile'] = function()
@@ -734,7 +734,98 @@ T['a zoom of the whole window']['gives the column its width back after the scree
   child.o.columns = 120
   entry.press(child, '\\Z')
 
-  eq(width_of('aineo://explorer'), 30)
+  eq(width_of('aineo://explorer'), 40)
+end
+
+--- The 'number' and 'relativenumber' of the window showing the explorer in the
+--- child.
+local EXPLORER_LINE_NUMBERS = [[(function()
+  local window = vim.fn.win_findbuf(vim.fn.bufnr('aineo://explorer'))[1]
+  return { vim.wo[window].number, vim.wo[window].relativenumber }
+end)()]]
+
+--- Turns the line numbers on as the user's global settings in the child.
+local function turn_on_line_numbers()
+  child.o.number = true
+  child.o.relativenumber = true
+end
+
+T['the explorer’s line numbers'] = MiniTest.new_set()
+
+T['the explorer’s line numbers']['are off in the column, whatever the user’s settings'] = function()
+  turn_on_line_numbers()
+  open_with_column('numbers-column', 'left')
+
+  eq(child.lua_get(EXPLORER_LINE_NUMBERS), { false, false })
+end
+
+T['the explorer’s line numbers']['are off in the pane, whatever the user’s settings'] = function()
+  turn_on_line_numbers()
+  open_in_repository('numbers-pane')
+
+  entry.press(child, '\\e')
+
+  eq(child.lua_get(EXPLORER_LINE_NUMBERS), { false, false })
+end
+
+--- Moves the cursor of the explorer in the child to the line of `README.md`.
+local function put_cursor_on_readme()
+  wait_for_tree()
+  child.lua([[(function()
+    for line, shown in ipairs(vim.api.nvim_buf_get_lines(0, 0, -1, false)) do
+      if vim.endswith(shown, 'README.md') then
+        vim.api.nvim_win_set_cursor(0, { line, 0 })
+      end
+    end
+  end)()]])
+end
+
+--- The 'number' and 'relativenumber' of the child's current window.
+local CURRENT_LINE_NUMBERS = [[{ vim.wo.number, vim.wo.relativenumber }]]
+
+T['the explorer’s line numbers']['stay the user’s in a file opened from the column'] = function()
+  turn_on_line_numbers()
+  local top = open_with_column('numbers-file-column', 'left')
+  entry.press(child, '\\e')
+  put_cursor_on_readme()
+  local readme = vim.fs.joinpath(top, 'README.md')
+
+  entry.press(child, '<CR>')
+
+  eq(wait_for_current_window(readme), readme)
+  eq(child.lua_get(CURRENT_LINE_NUMBERS), { true, true })
+end
+
+T['the explorer’s line numbers']['stay the user’s in a file opened from the pane'] = function()
+  turn_on_line_numbers()
+  local top = open_in_repository('numbers-file-pane')
+  entry.press(child, '\\e')
+  put_cursor_on_readme()
+  local readme = vim.fs.joinpath(top, 'README.md')
+
+  entry.press(child, '<CR>')
+
+  eq(wait_for_current_window(readme), readme)
+  eq(child.lua_get(CURRENT_LINE_NUMBERS), { true, true })
+end
+
+T['the explorer’s line numbers']['stay the user’s with explorer.numbers on, in the column'] = function()
+  turn_on_line_numbers()
+  open_in_repository(
+    'numbers-kept',
+    { layout = { explorer_column = 'left' }, explorer = { numbers = true } }
+  )
+
+  eq(child.lua_get(EXPLORER_LINE_NUMBERS), { true, true })
+end
+
+T['the explorer’s line numbers']['stay the user’s with explorer.numbers on, in the pane'] = function()
+  turn_on_line_numbers()
+  open_in_repository('numbers-kept-pane', { explorer = { numbers = true } })
+
+  entry.press(child, '\\e')
+
+  eq(child.lua_get(EXPLORER_LINE_NUMBERS), { true, true })
 end
 
 return T

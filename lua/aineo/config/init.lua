@@ -278,16 +278,17 @@ local SETTINGS = {
   },
   {
     name = 'layout.explorer_column',
-    default = false,
+    default = 'right',
     validator = is_explorer_column,
     expected = "'left', 'right' or false",
   },
   {
     name = 'layout.explorer_width',
-    default = 30,
+    default = 40,
     validator = is_positive_count,
     expected = 'a whole number of at least 1',
   },
+  { name = 'layout.file_beside_explorer', default = true, validator = 'boolean' },
   {
     name = 'changes.working_branch',
     default = nil,
@@ -319,6 +320,7 @@ local SETTINGS = {
   { name = 'explorer.counts', default = true, validator = 'boolean' },
   { name = 'explorer.compact', default = true, validator = 'boolean' },
   { name = 'explorer.diagnostics', default = true, validator = 'boolean' },
+  { name = 'explorer.numbers', default = false, validator = 'boolean' },
   {
     name = 'office.idle_ms',
     default = 180000,
