@@ -7,6 +7,7 @@ local closing = require('aineo.entry.closing')
 local editors = require('aineo.entry.editors')
 local errors = require('aineo.entry.errors')
 local explorer = require('aineo.entry.explorer')
+local explorer_choice = require('aineo.entry.explorer_choice')
 local folder_tabs = require('aineo.entry.folder_tabs')
 local input_carry = require('aineo.entry.input_carry')
 local layout_side = require('aineo.entry.layout_side')
@@ -1121,9 +1122,9 @@ local function make_tab(homes, key, callbacks)
       changes = changes_pane(),
       shell = homes.shell.shell_buffer(),
       run = run_stack(),
-      explorer = config.layout.explorer_column and homes.explorer.buffer()
+      explorer = explorer_choice.current(config) and homes.explorer.buffer()
         or homes.explorer.made_buffer(),
-      explorer_column = config.layout.explorer_column,
+      explorer_column = explorer_choice.current(config),
       explorer_width = config.layout.explorer_width,
       walkthrough = walkthrough_plans.buffer_of(tab),
       claude_statusline = require('aineo.claude').session_statusline(),
@@ -1998,7 +1999,7 @@ local function make_tab(homes, key, callbacks)
     ['pane run'] = run.run_command,
     ['pane explorer'] = function()
       homes.explorer.buffer()
-      local column = resolved_config().layout.explorer_column
+      local column = explorer_choice.current(resolved_config())
       if homes.layout.explorer_column() ~= column then
         apply_explorer_column_setting()
       end

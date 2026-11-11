@@ -421,6 +421,215 @@ local function width_of(name)
   )
 end
 
+--- Each way to turn the explorer column on or off, as a set's `parametrize`:
+--- its name, and the function that does it.
+local COLUMN_DOORS = {
+  {
+    'pressing \\E',
+    function()
+      entry.press(child, '\\E')
+    end,
+  },
+  {
+    'pressing <Plug>(aineo-explorer-column)',
+    function()
+      entry.press(child, '<Plug>(aineo-explorer-column)')
+    end,
+  },
+  {
+    'running :Aineo explorer column',
+    function()
+      entry.command(child, 'Aineo explorer column')
+    end,
+  },
+  {
+    'pressing <C-\\>E in Claude’s Terminal mode',
+    function()
+      entry.press(child, '\\c')
+      child.type_keys('<C-\\>E')
+    end,
+  },
+}
+
+local NO_COLUMN = { 'terminal', 'aineo://report', 'aineo://input' }
+
+T['the explorer column key'] = MiniTest.new_set({ parametrize = COLUMN_DOORS })
+
+T['the explorer column key']['turns the column on at the left, and off again, by'] = function(
+  _,
+  door
+)
+  open_in_repository('key-toggle')
+
+  door()
+  local turned_on = entry.windows(child)
+  entry.press(child, '<C-\\><C-n>')
+  door()
+
+  eq(turned_on, COLUMN_LEFT)
+  eq(entry.windows(child), NO_COLUMN)
+end
+
+T['the explorer column key']['turns the column off with the explorer a pane that \\e shows again, by'] = function(
+  _,
+  door
+)
+  open_with_column('key-pane', 'left')
+
+  door()
+  entry.press(child, '\\e')
+
+  eq(entry.windows(child), { 'terminal', 'aineo://explorer' })
+end
+
+T['the explorer column key’s choice'] = MiniTest.new_set()
+
+T['the explorer column key’s choice']['turns the column on at the side the setting names'] = function()
+  open_with_column('key-side', 'right')
+
+  entry.press(child, '\\E')
+  local turned_off = entry.windows(child)
+  entry.press(child, '\\E')
+
+  eq(turned_off, NO_COLUMN)
+  eq(entry.windows(child), COLUMN_RIGHT)
+end
+
+T['the explorer column key’s choice']['turns the column on at the side it last used when the setting names none'] = function()
+  open_with_column('key-last', 'right')
+  entry.press(child, '\\E')
+  entry.press(child, '\\E')
+  setup_layout({ explorer_column = false })
+
+  entry.press(child, '\\E')
+  local turned_on = entry.windows(child)
+  entry.press(child, '\\E')
+  entry.press(child, '\\E')
+
+  eq(turned_on, COLUMN_RIGHT)
+  eq(entry.windows(child), COLUMN_RIGHT)
+end
+
+T['the explorer column key’s choice']['keeps its column through a setup() that changes the width alone'] = function()
+  open_in_repository('key-width')
+  entry.press(child, '\\E')
+
+  setup_layout({ explorer_width = 20 })
+
+  eq(entry.windows(child), COLUMN_LEFT)
+  eq(
+    child.lua_get(
+      [[vim.api.nvim_win_get_width(vim.fn.win_findbuf(vim.fn.bufnr('aineo://explorer'))[1])]]
+    ),
+    20
+  )
+end
+
+T['the explorer column key’s choice']['changes every aineo tab, the tab page shown staying'] = function()
+  tabs.use_own_state(child, 'explorer-column-key-tabs')
+  entry.use_fake(child, tabs.fake('explorer-column-key-tabs-first'))
+  child.cmd('Aineo open')
+  claude_session.wait_for_status(child, 'ready')
+  entry.use_fake(child, tabs.fake('explorer-column-key-tabs-second'))
+  child.cmd('Aineo tab new')
+  claude_session.wait_for_status(child, 'ready')
+  local shown = tabs.current_tab(child)
+
+  entry.press(child, '\\E')
+
+  eq({ tabs.windows_of_tab(child, 1), tabs.windows_of_tab(child, 2) }, { COLUMN_LEFT, COLUMN_LEFT })
+  eq(tabs.current_tab(child), shown)
+end
+
+T['the explorer column key’s choice']['ends a zoom of the whole window'] = function()
+  open_in_repository('key-zoom')
+  entry.press(child, '\\Z')
+
+  entry.press(child, '\\E')
+
+  eq(child.lua_get([[require('aineo.layout').is_zoomed()]]), false)
+end
+
+T['the explorer column key’s choice']['moves the cursor to the file column when the column closes under it'] = function()
+  local top = open_with_column('key-cursor', 'left')
+  local readme = vim.fs.joinpath(top, 'README.md')
+  child.cmd('edit ' .. vim.fn.fnameescape(readme))
+  wait_for_current_window(readme)
+  entry.press(child, '\\e')
+  eq(entry.current_window(child), 'aineo://explorer')
+
+  entry.press(child, '\\E')
+
+  eq(entry.current_window(child), readme)
+end
+
+T['the explorer column key’s choice']['keeps a window across the screen across the screen'] = function()
+  open_in_repository('key-across')
+  child.cmd('botright 6new')
+  local before = child.lua_get('vim.api.nvim_win_get_width(vim.api.nvim_get_current_win())')
+
+  entry.press(child, '\\E')
+
+  eq(child.lua_get('vim.api.nvim_win_get_width(vim.api.nvim_get_current_win())'), before)
+  eq(before, child.lua_get('vim.o.columns'))
+end
+
+T['the explorer column key’s choice']['gives its choice to a tab opened later'] = function()
+  tabs.use_own_state(child, 'explorer-column-key-later')
+  entry.use_fake(child, tabs.fake('explorer-column-key-later-first'))
+  child.cmd('Aineo open')
+  claude_session.wait_for_status(child, 'ready')
+  entry.press(child, '\\E')
+  entry.use_fake(child, tabs.fake('explorer-column-key-later-second'))
+
+  child.cmd('Aineo tab new')
+  claude_session.wait_for_status(child, 'ready')
+
+  eq(tabs.windows_of_tab(child, 2), COLUMN_LEFT)
+end
+
+T['the explorer column key’s choice']['keeps its choice through a setup() that leaves the explorer’s settings alone'] = function()
+  open_in_repository('key-unrelated')
+  entry.press(child, '\\E')
+
+  child.lua([[require('aineo').setup({ find = { picker = 'auto' } })]])
+
+  eq(entry.windows(child), COLUMN_LEFT)
+end
+
+T['the explorer column key’s choice']['gives way to a setup() that changes the column'] = function()
+  open_in_repository('key-changed')
+  entry.press(child, '\\E')
+
+  setup_layout({ explorer_column = 'right' })
+
+  eq(entry.windows(child), COLUMN_RIGHT)
+end
+
+T[':Aineo explorer'] = MiniTest.new_set()
+
+T[':Aineo explorer']['tells the user the word it takes when given another or none'] =
+  MiniTest.new_set({
+    parametrize = { { 'Aineo explorer' }, { 'Aineo explorer up' }, { 'Aineo explorer column now' } },
+  })
+
+T[':Aineo explorer']['tells the user the word it takes when given another or none']['command'] = function(
+  command
+)
+  entry.command(child, command)
+
+  eq(entry.messages(child), {
+    {
+      message = 'aineo: :Aineo explorer takes one of column',
+      level = vim.log.levels.ERROR,
+    },
+  })
+end
+
+T[':Aineo explorer']['completes column'] = function()
+  eq(child.lua_get([[vim.fn.getcompletion('Aineo explorer ', 'cmdline')]]), { 'column' })
+end
+
 T['a new aineo tab'] = MiniTest.new_set()
 
 T['a new aineo tab']['has an explorer column of its own'] = function()
