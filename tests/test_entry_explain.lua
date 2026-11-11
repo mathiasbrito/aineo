@@ -287,7 +287,8 @@ end
 T[':Aineo explain']['is offered after :Aineo, and tools, issues, new and clear after it, after a range too'] =
   MiniTest.new_set({
     parametrize = {
-      { 'Aineo e', { 'explain' } },
+      { 'Aineo e', { 'explorer', 'explain' } },
+      { 'Aineo expla', { 'explain' } },
       { 'Aineo explain ', { 'tools', 'issues', 'new', 'clear' } },
       { 'Aineo explain t', { 'tools' } },
       { '2,3Aineo explain ', { 'tools', 'issues', 'new', 'clear' } },
