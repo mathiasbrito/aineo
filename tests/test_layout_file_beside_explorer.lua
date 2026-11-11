@@ -187,6 +187,7 @@ T['a file column without an explorer column']['stays between Claude and the pane
 end
 
 T['open() with the file beside the explorer'] = MiniTest.new_set()
+T['set_explorer_column()'] = MiniTest.new_set()
 
 T['open() with the file beside the explorer']['refuses a value that is not a boolean, naming it'] = function()
   local _, arrangement = arrangement_with('left', 'left')
@@ -195,6 +196,229 @@ T['open() with the file beside the explorer']['refuses a value that is not a boo
   expect.error(function()
     layout.open(child, arrangement)
   end, 'arrangement%.file_beside_explorer:')
+end
+
+--- Calls `set_explorer_column()` in the child.
+---
+---@param column string|false
+---@param beside? boolean
+local function set_explorer_column(column, beside)
+  child.lua(
+    [[(function(column, width, beside)
+      require('aineo.layout').set_explorer_column(column, width, beside)
+    end)(...)]],
+    { column, WIDTH, beside }
+  )
+end
+
+--- Opens the layout in a fresh child with Claude's column on `claude_side` and
+--- a file in its file column, `column` the explorer column the arrangement
+--- hands, and `beside` the option; the cursor is put in the Report's window.
+---
+---@param column string|false
+---@param claude_side string
+---@param beside boolean
+---@return table buffers
+local function open_with_file(column, claude_side, beside)
+  local buffers = open_with(column, claude_side, beside, true)
+  layout.enter_window_showing(child, buffers.report)
+  return buffers
+end
+
+T['turning the explorer column on'] = MiniTest.new_set({ parametrize = PLACES })
+
+T['turning the explorer column on']['moves the open file column beside it'] = function(
+  column,
+  claude_side,
+  expected
+)
+  local buffers = open_with_file(false, claude_side, true)
+  child.lua([[vim.api.nvim_win_set_cursor(0, { 1, 0 })]])
+  local file_window = layout.window_showing(child, buffers.files)
+  child.lua([[vim.api.nvim_win_set_cursor(..., { 3, 2 })]], { file_window })
+
+  set_explorer_column(column, true)
+
+  eq(from_the_left(buffers, COLUMN_NAMES), expected)
+  eq(layout.window_showing(child, buffers.files), file_window)
+  eq(child.lua_get([[vim.api.nvim_win_get_cursor(...)]], { file_window }), { 3, 2 })
+  eq(layout.window_showing(child, buffers.report), child.lua_get('vim.api.nvim_get_current_win()'))
+end
+
+T['turning the explorer column on']['keeps the file column in the centre with the option off'] = function()
+  local buffers = open_with_file(false, 'left', false)
+
+  set_explorer_column('left', false)
+
+  eq(from_the_left(buffers, COLUMN_NAMES), { 'explorer', 'claude', 'files', 'report' })
+end
+
+T['turning the explorer column off'] = MiniTest.new_set({
+  parametrize = {
+    { 'left', 'left', { 'claude', 'files', 'report' } },
+    { 'left', 'right', { 'report', 'files', 'claude' } },
+    { 'right', 'left', { 'claude', 'files', 'report' } },
+    { 'right', 'right', { 'report', 'files', 'claude' } },
+  },
+})
+
+T['turning the explorer column off']['moves the file column back between Claude and the panes column'] = function(
+  column,
+  claude_side,
+  expected
+)
+  local buffers = open_with_file(column, claude_side, true)
+  local file_window = layout.window_showing(child, buffers.files)
+
+  set_explorer_column(false, true)
+
+  eq(from_the_left(buffers, { 'files', 'claude', 'report' }), expected)
+  eq(layout.window_showing(child, buffers.files), file_window)
+  eq(layout.window_count(child), 4)
+end
+
+T['changing the option'] = MiniTest.new_set()
+
+T['changing the option']['to false moves the file column to the centre, the explorer staying'] = function()
+  local buffers = open_with_file('left', 'left', true)
+  local explorer_window = layout.window_showing(child, buffers.explorer)
+
+  set_explorer_column('left', false)
+
+  eq(from_the_left(buffers, COLUMN_NAMES), { 'explorer', 'claude', 'files', 'report' })
+  eq(layout.window_showing(child, buffers.explorer), explorer_window)
+  eq(box_of(buffers.explorer).width, WIDTH)
+end
+
+T['changing the option']['to true moves the file column beside the explorer'] = function()
+  local buffers = open_with_file('right', 'right', false)
+
+  set_explorer_column('right', true)
+
+  eq(from_the_left(buffers, COLUMN_NAMES), { 'report', 'claude', 'files', 'explorer' })
+end
+
+T['changing the option']['by handing the arrangement again moves the file column'] = function()
+  local buffers, arrangement = arrangement_with('left', 'left', true)
+  child.cmd('edit ' .. layout.file('first.txt'))
+  buffers.files = child.lua_get('vim.api.nvim_get_current_buf()')
+  layout.open(child, arrangement)
+
+  arrangement.file_beside_explorer = false
+  layout.open(child, arrangement)
+
+  eq(from_the_left(buffers, COLUMN_NAMES), { 'explorer', 'claude', 'files', 'report' })
+end
+
+T['changing the explorer column’s side'] = MiniTest.new_set()
+
+T['changing the explorer column’s side']['takes the file column along'] = function()
+  local buffers = open_with_file('left', 'left', true)
+
+  set_explorer_column('right', true)
+
+  eq(from_the_left(buffers, COLUMN_NAMES), { 'claude', 'report', 'files', 'explorer' })
+end
+
+T['a file column of two windows'] = MiniTest.new_set()
+
+T['a file column of two windows']['moves beside the explorer as one column'] = function()
+  local buffers = open_with_file(false, 'left', true)
+  child.lua([[vim.api.nvim_set_current_win(...)]], { layout.window_showing(child, buffers.files) })
+  child.cmd('split')
+  local windows = child.lua_get('vim.api.nvim_tabpage_list_wins(0)')
+
+  set_explorer_column('left', true)
+
+  local first = box_of(buffers.files)
+  eq(first.col, WIDTH + 1)
+  eq(layout.window_count(child), #windows + 1)
+  eq(
+    child.lua_get(
+      [[(function(column)
+        local count = 0
+        for _, window in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+          if vim.api.nvim_win_get_position(window)[2] == column then
+            count = count + 1
+          end
+        end
+        return count
+      end)(...)]],
+      { WIDTH + 1 }
+    ),
+    2
+  )
+end
+
+T['an explorer column closed by hand'] = MiniTest.new_set()
+
+T['an explorer column closed by hand']['sends the file column back to the centre until it opens again'] = function()
+  local buffers = open_with_file('left', 'left', true)
+
+  child.lua(
+    [[vim.api.nvim_win_close(..., false)]],
+    { layout.window_showing(child, buffers.explorer) }
+  )
+  child.lua([[require('aineo.layout').show_file(...)]], { buffers.files })
+
+  eq(from_the_left(buffers, { 'files', 'claude', 'report' }), { 'claude', 'files', 'report' })
+  eq(layout.window_count(child), 3 + 1)
+
+  child.lua([[require('aineo.layout').reopen_explorer_column()]])
+
+  eq(from_the_left(buffers, COLUMN_NAMES), { 'explorer', 'files', 'claude', 'report' })
+end
+
+T['set_explorer_column()']['refuses a file_beside_explorer that is not a boolean, naming it'] = function()
+  open_with('left', 'left', true)
+
+  expect.error(function()
+    child.lua([[require('aineo.layout').set_explorer_column('left', 30, 'yes')]])
+  end, 'file_beside_explorer:')
+end
+
+--- Moves Claude's column to `claude_side` in the child's layout.
+---
+---@param claude_side string
+local function set_claude_side(claude_side)
+  child.lua([[require('aineo.layout').set_claude_side(...)]], { claude_side })
+end
+
+T['swapping Claude’s side'] = MiniTest.new_set({
+  parametrize = {
+    { 'left', 'left', { 'explorer', 'files', 'report', 'claude' } },
+    { 'left', 'right', { 'explorer', 'files', 'claude', 'report' } },
+    { 'right', 'left', { 'report', 'claude', 'files', 'explorer' } },
+    { 'right', 'right', { 'claude', 'report', 'files', 'explorer' } },
+  },
+})
+
+T['swapping Claude’s side']['keeps the file column beside the explorer'] = function(
+  column,
+  from,
+  expected
+)
+  local buffers = open_with_file(column, from, true)
+  local file_window = layout.window_showing(child, buffers.files)
+
+  set_claude_side(from == 'left' and 'right' or 'left')
+
+  eq(from_the_left(buffers, COLUMN_NAMES), expected)
+  eq(layout.window_showing(child, buffers.files), file_window)
+  eq(box_of(buffers.explorer).width, WIDTH)
+end
+
+T['swapping Claude’s side']['keeps a window across the screen where it is'] = function()
+  local buffers = open_with_file('left', 'left', true)
+  child.cmd('botright 6new')
+  local across = child.lua_get('vim.api.nvim_get_current_win()')
+
+  set_claude_side('right')
+
+  local box = layout.box(child, across)
+  eq(box.width, layout.COLUMNS)
+  expect.equality(box.row > box_of(buffers.files).row, true)
+  eq(from_the_left(buffers, COLUMN_NAMES), { 'explorer', 'files', 'report', 'claude' })
 end
 
 return T
