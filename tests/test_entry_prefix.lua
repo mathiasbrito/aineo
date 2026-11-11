@@ -12,6 +12,7 @@ local PREFIX_KEYS = {
   { 'i', '<Plug>(aineo-input)', 'n' },
   { 'c', '<Plug>(aineo-claude)', 'n' },
   { 'tcn', '<Plug>(aineo-claude-numbers)', 'n' },
+  { 'tn', '<Plug>(aineo-panel-numbers)', 'n' },
   { 'S', '<Plug>(aineo-sessions)', 'n' },
   { 'N', '<Plug>(aineo-new)', 'n' },
   { 'pa', '<Plug>(aineo-pane-agent)', 'n' },
@@ -245,6 +246,7 @@ local DESCRIPTIONS = {
   { 'n', '\\Z', 'aineo: zoom full' },
   { 'n', '\\o', 'aineo: open' },
   { 'n', '\\tcn', 'aineo: claude-numbers' },
+  { 'n', '\\tn', 'aineo: panel-numbers' },
   { 'n', '\\V', 'aineo: explain-tools' },
   { 'n', '\\vc', 'aineo: explain-clean' },
   { 'n', '\\?', 'aineo: cheatsheet' },
@@ -252,6 +254,7 @@ local DESCRIPTIONS = {
   { 'x', '\\VI', 'aineo: explain-issues-tools' },
   { 't', '<C-\\>pa', 'aineo: pane agent' },
   { 't', '<C-\\>tcn', 'aineo: claude-numbers' },
+  { 't', '<C-\\>tn', 'aineo: panel-numbers' },
   { 'i', '<C-\\>X', 'aineo: run shell' },
   { 'i', '<C-\\>Z', 'aineo: zoom full' },
 }

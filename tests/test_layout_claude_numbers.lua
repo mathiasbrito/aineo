@@ -9,18 +9,22 @@ local NUMBERS_OF_WINDOW =
   '{ number = vim.wo[...].number, relativenumber = vim.wo[...].relativenumber }'
 
 --- Starts `child` with the user's line numbers set to `numbers`, as a
---- `:set` in their init would, opens the layout in it with the stand-ins and
+--- `:set` in their init would, opens the layout in it with the stand-ins, its
+--- panels showing the user's own settings (`arrangement.panel_numbers`), and
 --- returns the buffers of its three windows by name.
 ---
 ---@param child table
 ---@param numbers { number: boolean, relativenumber: boolean }
+---@param panel_numbers? boolean whether the panels show the user's own gutter, true when not given
 ---@return { claude: integer, report: integer, input: integer } buffers
-local function open_with_numbers(child, numbers)
+local function open_with_numbers(child, numbers, panel_numbers)
   layout.start(child)
   child.o.number = numbers.number
   child.o.relativenumber = numbers.relativenumber
   local buffers = layout.stand_ins(child)
-  layout.open(child, layout.arrangement(buffers))
+  local arrangement = layout.arrangement(buffers)
+  arrangement.panel_numbers = panel_numbers ~= false
+  layout.open(child, arrangement)
   buffers.input = layout.input_buffer(child)
   return buffers
 end
@@ -290,6 +294,33 @@ T['with no Claude window, toggling the line numbers']["warns once and changes no
     told = { { message = NO_CLAUDE_WINDOW, level = vim.log.levels.WARN } },
     numbers = { number = true, relativenumber = false },
   })
+end
+
+T["toggling Claude's line numbers when the panels show no gutter"] = MiniTest.new_set()
+
+T["toggling Claude's line numbers when the panels show no gutter"]["shows 'number' in Claude's window alone, and hides it again"] = function()
+  local buffers = open_with_numbers(child, { number = true, relativenumber = true }, false)
+  local hidden = { number = false, relativenumber = false }
+
+  toggle(child)
+  local shown = numbers_of_window_showing(child, buffers.claude)
+  local report_while_shown = numbers_of_window_showing(child, buffers.report)
+  toggle(child)
+
+  eq(shown, { number = true, relativenumber = false })
+  eq(report_while_shown, hidden)
+  eq(numbers_of_window_showing(child, buffers.claude), hidden)
+end
+
+T["toggling Claude's line numbers when the panels show no gutter"]["keeps the numbers it showed when another buffer enters Claude's window"] = function()
+  local buffers = open_with_numbers(child, { number = true, relativenumber = false }, false)
+  toggle(child)
+  local window = layout.window_showing(child, buffers.claude)
+
+  child.api.nvim_win_set_buf(window, child.api.nvim_create_buf(false, true))
+  child.api.nvim_win_set_buf(window, buffers.claude)
+
+  eq(numbers_of_window_showing(child, buffers.claude), { number = true, relativenumber = false })
 end
 
 return T

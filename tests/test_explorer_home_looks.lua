@@ -21,10 +21,6 @@ local T = MiniTest.new_set({
     end,
     post_case = function()
       vim.notify = notify
-      vim.o.number = false
-      vim.o.relativenumber = false
-      vim.o.signcolumn = 'auto'
-      vim.o.foldcolumn = '0'
       explorer.let_go()
     end,
   },
@@ -112,81 +108,6 @@ T['the looks']['tell a problem again once it was gone and comes back'] = functio
   explorer.refresh()
 
   eq(#notified, 2)
-end
-
-T['the line numbers'] = MiniTest.new_set()
-
---- Turns the line numbers, the sign column and the fold column on for the
---- current window and as the global settings, as a user's own settings do.
-local function turn_on_the_users_columns()
-  vim.o.number = true
-  vim.o.relativenumber = true
-  vim.o.signcolumn = 'yes'
-  vim.o.foldcolumn = '1'
-end
-
-T['the line numbers']['are off in the window the explorer enters, whatever the user’s settings'] = function()
-  turn_on_the_users_columns()
-
-  show_with_looks(function()
-    return {}
-  end)
-
-  eq({ vim.wo.number, vim.wo.relativenumber }, { false, false })
-end
-
-T['the line numbers']['are off in a second window that comes to show the explorer'] = function()
-  show_with_looks(function()
-    return {}
-  end)
-  turn_on_the_users_columns()
-  vim.cmd('new')
-
-  vim.api.nvim_win_set_buf(0, explorer.buffer())
-
-  eq({ vim.wo.number, vim.wo.relativenumber }, { false, false })
-end
-
-T['the line numbers']['stay as the user’s settings make them when the numbers look is on'] = function()
-  turn_on_the_users_columns()
-
-  show_with_looks(function()
-    return { numbers = true }
-  end)
-
-  eq({ vim.wo.number, vim.wo.relativenumber }, { true, true })
-end
-
-T['the line numbers']['leave the user’s global settings alone, so that no other window loses its numbers'] = function()
-  turn_on_the_users_columns()
-
-  show_with_looks(function()
-    return {}
-  end)
-
-  eq({ vim.go.number, vim.go.relativenumber }, { true, true })
-end
-
-T['the line numbers']['are on in a window of a new tab page after the explorer showed'] = function()
-  turn_on_the_users_columns()
-  show_with_looks(function()
-    return {}
-  end)
-
-  vim.cmd('tabnew')
-
-  eq({ vim.wo.number, vim.wo.relativenumber }, { true, true })
-  vim.cmd('tabclose')
-end
-
-T['the line numbers']['leave the sign column and the fold column alone'] = function()
-  turn_on_the_users_columns()
-
-  show_with_looks(function()
-    return {}
-  end)
-
-  eq({ vim.wo.signcolumn, vim.wo.foldcolumn }, { 'yes', '1' })
 end
 
 return T

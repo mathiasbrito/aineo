@@ -32,7 +32,8 @@ most behind its twin in Terminal and Insert mode, below):
 `\s` sends Input to Claude, `\o` opens or restores the layout, and `\r`, `\i`
 and `\c` move to the Report, Input and Claude — `\c` in Terminal mode, so
 that what you type next goes to Claude, unless Claude Code has exited.
-`\tcn` hides or shows the line numbers of Claude's window. `\S` lists the
+`\tcn` hides or shows the line numbers of Claude's window, `\tn` those of
+every panel (|:Aineo-panel-numbers|). `\S` lists the
 sessions Claude Code lists for the folder and opens the one you pick in a new
 tab, or moves to the tab that has it (|:Aineo-sessions|). `\N` starts a new
 Claude Code session: on a new id once Claude Code has exited, where `\o`
@@ -714,6 +715,18 @@ columns and rows the tab page gains or loses. `\Z` then gives back the sizes
 recorded when you zoomed, scaled to the editor's size now, the last window of
 each row and column taking the cells that remain; with the same size as when
 you zoomed they come back exactly.
+
+Claude Code lays its screen out for the size of its terminal, which Neovim
+sizes to the largest window showing it, in any tab. While a window is zoomed
+fully, Claude's window has a sliver of a column and Claude Code is told so.
+Whenever Claude's window has changed size (a zoom ending, a column opening or
+closing, the editor resized), aineo tells Claude's terminal its size once more
+a moment after the last change: one column less, then, a third of a second
+later, the size of the window, so that Claude Code, busy or not, lays its
+screen out for the size it has now. A window that keeps its size, as in a
+swap or a mirror, gets nothing. When the editor is resized, the layout of a
+tab that is not shown keeps the sizes of its windows until the tab is entered,
+so that its Claude Code is not told a width the window never has.
 
 The agent's run tools ~
                                                              *aineo-run-tools*
@@ -3562,7 +3575,9 @@ only in place of a resume Claude Code has no conversation for
 			them again as they were when aineo last hid them,
 			whichever buffer Claude's window showed then, when it
 			shows none: 'number' alone when aineo has hidden none
-			before. It acts on the buffer Claude's window shows,
+			before; Claude's window starts with none while the
+			panels show no gutter (|:Aineo-panel-numbers|). It
+			acts on the buffer Claude's window shows,
 			whichever it is, changes no other window, and leaves
 			the cursor and the mode where they are; from another
 			tab it acts on Claude's window in the layout's tab.
@@ -3588,6 +3603,31 @@ only in place of a resume Claude Code has no conversation for
 			next toggle shows Claude's terminal again, in place of
 			the terminal's own. A file opened from Claude's window
 			keeps your own numbers.
+
+                                                      *:Aineo-panel-numbers*
+:Aineo panel-numbers	Shows or hides the gutter of every panel: the line
+			numbers, the sign column, the fold column and the
+			status column. A panel is a window of the layout
+			that shows no file: Claude's window, the Report's,
+			Input's, the explorer column's, and the windows of
+			the changes, terminal, run, explorer and walkthrough
+			panes. By default they show none of these, whatever
+			your global settings say, so that only the separator
+			between windows is left; files, wherever they show,
+			keep your own settings, and so does every window
+			that is no panel. The command gives every panel
+			your own settings back when the panels in the tab
+			you see show none, and takes them out again when
+			they show them, in every aineo tab at once, live.
+			Setting 'number', 'relativenumber', 'signcolumn',
+			'foldcolumn' and 'statuscolumn' for the window alone,
+			as |:setlocal| does, it changes no global option. A
+			buffer that comes into a panel later, a pane
+			switching, gets the same. aineo keeps your choice
+			until the editor quits, and gives it to a tab made
+			later (|aineo-config-layout.panel_numbers|). The line
+			numbers |:Aineo-claude-numbers| set in Claude's
+			window stay as they are.
 
                                                              *:Aineo-sessions*
 :Aineo sessions		Lists the sessions Claude Code lists for the folder
@@ -4228,6 +4268,10 @@ you turn the prefix off, or when a prefix key is yours: >lua
 <Plug>(aineo-claude-numbers)
 			Does what |:Aineo-claude-numbers| does.
 
+                                                 *<Plug>(aineo-panel-numbers)*
+<Plug>(aineo-panel-numbers)
+			Does what |:Aineo-panel-numbers| does.
+
                                                       *<Plug>(aineo-sessions)*
 <Plug>(aineo-sessions)	Does what |:Aineo-sessions| does.
 
@@ -4550,6 +4594,8 @@ which has none, and those of a fix shown, whose keys are local to its buffer
 \c		|<Plug>(aineo-claude)|
                                                                   *aineo-\tcn*
 \tcn		|<Plug>(aineo-claude-numbers)|
+                                                                   *aineo-\tn*
+\tn		|<Plug>(aineo-panel-numbers)|
                                                                     *aineo-\S*
 \S		|<Plug>(aineo-sessions)|
                                                                     *aineo-\N*
@@ -4712,6 +4758,8 @@ twin's keys.
 <C-\>c		|<Plug>(aineo-claude)|
                                                               *aineo-<C-\>tcn*
 <C-\>tcn	|<Plug>(aineo-claude-numbers)|
+                                                               *aineo-<C-\>tn*
+<C-\>tn		|<Plug>(aineo-panel-numbers)|
                                                                 *aineo-<C-\>S*
 <C-\>S		|<Plug>(aineo-sessions)|
                                                                 *aineo-<C-\>N*
@@ -4930,6 +4978,19 @@ layout.explorer_width	A whole number of at least 1. Default: `40`
 			(|aineo-explorer-column|). It does nothing while
 			`layout.explorer_column` is `false`.
 
+                                          *aineo-config-layout.panel_numbers*
+layout.panel_numbers	A boolean. Default: `false`
+			Whether the panels, the windows of the layout that
+			show no file, show your own line numbers, sign
+			column, fold column and status column
+			(|:Aineo-panel-numbers|). With `false` they show
+			none, whatever your global settings say, so that
+			only the separator between windows is left; files
+			keep yours. `true` starts with them shown. The old
+			name of this option is `explorer.numbers`.
+			|:Aineo-panel-numbers| changes it for the editor's
+			life.
+
                                     *aineo-config-layout.file_beside_explorer*
 layout.file_beside_explorer	A boolean. Default: `true`
 			Whether the file column opens beside the explorer
@@ -5022,12 +5083,8 @@ explorer.diagnostics	A boolean. Default: `true`
 
                                                *aineo-config-explorer.numbers*
 explorer.numbers	A boolean. Default: `false`
-			Whether a window showing the explorer, the column or
-			the pane, keeps the line numbers your own settings
-			give it. With `false` its 'number' and
-			'relativenumber' are off there, whatever your global
-			settings say; the sign column and the fold column
-			stay as they are.
+			The old name of |aineo-config-layout.panel_numbers|:
+			`true` here does what `true` there does.
 
                                 *aineo-config-find* *aineo-config-find.picker*
 find.picker		One of `'auto'`, `'snacks'`, `'fzf-lua'`,

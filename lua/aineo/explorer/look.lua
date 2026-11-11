@@ -1,7 +1,6 @@
 --- Which looks of the explorer are on: the guides, the icons, the dimming of
 --- unchanged files, the counts, the compact chains and the diagnostics of its
---- tree are on unless the settings say otherwise; the line numbers of the
---- windows that show it are off unless they do.
+--- tree are on unless the settings say otherwise.
 
 local M = {}
 
@@ -13,10 +12,8 @@ local M = {}
 ---@field counts boolean
 ---@field compact boolean
 ---@field diagnostics boolean
----@field numbers boolean whether a window showing the explorer keeps the user's own line numbers
 
---- The looks the settings leave alone: those of the tree on, the line numbers
---- off.
+--- The looks the settings leave alone: all on.
 ---@type aineo.explorer.Look
 M.DEFAULT = {
   guides = true,
@@ -25,7 +22,6 @@ M.DEFAULT = {
   counts = true,
   compact = true,
   diagnostics = true,
-  numbers = false,
 }
 
 --- The looks `given` says, each one it does not say as `M.DEFAULT` has it.

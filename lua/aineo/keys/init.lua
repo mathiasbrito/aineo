@@ -210,6 +210,13 @@ local ROWS = vim.list_extend(
       "show or hide the line numbers of Claude's window"
     ),
     global_with_twin(
+      'layout',
+      'tn',
+      'panel-numbers',
+      'panel-numbers',
+      'show or hide the line numbers, sign column and fold column of every panel'
+    ),
+    global_with_twin(
       'claude',
       'S',
       'sessions',

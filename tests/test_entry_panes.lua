@@ -1262,6 +1262,7 @@ T['while the changes pane shows']['the key of Claude’s line numbers toggles th
   child.o.number = true
   open_layout('panes-claude-numbers')
   entry.press(child, '\\g')
+  entry.command(child, 'Aineo panel-numbers')
 
   entry.press(child, '\\tcn')
 
@@ -1327,6 +1328,7 @@ local SUBCOMMANDS = {
   'input',
   'claude',
   'claude-numbers',
+  'panel-numbers',
   'sessions',
   'new',
   'pane',
@@ -1352,7 +1354,7 @@ T[':Aineo pane']['completes after a command modifier or a range as it does witho
         'silent Aineo pane ',
         { 'agent', 'changes', 'terminal', 'run', 'explorer', 'walkthrough' },
       },
-      { 'vertical Aineo p', { 'pane' } },
+      { 'vertical Aineo p', { 'panel-numbers', 'pane' } },
       { 'keepalt botright Aineo pane c', { 'changes' } },
       { 'silent! Ain pane a', { 'agent' } },
       {

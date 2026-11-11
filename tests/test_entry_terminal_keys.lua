@@ -31,6 +31,7 @@ local TWIN_KEYS = {
   { 'i', '<Plug>(aineo-input)' },
   { 'c', '<Plug>(aineo-claude)' },
   { 'tcn', '<Plug>(aineo-claude-numbers)' },
+  { 'tn', '<Plug>(aineo-panel-numbers)' },
   { 'S', '<Plug>(aineo-sessions)' },
   { 'N', '<Plug>(aineo-new)' },
   { 'pa', '<Plug>(aineo-pane-agent)' },
@@ -180,7 +181,7 @@ T['a twin']['<C-\\>tcn hides the line numbers of Claude’s window'] = MiniTest.
 
 T['a twin']['<C-\\>tcn hides the line numbers of Claude’s window']['from'] = function(mode)
   local fake = claude_session.fake('terminal-keys-numbers-' .. mode, 'ready')
-  entry.use_fake(child, fake)
+  entry.use_fake(child, fake, { layout = { panel_numbers = true } })
   child.o.number = true
   child.cmd('Aineo open')
   claude_session.wait_for_status(child, 'ready')

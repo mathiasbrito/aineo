@@ -22,8 +22,9 @@ local CLAUDE_WINDOW_BUFFER = 'vim.api.nvim_win_get_buf(vim.fn.win_getid(1))'
 
 --- Gives `child` the user's `:set number` and a state directory of its own
 --- under `name`, then opens the layout in it with aineo running the fake
---- `claude` in its `ready` mode under `name`, with `extra_environment`, and
---- waits until that Claude Code has started.
+--- `claude` in its `ready` mode under `name`, with `extra_environment`, the
+--- panels showing the user's own gutter (`layout.panel_numbers`), and waits
+--- until that Claude Code has started.
 ---
 ---@param child table
 ---@param name string the test's own name for its files
@@ -32,7 +33,7 @@ local CLAUDE_WINDOW_BUFFER = 'vim.api.nvim_win_get_buf(vim.fn.win_getid(1))'
 local function open_with_number(child, name, extra_environment)
   local fake = claude_session.fake(name, 'ready', extra_environment)
   child.lua('vim.env.XDG_STATE_HOME = ...', { fixture.directory(name .. '-state') })
-  entry.use_fake(child, fake)
+  entry.use_fake(child, fake, { layout = { panel_numbers = true } })
   child.o.number = true
   child.cmd('Aineo open')
   claude_session.wait_for_start(fake)
