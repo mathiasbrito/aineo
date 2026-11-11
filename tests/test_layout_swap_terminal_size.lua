@@ -152,4 +152,18 @@ T['the terminal of Claude Code after a swap']['has the size of its window after 
   eq(sizes.recorded, sizes.expected)
 end
 
+T['the terminal of Claude Code after a mirror'] = MiniTest.new_set()
+
+T['the terminal of Claude Code after a mirror']['has the size of its window, mirrored and back'] = function()
+  local record = open_around_recorder('mirror', true, true)
+  settled_sizes(record)
+
+  child.lua([[require('aineo.layout').set_column_sides('right', 'right')]])
+  local mirrored = settled_sizes(record)
+  child.lua([[require('aineo.layout').set_column_sides('left', 'left')]])
+  local back = settled_sizes(record)
+
+  eq({ mirrored.recorded, back.recorded }, { mirrored.expected, back.expected })
+end
+
 return T

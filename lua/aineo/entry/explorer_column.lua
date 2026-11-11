@@ -57,18 +57,44 @@ function M.apply()
   end)
 end
 
---- Whether the explorer column is on in the screen the user sees: in the aineo
---- tab of the current tab page, else in the tab used last; the user's choice or
---- the setting says when there is none.
+--- The side the explorer column is on in the screen the user sees: in the
+--- aineo tab of the current tab page, else in the tab used last; the user's
+--- choice or the setting says when there is none. `false` when it is off.
+---
+---@param config table the resolved configuration
+---@return aineo.layout.Side|false
+local function side_on_screen_of(config)
+  local tab = registry.tab_of_current_page() or registry.last_used_tab
+  if tab and tab.is_bound() then
+    return tab.homes.layout.explorer_column()
+  end
+  return explorer_choice.current(config)
+end
+
+--- Whether the explorer column is on in the screen the user sees
+--- (`side_on_screen_of()`).
 ---
 ---@param config table the resolved configuration
 ---@return boolean
 local function is_on_screen(config)
-  local tab = registry.tab_of_current_page() or registry.last_used_tab
-  if tab and tab.is_bound() then
-    return tab.homes.layout.explorer_column() ~= false
-  end
-  return explorer_choice.current(config) ~= false
+  return side_on_screen_of(config) ~= false
+end
+
+--- The side the explorer column is on in the screen the user sees, `false`
+--- when it is off.
+---
+---@return aineo.layout.Side|false
+function M.side_on_screen()
+  return side_on_screen_of(settings.resolved())
+end
+
+--- Records `side` as the side of the explorer column for the editor's life,
+--- as `\E` turning it on there does, without moving any window: the tabs
+--- opened later, the layouts restored and the next `\E` use it.
+---
+---@param side aineo.layout.Side
+function M.record_side(side)
+  explorer_choice.choose(side, settings.resolved())
 end
 
 --- Whether the screen the user sees has the explorer column on but its window
