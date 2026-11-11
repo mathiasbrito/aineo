@@ -187,6 +187,29 @@ you can change it at will:
   Input, `\g`, `\pt`, `\x`, `\e` and the other panes, the office
   (|aineo-office|) and the cheatsheet (|aineo-cheatsheet|).
 
+                                                         *aineo-layout-mirror*
+Mirroring the layout ~
+`:Aineo layout mirror` flips the whole row end to end, in every aineo tab at
+once: from the default, Claude Code, the panes column, the file column and
+the explorer column, to the explorer column, the file column, the panes
+column and Claude Code, and back when you run it again. It is the swap and
+the explorer column moved to the other edge in one move of the windows, the
+file column following the explorer column (|aineo-explorer-column|). Without
+an explorer column it does what `:Aineo layout swap` does.
+
+    +----------+--------------+--------------+--------------+
+    |          |              |  Agent Report|              |
+    | Explorer |  File column +--------------+  Claude Code |
+    |  (tree)  |              |     Input    |  (terminal)  |
+    +----------+--------------+--------------+--------------+
+
+Everything the swap keeps stays (|aineo-layout-swap|): buffers, jobs, splits
+of the file column, cursors, the window the cursor is in, and windows across
+the screen. The explorer's side it sets is the one `\E` turns the column on at
+afterwards, for the editor's life; the settings are where a lasting choice
+lives. There is no default key; map `<Plug>(aineo-layout-mirror)` to one of
+your own.
+
                                                        *aineo-explorer-column*
 The explorer column ~
 `layout.explorer_column` (|aineo-config-layout.explorer_column|), `'right'` by
@@ -3935,14 +3958,18 @@ keeps the tab's claim, and the next start takes it up again (|aineo-tabs|).
 :Aineo layout swap	Puts Claude Code's column on the side of the screen
 :Aineo layout left	it is not on (`swap`), on the left (`left`) or on
 :Aineo layout right	the right (`right`), the panes column across from
-			it and the file column between them, in every aineo
-			tab at once (|aineo-layout-swap|). Tabs opened later
-			and layouts restored open on that side, for the
-			editor's life. Nothing changes but the places of the
-			windows, and a zoom ends. It makes no tab: with none,
-			it only records the side. With any other word, or
-			none, it tells you, with one error, what
-			`:Aineo layout` takes. No key is mapped to it.
+:Aineo layout mirror	it and the file column between them, in every aineo
+			tab at once (|aineo-layout-swap|); `mirror` flips the
+			whole row end to end, Claude Code's column and the
+			explorer column to the sides they are not on, the file
+			column staying beside the explorer column
+			(|aineo-layout-mirror|). Tabs opened later and layouts
+			restored open on those sides, for the editor's life.
+			Nothing changes but the places of the windows, and a
+			zoom ends. It makes no tab: with none, it only
+			records the sides. With any other word, or none, it
+			tells you, with one error, what `:Aineo layout`
+			takes. No key is mapped to it.
 
                                                              *:Aineo-explain*
 :[range]Aineo explain [issues] [tools] [new]
@@ -4487,6 +4514,11 @@ you turn the prefix off, or when a prefix key is yours: >lua
                                                  *<Plug>(aineo-layout-right)*
 <Plug>(aineo-layout-right)
 			Does what `:Aineo layout right` does
+			(|:Aineo-layout|).
+
+                                                 *<Plug>(aineo-layout-mirror)*
+<Plug>(aineo-layout-mirror)
+			Does what `:Aineo layout mirror` does
 			(|:Aineo-layout|).
 
                                                         *<Plug>(aineo-office)*

@@ -24,7 +24,10 @@ tells which ones are working.
 
 `:Aineo layout swap` mirrors Claude Code's column and the panes column, live
 and in every tab: the panes column on the left, Claude Code next to it, the
-file column and the explorer staying where they are. `:Aineo layout left` and
+file column and the explorer staying where they are. `:Aineo layout mirror`
+flips the whole row end to end, the explorer column going to the other edge
+and the file column with it (explorer, files, panes, Claude Code), and back
+when run again. `:Aineo layout left` and
 `:Aineo layout right` name the side, and the setting `layout.claude_side` is
 where a lasting choice lives:
 

@@ -92,6 +92,7 @@ local zoom = require('aineo.layout.zoom')
 ---@field right_column_area fun(): aineo.layout.Area|nil
 ---@field claude_side fun(): aineo.layout.Side
 ---@field set_claude_side fun(claude_side: aineo.layout.Side)
+---@field set_column_sides fun(claude_side: aineo.layout.Side, explorer_side?: aineo.layout.Side)
 ---@field explorer_column fun(): aineo.layout.Side|false
 ---@field focus_explorer_column fun(arrangement: aineo.layout.Arrangement|fun(): aineo.layout.Arrangement)
 ---@field set_explorer_column fun(explorer_column: aineo.layout.Side|false, explorer_width: integer, file_beside_explorer?: boolean)
@@ -1099,12 +1100,17 @@ local function make_layout(input_name, group_name)
   --- one pass (`place_columns()`): the explorer column, to the edge of its own
   --- side, stays outermost there, and the file column, which does not move,
   --- stays between Claude's column and the right one or beside the explorer
-  --- column. With no window of the layout open, only the side is recorded,
-  --- for the layout to open on.
+  --- column. With `explorer_side`, the explorer column of a layout that has one
+  --- goes to that side in the same pass. With no window of the layout open,
+  --- only the sides are recorded, for the layout to open on.
   ---
   ---@param target aineo.layout.Side
-  local function move_columns_to(target)
+  ---@param explorer_side? aineo.layout.Side the side the explorer column goes to too, when the layout has one
+  local function move_columns_to(target, explorer_side)
     state.claude_side = target
+    if explorer_side and state.explorer_column then
+      state.explorer_column = explorer_side
+    end
     if not has_any_window() then
       return
     end
@@ -3382,6 +3388,34 @@ local function make_layout(input_name, group_name)
     vim.validate('claude_side', claude_side, side.is_side, false, "'left' or 'right'")
     if claude_side ~= state.claude_side then
       move_columns_to(claude_side)
+    end
+  end
+
+  --- Mirrors the layout in one pass: Claude's column goes to `claude_side` and
+  --- the explorer column, when the layout has one (`M.explorer_column()`), to
+  --- `explorer_side`, the right column across from Claude's and the file
+  --- column beside the explorer column or between the other two as
+  --- `arrangement.file_beside_explorer` says. As `M.set_claude_side()` moves
+  --- Claude's column, the windows move, never their buffers, jobs or splits,
+  --- the cursor and the tab page shown stay, a zoom ends and windows across
+  --- the screen keep their place. With no `explorer_side`, or no explorer
+  --- column, it moves Claude's column alone; asked for the sides the layout
+  --- has, it changes nothing. With none of the layout's windows open, only the
+  --- sides are recorded, for the layout to open on.
+  ---
+  --- Raises an error naming the argument when `claude_side` or `explorer_side`,
+  --- when given, is neither `'left'` nor `'right'`, before changing anything.
+  ---
+  ---@param claude_side aineo.layout.Side
+  ---@param explorer_side? aineo.layout.Side
+  function M.set_column_sides(claude_side, explorer_side)
+    vim.validate('claude_side', claude_side, side.is_side, false, "'left' or 'right'")
+    vim.validate('explorer_side', explorer_side, side.is_side, true, "'left' or 'right'")
+    local moves_explorer = explorer_side ~= nil
+      and state.explorer_column ~= false
+      and explorer_side ~= state.explorer_column
+    if claude_side ~= state.claude_side or moves_explorer then
+      move_columns_to(claude_side, explorer_side)
     end
   end
 
