@@ -489,15 +489,39 @@ T['an asynchronous picker']['reveals the file it opens in the window it returns 
   eq(explorer_cursor_is_on('note.txt'), true)
 end
 
-T['an asynchronous picker']['reveals nothing when cancelled, though the cursor returns to a file'] = function()
+T['an asynchronous picker']['reveals nothing when cancelled, the cursor returning to the window the search began in'] = function()
   local top = search_with_an_asynchronous_picker('async-cancel')
 
-  child.lua('_G.close_picker()')
+  child.lua([[
+    vim.api.nvim_win_close(_G.picker_float, true)
+    vim.api.nvim_set_current_win(vim.fn.win_findbuf(require('aineo.layout').input_buffer())[1])
+  ]])
   vim.wait(300)
   child.cmd('edit ' .. vim.fn.fnameescape(vim.fs.joinpath(top, 'sub', 'other.txt')))
 
   vim.wait(300)
   eq({ explorer_cursor_is_on('top.txt'), explorer_cursor_is_on('other.txt') }, { false, false })
+end
+
+T['an asynchronous picker']['reveals a file already shown in another window, which it only enters'] = function()
+  local top = open_with_column('async-shown', 'sub/note.txt')
+  wait_for_tree()
+  local note = vim.fs.joinpath(top, 'sub', 'note.txt')
+  child.cmd('edit ' .. vim.fn.fnameescape(note))
+  wait_for_current_window(note)
+  install_an_asynchronous_picker(note)
+  entry.press(child, '\\c')
+  put_explorer_cursor_on_the_first_line()
+  entry.press(child, '\\f')
+  wait_for_the_picker()
+
+  child.lua('_G.close_picker()')
+
+  vim.wait(PATIENCE_MS, function()
+    return explorer_cursor_is_on('note.txt')
+  end, 20)
+  eq(explorer_cursor_is_on('note.txt'), true)
+  eq(entry.current_window(child), note)
 end
 
 --- Leaves no third-party picker in the child, so that the finder lists the
