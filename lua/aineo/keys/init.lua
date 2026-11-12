@@ -569,6 +569,12 @@ local ROWS = vim.list_extend(
       nil,
       'unfold or fold the folder, or show the file, the cursor staying in the tree'
     ),
+    in_buffer(
+      'explorer_pane',
+      '<C-l>',
+      nil,
+      'show the file and hide the panes column, or bring it back'
+    ),
     in_buffer('explorer_pane', 'h', nil, 'fold the folder, or the one above'),
     in_buffer('explorer_pane', 'R', nil, 'read the tree again'),
     in_buffer('explorer_pane', 'I', nil, 'show or hide what git ignores'),

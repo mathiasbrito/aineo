@@ -17,8 +17,8 @@ local WORKTREES_WAIT_MS = 5000
 
 --- What a call needs of the tab it is made for.
 ---@class aineo.entry.RunToolsTab
----@field homes { run: aineo.run.Home } the tab's run home
----@field start_in_run_stack fun(command: string, options: { name: string, directory: string? }): integer starts the command at the bottom of the tab's run stack, shows the run pane when the tab page is the current one, the cursor staying where it is, and returns its terminal; raises the error that kept it from starting
+---@field homes { run: aineo.run.Home, layout?: { is_file_focused: fun(): boolean } } the tab's run home, and its layout, which tells whether the user's file focus is on
+---@field start_in_run_stack fun(command: string, options: { name: string, directory: string? }): integer starts the command at the bottom of the tab's run stack, shows the run pane when the tab page is the current one and its file focus is off, the cursor staying where it is, and returns its terminal; raises the error that kept it from starting
 
 --- What a call needs of the editor.
 ---@class aineo.entry.RunToolsContext
@@ -160,12 +160,22 @@ local function first_word_of(command)
   return word ~= '' and word or 'command'
 end
 
+--- Whether a run tool's process shows the run pane: not while the tab's file
+--- focus is on (`aineo.layout`'s `start_file_focus()`).
+---
+---@param tab aineo.entry.RunToolsTab
+---@return boolean
+local function shows_run_pane(tab)
+  return not (tab.homes.layout and tab.homes.layout.is_file_focused())
+end
+
 --- Starts the command a `run` call gives at the bottom of the tab's run
 --- stack (`aineo.entry.Tab`'s `start_in_run_stack()`), named as the call
 --- says, else by the command's first word, a name the stack holds already
 --- made unused (`unused_name()`), in the project folder or the directory the
 --- call gives; tells the user once. Answers at once; the run pane is shown when
---- the tab page is the one the user is in, the cursor staying where it is.
+--- the tab page is the one the user is in and its file focus is off, the cursor
+--- staying where it is.
 --- An error that keeps it from starting, or a directory not allowed, is
 --- answered as a refusal that says why.
 ---
@@ -191,8 +201,10 @@ local function run(tab, arguments, context)
   end
   context.tell(('aineo: started %s in the run pane'):format(name))
   return done(
-    ('Started "%s" in the run pane, which aineo brings into view when the user is in its tab page, the cursor staying where it is.'):format(
-      name
+    ('Started "%s" in the run pane, which %s, the cursor staying where it is.'):format(
+      name,
+      shows_run_pane(tab) and 'aineo brings into view when the user is in its tab page'
+        or "stays hidden while the user's file focus is on"
     ) .. (' Read what it prints with run_output, name "%s".'):format(name)
   )
 end

@@ -28,7 +28,7 @@ local FOLDER_GONE = 'the folder aineo started in is gone, so nothing started: %s
 ---@class aineo.entry.RunPane
 ---@field run_command fun() what `:Aineo pane run` does
 ---@field run_shell fun() what `:Aineo run shell` does
----@field start_in_stack fun(command: string, options: { name: string, directory: string? }): integer what a run tool's call does: starts `command` at the bottom of the stack and shows the pane in the tab page the user is in, the cursor staying where it is
+---@field start_in_stack fun(command: string, options: { name: string, directory: string? }): integer what a run tool's call does: starts `command` at the bottom of the stack and shows the pane in the tab page the user is in unless its file focus is on, the cursor staying where it is
 ---@field watch fun(group_name: string) keeps the pane in step with the processes
 
 --- What a process of the run pane is started with: the folder aineo started
@@ -140,9 +140,11 @@ function M.make(tab)
   --- Shows the run pane, the cursor staying where it is, when the tab page of
   --- the tab is the one the user is in, so that the stack lists the process
   --- just started; tells the user once an error showing it raises. In another
-  --- tab page the layout is left as it is.
+  --- tab page the layout is left as it is, and so it is while the file focus
+  --- is on (`aineo.layout`'s `start_file_focus()`), which only the user's own
+  --- pane keys end.
   local function show_stack_in_current_tab()
-    if not tab.is_current() then
+    if not tab.is_current() or tab.layout.is_file_focused() then
       return
     end
     errors.run(function()
@@ -153,7 +155,7 @@ function M.make(tab)
   --- Starts `command` in the project folder, or in `options.directory`, named
   --- `options.name`, at the bottom of the stack, as a call of a run tool asks
   --- (`aineo.entry.run_tools`): the run pane is shown in the tab page the
-  --- user is in, the cursor staying where it is
+  --- user is in, the cursor staying where it is, unless the file focus is on
   --- (`show_stack_in_current_tab()`). The quit of the editor is guarded from the
   --- first process on (`aineo.entry.quitting`). Returns the process's
   --- terminal; raises the error that kept it from starting, and then nothing
@@ -183,9 +185,11 @@ function M.make(tab)
   --- Shows the pane again as the processes changed under it: the agent pane
   --- once none is left, else the stack without the process that left. Does
   --- nothing unless the run pane is shown in the tab page the user is in, and
-  --- tells the user once an error showing it raises.
+  --- nothing while the file focus is on, which keeps the panes column closed
+  --- (`aineo.layout`'s `start_file_focus()`); tells the user once an error
+  --- showing it raises.
   local function follow_processes()
-    if tab.layout.shown_pane() ~= 'run' or not tab.is_current() then
+    if tab.layout.shown_pane() ~= 'run' or not tab.is_current() or tab.layout.is_file_focused() then
       return
     end
     errors.run(function()
@@ -196,13 +200,19 @@ function M.make(tab)
   --- Has the process of a window the user closes taken out of the stack once
   --- that closing is done, when it ended: it keeps its window and its output
   --- until then. A process that runs stays, hidden, for the next `:Aineo pane
-  --- run`. A window the layout closes as another pane shows is no closing by
-  --- the user: the layout notes the other pane first.
+  --- run`. A window the layout closes as another pane shows, or as the file
+  --- focus begins, is no closing by the user: the layout notes the other pane
+  --- or the focus first.
   ---
   ---@param event { match: string }
   local function discard_ended_in_closed_window(event)
     local window = tonumber(event.match)
-    if tab.layout.shown_pane() ~= 'run' or not window or not vim.api.nvim_win_is_valid(window) then
+    if
+      tab.layout.shown_pane() ~= 'run'
+      or tab.layout.is_file_focused()
+      or not window
+      or not vim.api.nvim_win_is_valid(window)
+    then
       return
     end
     local buffer = vim.api.nvim_win_get_buf(window)

@@ -52,6 +52,7 @@ local SUBCOMMANDS = {
   'diff',
   'find',
   'zoom',
+  'focus',
   'layout',
   'explain',
   'write',
@@ -993,5 +994,5 @@ end, {
   range = true,
   bar = true,
   complete = complete_subcommand,
-  desc = 'aineo: send, open, report, input, claude, claude-numbers, panel-numbers, sessions, new, pane agent|changes|terminal|run|explorer, explorer column, run shell, claim [id], tab new|close|{n}, diff close, find, zoom or zoom full, layout swap|left|right, [range]explain [issues] [tools] [new]|clear, [range]write [deep], office [check|states|preview [name]|new name|pack [name]|reset], cheatsheet',
+  desc = 'aineo: send, open, report, input, claude, claude-numbers, panel-numbers, sessions, new, pane agent|changes|terminal|run|explorer, explorer column, run shell, claim [id], tab new|close|{n}, diff close, find, zoom or zoom full, focus, layout swap|left|right, [range]explain [issues] [tools] [new]|clear, [range]write [deep], office [check|states|preview [name]|new name|pack [name]|reset], cheatsheet',
 })

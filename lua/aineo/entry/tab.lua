@@ -166,7 +166,7 @@ end
 ---@field key string? what tells the tab's entry in the list of running editors from the editor's other tabs; nil for the first tab, whose entry keeps the name it has always had
 ---@field homes aineo.entry.Homes
 ---@field running_processes fun(): string[] the names of the processes the tab's run pane runs, the oldest first
----@field start_in_run_stack fun(command: string, options: { name: string, directory: string? }): integer starts `command` at the bottom of the tab's run stack as a call of a run tool asks, the run pane shown when the tab page is the current one, the cursor staying where it is (`aineo.entry.run_pane`'s `start_in_stack()`)
+---@field start_in_run_stack fun(command: string, options: { name: string, directory: string? }): integer starts `command` at the bottom of the tab's run stack as a call of a run tool asks, the run pane shown when the tab page is the current one and its file focus is off, the cursor staying where it is (`aineo.entry.run_pane`'s `start_in_stack()`)
 ---@field show_pane fun(pane: aineo.layout.Pane) shows `pane` in the layout's panes column, the cursor staying where it is (`aineo.layout`'s `show_pane()`), the layout opened first when it must
 ---@field focus_pane fun(pane: aineo.layout.Pane) shows `pane` and moves the cursor into it (`aineo.layout`'s `focus_pane()`)
 ---@field actions table<string, fun(origin: integer)> what each of `:Aineo`'s arguments that acts on a tab does, by the argument, given the buffer the key was pressed in
@@ -1256,6 +1256,22 @@ local function make_tab(homes, key, callbacks)
     show_pane('changes')
   end
 
+  --- Turns the tab's file focus on, or off when it is on
+  --- (`aineo.layout`'s `start_file_focus()` and `end_file_focus()`): the
+  --- panes column closes and the file column takes its cells, or the panes
+  --- column opens again around the Claude session's terminal as it is, as
+  --- `focus()` opens the layout, with its pane and the cursor and file where
+  --- they were.
+  local function toggle_file_focus()
+    if not homes.layout.is_file_focused() then
+      homes.layout.start_file_focus()
+      return
+    end
+    with_pane_arrangement(function(make_arrangement)
+      homes.layout.end_file_focus(make_arrangement)
+    end)
+  end
+
   --- Shows the tab's shell in the layout's terminal pane and moves the cursor
   --- into it, in Terminal mode, starting the shell in the folder
   --- (`kept_places()`'s working directory, whatever `:cd` or `:tcd` says) when
@@ -2019,6 +2035,7 @@ local function make_tab(homes, key, callbacks)
     ['diff close'] = function()
       projects.close_shown_diff(tab)
     end,
+    focus = toggle_file_focus,
     zoom = function()
       homes.layout.toggle_zoom()
     end,
