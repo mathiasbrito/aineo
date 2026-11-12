@@ -91,13 +91,13 @@ local EXPLORER_CURSOR_LINE = [[(function()
   return vim.api.nvim_buf_get_lines(buffer, line - 1, line, false)[1]
 end)()]]
 
---- Waits, at most `PATIENCE_MS`, until the explorer's lines are more than its
---- header and a first row (the tree was read).
+--- Waits, at most `PATIENCE_MS`, until the explorer's lines are more than a
+--- first row (the tree was read).
 local function wait_for_tree()
   vim.wait(PATIENCE_MS, function()
     return child.lua_get([[(function()
       local buffer = vim.fn.bufnr('aineo://explorer')
-      return buffer ~= -1 and vim.api.nvim_buf_line_count(buffer) > 2
+      return buffer ~= -1 and vim.api.nvim_buf_line_count(buffer) > 1
     end)()]])
   end, 20)
 end
@@ -177,7 +177,7 @@ T['a file opened with \\f']['unfolds its folders for the next time the explorer 
 
   eq(windows, { 'terminal', note, 'aineo://report', 'aineo://input' })
   eq(
-    child.lua_get([[vim.api.nvim_buf_get_lines(vim.fn.bufnr('aineo://explorer'), 0, -1, false)]])[3],
+    child.lua_get([[vim.api.nvim_buf_get_lines(vim.fn.bufnr('aineo://explorer'), 0, -1, false)]])[2],
     '▾   sub/'
   )
 end
