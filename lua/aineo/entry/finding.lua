@@ -1,6 +1,8 @@
 --- What `:Aineo find` does in an aineo tab: searches the files under the
---- folder the tab's Claude Code works in, or under the top of the repository
---- that folder is in, with the picker `find.picker` names
+--- folder the tab's explorer shows (the worktree its changes pane's focused
+--- view shows alone, else the folder the tab's Claude Code works in), or
+--- under the top of the repository that folder is in, with the picker
+--- `find.picker` names
 --- (`aineo.find`), and so opens the file picked in the file column, which the
 --- tab's explorer then reveals (`aineo.entry.find_reveal`).
 
@@ -10,15 +12,6 @@ local find_reveal = require('aineo.entry.find_reveal')
 local M = {}
 
 local resolved_config = require('aineo.entry.settings').resolved
-
---- The folder the tab's Claude Code works in: where it started, and before
---- it has started, where the editor is.
----
----@param tab aineo.entry.Tab
----@return string
-local function claude_directory(tab)
-  return tab.homes.claude.session_directory() or vim.fn.getcwd()
-end
 
 --- Calls `done` with the repository `directory` is in, as the git home finds
 --- it (`aineo.git`'s `find_repository()`), and with nil when it is in none, or
@@ -47,9 +40,10 @@ end
 local FROM_A_FLOAT = 'aineo: a file is found from a window of the tab, not from a floating one'
 
 --- Starts the search for a file of `tab` (`aineo.find`'s `find_file()`) once the
---- repository of its folder is known (`find_repository()`), unless the cursor
---- has left the window it was in by then; under the repository's top, else
---- under the folder. A search asked for from a floating window starts nothing
+--- folder its explorer shows (`aineo.explorer`'s `shown_folder()`) and the
+--- repository of that folder are known (`find_repository()`), unless the
+--- cursor has left the window it was in by then; under the repository's top,
+--- else under the folder. A search asked for from a floating window starts nothing
 --- and tells the user once, with a warning: the file would open in the float,
 --- and a picker's own float would be left. The configuration is read at once,
 --- so a wrong setting raises its error to the caller; an error the search
@@ -63,22 +57,23 @@ function M.find_in(tab)
     vim.notify(FROM_A_FLOAT, vim.log.levels.WARN)
     return
   end
-  local directory = claude_directory(tab)
-  find_repository(directory, function(repository)
-    if vim.api.nvim_get_current_win() ~= window then
-      return
-    end
-    errors.run(function()
-      local reveal = tab.homes.explorer.reveal
-      find_reveal.watching(reveal, function()
-        return require('aineo.find').find_file({
-          directory = repository and repository.top or directory,
-          picker = picker,
-          list_files = repository and list_files_of(repository) or nil,
-          on_open = function(file)
-            find_reveal.reveal_when_settled(reveal, file)
-          end,
-        })
+  tab.homes.explorer.shown_folder(function(directory)
+    find_repository(directory, function(repository)
+      if vim.api.nvim_get_current_win() ~= window then
+        return
+      end
+      errors.run(function()
+        local reveal = tab.homes.explorer.reveal
+        find_reveal.watching(reveal, function()
+          return require('aineo.find').find_file({
+            directory = repository and repository.top or directory,
+            picker = picker,
+            list_files = repository and list_files_of(repository) or nil,
+            on_open = function(file)
+              find_reveal.reveal_when_settled(reveal, file)
+            end,
+          })
+        end)
       end)
     end)
   end)
