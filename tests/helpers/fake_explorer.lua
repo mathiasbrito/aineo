@@ -13,6 +13,7 @@ local M = {}
 ---@field folder string the folder Claude works in
 ---@field focused_work? aineo.explorer.Work what the changes pane's focused view shows alone, read at each read; none for its default view
 ---@field look? fun(): table<string, boolean>, string[]|nil what `settings.look` answers; none given, none is handed
+---@field list_failure? aineo.git.Failure why git fails to list the files; none given, it lists them
 
 --- Makes the world of a case, `overrides` over its defaults: the files
 --- `a.txt`, `b.txt` and `c.txt` of the repository `/repo`, nothing changed.
@@ -40,7 +41,7 @@ function M.new(world)
       done(nil, { top = '/repo', git_directory = '/repo/.git', branch = 'main' })
     end,
     list_files = function(_, done)
-      done(nil, world.files)
+      done(world.list_failure, world.files)
     end,
     uncommitted_files = function(_, done)
       done(nil, world.changes)

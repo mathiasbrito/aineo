@@ -128,16 +128,16 @@ T['the footer']['closes with its window'] = function()
   eq(#footer.footers_of(first), 1)
 end
 
-T['the footer']['closes as its window shows another buffer'] = function()
+T['the footer']['stays as git fails, the failure alone on the tree’s first line'] = function()
   local window = vim.api.nvim_get_current_win()
-  local shown_footer = footer.footer_of(window)
+  world.list_failure = { reason = 'exit', message = 'boom' }
 
-  vim.cmd('enew')
-  vim.wait(WAIT_MS, function()
-    return not vim.api.nvim_win_is_valid(shown_footer)
-  end)
+  explorer.refresh()
 
-  eq(vim.api.nvim_win_is_valid(shown_footer), false)
+  eq(vim.api.nvim_buf_get_lines(explorer.made_buffer(), 0, -1, false), {
+    '  git could not list the files: boom',
+  })
+  eq(footer.lines(window), { '/repo', '  main', 'ignored hidden · dotfiles shown' })
 end
 
 T['the footer']['closes as the explorer is let go'] = function()

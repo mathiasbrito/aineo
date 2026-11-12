@@ -76,4 +76,69 @@ T['the cursor']['moves up above the footer as the tree scrolls up past it'] = fu
   eq(cursor_row(), row)
 end
 
+T['the footer'] = MiniTest.new_set()
+
+--- Where the footer that sits on the child's window `window` is
+--- (`tests/helpers/explorer_footer.lua`'s `placement()`), `vim.NIL` when none
+--- does.
+---
+---@param window integer
+---@return table|userdata
+local function footer_placement(window)
+  return child.lua_get("dofile('tests/helpers/explorer_footer.lua').placement(...)", { window })
+end
+
+--- The row below the footer that sits on the child's window `window`, from
+--- 0: the window's height while the footer sits on its bottom rows.
+---
+---@param window integer
+---@return integer
+local function bottom_row(window)
+  local placement = footer_placement(window)
+  return placement.row + placement.height
+end
+
+T['the footer']['moves to the new bottom rows of its window as it gets shorter, its width the same'] = function()
+  local window = child.lua_get('vim.api.nvim_get_current_win()')
+  child.cmd('botright split')
+  child.lua('vim.api.nvim_set_current_win(...)', { window })
+  vim.wait(WAIT_MS, function()
+    return bottom_row(window) == child.lua_get('vim.api.nvim_win_get_height(0)')
+  end)
+
+  child.cmd('resize -2')
+  local height = child.lua_get('vim.api.nvim_win_get_height(0)')
+  vim.wait(WAIT_MS, function()
+    return bottom_row(window) == height
+  end)
+
+  eq(bottom_row(window), height)
+end
+
+T['the footer']['closes as its window shows another buffer'] = function()
+  local window = child.lua_get('vim.api.nvim_get_current_win()')
+  eq(footer_placement(window) ~= vim.NIL, true)
+
+  child.cmd('enew')
+  vim.wait(WAIT_MS, function()
+    return footer_placement(window) == vim.NIL
+  end)
+
+  eq(footer_placement(window), vim.NIL)
+end
+
+T['the footer']['follows its window resized while another tab page showed'] = function()
+  local window = child.lua_get('vim.api.nvim_get_current_win()')
+  child.cmd('tabnew')
+  child.o.lines = child.o.lines - 4
+
+  child.cmd('tabprevious')
+  local height = child.lua_get('vim.api.nvim_win_get_height(...)', { window })
+  vim.wait(WAIT_MS, function()
+    return bottom_row(window) == height
+  end)
+
+  eq(bottom_row(window), height)
+end
+
 return T
