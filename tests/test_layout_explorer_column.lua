@@ -382,6 +382,27 @@ end
 
 T['the explorer column'] = MiniTest.new_set()
 
+T['the explorer column']['keeps its width as the file column closes under the terminal pane'] = function()
+  local buffers, arrangement = arrangement_with_column('right', 'left')
+  child.o.shell = '/bin/sh'
+  buffers.shell = child.lua_get([[require('aineo.shell').start({ cwd = vim.uv.cwd() })]])
+  arrangement.shell = buffers.shell
+  child.cmd('edit ' .. layout.file('first.txt'))
+  buffers.files = child.lua_get('vim.api.nvim_get_current_buf()')
+  layout.open(child, arrangement)
+  child.lua([[require('aineo.layout').show_pane('terminal', ...)]], { arrangement })
+
+  child.lua('vim.api.nvim_win_close(vim.fn.win_findbuf(...)[1], false)', { buffers.files })
+
+  local rest = layout.COLUMNS - WIDTH - 1
+  layout.wait_until(
+    child,
+    'math.abs(vim.api.nvim_win_get_width(vim.fn.win_findbuf(...)[1]) - ' .. rest / 2 .. ') <= 1',
+    { buffers.claude }
+  )
+  eq(box_of(buffers.explorer).width, WIDTH)
+end
+
 T['the explorer column']['stays outermost as Claude’s closed window opens again'] =
   MiniTest.new_set({
     parametrize = {
