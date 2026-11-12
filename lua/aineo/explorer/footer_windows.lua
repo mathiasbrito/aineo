@@ -342,12 +342,6 @@ function M.follow(buffer, groups)
     desc = 'aineo: keep the explorer’s footers on the windows that show it',
     callback = draw_soon,
   })
-  vim.api.nvim_create_autocmd('BufWinLeave', {
-    group = augroup,
-    buffer = buffer,
-    desc = 'aineo: keep the explorer’s footers on the windows that show it',
-    callback = draw_soon,
-  })
   vim.api.nvim_create_autocmd('BufWinEnter', {
     group = augroup,
     desc = 'aineo: keep the explorer’s footers on the windows that show it',
