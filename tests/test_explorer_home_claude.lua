@@ -80,10 +80,10 @@ T['the work of the session']['flashes the lines of the files that join it after 
   end, 10)
   local lasted = vim.uv.now() - started
 
-  eq(flashing, { 4 })
+  eq(flashing, { 3 })
   eq(ended, true)
   eq(lasted >= 1400 and lasted <= 2200, true)
-  eq(marked_lines(), { 2, 4 })
+  eq(marked_lines(), { 1, 3 })
 end
 
 T['the work of the session']['flashes the line of a file whose change is read anew'] = function()
@@ -95,7 +95,7 @@ T['the work of the session']['flashes the line of a file whose change is read an
   world.counts = { ['a.txt'] = { added = 2, removed = 0 } }
   explorer.refresh()
 
-  eq(flashing_lines(), { 2 })
+  eq(flashing_lines(), { 1 })
 end
 
 T['the work of the session']['flashes a file for the whole time again when its change is read anew while it flashes'] = function()
@@ -112,7 +112,7 @@ T['the work of the session']['flashes a file for the whole time again when its c
   explorer.refresh()
   vim.wait(math.max(0, joined + 1700 - vim.uv.now()))
 
-  eq(flashing_lines(), { 2 })
+  eq(flashing_lines(), { 1 })
 end
 
 T['the work of the session']['flashes nothing when it is read again as it was'] = function()
@@ -134,7 +134,7 @@ T['the work of the session']['flashes nothing at the read after one that did not
   explorer.refresh()
 
   eq(flashing_lines(), {})
-  eq(marked_lines(), { 2, 3 })
+  eq(marked_lines(), { 1, 2 })
 end
 
 T['the work of the session']['flashes nothing at the read after one that did not know it, whatever it read before'] = function()
@@ -157,7 +157,7 @@ T['the work of the session']['flashes nothing when the folder shown is another, 
   world.folder = '/repo/sub'
   explorer.refresh()
 
-  eq(marked_lines(), { 2 })
+  eq(marked_lines(), { 1 })
   eq(flashing_lines(), {})
 end
 
@@ -173,11 +173,11 @@ T['the cursor of the explorer'] = MiniTest.new_set()
 
 T['the cursor of the explorer']['keeps its column as the tree is read again'] = function()
   show_explorer()
-  vim.api.nvim_win_set_cursor(0, { 3, 5 })
+  vim.api.nvim_win_set_cursor(0, { 2, 5 })
 
   explorer.refresh()
 
-  eq(vim.api.nvim_win_get_cursor(0), { 3, 5 })
+  eq(vim.api.nvim_win_get_cursor(0), { 2, 5 })
 end
 
 T['the cursor of the explorer']['keeps its column when a flash ends'] = function()
@@ -185,13 +185,13 @@ T['the cursor of the explorer']['keeps its column when a flash ends'] = function
   show_explorer()
   world.work.paths = { 'a.txt', 'c.txt' }
   explorer.refresh()
-  vim.api.nvim_win_set_cursor(0, { 3, 6 })
+  vim.api.nvim_win_set_cursor(0, { 2, 6 })
 
   vim.wait(PATIENCE_MS, function()
     return #flashing_lines() == 0
   end, 10)
 
-  eq(vim.api.nvim_win_get_cursor(0), { 3, 6 })
+  eq(vim.api.nvim_win_get_cursor(0), { 2, 6 })
 end
 
 return T

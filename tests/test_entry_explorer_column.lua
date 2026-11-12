@@ -89,7 +89,7 @@ local function open_with_column(name, column)
   return open_in_repository(name, { layout = { explorer_column = column } })
 end
 
---- The lines of the explorer's buffer in the child, the header first.
+--- The lines of the explorer's buffer in the child.
 ---
 ---@return string[]
 local function explorer_lines()
@@ -103,14 +103,14 @@ local function explorer_lines()
   end)()]])
 end
 
---- Waits, at most `PATIENCE_MS`, until the explorer's lines below its header
---- are `FOLDED_TREE`, and returns them as they are then.
+--- Waits, at most `PATIENCE_MS`, until the explorer's lines are
+--- `FOLDED_TREE`, and returns them as they are then.
 ---
 ---@return string[]
 local function wait_for_tree()
   local lines
   vim.wait(PATIENCE_MS, function()
-    lines = vim.list_slice(explorer_lines(), 2)
+    lines = explorer_lines()
     return vim.deep_equal(lines, FOLDED_TREE)
   end, 20)
   return lines

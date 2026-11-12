@@ -25,23 +25,17 @@ local function chunk_pairs(item, role_groups)
   end, item.chunks)
 end
 
---- The highlight groups that colour a whole line.
----@class aineo.explorer.LineGroups
----@field header string the header line's
----@field flash string the lines that flash
-
 --- Draws the colours and the virtual text of `rendering` on `buffer` in
---- `namespace`, the header line and the flashing lines in `line_groups`,
---- after clearing what the namespace held.
+--- `namespace`, the flashing lines whole in `flash_group`, after clearing
+--- what the namespace held.
 ---
 ---@param buffer integer
 ---@param namespace integer
 ---@param rendering aineo.explorer.Rendering
 ---@param role_groups table<string, string> the group each role shows in
----@param line_groups aineo.explorer.LineGroups
-function M.draw(buffer, namespace, rendering, role_groups, line_groups)
+---@param flash_group string the group of the lines that flash
+function M.draw(buffer, namespace, rendering, role_groups, flash_group)
   vim.api.nvim_buf_clear_namespace(buffer, namespace, 0, -1)
-  vim.api.nvim_buf_set_extmark(buffer, namespace, 0, 0, { line_hl_group = line_groups.header })
   for line, spans in pairs(rendering.spans) do
     for _, span in ipairs(spans) do
       vim.api.nvim_buf_set_extmark(buffer, namespace, line - 1, span.first_column, {
@@ -51,13 +45,7 @@ function M.draw(buffer, namespace, rendering, role_groups, line_groups)
     end
   end
   for line in pairs(rendering.flashed) do
-    vim.api.nvim_buf_set_extmark(
-      buffer,
-      namespace,
-      line - 1,
-      0,
-      { line_hl_group = line_groups.flash }
-    )
+    vim.api.nvim_buf_set_extmark(buffer, namespace, line - 1, 0, { line_hl_group = flash_group })
   end
   for line, items in pairs(rendering.virtual) do
     for _, item in ipairs(items) do

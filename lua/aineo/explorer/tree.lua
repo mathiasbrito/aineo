@@ -5,7 +5,6 @@
 local compact = require('aineo.explorer.compact')
 local counts = require('aineo.explorer.counts')
 local line_virtual_text = require('aineo.explorer.line_virtual_text')
-local header = require('aineo.explorer.header')
 
 local M = {}
 
@@ -28,7 +27,7 @@ local M = {}
 ---@field show_dotfiles boolean whether entries whose name starts with a dot show
 ---@field show_ignored boolean whether entries git ignores show
 ---@field filter? string the text a file's path must hold to show, ignoring case; none, or empty, shows every file
----@field title? string what the header names as shown: the folder, or the worktree
+---@field title? string what the footer names as shown: the folder, or the worktree (`aineo.explorer.footer`)
 ---@field quote? fun(name: string): string how a name shows, so that a control character in it cannot break its line; as it is when not given
 ---@field guides? boolean whether the connectors of the tree are laid over the indent (`aineo.explorer.guides`)
 ---@field compact? boolean whether a chain of folders each holding a folder alone shows on one line (`aineo.explorer.compact`)
@@ -41,11 +40,11 @@ local M = {}
 ---@field claude? table<string, true> the files in the work of the session, by path
 ---@field flash? table<string, true> the files of `claude` that joined it, or changed in it, just now, by path
 ---@field icons? fun(entry: aineo.explorer.Entry): aineo.explorer.Icon|nil the icon of a file (`aineo.explorer.icons`); none given, no file shows one
----@field branch? string the branch the folder shown is on, for the header
+---@field branch? string the branch the folder shown is on, for the footer
 
 --- What the tree renders as.
 ---@class aineo.explorer.Rendering
----@field lines string[] the buffer's lines, the header first
+---@field lines string[] the buffer's lines
 ---@field entries table<integer, aineo.explorer.Entry> the entry each line shows, by line number, from 1
 ---@field spans table<integer, aineo.explorer.Span[]> the colours of each entry's line, by line number, from 1; none for a line with no colour
 ---@field virtual table<integer, aineo.explorer.VirtualText[]> the text each line shows without holding it, by line number, from 1; none for a line with none
@@ -422,28 +421,6 @@ local function is_shown(entry, view)
   return view.show_dotfiles or entry.name:sub(1, 1) ~= '.'
 end
 
---- The header line (`aineo.explorer.header`): the title of what the tree
---- shows, its branch and a summary of its changes, then whether ignored
---- entries and dotfiles show, and the filter, when there is one.
----
----@param view aineo.explorer.View
----@return string
-local function header_line(view)
-  local toggles = {
-    view.show_ignored and 'ignored shown' or 'ignored hidden',
-    view.show_dotfiles and 'dotfiles shown' or 'dotfiles hidden',
-  }
-  if view.filter and view.filter ~= '' then
-    table.insert(toggles, ('filter “%s”'):format(view.filter))
-  end
-  return header.compose({
-    title = view.title or '',
-    branch = view.branch,
-    summary = header.summary(view.marks),
-    toggles = toggles,
-  }, view.width)
-end
-
 --- The line that stands for the tree when no file matches `filter`.
 ---
 ---@param filter string
@@ -533,8 +510,8 @@ function M.deepest_folder(tree, view, folder)
   return chain[#chain]
 end
 
---- The lines `tree` shows under `view`: a header, then each entry of the
---- root, in a folder's order (`comes_before()`), each unfolded folder's
+--- The lines `tree` shows under `view`: each entry of the root, from the
+--- first line, in a folder's order (`comes_before()`), each unfolded folder's
 --- entries below it; a file with its mark, a folder with its own mark when
 --- it has one — an untracked nested repository's — else, when it holds a
 --- marked file, with `M.FOLDER_MARK`. Under a filter, only the files whose path holds it,
@@ -543,14 +520,13 @@ end
 --- alone takes one line with it, its entry the deepest folder of the chain
 --- (`aineo.explorer.compact`). Each entry's line has its colours as spans
 --- (`aineo.explorer.Span`) and the text it shows without holding it as
---- virtual text; the header and the line that says no file matches have
---- neither.
+--- virtual text; the line that says no file matches has neither.
 ---
 ---@param tree aineo.explorer.Tree
 ---@param view aineo.explorer.View
 ---@return aineo.explorer.Rendering
 function M.render(tree, view)
-  local lines, entries, spans, virtual = { header_line(view) }, {}, {}, {}
+  local lines, entries, spans, virtual = {}, {}, {}, {}
   local unchanged_names, changed_shown, flashed = {}, 0, {}
   local quote = view.quote or as_it_is
   local filter = view.filter and view.filter ~= '' and view.filter:lower() or nil
@@ -638,7 +614,7 @@ function M.render(tree, view)
       }
     end
   end
-  if filter and #lines == 1 then
+  if filter and #lines == 0 then
     table.insert(lines, no_match_line(view.filter))
   end
   return {
