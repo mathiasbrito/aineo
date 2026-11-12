@@ -4,7 +4,9 @@
 --- whose pick its `s` shares (`aineo.changes`' `focused_work()`,
 --- `offer_scopes()`), opens a file as a link to it opens
 --- (`aineo.entry.links`), and pastes into that Claude Code's prompt through
---- the Send home (`aineo.send`'s `paste()`).
+--- the Send home (`aineo.send`'s `paste()`). A change of the changes pane's
+--- focused work ends the hold of the default view the explorer takes when a
+--- file of the folder Claude works in is followed (`follow_focused_work()`).
 
 local errors = require('aineo.entry.errors')
 local links = require('aineo.entry.links')
@@ -70,7 +72,7 @@ function M.make_explorer(homes)
       require('aineo.send').paste(text, { session = homes.claude })
     end,
   })
-  homes.changes.watch_focused_work(explorer.refresh)
+  homes.changes.watch_focused_work(explorer.follow_focused_work)
   return explorer
 end
 
