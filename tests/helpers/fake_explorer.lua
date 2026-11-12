@@ -11,6 +11,7 @@ local M = {}
 ---@field counts table<string, aineo.git.LineCount>
 ---@field work aineo.explorer.SessionWork|nil the work of the session
 ---@field folder string the folder Claude works in
+---@field focused_work? aineo.explorer.Work what the changes pane's focused view shows alone, read at each read; none for its default view
 ---@field look? fun(): table<string, boolean>, string[]|nil what `settings.look` answers; none given, none is handed
 
 --- Makes the world of a case, `overrides` over its defaults: the files
@@ -62,6 +63,9 @@ function M.new(world)
     git = git,
     claude_folder = function()
       return world.folder
+    end,
+    focused_work = function()
+      return world.focused_work
     end,
     open_file = function() end,
     paste = function() end,
