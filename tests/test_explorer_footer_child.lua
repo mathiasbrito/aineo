@@ -51,6 +51,24 @@ local function wait_for_cursor_row(row)
   end)
 end
 
+--- The first line the child's current window shows.
+---
+---@return integer
+local function top_line()
+  return child.lua_get('vim.fn.line("w0")')
+end
+
+--- Waits until the child's current window shows line `top` first and its
+--- cursor is on row `row`, at most `WAIT_MS`.
+---
+---@param top integer
+---@param row integer
+local function wait_for_view(top, row)
+  vim.wait(WAIT_MS, function()
+    return top_line() == top and cursor_row() == row
+  end)
+end
+
 T['the cursor'] = MiniTest.new_set()
 
 T['the cursor']['stays above the footer as it goes to the last entry'] = function()
@@ -73,6 +91,57 @@ T['the cursor']['moves up above the footer as the tree scrolls up past it'] = fu
   wait_for_cursor_row(row)
 
   eq(child.lua_get('vim.fn.line("w0")'), top - 4)
+  eq(cursor_row(), row)
+end
+
+T['the cursor']['moves up above the footer as the tree scrolls up by one row'] = function()
+  local row = last_row_above_footer()
+  child.type_keys('G')
+  wait_for_cursor_row(row)
+  local top = top_line()
+
+  child.type_keys('<C-y>')
+  wait_for_view(top - 1, row)
+
+  eq(top_line(), top - 1)
+  eq(cursor_row(), row)
+end
+
+T['the cursor']['moves up above the footer as the wheel scrolls the tree up a notch'] = function()
+  child.o.mouse = 'a'
+  local row = last_row_above_footer()
+  child.type_keys('G')
+  wait_for_cursor_row(row)
+  local top = top_line()
+
+  child.api.nvim_input_mouse('wheel', 'up', '', 0, 2, 2)
+  wait_for_view(top - 3, row)
+
+  eq(top_line(), top - 3)
+  eq(cursor_row(), row)
+end
+
+T['the cursor']['stays above the footer as zb puts its line at the window’s bottom'] = function()
+  local row = last_row_above_footer()
+  child.type_keys('30G')
+
+  child.type_keys('zb')
+  vim.wait(WAIT_MS, function()
+    return cursor_row() == row and top_line() > 1
+  end)
+
+  eq(top_line() > 1, true)
+  eq(cursor_row(), row)
+end
+
+T['the cursor']['stays above the footer as the window gets shorter'] = function()
+  child.type_keys(tostring(last_row_above_footer()) .. 'G')
+  wait_for_cursor_row(last_row_above_footer())
+
+  child.o.lines = child.o.lines - 5
+  local row = last_row_above_footer()
+  wait_for_cursor_row(row)
+
   eq(cursor_row(), row)
 end
 
@@ -125,6 +194,23 @@ T['the footer']['closes as its window shows another buffer'] = function()
   end)
 
   eq(footer_placement(window), vim.NIL)
+end
+
+T['the footer']['closes on one of two windows showing the explorer as it shows another buffer'] = function()
+  local first = child.lua_get('vim.api.nvim_get_current_win()')
+  child.cmd('split')
+  local second = child.lua_get('vim.api.nvim_get_current_win()')
+  vim.wait(WAIT_MS, function()
+    return footer_placement(second) ~= vim.NIL
+  end)
+
+  child.cmd('enew')
+  vim.wait(WAIT_MS, function()
+    return footer_placement(second) == vim.NIL
+  end)
+
+  eq(footer_placement(second), vim.NIL)
+  eq(footer_placement(first) ~= vim.NIL, true)
 end
 
 T['the footer']['follows its window resized while another tab page showed'] = function()

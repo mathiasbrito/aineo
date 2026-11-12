@@ -198,8 +198,11 @@ end
 
 --- Has a footer follow each window that shows `buffer`, the explorer's, its
 --- lines in `groups`; it is drawn as `draw()` is asked, and again as windows
---- open, close, resize or change buffer, once the commands in flight are
---- done. Every footer closes once `buffer` is wiped.
+--- close, resize or change buffer, once the commands in flight are done.
+--- Every footer closes once `buffer` is wiped. The cursor of each window a
+--- footer sits on is kept above it: the tree scrolls when the cursor goes
+--- down under it, and as each footer is drawn; the cursor moves up when the
+--- tree scrolled and left it there.
 ---
 ---@param buffer integer
 ---@param groups aineo.explorer.FooterGroups
@@ -247,10 +250,34 @@ function M.follow(buffer, groups)
     write(shown_footer, lines, groups.roles)
   end
 
+  --- Keeps the cursor of `window` above the footer that sits on it
+  --- (`keep_cursor_above()`), when one does, and remembers its line.
+  ---
+  ---@param window integer
+  ---@param scrolled_up boolean
+  local function keep_cursor_of(window, scrolled_up)
+    local shown_footer = footers[window]
+    if not (shown_footer and vim.api.nvim_win_is_valid(window)) then
+      return
+    end
+    local rows = vim.api.nvim_win_get_height(window) - shown_footer.height
+    keep_cursor_above(window, rows, scrolled_up)
+    shown_footer.cursor_line = vim.api.nvim_win_get_cursor(window)[1]
+  end
+
+  --- Whether a window a footer sits on no longer shows `buffer`.
+  ---
+  ---@return boolean
+  local function sits_on_another_buffer()
+    return vim.iter(pairs(footers)):any(function(window)
+      return vim.api.nvim_win_is_valid(window) and vim.api.nvim_win_get_buf(window) ~= buffer
+    end)
+  end
+
   --- Lays out the footer of every window that shows `buffer` under what the
-  --- explorer showed last, closes the footers of windows that no longer do,
-  --- and leaves room after the tree's last line for the tallest footer
-  --- (`leave_room()`).
+  --- explorer showed last, each window's cursor kept above it, closes the
+  --- footers of windows that no longer do, and leaves room after the tree's
+  --- last line for the tallest footer (`leave_room()`).
   local function draw_all()
     if not (last_shown and vim.api.nvim_buf_is_valid(buffer)) then
       return
@@ -259,6 +286,7 @@ function M.follow(buffer, groups)
     for _, window in ipairs(vim.fn.win_findbuf(buffer)) do
       showing[window] = true
       lay_out(window, last_shown)
+      keep_cursor_of(window, false)
     end
     local tallest = 0
     for window, shown_footer in pairs(footers) do
@@ -297,10 +325,8 @@ function M.follow(buffer, groups)
   end
 
   function shown_footers.keep_cursors()
-    for window, shown_footer in pairs(footers) do
-      if vim.api.nvim_win_is_valid(window) then
-        keep_cursor_above(window, vim.api.nvim_win_get_height(window) - shown_footer.height, false)
-      end
+    for window in pairs(footers) do
+      keep_cursor_of(window, false)
     end
   end
 
@@ -316,11 +342,37 @@ function M.follow(buffer, groups)
     desc = 'aineo: keep the explorer’s footers on the windows that show it',
     callback = draw_soon,
   })
-  vim.api.nvim_create_autocmd({ 'BufWinEnter', 'BufWinLeave' }, {
+  vim.api.nvim_create_autocmd('BufWinLeave', {
     group = augroup,
     buffer = buffer,
     desc = 'aineo: keep the explorer’s footers on the windows that show it',
     callback = draw_soon,
+  })
+  vim.api.nvim_create_autocmd('BufWinEnter', {
+    group = augroup,
+    desc = 'aineo: keep the explorer’s footers on the windows that show it',
+    callback = function(event)
+      if event.buf == buffer or sits_on_another_buffer() then
+        draw_soon()
+      end
+    end,
+  })
+  vim.api.nvim_create_autocmd('WinScrolled', {
+    group = augroup,
+    desc = 'aineo: keep the cursor of the explorer above its footer as the tree scrolls',
+    callback = function()
+      for key, change in pairs(vim.v.event) do
+        local window = tonumber(key)
+        if
+          window
+          and change.topline ~= 0
+          and vim.api.nvim_win_is_valid(window)
+          and vim.api.nvim_win_get_buf(window) == buffer
+        then
+          keep_cursor_of(window, true)
+        end
+      end
+    end,
   })
   vim.api.nvim_create_autocmd('CursorMoved', {
     group = augroup,
@@ -333,13 +385,7 @@ function M.follow(buffer, groups)
         return
       end
       local line = vim.api.nvim_win_get_cursor(window)[1]
-      local scrolled_up = shown_footer.cursor_line ~= nil and line < shown_footer.cursor_line
-      keep_cursor_above(
-        window,
-        vim.api.nvim_win_get_height(window) - shown_footer.height,
-        scrolled_up
-      )
-      shown_footer.cursor_line = vim.api.nvim_win_get_cursor(window)[1]
+      keep_cursor_of(window, shown_footer.cursor_line ~= nil and line < shown_footer.cursor_line)
     end,
   })
   vim.api.nvim_create_autocmd('BufWipeout', {

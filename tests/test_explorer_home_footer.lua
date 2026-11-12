@@ -220,4 +220,23 @@ T['the tree under the footer']['shows a file revealed above the footer'] = funct
   )
 end
 
+T['the tree under the footer']['keeps the cursor of a window not entered above the footer as entries come above it'] = function()
+  list_many_files()
+  local window = vim.api.nvim_get_current_win()
+  local row = vim.api.nvim_win_get_height(window) - footer.placement(window).height
+  vim.api.nvim_win_set_cursor(window, { row, 0 })
+  vim.cmd('vsplit')
+  vim.cmd('enew')
+
+  table.insert(world.files, 1, 'aa1.txt')
+  table.insert(world.files, 1, 'aa2.txt')
+  explorer.refresh()
+
+  eq(vim.api.nvim_win_get_cursor(window)[1], row + 2)
+  eq(
+    vim.api.nvim_win_call(window, vim.fn.winline),
+    vim.api.nvim_win_get_height(window) - footer.placement(window).height
+  )
+end
+
 return T
