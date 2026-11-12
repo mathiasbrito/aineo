@@ -8,8 +8,10 @@
 --- the explorer's `reveal()`. The watch ends when the cursor goes back to a
 --- window that existed when the search began (the picker closed), and a file
 --- shown before any picker window was entered, once the search call had
---- returned, is not the one found. Entering a file any other way is not a
---- reveal.
+--- returned, is not the one found. A picker that confirms a file already shown
+--- in a window of the tab page opens nothing: it only enters that window, and
+--- the file that window shows is the one found. Entering a file any other way
+--- is not a reveal.
 
 local M = {}
 
@@ -27,6 +29,15 @@ end
 --- watches.
 ---@type table<integer, table>
 local watches = {}
+
+--- Whether `token` is still the watch of `page`.
+---
+---@param page integer
+---@param token table
+---@return boolean
+local function is_watching(page, token)
+  return watches[page] == token
+end
 
 --- Ends the watch `token` made of `page`, if it is still the watch of `page`.
 ---
@@ -66,6 +77,26 @@ local function is_named_file(buffer)
   return vim.bo[buffer].buftype == '' and vim.api.nvim_buf_get_name(buffer) ~= ''
 end
 
+--- The full name of the file the current window shows, when it is one of the
+--- tab page `page`'s windows that does not float, other than `origin`, and
+--- shows a file with a name; nil otherwise.
+---
+---@param page integer
+---@param origin integer
+---@return string|nil
+local function file_entered_beside(page, origin)
+  local buffer = vim.api.nvim_get_current_buf()
+  if
+    vim.api.nvim_get_current_tabpage() ~= page
+    or vim.api.nvim_get_current_win() == origin
+    or in_a_float()
+    or not is_named_file(buffer)
+  then
+    return nil
+  end
+  return vim.fn.fnamemodify(vim.api.nvim_buf_get_name(buffer), ':p')
+end
+
 --- What a watch knows of its search.
 ---@class aineo.entry.FindWatch
 ---@field searching boolean whether the call that starts the search has not returned yet
@@ -78,12 +109,16 @@ end
 --- (`reveal`), and the watch ends, provided the search call is still running
 --- or a picker window was entered. The watch ends without a reveal two ticks
 --- after the cursor enters a window that did not float and existed when the
---- search began, once a picker window was entered: the picker was closed.
+--- search began, once a picker window was entered: the picker was closed; when
+--- that window is not the one the search began in and shows a file with a name
+--- by then, and no file was opened meanwhile, the picker confirmed a file
+--- already shown there, and that file is revealed.
 ---
 ---@param reveal fun(file: string)
 ---@return aineo.entry.FindWatch watch
 local function start(reveal)
   local page = vim.api.nvim_get_current_tabpage()
+  local origin = vim.api.nvim_get_current_win()
   local before = vim.api.nvim_get_current_buf()
   local token = {}
   local existing = {}
@@ -128,7 +163,16 @@ local function start(reveal)
       if not existing[vim.api.nvim_get_current_win()] then
         watch.picker_seen = true
       elseif watch.picker_seen and not in_a_float() then
-        after_the_layout_settles(watch.stop)
+        after_the_layout_settles(function()
+          if not is_watching(page, token) then
+            return
+          end
+          local file = file_entered_beside(page, origin)
+          watch.stop()
+          if file then
+            reveal(file)
+          end
+        end)
       end
     end,
   })
