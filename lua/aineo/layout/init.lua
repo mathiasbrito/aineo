@@ -587,7 +587,8 @@ local function make_layout(input_name, group_name)
   --- each, the two separators taken out, and the file column the rest, set
   --- too, since a window next to a fixed one keeps whatever width a neighbour
   --- leaves it; without it, Claude's column takes half and the right one the
-  --- rest.
+  --- rest, which is set as well when the explorer column is open, or the cells
+  --- Claude's column takes come out of the explorer column.
   local function set_column_widths()
     local available = vim.o.columns
     if has_explorer_column() then
@@ -600,7 +601,12 @@ local function make_layout(input_name, group_name)
       vim.api.nvim_win_set_width(state.windows.claude, third)
       vim.api.nvim_win_set_width(state.windows.report, third)
     else
-      vim.api.nvim_win_set_width(state.windows.claude, math.floor(available / 2))
+      local claude_width = math.floor(available / 2)
+      vim.api.nvim_win_set_width(state.windows.claude, claude_width)
+      local right_column = right_column_window()
+      if has_explorer_column() and right_column then
+        vim.api.nvim_win_set_width(right_column, available - claude_width - 1)
+      end
     end
   end
 
