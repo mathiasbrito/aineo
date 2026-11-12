@@ -1,5 +1,6 @@
 local MiniTest = require('mini.test')
 local fake_explorer = dofile('tests/helpers/fake_explorer.lua')
+local footer = dofile('tests/helpers/explorer_footer.lua')
 
 local eq = MiniTest.expect.equality
 
@@ -52,11 +53,13 @@ local function line_ending_with(text)
   return nil
 end
 
---- Whether the explorer's header names the worktree.
+--- Whether the footer of the first window showing the explorer names the
+--- worktree.
 ---
 ---@return boolean
 local function shows_the_worktree()
-  return vim.startswith(shown_lines()[1], 'Worktree feature (feature)')
+  local window = vim.fn.win_findbuf(explorer.made_buffer())[1]
+  return vim.startswith(footer.lines(window)[1], 'Worktree feature (feature)')
 end
 
 --- The highlight groups of the lines of the explorer's buffer that carry a
@@ -115,11 +118,11 @@ end
 
 T['a file of the folder Claude works in']['followed leaves the cursor of every window where it is'] = function()
   local window = vim.api.nvim_get_current_win()
-  vim.api.nvim_win_set_cursor(window, { 2, 0 })
+  vim.api.nvim_win_set_cursor(window, { 1, 0 })
 
   explorer.follow('/repo/deep/inner/target.txt')
 
-  eq(vim.api.nvim_win_get_cursor(window)[1], 2)
+  eq(vim.api.nvim_win_get_cursor(window)[1], 1)
 end
 
 T['a file of the folder Claude works in']['revealed while a worktree shows puts the cursors of the explorer windows on its line'] = function()
@@ -174,7 +177,7 @@ T['a file outside both folders'] = MiniTest.new_set()
 
 T['a file outside both folders']['changes nothing, followed or revealed'] = function()
   local window = vim.api.nvim_get_current_win()
-  vim.api.nvim_win_set_cursor(window, { 2, 0 })
+  vim.api.nvim_win_set_cursor(window, { 1, 0 })
   local before = shown_lines()
 
   local followed = explorer.follow('/elsewhere/file.txt')
@@ -182,7 +185,7 @@ T['a file outside both folders']['changes nothing, followed or revealed'] = func
 
   eq(followed, false)
   eq(shown_lines(), before)
-  eq(vim.api.nvim_win_get_cursor(window)[1], 2)
+  eq(vim.api.nvim_win_get_cursor(window)[1], 1)
 end
 
 T['a file in the folder the explorer shows'] = MiniTest.new_set()

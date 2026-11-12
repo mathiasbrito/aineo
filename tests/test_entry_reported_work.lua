@@ -1,5 +1,6 @@
 local MiniTest = require('mini.test')
 local claude_session = dofile('tests/helpers/claude_session.lua')
+local explorer_footer = dofile('tests/helpers/explorer_footer.lua')
 local entry = dofile('tests/helpers/entry.lua')
 local git_repo = dofile('tests/helpers/git_repo.lua')
 
@@ -294,7 +295,7 @@ T['Enter on a branch’s line']['shows its commits alone, and the explorer follo
 
   eq(
     wait_until(function()
-      return (lines_of('aineo://explorer')[1] or ''):find(
+      return (explorer_footer.shown_lines_in(child)[1] or ''):find(
         '(Branch lonely has no folder on disk)',
         1,
         true

@@ -4,6 +4,7 @@
 local claude_work = require('aineo.explorer.claude_work')
 local decorate = require('aineo.explorer.decorate')
 local folders = require('aineo.explorer.folders')
+local footer_windows = require('aineo.explorer.footer_windows')
 local icons = require('aineo.explorer.icons')
 local look = require('aineo.explorer.look')
 local open_buffers = require('aineo.explorer.open_buffers')
@@ -31,11 +32,11 @@ local M = {}
 ---@field branch? string
 ---@field heading string
 
---- What the explorer shows: a folder, and the title its header gives it.
+--- What the explorer shows: a folder, and the title its footer gives it.
 ---@class aineo.explorer.Place
 ---@field directory string absolute
 ---@field title string
----@field shows_branch? boolean whether the header names the branch the folder is on: for the folder Claude works in, not for what the changes pane shows alone
+---@field shows_branch? boolean whether the footer names the branch the folder is on: for the folder Claude works in, not for what the changes pane shows alone
 
 --- What an explorer is handed.
 ---@class aineo.explorer.Settings
@@ -72,7 +73,12 @@ local M = {}
 --- The highlight groups the explorer draws with, each linked by default so
 --- that a colorscheme or the user may set its own.
 local HIGHLIGHTS = {
-  AineoExplorerHeader = 'Comment',
+  AineoExplorerFooter = 'Normal',
+  AineoExplorerFooterTitle = 'Title',
+  AineoExplorerFooterBranch = 'Identifier',
+  AineoExplorerFooterSummary = 'AineoExplorerChanged',
+  AineoExplorerFooterToggles = 'Comment',
+  AineoExplorerFooterFilter = 'Special',
   AineoExplorerFollowed = 'Visual',
   AineoExplorerFolder = 'Directory',
   AineoExplorerChanged = 'AineoChangesModified',
@@ -100,6 +106,20 @@ local ROLE_GROUPS = {
   claude = 'AineoExplorerClaude',
   diagnostic_error = 'DiagnosticError',
   diagnostic_warn = 'DiagnosticWarn',
+}
+
+--- The groups the footer shows in (`aineo.explorer.footer_windows`): each
+--- line's, by its role, and its background's.
+---@type aineo.explorer.FooterGroups
+local FOOTER_GROUPS = {
+  roles = {
+    title = 'AineoExplorerFooterTitle',
+    branch = 'AineoExplorerFooterBranch',
+    summary = 'AineoExplorerFooterSummary',
+    toggles = 'AineoExplorerFooterToggles',
+    filter = 'AineoExplorerFooterFilter',
+  },
+  background = 'AineoExplorerFooter',
 }
 
 --- The namespace of the explorer's highlights.
@@ -157,9 +177,10 @@ end
 ---@param settings aineo.explorer.Settings
 ---@return aineo.explorer.Home
 function M.new(settings)
-  --- The explorer's buffer and the name it takes; the folder shown and the
-  --- header's title for it, as the last read took them, what it was asked
-  --- for (`place_key()`), and the gone worktree last told of; the tree, the marks
+  --- The explorer's buffer, the footers of its windows and the name it takes;
+  --- the folder shown and the footer's title for it, as the last read took
+  --- them, what it was asked for (`place_key()`), and the gone worktree last
+  --- told of; the tree, the marks
   --- and, when git failed, why, as last read; the folders unfolded, the
   --- toggles and the filter the user set; what the buffer shows, by line;
   --- the number of the last read asked for; the watch of the repository and
@@ -172,6 +193,8 @@ function M.new(settings)
   local state = {
     ---@type integer|nil
     buffer = nil,
+    ---@type aineo.explorer.Footers|nil
+    footers = nil,
     ---@type string|nil
     name = nil,
     ---@type aineo.explorer.Place|nil
@@ -286,7 +309,7 @@ function M.new(settings)
     }
   end
 
-  --- The entry under the cursor of `window`, nil on the header or on no
+  --- The entry under the cursor of `window`, nil on a line that shows no
   --- entry.
   ---
   ---@param window integer
@@ -312,9 +335,10 @@ function M.new(settings)
     return nil
   end
 
-  --- Writes the tree into the buffer under the view, the header drawn as
-  --- such, each window's cursor kept on the entry it was on, by path, or on
-  --- its line when that entry no longer shows.
+  --- Writes the tree into the buffer under the view, each window's cursor
+  --- kept on the entry it was on, by path, or on its line when that entry no
+  --- longer shows, then lays out the footer of each window that shows it
+  --- (`aineo.explorer.footer_windows`).
   local function render()
     local buffer = state.buffer
     if not (buffer and vim.api.nvim_buf_is_valid(buffer)) then
@@ -332,7 +356,7 @@ function M.new(settings)
     local rendering = tree.render(state.tree, shown)
     if state.failure then
       rendering = {
-        lines = { rendering.lines[1], '  ' .. state.failure },
+        lines = { '  ' .. state.failure },
         entries = {},
         spans = {},
         virtual = {},
@@ -344,10 +368,7 @@ function M.new(settings)
     vim.api.nvim_buf_set_lines(buffer, 0, -1, false, rendering.lines)
     vim.bo[buffer].modifiable = false
     vim.bo[buffer].modified = false
-    decorate.draw(buffer, NAMESPACE, rendering, role_groups, {
-      header = 'AineoExplorerHeader',
-      flash = 'AineoExplorerClaudeFlash',
-    })
+    decorate.draw(buffer, NAMESPACE, rendering, role_groups, 'AineoExplorerClaudeFlash')
     local followed_line = state.followed and line_of(rendering, state.followed)
     if followed_line then
       vim.api.nvim_buf_set_extmark(
@@ -365,11 +386,12 @@ function M.new(settings)
         vim.api.nvim_win_set_cursor(window, { line, column })
       end
     end
+    state.footers.draw(shown)
   end
 
   --- Moves the cursor of every window that shows the explorer to the line
   --- of the file followed, when it shows, which scrolls the window so the
-  --- line shows.
+  --- line shows above its footer.
   local function put_cursors_on_followed()
     local line = state.rendering and state.followed and line_of(state.rendering, state.followed)
     if not line then
@@ -378,6 +400,7 @@ function M.new(settings)
     for _, window in ipairs(vim.fn.win_findbuf(state.buffer)) do
       vim.api.nvim_win_set_cursor(window, { line, 0 })
     end
+    state.footers.keep_cursors()
   end
 
   --- Moves the cursors to the file followed when a reveal waited for the
@@ -895,7 +918,8 @@ function M.new(settings)
 
   --- What `h` does: folds the folder under the cursor when it is unfolded;
   --- otherwise folds the folder that holds the entry under the cursor and
-  --- moves the cursor to it. Nothing on the header or an entry of the root.
+  --- moves the cursor to it. Nothing on a line with no entry, or on an entry
+  --- of the root.
   local function on_h()
     local entry = entry_in(0)
     if not entry then
@@ -985,7 +1009,7 @@ function M.new(settings)
 
   --- What Enter does: unfolds or folds the folder under the cursor, or opens
   --- the file under it (`open_file_of()`), the explorer's cursor kept on its
-  --- line; nothing on the header.
+  --- line; nothing on a line with no entry.
   local function on_enter()
     local entry = entry_in(0)
     if not entry then
@@ -1003,7 +1027,7 @@ function M.new(settings)
 
   --- What `l` does: unfolds or folds the folder under the cursor, or shows
   --- the file under it as Enter opens it (`open_file_of()`), the cursor
-  --- staying in the tree, on its line; nothing on the header.
+  --- staying in the tree, on its line; nothing on a line with no entry.
   local function on_l()
     local entry = entry_in(0)
     if not entry then
@@ -1020,8 +1044,8 @@ function M.new(settings)
   end
 
   --- What `<C-l>` does: with the file focus off, shows the file under the
-  --- cursor as `l` does (`open_file_of()`), nothing for a folder or the
-  --- header, and turns the file focus on; with it on, turns it off, on any
+  --- cursor as `l` does (`open_file_of()`), nothing for a folder or a line
+  --- with no entry, and turns the file focus on; with it on, turns it off, on any
   --- line (`settings.toggle_file_focus`). The focus is turned once the file
   --- has taken its place in the file column, after the commands in flight
   --- are done (`return_cursor_to_tree()`). Does nothing when the explorer
@@ -1085,7 +1109,8 @@ function M.new(settings)
 
   --- What `@` does: pastes `@` and the path of the entry under the cursor,
   --- from the folder shown, a folder's ending in `/`, then a space, into
-  --- Claude Code's prompt (`settings.paste`); nothing on the header.
+  --- Claude Code's prompt (`settings.paste`); nothing on a line with no
+  --- entry.
   local function paste_path()
     local entry = entry_in(0)
     if entry then
@@ -1197,6 +1222,7 @@ function M.new(settings)
       end,
     })
     watch_editor(buffer)
+    state.footers = footer_windows.follow(buffer, FOOTER_GROUPS)
     vim.api.nvim_create_autocmd('BufWinLeave', {
       buffer = buffer,
       desc = 'aineo: stop watching while the explorer is hidden',

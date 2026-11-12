@@ -19,19 +19,27 @@ local function view(changes)
 end
 
 --- The lines `tree.render()` gives for the folders `paths` make, under
---- `view`, without the header line.
+--- `view`.
 ---
 ---@param paths string[]
 ---@param shown aineo.explorer.View
 ---@return string[]
 local function body(paths, shown)
-  local lines = tree.render(tree.from_paths(paths), shown).lines
-  return vim.list_slice(lines, 2)
+  return tree.render(tree.from_paths(paths), shown).lines
 end
 
 local T = MiniTest.new_set()
 
 T['the tree'] = MiniTest.new_set()
+
+T['the tree']['starts with its first entry, on the first line'] = function()
+  local shown = view({ title = 'project', branch = 'main' })
+
+  local rendering = tree.render(tree.from_paths({ 'a.txt', 'b.txt' }), shown)
+
+  eq(rendering.lines, { '    a.txt', '    b.txt' })
+  eq(rendering.entries[1].path, 'a.txt')
+end
 
 T['the tree']['lists folders first, then files, each alphabetically, folders folded'] = function()
   local paths = { 'zeta.txt', 'src/main.lua', 'Alpha.md', 'docs/guide.md', 'beta.txt' }
@@ -111,7 +119,7 @@ T['the tree']['never shows a file named .git, as a linked worktree has'] = funct
 
   local lines = tree.render(read, view()).lines
 
-  eq(vim.list_slice(lines, 2), { '    a.txt' })
+  eq(lines, { '    a.txt' })
 end
 
 T['the tree']['never shows a folder named .git, dotfiles shown or not'] = function()
@@ -136,7 +144,7 @@ T['the tree']['hides what git ignores while ignored entries are hidden'] = funct
 
   local lines = tree.render(listed, view({ open = { build = true } })).lines
 
-  eq(vim.list_slice(lines, 2), {
+  eq(lines, {
     '▾   build/',
     '      keep.txt',
     '    a.txt',
@@ -148,7 +156,7 @@ T['the tree']['shows what git ignores while ignored entries are shown, an ignore
 
   local lines = tree.render(listed, view({ show_ignored = true, open = { build = true } })).lines
 
-  eq(vim.list_slice(lines, 2), {
+  eq(lines, {
     '▾   build/',
     '      keep.txt',
     '      out.o',
@@ -206,7 +214,7 @@ T['a repository’s listing']['gives the files under the root, its deleted ones 
 
   local lines = tree.render(read.tree, view({ marks = read.marks, open = { dir = true } })).lines
 
-  eq(vim.list_slice(lines, 2), {
+  eq(lines, {
     '▾ • dir/',
     '    A added.txt',
     '  M changed.txt',
@@ -223,7 +231,7 @@ T['a repository’s listing']['gives the ignored entries under the root'] = func
 
   local lines = tree.render(read.tree, view({ marks = read.marks, show_ignored = true })).lines
 
-  eq(lines[2], '▸   build/')
+  eq(lines[1], '▸   build/')
 end
 
 T['a repository’s listing']['at the repository’s top gives every file'] = function()
@@ -231,7 +239,7 @@ T['a repository’s listing']['at the repository’s top gives every file'] = fu
 
   local lines = tree.render(read.tree, view()).lines
 
-  eq(vim.list_slice(lines, 2), { '▸   sub/', '    a' })
+  eq(lines, { '▸   sub/', '    a' })
 end
 
 T['a repository’s listing']['shows a nested repository and a submodule as folders read from disk, the untracked one marked'] = function()
@@ -244,7 +252,7 @@ T['a repository’s listing']['shows a nested repository and a submodule as fold
   local read = tree.from_repository(listing, '')
   local lines = tree.render(read.tree, view({ marks = read.marks, open = { vendor = true } })).lines
 
-  eq(vim.list_slice(lines, 2), { '▸ ? nested/', '▾   vendor/', '  ▸   lib/', '    a.txt' })
+  eq(lines, { '▸ ? nested/', '▾   vendor/', '  ▸   lib/', '    a.txt' })
   eq(
     { tree.is_known(read.tree, 'nested'), tree.is_known(read.tree, 'vendor/lib') },
     { false, false }
@@ -265,8 +273,8 @@ T['a folder read from disk']['shows the entries listed for it, and is not known 
   local after = tree.render(read, view({ open = { lib = true } })).lines
 
   eq({ tree.is_known(root, 'lib'), tree.is_known(read, 'lib') }, { false, true })
-  eq(vim.list_slice(before, 2), { '▾   lib/', '    a.txt' })
-  eq(vim.list_slice(after, 2), { '▾   lib/', '      b.txt', '    a.txt' })
+  eq(before, { '▾   lib/', '    a.txt' })
+  eq(after, { '▾   lib/', '      b.txt', '    a.txt' })
 end
 
 T['a folder read from disk']['inside an ignored folder lists ignored entries'] = function()
@@ -277,8 +285,8 @@ T['a folder read from disk']['inside an ignored folder lists ignored entries'] =
   local shown =
     tree.render(read, view({ show_ignored = true, open = { node_modules = true } })).lines
 
-  eq(vim.list_slice(hidden, 2), { '    a.txt' })
-  eq(vim.list_slice(shown, 2), { '▾   node_modules/', '  ▸   pkg/', '    a.txt' })
+  eq(hidden, { '    a.txt' })
+  eq(shown, { '▾   node_modules/', '  ▸   pkg/', '    a.txt' })
   eq(read.children.node_modules[1].ignored, true)
 end
 
@@ -289,28 +297,10 @@ T['the folders above a path']['are listed from the root down, none for an entry 
   eq(tree.folders_above('top.txt'), {})
 end
 
-T['the header'] = MiniTest.new_set()
-
-T['the header']['names what the tree shows and its toggles'] = function()
-  local lines = tree.render(tree.from_paths({ 'a' }), view({ title = 'project' })).lines
-
-  eq(lines[1], 'project  ·  ignored hidden  ·  dotfiles shown')
-end
-
-T['the header']['names the toggles turned and the filter'] = function()
-  local shown =
-    view({ title = 'project', show_ignored = true, show_dotfiles = false, filter = 'x' })
-
-  local lines = tree.render(tree.from_paths({ 'x' }), shown).lines
-
-  eq(lines[1], 'project  ·  ignored shown  ·  dotfiles hidden  ·  filter “x”')
-end
-
 T['the colours'] = MiniTest.new_set()
 
 --- The spans `tree.render()` gives for the folders `paths` make, with the
---- entries `ignored` git ignores, under `shown`, by line, the header's line
---- first.
+--- entries `ignored` git ignores, under `shown`, by line.
 ---
 ---@param paths string[]
 ---@param ignored? string[]
@@ -325,7 +315,7 @@ T['the colours']['span a changed file’s mark and name in the kind of its chang
 
   local by_line = spans({ 'README.md' }, nil, shown)
 
-  eq(by_line, { [2] = { { first_column = 2, end_column = 13, role = 'modified' } } })
+  eq(by_line, { [1] = { { first_column = 2, end_column = 13, role = 'modified' } } })
 end
 
 T['the colours']['name the kind of each mark git gives'] = MiniTest.new_set({
@@ -342,7 +332,7 @@ T['the colours']['name the kind of each mark git gives'] = MiniTest.new_set({
 T['the colours']['name the kind of each mark git gives']['by its letter'] = function(mark, role)
   local by_line = spans({ 'a.txt' }, nil, view({ marks = { ['a.txt'] = mark } }))
 
-  eq(by_line[2][1].role, role)
+  eq(by_line[1][1].role, role)
 end
 
 T['the colours']['span a file git does not see changed in none'] = function()
@@ -352,7 +342,7 @@ end
 T['the colours']['span a folder’s sign and name, not the blank where its mark goes'] = function()
   local by_line = spans({ 'src/main.lua' }, nil, view({ open = { src = true } }))
 
-  eq(by_line[2], {
+  eq(by_line[1], {
     { first_column = 0, end_column = 3, role = 'folder' },
     { first_column = 6, end_column = 10, role = 'folder' },
   })
@@ -363,7 +353,7 @@ T['the colours']['span a folder holding a change with its dot apart, from the in
 
   local by_line = spans({ 'src/lib/util.lua' }, nil, shown)
 
-  eq(by_line[3], {
+  eq(by_line[2], {
     { first_column = 2, end_column = 5, role = 'folder' },
     { first_column = 6, end_column = 9, role = 'changed_folder' },
     { first_column = 10, end_column = 14, role = 'folder' },
@@ -373,7 +363,7 @@ end
 T['the colours']['span a folder’s own mark in its kind, its name in the folder’s'] = function()
   local by_line = spans({ 'nested/' }, nil, view({ marks = { nested = '?' } }))
 
-  eq(by_line[2], {
+  eq(by_line[1], {
     { first_column = 0, end_column = 3, role = 'folder' },
     { first_column = 4, end_column = 5, role = 'untracked' },
     { first_column = 6, end_column = 13, role = 'folder' },
@@ -386,12 +376,12 @@ T['the colours']['span an entry git ignores whole, whatever its mark'] = functio
   local by_line = spans({ 'a.txt' }, { 'build/', 'out.log' }, shown)
 
   eq(by_line, {
-    [2] = { { first_column = 0, end_column = #'▸   build/', role = 'ignored' } },
-    [4] = { { first_column = 0, end_column = #'    out.log', role = 'ignored' } },
+    [1] = { { first_column = 0, end_column = #'▸   build/', role = 'ignored' } },
+    [3] = { { first_column = 0, end_column = #'    out.log', role = 'ignored' } },
   })
 end
 
-T['the colours']['span nothing on the header or the line that says no file matches'] = function()
+T['the colours']['span nothing on the line that says no file matches'] = function()
   local by_line = spans({ 'a.txt' }, nil, view({ filter = 'zzz' }))
 
   eq(by_line, {})

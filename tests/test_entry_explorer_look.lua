@@ -1,5 +1,6 @@
 local MiniTest = require('mini.test')
 local claude_session = dofile('tests/helpers/claude_session.lua')
+local explorer_footer = dofile('tests/helpers/explorer_footer.lua')
 local entry = dofile('tests/helpers/entry.lua')
 local git_repo = dofile('tests/helpers/git_repo.lua')
 
@@ -58,11 +59,11 @@ local FILES = {
   ['docs/guide.md'] = { 'guide' },
 }
 
---- The cells the explorer's header leaves for what follows the folder in it
---- (a branch, a summary of the changes, the toggles and a filter).
-local HEADER_ROOM = 90
+--- The cells the child's screen keeps beside the folder of a case, so that the
+--- explorer's window shows each line of its footer whole.
+local FOOTER_ROOM = 90
 
---- The cells the folder of the explorer takes in its header in the case
+--- The cells the folder of the explorer takes in its footer in the case
 --- `name`, at most: the repository's folder under the checkout's fixtures,
 --- whatever the length of the checkout's path.
 ---
@@ -85,7 +86,7 @@ end
 ---@param settings? table more of `vim.g.aineo`
 ---@return string top
 local function explore(name, files, change, settings)
-  child.o.columns = 2 * (title_width(name) + HEADER_ROOM)
+  child.o.columns = 2 * (title_width(name) + FOOTER_ROOM)
   local top = git_repo.create('look-' .. name, files or FILES)
   if change then
     change(top)
@@ -98,7 +99,7 @@ local function explore(name, files, change, settings)
   return top
 end
 
---- The lines of the explorer's buffer in the child, the header first.
+--- The lines of the explorer's buffer in the child.
 ---
 ---@return string[]
 local function explorer_lines()
@@ -112,21 +113,21 @@ local function explorer_lines()
   end)()]])
 end
 
---- Waits, at most `PATIENCE_MS`, until `predicate` holds of the lines below
---- the explorer's header, and returns them as they are then.
+--- Waits, at most `PATIENCE_MS`, until `predicate` holds of the explorer's
+--- lines, and returns them as they are then.
 ---
 ---@param predicate fun(lines: string[]): boolean
 ---@return string[]
 local function wait_for_lines(predicate)
   local lines
   vim.wait(PATIENCE_MS, function()
-    lines = vim.list_slice(explorer_lines(), 2)
+    lines = explorer_lines()
     return predicate(lines)
   end, 20)
   return lines
 end
 
---- Waits until the explorer holds exactly `expected` below its header.
+--- Waits until the explorer holds exactly `expected`.
 ---
 ---@param expected string[]
 ---@return string[]
@@ -222,7 +223,7 @@ T['the guides']['lie over the indent of the entries below the root, in the guide
     '      main.lua',
     '    README.md',
   })
-  eq(virtual_at('overlay'), { { 4, '├ ' }, { 5, '│ └ ' }, { 6, '└ ' } })
+  eq(virtual_at('overlay'), { { 3, '├ ' }, { 4, '│ └ ' }, { 5, '└ ' } })
   eq(child.lua_get(VIRTUAL_TEXT)[1].groups, { 'AineoExplorerGuide' })
 end
 
@@ -263,11 +264,11 @@ T['a chain of single-child folders']['shows on one line, and l or Enter unfolds 
 
   put_cursor_on('lua/aineo/explorer/')
   entry.press(child, key)
-  local unfolded = vim.list_slice(explorer_lines(), 2, 4)
+  local unfolded = vim.list_slice(explorer_lines(), 1, 3)
   entry.press(child, key)
 
   eq(unfolded, { '▾   lua/aineo/explorer/', '      home.lua', '      tree.lua' })
-  eq(vim.list_slice(explorer_lines(), 2), folded)
+  eq(explorer_lines(), folded)
 end
 
 T['a chain of single-child folders']['is folded by h from a file in it, the cursor on its line'] = function()
@@ -281,7 +282,7 @@ T['a chain of single-child folders']['is folded by h from a file in it, the curs
 
   entry.press(child, 'h')
 
-  eq(vim.list_slice(explorer_lines(), 2, 2), { '▸   lua/aineo/explorer/' })
+  eq(vim.list_slice(explorer_lines(), 1, 1), { '▸   lua/aineo/explorer/' })
   eq(child.lua_get('vim.api.nvim_get_current_line()'), '▸   lua/aineo/explorer/')
 end
 
@@ -303,7 +304,7 @@ T['a chain of single-child folders']['folded is left by h for the folder that ho
     unfolded,
     { '▸   lua/aineo/explorer/', '▾   x/', '  ▸   a/b/', '      y.lua', '    README.md' }
   )
-  eq(vim.list_slice(explorer_lines(), 2), {
+  eq(explorer_lines(), {
     '▸   lua/aineo/explorer/',
     '▸   x/',
     '    README.md',
@@ -365,7 +366,7 @@ T['a chain of single-child folders']['read from the disk as its first folder unf
 
   entry.press(child, '<CR>')
 
-  eq(vim.list_slice(explorer_lines(), 2), {
+  eq(explorer_lines(), {
     '▾   build/out/',
     '      x.o',
     '    .gitignore',
@@ -398,9 +399,9 @@ T['the counts']['follow the mark of a folder holding changes, and show the lines
     vim.tbl_filter(function(item)
       return item[2]:match('^%d+$') ~= nil
     end, virtual_at('inline')),
-    { { 2, '1' }, { 4, '1' } }
+    { { 1, '1' }, { 3, '1' } }
   )
-  eq(virtual_at('right_align'), { { 3, '+1 −0' }, { 6, '+2 −0' } })
+  eq(virtual_at('right_align'), { { 2, '+1 −0' }, { 5, '+2 −0' } })
 end
 
 T['the counts']['read the lines of the changed files in one call of the git home for each read'] = function()
@@ -480,9 +481,9 @@ T['the icons']['come from mini.icons when it is set up, before each file’s nam
       return { item.line, item.column, item.text, item.groups }
     end, inline),
     {
+      { 1, #'▸   ', '  ', {} },
       { 2, #'▸   ', '  ', {} },
-      { 3, #'▸   ', '  ', {} },
-      { 4, #'    ', 'M ', { 'FakeIconGroup' } },
+      { 3, #'    ', 'M ', { 'FakeIconGroup' } },
     }
   )
   eq(child.lua_get('_G.icon_calls'), { 'file:README.md' })
@@ -589,8 +590,8 @@ T['the claude marks']['sit before the files in the work of the session, a blank 
   git_repo.write(top, 'README.md', { 'changed by Claude' })
   entry.press(child, 'R')
 
-  local places = wait_for_claude_places({ { 2, '  ' }, { 3, '  ' }, { 4, '✦ ' } })
-  eq(places, { { 2, '  ' }, { 3, '  ' }, { 4, '✦ ' } })
+  local places = wait_for_claude_places({ { 1, '  ' }, { 2, '  ' }, { 3, '✦ ' } })
+  eq(places, { { 1, '  ' }, { 2, '  ' }, { 3, '✦ ' } })
   local inline = child.lua_get(VIRTUAL_TEXT)
   eq(inline[#inline].groups, { 'AineoExplorerClaude' })
   eq(child.lua_get("vim.api.nvim_get_hl(0, { name = 'AineoExplorerClaude' }).link"), 'Special')
@@ -608,8 +609,8 @@ T['the claude marks']['follow the work the changes pane lists: a file committed 
   git_repo.commit_all(top, 'Claude commits')
   entry.press(child, 'R')
 
-  local places = wait_for_claude_places({ { 2, '  ' }, { 3, '  ' }, { 4, '✦ ' } })
-  eq(places, { { 2, '  ' }, { 3, '  ' }, { 4, '✦ ' } })
+  local places = wait_for_claude_places({ { 1, '  ' }, { 2, '  ' }, { 3, '✦ ' } })
+  eq(places, { { 1, '  ' }, { 2, '  ' }, { 3, '✦ ' } })
 end
 
 T['the claude marks']['flash the line of a file that joins the work for a moment, the cursor staying where it is'] = function()
@@ -632,14 +633,14 @@ T['the claude marks']['flash the line of a file that joins the work for a moment
   local lasted = vim.uv.now() - started
 
   eq(appeared, true)
-  eq(flashing, { 4 })
+  eq(flashing, { 3 })
   eq(ended, true)
   eq(lasted >= 1200 and lasted <= 2500, true)
   eq(cursor_during, cursor_before)
   eq(child.lua_get('vim.api.nvim_win_get_cursor(0)'), cursor_before)
   eq(
-    wait_for_claude_places({ { 2, '  ' }, { 3, '  ' }, { 4, '✦ ' } }),
-    { { 2, '  ' }, { 3, '  ' }, { 4, '✦ ' } }
+    wait_for_claude_places({ { 1, '  ' }, { 2, '  ' }, { 3, '✦ ' } }),
+    { { 1, '  ' }, { 2, '  ' }, { 3, '✦ ' } }
   )
 end
 
@@ -648,7 +649,7 @@ T['the claude marks']['flash nothing for the work the session already had when t
     git_repo.write(top, 'README.md', { 'changed before the explorer showed' })
   end)
   wait_for_tree({ '▸   docs/', '▸   src/', '  M README.md' })
-  wait_for_claude_places({ { 2, '  ' }, { 3, '  ' }, { 4, '✦ ' } })
+  wait_for_claude_places({ { 1, '  ' }, { 2, '  ' }, { 3, '✦ ' } })
   vim.wait(300)
 
   eq(child.lua_get(FLASHING_LINES), {})
@@ -739,7 +740,7 @@ T['an explorer at rest']['is drawn once for an edit of a file in another window'
   local before = child.lua_get('_G.explorer_draws')
 
   child.lua('vim.api.nvim_buf_set_lines(0, 0, 0, false, { "edited" })')
-  wait_for_unsaved({ { 4, ' ●' } })
+  wait_for_unsaved({ { 3, ' ●' } })
   vim.wait(500)
 
   eq(child.lua_get('_G.explorer_draws') - before, 1)
@@ -754,12 +755,12 @@ T['the cursor of the explorer']['keeps its column when a file in another window 
   child.lua(COUNT_DRAWINGS)
   wait_until_drawn_still()
   local window = child.lua_get("vim.fn.win_findbuf(vim.fn.bufnr('aineo://explorer'))[1]")
-  child.lua('vim.api.nvim_win_set_cursor(..., { 4, 6 })', { window })
+  child.lua('vim.api.nvim_win_set_cursor(..., { 3, 6 })', { window })
 
   child.lua('vim.api.nvim_buf_set_lines(0, 0, 0, false, { "edited" })')
-  wait_for_unsaved({ { 4, ' ●' } })
+  wait_for_unsaved({ { 3, ' ●' } })
 
-  eq(child.lua_get('vim.api.nvim_win_get_cursor(...)', { window }), { 4, 6 })
+  eq(child.lua_get('vim.api.nvim_win_get_cursor(...)', { window }), { 3, 6 })
 end
 
 T['the unsaved mark']['follows the name of a file edited in this editor, until it is written'] = function()
@@ -770,18 +771,18 @@ T['the unsaved mark']['follows the name of a file edited in this editor, until i
   wait_until_drawn_still()
 
   child.lua('vim.api.nvim_buf_set_lines(0, 0, 0, false, { "edited" })')
-  local edited = wait_for_unsaved({ { 4, ' ●' } })
+  local edited = wait_for_unsaved({ { 3, ' ●' } })
   child.cmd('write')
   local written = wait_for_unsaved({})
   wait_until_drawn_still()
   child.lua('vim.api.nvim_buf_set_lines(0, 0, 0, false, { "edited again" })')
-  local edited_again = wait_for_unsaved({ { 4, ' ●' } })
+  local edited_again = wait_for_unsaved({ { 3, ' ●' } })
   child.cmd('write')
   local written_again = wait_for_unsaved({})
 
-  eq(edited, { { 4, ' ●' } })
+  eq(edited, { { 3, ' ●' } })
   eq(written, {})
-  eq(edited_again, { { 4, ' ●' } })
+  eq(edited_again, { { 3, ' ●' } })
   eq(written_again, {})
 end
 
@@ -790,7 +791,7 @@ T['the unsaved mark']['is in the unsaved group, linked to WarningMsg by default'
   wait_for_tree({ '▸   docs/', '▸   src/', '    README.md' })
   child.cmd('edit ' .. vim.fn.fnameescape(vim.fs.joinpath(top, 'README.md')))
   child.lua('vim.api.nvim_buf_set_lines(0, 0, 0, false, { "edited" })')
-  wait_for_unsaved({ { 4, ' ●' } })
+  wait_for_unsaved({ { 3, ' ●' } })
 
   local inline = child.lua_get(VIRTUAL_TEXT)
 
@@ -836,10 +837,10 @@ T['the diagnostics']['of a loaded file show at its right, E before W, in the dia
       { lnum = 0, col = 0, message = 'd', severity = severity.HINT },
     })
   ]])
-  local shown = wait_for_virtual('right_align', { { 4, 'E2 W1' } })
+  local shown = wait_for_virtual('right_align', { { 3, 'E2 W1' } })
 
   local right = child.lua_get(VIRTUAL_TEXT)
-  eq(shown, { { 4, 'E2 W1' } })
+  eq(shown, { { 3, 'E2 W1' } })
   eq(right[#right].groups, { 'DiagnosticError', 'DiagnosticWarn' })
 end
 
@@ -852,7 +853,7 @@ T['the diagnostics']['of a file the editor no longer has loaded are left out'] =
       { lnum = 0, col = 0, message = 'a', severity = vim.diagnostic.severity.ERROR },
     })
   ]])
-  wait_for_virtual('right_align', { { 4, 'E1' } })
+  wait_for_virtual('right_align', { { 3, 'E1' } })
   local readme = child.lua_get('vim.api.nvim_get_current_buf()')
   child.cmd('edit ' .. vim.fn.fnameescape(vim.fs.joinpath(top, 'docs', 'guide.md')))
   child.cmd('bunload ' .. readme)
@@ -862,9 +863,9 @@ T['the diagnostics']['of a file the editor no longer has loaded are left out'] =
       { lnum = 0, col = 0, message = 'b', severity = vim.diagnostic.severity.WARN },
     })
   ]])
-  local shown = wait_for_virtual('right_align', { { 3, 'W1' } })
+  local shown = wait_for_virtual('right_align', { { 2, 'W1' } })
 
-  eq(shown, { { 3, 'W1' } })
+  eq(shown, { { 2, 'W1' } })
 end
 
 T['the diagnostics']['go when the file has none left'] = function()
@@ -877,81 +878,93 @@ T['the diagnostics']['go when the file has none left'] = function()
       { lnum = 0, col = 0, message = 'a', severity = vim.diagnostic.severity.WARN },
     })
   ]])
-  local shown = wait_for_virtual('right_align', { { 4, 'W1' } })
+  local shown = wait_for_virtual('right_align', { { 3, 'W1' } })
 
   child.lua('vim.diagnostic.reset(_G.look_namespace, 0)')
   local gone = wait_for_virtual('right_align', {})
 
-  eq(shown, { { 4, 'W1' } })
+  eq(shown, { { 3, 'W1' } })
   eq(gone, {})
 end
 
-T['the header'] = MiniTest.new_set()
+T['the footer'] = MiniTest.new_set()
 
---- Waits, at most `PATIENCE_MS`, until the explorer's header satisfies
---- `predicate`, and returns it as it is then.
+--- The lines the footer of the explorer's window in the child's current tab
+--- shows, none while none shows.
 ---
----@param predicate fun(header: string): boolean
----@return string
-local function wait_for_header(predicate)
-  local header
+---@return string[]
+local function footer_lines()
+  return explorer_footer.shown_lines_in(child)
+end
+
+--- Waits, at most `PATIENCE_MS`, until the explorer's footer satisfies
+--- `predicate`, and returns its lines as they are then.
+---
+---@param predicate fun(lines: string[]): boolean
+---@return string[]
+local function wait_for_footer(predicate)
+  local lines
   vim.wait(PATIENCE_MS, function()
-    header = explorer_lines()[1] or ''
-    return predicate(header)
+    lines = footer_lines()
+    return predicate(lines)
   end, 20)
-  return header
+  return lines
 end
 
---- The cells the explorer's window takes for a line in the child.
-local WINDOW_WIDTH = [[(function()
-  local window = vim.fn.win_findbuf(vim.fn.bufnr('aineo://explorer'))[1]
-  return vim.api.nvim_win_get_width(window) - vim.fn.getwininfo(window)[1].textoff
-end)()]]
-
-T['the header']['names the folder, its branch and the changes, the toggles at the right edge'] = function()
-  explore('header', FILES, change_some_files)
-
-  local header = wait_for_header(function(shown)
-    return shown:find('3 changed', 1, true) ~= nil
-  end)
-
-  eq(header:find(' · main · 3 changed · 1 new', 1, true) ~= nil, true)
-  eq(vim.endswith(header, 'ignored hidden  ·  dotfiles shown'), true)
-  eq(vim.api.nvim_strwidth(header), child.lua_get(WINDOW_WIDTH))
-  eq(#explorer_lines(), 5)
+--- Whether the footer `lines` sums up three changed files and a new one.
+---
+---@param lines string[]
+---@return boolean
+local function sums_the_changes_up(lines)
+  return vim.tbl_contains(lines, '3 changed · 1 new')
 end
 
-T['the header']['drops the toggles when the window narrows, and lays them out again when it widens'] = function()
-  explore('header-resize', FILES, change_some_files)
-  wait_for_header(function(shown)
-    return shown:find('3 changed', 1, true) ~= nil
-  end)
+--- The folder the child works in, as the footer names it.
+---
+---@return string
+local function shown_folder()
+  return vim.fn.fnamemodify(child.lua_get('vim.fn.getcwd()'), ':~')
+end
+
+T['the footer']['names the folder, its branch, the changes and the toggles, a line each, below the tree'] = function()
+  explore('footer', FILES, change_some_files)
+
+  local lines = wait_for_footer(sums_the_changes_up)
+
+  eq(lines, { shown_folder(), '  main', '3 changed · 1 new', 'ignored hidden · dotfiles shown' })
+  eq(#explorer_lines(), 4)
+end
+
+T['the footer']['cuts a line at its start when the window narrows, and shows it whole again when it widens'] = function()
+  explore('footer-resize', FILES, change_some_files)
+  wait_for_footer(sums_the_changes_up)
 
   child.cmd('vertical resize 30')
-  local narrow = wait_for_header(function(shown)
-    return shown:find('dotfiles', 1, true) == nil
+  local narrow = wait_for_footer(function(lines)
+    return vim.startswith(lines[4] or '', '…')
   end)
-  child.cmd('vertical resize ' .. (title_width('header-resize') + HEADER_ROOM))
-  local wide = wait_for_header(function(shown)
-    return shown:find('dotfiles', 1, true) ~= nil
+  child.cmd('vertical resize ' .. (title_width('footer-resize') + FOOTER_ROOM))
+  local wide = wait_for_footer(function(lines)
+    return lines[4] == 'ignored hidden · dotfiles shown'
   end)
 
-  eq(narrow:find('dotfiles', 1, true), nil)
-  eq(vim.endswith(wide, 'dotfiles shown'), true)
+  eq(vim.startswith(narrow[4], '…'), true)
+  eq(vim.endswith(narrow[4], 'dotfiles shown'), true)
+  eq(vim.api.nvim_strwidth(narrow[4]) <= 30, true)
+  eq(wide[4], 'ignored hidden · dotfiles shown')
 end
 
-T['the header']['shows no branch for a folder on a detached HEAD'] = function()
-  explore('header-detached', FILES, function(top)
+T['the footer']['shows no branch for a folder on a detached HEAD'] = function()
+  explore('footer-detached', FILES, function(top)
     git_repo.git(top, { 'checkout', '--quiet', '--detach' })
   end)
 
   wait_for_tree({ '▸   docs/', '▸   src/', '    README.md' })
-  local header = explorer_lines()[1]
+  local lines = wait_for_footer(function(shown)
+    return #shown > 0
+  end)
 
-  eq(
-    header:match('^(.-)%s+ignored hidden'),
-    vim.fn.fnamemodify(child.lua_get('vim.fn.getcwd()'), ':~')
-  )
+  eq(lines, { shown_folder(), 'ignored hidden · dotfiles shown' })
 end
 
 T['the dimming'] = MiniTest.new_set()
@@ -977,7 +990,7 @@ T['the dimming']['shows an unchanged file’s name in the unchanged group while 
     return found
   end)()]])
 
-  eq(dimmed, { { 3, 6, #'      guide.md' } })
+  eq(dimmed, { { 2, 6, #'      guide.md' } })
 end
 
 T['the looks turned off'] = MiniTest.new_set()
@@ -1004,7 +1017,7 @@ T['the looks turned off']['one set wrong while the editor runs raises nothing, s
   put_cursor_on('src/')
   entry.press(child, 'l')
   entry.press(child, 'R')
-  wait_for_virtual('overlay', { { 5, '├ ' }, { 6, '└ ' } })
+  wait_for_virtual('overlay', { { 4, '├ ' }, { 5, '└ ' } })
   entry.press(child, 'R')
   vim.wait(500)
 

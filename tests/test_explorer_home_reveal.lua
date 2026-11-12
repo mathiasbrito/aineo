@@ -107,11 +107,11 @@ end
 
 T['reveal()']['changes nothing for a file outside the folder shown'] = function()
   local window = vim.api.nvim_get_current_win()
-  vim.api.nvim_win_set_cursor(window, { 3, 0 })
+  vim.api.nvim_win_set_cursor(window, { 2, 0 })
 
   explorer.reveal('/elsewhere/file.txt')
 
-  eq(cursor_line(window), 3)
+  eq(cursor_line(window), 2)
 end
 
 T['reveal()']['unfolds for the next time when no window shows the explorer'] = function()
@@ -127,22 +127,22 @@ end
 T['reveal()']['changes nothing for a file outside the folder shown after one inside was followed'] = function()
   local window = vim.api.nvim_get_current_win()
   explorer.follow('/repo/file60.txt')
-  vim.api.nvim_win_set_cursor(window, { 3, 0 })
+  vim.api.nvim_win_set_cursor(window, { 2, 0 })
 
   explorer.reveal('/elsewhere/file.txt')
 
-  eq(cursor_line(window), 3)
+  eq(cursor_line(window), 2)
 end
 
 T['follow()'] = MiniTest.new_set()
 
 T['follow()']['leaves every cursor where it is'] = function()
   local window = vim.api.nvim_get_current_win()
-  vim.api.nvim_win_set_cursor(window, { 2, 0 })
+  vim.api.nvim_win_set_cursor(window, { 1, 0 })
 
   explorer.follow('/repo/deep/inner/target.txt')
 
-  eq(cursor_line(window), 2)
+  eq(cursor_line(window), 1)
 end
 
 return T
