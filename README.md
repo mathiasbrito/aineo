@@ -231,7 +231,7 @@ resumes it.
 | Keys | Does |
 |---|---|
 | `\o` | opens or restores the layout |
-| `\f` | finds a file under the folder Claude works in and opens it in the file column, revealing it in the explorer when that shows |
+| `\f` | finds a file under the folder the explorer shows (a worktree when the changes pane shows one alone, else the folder Claude works in) and opens it in the file column, revealing it in the explorer when that shows |
 | `\T` | opens a tab with a Claude Code session of its own |
 | `\1` to `\9` | move to the tab page of that number |
 | `\Q` | closes the current tab; on the last aineo tab, quits Neovim as `:qa` does |
@@ -329,7 +329,7 @@ and, in Terminal mode, `<C-\>Z` do the same.
 | `I`, `H`, `f`, `R` | show ignored files, hide dotfiles, filter by path, read again |
 | `s` | picks the worktree or branch shown, the same pick as the changes pane's `s` |
 
-A file opened with `\f` is revealed in the explorer when it shows: its folders unfold, the explorer's window scrolls to the line and its own cursor goes there, while the cursor stays in the file. Entering a file any other way moves no cursor.
+A file opened with `\f` is revealed in the explorer when it shows: its folders unfold, the explorer's window scrolls to the line and its own cursor goes there, while the cursor stays in the file. Entering a file any other way moves no cursor. While the explorer shows a worktree, a file of the folder Claude works in that you open (with `:e`, `\f` or a picker) takes the explorer back to that folder and follows the file there; the changes pane keeps its view, and the explorer shows the focused work again at its next change.
 
 What the tree shows besides the names, each a look that `explorer.*` turns off (see Settings below), display only, so the keys read the same lines:
 

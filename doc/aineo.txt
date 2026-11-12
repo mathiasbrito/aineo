@@ -524,14 +524,22 @@ The keys of the tree, in Normal mode, in its buffer alone:
 The current file: when the file column shows a file under the folder
 shown, the tree unfolds the folders above it and highlights its line
 (|hl-AineoExplorerFollowed|, linked to |hl-Visual|); the cursors stay where
-they are. A file elsewhere changes nothing.
+they are. A file elsewhere changes nothing, except one under the folder
+Claude works in while the explorer shows a worktree (see below): the
+explorer then goes back to the folder Claude works in and follows the file
+there. The changes pane keeps its view; only the explorer goes back, and
+keeps the folder Claude works in until the changes pane's focused work
+changes (an `s` pick, `\g` in that pane, a newly reported worktree), when
+it shows that work again.
 
 A file opened with `\f` (|aineo-find|) is revealed as well: the explorer's
 window, the column's or the pane's, scrolls to show its line and its own
 cursor goes to it, while the cursor you are working with stays in the file.
 Only `\f` reveals; entering a file any other way moves no cursor. An explorer
 that is not showing at that moment reveals nothing, and highlights the file
-when it next shows.
+when it next shows. A file of the folder Claude works in that `\f` opens while
+the explorer shows a worktree is revealed after the explorer has gone back to
+that folder, once its tree is read.
 
 One pick for both panes: what the explorer shows follows the worktree or
 branch the changes pane shows alone (|aineo-changes-s|), picked with `s` in
@@ -2261,10 +2269,12 @@ and the two columns left take half of the screen each again.
 
 Finding a file ~
                                                                   *aineo-find*
-`\f` searches the files under the folder the tab's Claude Code works in, or
-under the top of the repository that folder is in, and opens the one you pick
-in the file column as any file opened from the layout (|aineo-file-column|):
-modifiable, written by `:w`, with the cursor in it in Normal mode. It works
+`\f` searches the files under the folder the tab's explorer shows
+(|aineo-explorer|) - the worktree the changes pane shows alone, else the
+folder the tab's Claude Code works in - or under the top of the repository
+that folder is in, and opens the one you pick in the file column as any file
+opened from the layout (|aineo-file-column|): modifiable, written by `:w`,
+with the cursor in it in Normal mode. It works
 from any window of the tab but a floating one, Claude's terminal included,
 where its twin `<C-\>f` leaves Terminal mode first (|aineo-terminal-keys|);
 from a floating window, a picker's own among them, it starts nothing and
