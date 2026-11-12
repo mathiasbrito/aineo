@@ -62,7 +62,10 @@ local M = {}
 ---@class aineo.explorer.Home
 ---@field buffer fun(): integer
 ---@field made_buffer fun(): integer|nil
----@field follow fun(file: string)
+---@field follow fun(file: string): boolean
+---@field reveal fun(file: string)
+---@field shown_folder fun(done: fun(directory: string))
+---@field follow_focused_work fun()
 ---@field refresh fun()
 ---@field let_go fun()
 
@@ -162,8 +165,10 @@ function M.new(settings)
   --- the number of the last read asked for; the watch of the repository and
   --- its top; whether the last read went through git; the file followed,
   --- by its path from the folder shown, and one followed before the first
-  --- read, absolute; whether `I` told the user nothing is ignored outside
-  --- git.
+  --- read, absolute; whether the default view is held (the folder Claude
+  --- works in shown whatever the changes pane's focused view is) and whether a
+  --- reveal waits for the tree to be read to move the cursors; whether `I`
+  --- told the user nothing is ignored outside git.
   local state = {
     ---@type integer|nil
     buffer = nil,
@@ -208,6 +213,8 @@ function M.new(settings)
     followed = nil,
     ---@type string|nil
     pending_follow = nil,
+    default_held = false,
+    reveal_pending = false,
     nothing_ignored_told = false,
   }
 
@@ -360,6 +367,28 @@ function M.new(settings)
     end
   end
 
+  --- Moves the cursor of every window that shows the explorer to the line
+  --- of the file followed, when it shows, which scrolls the window so the
+  --- line shows.
+  local function put_cursors_on_followed()
+    local line = state.rendering and state.followed and line_of(state.rendering, state.followed)
+    if not line then
+      return
+    end
+    for _, window in ipairs(vim.fn.win_findbuf(state.buffer)) do
+      vim.api.nvim_win_set_cursor(window, { line, 0 })
+    end
+  end
+
+  --- Moves the cursors to the file followed when a reveal waited for the
+  --- tree to be read, once it is.
+  local function settle_reveal()
+    if state.reveal_pending then
+      state.reveal_pending = false
+      put_cursors_on_followed()
+    end
+  end
+
   --- Stops the watch of the repository, when one runs.
   local function stop_watch()
     if state.watch then
@@ -378,14 +407,15 @@ function M.new(settings)
 
   local read_tree
 
-  --- What the explorer shows: the folder Claude works in, and what the
-  --- changes pane's focused view shows alone, as one text; a read is asked
-  --- for again when it differs from the last read's.
+  --- What the explorer shows: the folder Claude works in, what the changes
+  --- pane's focused view shows alone and whether the default view is held, as
+  --- one text; a read is asked for again when it differs from the last
+  --- read's.
   ---
   ---@return string
   local function place_key()
     local work = settings.focused_work and settings.focused_work()
-    return settings.claude_folder() .. '\n' .. vim.inspect(work)
+    return ('%s\n%s\n%s'):format(settings.claude_folder(), vim.inspect(work), state.default_held)
   end
 
   --- The place of the folder Claude works in, its title the folder, `note`
@@ -439,13 +469,14 @@ function M.new(settings)
   --- Calls `done` with the place the explorer shows: what the changes pane's
   --- focused view shows alone (`settings.focused_work`) — a worktree, or the
   --- worktree a branch is checked out in (`resolve_branch()`) — or, for the
-  --- default view, the folder Claude works in. A worktree that is no longer
+  --- default view, the folder Claude works in, which is what the explorer
+  --- shows too while the default view is held. A worktree that is no longer
   --- on disk gives the folder Claude works in, the user told once.
   ---
   ---@param done fun(place: aineo.explorer.Place)
   local function resolve_place(done)
     local work = settings.focused_work and settings.focused_work()
-    if not work then
+    if state.default_held or not work then
       done(claude_place())
       return
     end
@@ -464,13 +495,15 @@ function M.new(settings)
     done(claude_place())
   end
 
-  --- Makes `file`, absolute, the file followed when it lies under the folder
-  --- shown, and unfolds the folders above it; says whether it lies there.
+  --- Makes `file`, absolute, the file followed when it lies under `directory`
+  --- (the folder shown, when not given), and unfolds the folders above it;
+  --- says whether it lies there.
   ---
   ---@param file string
+  ---@param directory? string
   ---@return boolean
-  local function take_followed(file)
-    local path = path_from(state.place.directory, file)
+  local function take_followed(file, directory)
+    local path = path_from(directory or state.place.directory, file)
     if not path or path == '' then
       return false
     end
@@ -479,6 +512,29 @@ function M.new(settings)
       state.open[folder] = true
     end
     return true
+  end
+
+  --- Makes `file`, absolute, the file followed as `take_followed()` does
+  --- when it lies under the folder shown; when it lies elsewhere but under
+  --- the folder Claude works in, the explorer is to go back to that folder: it
+  --- holds the default view, which the next change of the focused work ends
+  --- (`home.follow_focused_work()`), and follows the file there. The tree and
+  --- the place shown stay as they are until the next read. Says whether the
+  --- file is followed, and whether the explorer is to go back for it.
+  ---
+  ---@param file string
+  ---@return boolean followed
+  ---@return boolean going_back
+  local function take_followed_or_go_back(file)
+    if take_followed(file) then
+      return true, false
+    end
+    local claude_folder = settings.claude_folder()
+    if not take_followed(file, claude_folder) then
+      return false, false
+    end
+    state.default_held = true
+    return true, true
   end
 
   --- Whether a window of any tab page shows the explorer's buffer.
@@ -545,6 +601,7 @@ function M.new(settings)
       read, {}, {}, nil, false
     session_work.take({ claude = {}, marks = {}, line_counts = {} }, directory, false)
     render()
+    settle_reveal()
   end
 
   --- Takes the tree `listing` gives of the folder `prefix` of `repository`,
@@ -569,6 +626,7 @@ function M.new(settings)
     state.line_counts = read.line_counts
     session_work.take(read, state.place.directory, listing.session_paths ~= nil)
     render()
+    settle_reveal()
     watch(repository)
   end
 
@@ -604,6 +662,7 @@ function M.new(settings)
       if failed then
         state.failure = ('git could not list the files: %s'):format(failed.message or failed.reason)
         render()
+        settle_reveal()
         return
       end
       take_repository(repository, prefix, listing)
@@ -651,17 +710,21 @@ function M.new(settings)
       if not is_last_read(read) then
         return
       end
-      local directory = place.directory
       state.place, state.branch = place, nil
       if state.pending_follow then
-        take_followed(state.pending_follow)
+        local _, going_back = take_followed_or_go_back(state.pending_follow)
         state.pending_follow = nil
+        if going_back then
+          state.place, state.place_key = claude_place(), place_key()
+        end
       end
+      local shown = state.place
+      local directory = shown.directory
       settings.git.find_repository(directory, function(_, repository)
         if not is_last_read(read) then
           return
         end
-        state.branch = repository and place.shows_branch and repository.branch or nil
+        state.branch = repository and shown.shows_branch and repository.branch or nil
         local prefix = repository and path_from(repository.top, directory)
         if not prefix then
           take_folders(directory)
@@ -683,47 +746,89 @@ function M.new(settings)
     end
   end
 
-  --- Follows `file`, absolute, the file the file column shows: when it lies
-  --- under the folder shown, the folders above it unfold, read from the disk
-  --- when git does not list them, and its line is highlighted; every cursor
-  --- stays where it is. A file elsewhere changes nothing. Before the tree is
-  --- first read, the file is followed once it is.
+  --- Follows `file` as `home.follow()` does, and says whether the tree is
+  --- read again for it, which the cursors of a reveal then wait for.
   ---
   ---@param file string
-  ---@return boolean followed whether the file was followed now: false for a file elsewhere and before the tree is first read
-  function home.follow(file)
+  ---@param reveal boolean whether the cursors move to the file once the tree is read
+  ---@return boolean followed
+  ---@return boolean reading
+  local function follow_file(file, reveal)
     if not state.place then
       state.pending_follow = file
-      return false
+      return false, false
     end
-    if not take_followed(file) then
-      return false
+    local followed, going_back = take_followed_or_go_back(file)
+    if not followed then
+      return false, false
+    end
+    if going_back then
+      local reading = is_shown()
+      state.reveal_pending = reveal and reading
+      if reading then
+        read_tree()
+      else
+        state.place = claude_place()
+      end
+      return true, reading
     end
     for _, folder in ipairs(tree.folders_above(state.followed)) do
       list_when_unknown(folder)
     end
     render()
-    return true
+    return true, false
+  end
+
+  --- Follows `file`, absolute, the file the file column shows: when it lies
+  --- under the folder shown, the folders above it unfold, read from the disk
+  --- when git does not list them, and its line is highlighted; every cursor
+  --- stays where it is. A file under the folder Claude works in while the
+  --- explorer shows another takes the explorer back to Claude's folder,
+  --- where it is followed, and holds that view until the focused work
+  --- changes (`follow_focused_work()`); the changes pane keeps its view. A
+  --- file elsewhere changes nothing. Before the tree is first read, the file
+  --- is followed once it is.
+  ---
+  ---@param file string
+  ---@return boolean followed whether the file was followed now: false for a file elsewhere and before the tree is first read
+  function home.follow(file)
+    return (follow_file(file, false))
   end
 
   --- Follows `file` as `follow()` does, and moves the cursor of every window
   --- that shows the explorer to its line, which scrolls the window so the
-  --- line shows. The current window stays. A file elsewhere, and a file revealed
-  --- before the tree is first read, move no cursor: the latter is followed
-  --- once the tree is read, as `follow()` has it.
+  --- line shows; when the explorer goes back to the folder Claude works in
+  --- for it, once the tree is read. The current window stays. A file
+  --- elsewhere, and a file revealed before the tree is first read, move no
+  --- cursor: the latter is followed once the tree is read, as `follow()`
+  --- has it.
   ---
   ---@param file string
   function home.reveal(file)
-    if not home.follow(file) then
-      return
+    local followed, reading = follow_file(file, true)
+    if followed and not reading then
+      put_cursors_on_followed()
     end
-    local line = state.rendering and line_of(state.rendering, state.followed)
-    if not line then
-      return
-    end
-    for _, window in ipairs(vim.fn.win_findbuf(state.buffer)) do
-      vim.api.nvim_win_set_cursor(window, { line, 0 })
-    end
+  end
+
+  --- Calls `done` with the folder the explorer shows: the top of the worktree
+  --- the changes pane's focused view shows alone, the folder Claude works in
+  --- for its default view, and wherever `follow()` held it.
+  ---
+  ---@param done fun(directory: string)
+  function home.shown_folder(done)
+    resolve_place(function(place)
+      done(place.directory)
+    end)
+  end
+
+  --- Ends the hold of the default view and shows what the changes pane's
+  --- focused view shows alone again, reading the tree again while a window
+  --- shows the explorer; what the explorer is told when the focused work
+  --- changes.
+  function home.follow_focused_work()
+    state.default_held = false
+    home.refresh()
   end
 
   --- Puts the cursor of the current window on the entry `path`, when it
