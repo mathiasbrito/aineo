@@ -311,7 +311,7 @@ function M.follow(buffer, groups)
     end
   end
 
-  vim.api.nvim_create_autocmd({ 'WinNew', 'WinClosed', 'WinResized', 'VimResized', 'TabEnter' }, {
+  vim.api.nvim_create_autocmd({ 'WinClosed', 'WinResized' }, {
     group = augroup,
     desc = 'aineo: keep the explorer’s footers on the windows that show it',
     callback = draw_soon,
