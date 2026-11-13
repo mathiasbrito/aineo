@@ -50,13 +50,16 @@ local T = MiniTest.new_set({
 })
 
 --- The columns a window's gutter takes (`textoff`) in each window of the tab
---- page numbered `number`, by what the window shows: `'terminal'` or the
---- buffer's name.
+--- page numbered `number` that does not float, by what the window shows:
+--- `'terminal'` or the buffer's name.
 local TEXTOFFS_OF_TAB = [[(function(number)
   vim.cmd('redraw')
   local page = vim.api.nvim_list_tabpages()[number]
   local offs = {}
-  for _, window in ipairs(vim.api.nvim_tabpage_list_wins(page)) do
+  local tiled = vim.tbl_filter(function(window)
+    return vim.api.nvim_win_get_config(window).relative == ''
+  end, vim.api.nvim_tabpage_list_wins(page))
+  for _, window in ipairs(tiled) do
     local buffer = vim.api.nvim_win_get_buf(window)
     local name = vim.bo[buffer].buftype == 'terminal' and 'terminal'
       or (vim.api.nvim_buf_get_name(buffer):gsub('%-%d+$', ''))

@@ -20,11 +20,11 @@ local T = MiniTest.new_set({
   },
 })
 
---- The lines of the explorer's buffer below its header.
+--- The lines of the explorer's buffer.
 ---
 ---@return string[]
 local function tree_lines()
-  return vim.list_slice(vim.api.nvim_buf_get_lines(explorer.made_buffer(), 0, -1, false), 2)
+  return vim.api.nvim_buf_get_lines(explorer.made_buffer(), 0, -1, false)
 end
 
 --- Presses `keys` in the explorer's window as typed in Normal mode.
@@ -44,7 +44,7 @@ T['a chain unfolded by a key']['stays unfolded, every folder of it, once it brea
 T['a chain unfolded by a key']['stays unfolded, every folder of it, once it breaks']['by'] = function(
   key
 )
-  vim.api.nvim_win_set_cursor(0, { 2, 0 })
+  vim.api.nvim_win_set_cursor(0, { 1, 0 })
   press(key)
   local unfolded = tree_lines()
 

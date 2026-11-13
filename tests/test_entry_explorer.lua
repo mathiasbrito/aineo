@@ -1,5 +1,6 @@
 local MiniTest = require('mini.test')
 local claude_session = dofile('tests/helpers/claude_session.lua')
+local explorer_footer = dofile('tests/helpers/explorer_footer.lua')
 local entry = dofile('tests/helpers/entry.lua')
 local fixture = dofile('tests/helpers/fixture.lua')
 local git_repo = dofile('tests/helpers/git_repo.lua')
@@ -79,28 +80,31 @@ local function open_in_repository(name, files)
   return top
 end
 
---- The cells the explorer's header leaves for what follows the folder in it
---- (a branch, a summary of the changes, the toggles and a filter).
-local HEADER_ROOM = 90
+--- The cells the child's screen keeps beside the folder of a case, so that the
+--- explorer's window shows each line of its footer whole.
+local FOOTER_ROOM = 90
 
---- Makes the child's screen wide enough for the explorer's header in the
---- case `name`, whatever the length of the checkout's path: the folder of
---- the longest fixture the case makes, and the room for the rest.
+--- Makes the child's screen wide enough for the lines of the explorer's
+--- footer in the case `name`, whatever the length of the checkout's path:
+--- the folder of the longest fixture the case makes, and the room for the
+--- rest.
 ---
 ---@param name string
-local function make_room_for_header(name)
+local function make_room_for_footer(name)
   local folder =
     vim.fs.joinpath(vim.uv.cwd(), '.tests', 'fixtures', 'git-explorer-' .. name, 'repo')
-  child.o.columns = 2 * (vim.api.nvim_strwidth(vim.fn.fnamemodify(folder, ':~')) + HEADER_ROOM)
+  child.o.columns = 2 * (vim.api.nvim_strwidth(vim.fn.fnamemodify(folder, ':~')) + FOOTER_ROOM)
 end
 
---- The cells a line of the explorer's window has in the child.
-local WINDOW_WIDTH = [[(function()
-  local window = vim.fn.win_findbuf(vim.fn.bufnr('aineo://explorer'))[1]
-  return vim.api.nvim_win_get_width(window) - vim.fn.getwininfo(window)[1].textoff
-end)()]]
+--- The lines the footer of the explorer's window in the child's current tab
+--- shows, none while none shows.
+---
+---@return string[]
+local function footer_lines()
+  return explorer_footer.shown_lines_in(child)
+end
 
---- The lines of the explorer's buffer in the child, the header first.
+--- The lines of the explorer's buffer in the child.
 ---
 ---@return string[]
 local function explorer_lines()
@@ -114,15 +118,15 @@ local function explorer_lines()
   end)()]])
 end
 
---- Waits, at most `PATIENCE_MS`, until the explorer's lines below its header
---- are `expected`, and returns them as they are then.
+--- Waits, at most `PATIENCE_MS`, until the explorer's lines are `expected`,
+--- and returns them as they are then.
 ---
 ---@param expected string[]
 ---@return string[]
 local function wait_for_tree(expected)
   local lines
   vim.wait(PATIENCE_MS, function()
-    lines = vim.list_slice(explorer_lines(), 2)
+    lines = explorer_lines()
     return vim.deep_equal(lines, expected)
   end, 20)
   return lines
@@ -298,7 +302,7 @@ T['a folder']['unfolds and folds again, by'] = function(key)
   put_cursor_on('src/')
 
   entry.press(child, key)
-  local unfolded = vim.list_slice(explorer_lines(), 2)
+  local unfolded = explorer_lines()
   entry.press(child, key)
 
   eq(unfolded, {
@@ -309,7 +313,7 @@ T['a folder']['unfolds and folds again, by'] = function(key)
     '    .gitignore',
     '    README.md',
   })
-  eq(vim.list_slice(explorer_lines(), 2), FOLDED_TREE)
+  eq(explorer_lines(), FOLDED_TREE)
 end
 
 T['h'] = MiniTest.new_set()
@@ -322,7 +326,7 @@ T['h']['on a file folds its folder and moves the cursor there'] = function()
 
   entry.press(child, 'h')
 
-  eq(vim.list_slice(explorer_lines(), 2), FOLDED_TREE)
+  eq(explorer_lines(), FOLDED_TREE)
   eq(line_at_cursor(), '▸   src/')
 end
 
@@ -333,7 +337,7 @@ T['h']['on an unfolded folder folds it'] = function()
 
   entry.press(child, 'h')
 
-  eq(vim.list_slice(explorer_lines(), 2), FOLDED_TREE)
+  eq(explorer_lines(), FOLDED_TREE)
   eq(line_at_cursor(), '▸   src/')
 end
 
@@ -501,16 +505,22 @@ T['a file']['is shown by l, the cheatsheet’s row says what the map’s descrip
   eq('aineo explorer: ' .. rows[1].phrase, description)
 end
 
-T['the header'] = MiniTest.new_set()
+T['a line with no entry'] = MiniTest.new_set()
 
-T['the header']['does nothing with l'] = function()
-  explore('preview-header')
+T['a line with no entry']['does nothing with l'] = function()
+  explore('preview-no-entry')
+  child.lua([[
+    vim.ui.input = function(_, on_confirm)
+      on_confirm('zzz')
+    end
+  ]])
+  entry.press(child, 'f')
   child.lua('vim.api.nvim_win_set_cursor(0, { 1, 0 }); vim.v.errmsg = ""')
 
   entry.press(child, 'l')
 
   eq(child.lua_get('vim.v.errmsg'), '')
-  eq(vim.list_slice(explorer_lines(), 2), FOLDED_TREE)
+  eq(explorer_lines(), { '  no file matches “zzz”' })
   eq(entry.windows(child), { 'terminal', 'aineo://explorer' })
   eq(entry.messages(child), {})
 end
@@ -550,15 +560,15 @@ T['git’s marks']['show modified, untracked and deleted files, and folders hold
   put_cursor_on('docs/')
   entry.press(child, 'l')
 
-  eq(vim.list_slice(explorer_lines(), 2, 3), { '▾ • docs/', '    D guide.md' })
+  eq(vim.list_slice(explorer_lines(), 1, 2), { '▾ • docs/', '    D guide.md' })
 end
 
 T['the colours'] = MiniTest.new_set()
 
 --- The colours the explorer's buffer shows in the child, as
 --- `{ line, first_column, end_column, group }` (line from 1, columns in
---- bytes from 0) in the order of the lines, the header's and the followed
---- file's whole-line highlights left out.
+--- bytes from 0) in the order of the lines, the followed file's whole-line
+--- highlight left out.
 local COLOURS = [[(function()
   for _, buffer in ipairs(vim.api.nvim_list_bufs()) do
     if vim.api.nvim_buf_get_name(buffer) == 'aineo://explorer' then
@@ -596,15 +606,15 @@ T['the colours']['show a changed file in its change’s group and a folder in th
   eq(wait_for_tree(expected), expected)
 
   eq(child.lua_get(COLOURS), {
+    { 1, 0, 3, 'AineoExplorerFolder' },
+    { 1, 4, 7, 'AineoExplorerChanged' },
+    { 1, 8, 13, 'AineoExplorerFolder' },
     { 2, 0, 3, 'AineoExplorerFolder' },
     { 2, 4, 7, 'AineoExplorerChanged' },
-    { 2, 8, 13, 'AineoExplorerFolder' },
-    { 3, 0, 3, 'AineoExplorerFolder' },
-    { 3, 4, 7, 'AineoExplorerChanged' },
-    { 3, 8, 12, 'AineoExplorerFolder' },
-    { 4, 4, 14, 'AineoExplorerUnchanged' },
-    { 5, 2, 11, 'AineoChangesUntracked' },
-    { 6, 2, 13, 'AineoChangesModified' },
+    { 2, 8, 12, 'AineoExplorerFolder' },
+    { 3, 4, 14, 'AineoExplorerUnchanged' },
+    { 4, 2, 11, 'AineoChangesUntracked' },
+    { 5, 2, 13, 'AineoChangesModified' },
   })
 end
 
@@ -631,12 +641,12 @@ T['the colours']['show an entry git ignores whole in the ignored group, once I s
   eq(wait_for_tree(shown), shown)
 
   eq(child.lua_get(COLOURS), {
-    { 2, 0, 12, 'AineoExplorerIgnored' },
+    { 1, 0, 12, 'AineoExplorerIgnored' },
+    { 2, 0, 3, 'AineoExplorerFolder' },
+    { 2, 6, 11, 'AineoExplorerFolder' },
     { 3, 0, 3, 'AineoExplorerFolder' },
-    { 3, 6, 11, 'AineoExplorerFolder' },
-    { 4, 0, 3, 'AineoExplorerFolder' },
-    { 4, 6, 10, 'AineoExplorerFolder' },
-    { 6, 0, 13, 'AineoExplorerIgnored' },
+    { 3, 6, 10, 'AineoExplorerFolder' },
+    { 5, 0, 13, 'AineoExplorerIgnored' },
   })
 end
 
@@ -747,7 +757,7 @@ T['a change on disk']['while the pane is hidden is read once the pane shows agai
 
   git_repo.write(top, 'later.txt', { 'later' })
   vim.wait(2000)
-  local while_hidden = vim.list_slice(explorer_lines(), 2)
+  local while_hidden = explorer_lines()
   entry.press(child, '\\e')
 
   local expected =
@@ -804,7 +814,7 @@ T['a folder outside git']['lists a folder when it unfolds, .git hidden, with no 
 
   entry.press(child, 'l')
 
-  eq(vim.list_slice(explorer_lines(), 2), {
+  eq(explorer_lines(), {
     '▸   docs/',
     '▾   src/',
     '  ▸   lib/',
@@ -816,7 +826,7 @@ T['a folder outside git']['lists a folder when it unfolds, .git hidden, with no 
 end
 
 T['a folder outside git']['says once for the tab that nothing is ignored there, I pressed twice'] = function()
-  make_room_for_header('plain-ignored')
+  make_room_for_footer('plain-ignored')
   explore_folder('plain-ignored', PLAIN_FILES, FOLDED_TREE)
 
   entry.press(child, 'I')
@@ -828,13 +838,13 @@ T['a folder outside git']['says once for the tab that nothing is ignored there, 
       level = vim.log.levels.INFO,
     },
   })
-  eq(explorer_lines()[1]:find('ignored hidden', 1, true) ~= nil, true)
+  eq(footer_lines()[2], 'ignored hidden · dotfiles shown')
 end
 
 T['ignored entries'] = MiniTest.new_set()
 
 T['ignored entries']['are hidden, and shown and hidden again by I'] = function()
-  make_room_for_header('ignored')
+  make_room_for_footer('ignored')
   local top = git_repo.create('explorer-ignored', FILES)
   git_repo.write(top, 'debug.log', { 'log' })
   git_repo.write(top, 'build/out.o', { 'out' })
@@ -855,14 +865,14 @@ T['ignored entries']['are hidden, and shown and hidden again by I'] = function()
 
   entry.press(child, 'I')
   local after_one = wait_for_tree(shown)
-  local header = explorer_lines()[1]
+  local footer = footer_lines()
   put_cursor_on('build/')
   entry.press(child, 'l')
-  local unfolded = vim.list_slice(explorer_lines(), 2, 3)
+  local unfolded = vim.list_slice(explorer_lines(), 1, 2)
   entry.press(child, 'I')
 
   eq(after_one, shown)
-  eq(header:find('ignored shown', 1, true) ~= nil, true)
+  eq(vim.tbl_contains(footer, 'ignored shown · dotfiles shown'), true)
   eq(unfolded, { '▾   build/', '      out.o' })
   eq(wait_for_tree(FOLDED_TREE), FOLDED_TREE)
 end
@@ -870,23 +880,23 @@ end
 T['dotfiles'] = MiniTest.new_set()
 
 T['dotfiles']['are shown, and hidden and shown again by H'] = function()
-  make_room_for_header('dotfiles')
+  make_room_for_footer('dotfiles')
   explore('dotfiles')
 
   entry.press(child, 'H')
-  local hidden = vim.list_slice(explorer_lines(), 2)
-  local header = explorer_lines()[1]
+  local hidden = explorer_lines()
+  local footer = footer_lines()
   entry.press(child, 'H')
 
   eq(hidden, { '▸   docs/', '▸   src/', '    README.md' })
-  eq(header:find('dotfiles hidden', 1, true) ~= nil, true)
-  eq(vim.list_slice(explorer_lines(), 2), FOLDED_TREE)
+  eq(vim.tbl_contains(footer, 'ignored hidden · dotfiles hidden'), true)
+  eq(explorer_lines(), FOLDED_TREE)
 end
 
 T['the filter'] = MiniTest.new_set()
 
 T['the filter']['shows the files whose path holds it, and an empty one shows every file again'] = function()
-  make_room_for_header('filter')
+  make_room_for_footer('filter')
   explore('filter')
   child.lua([[
     _G.filter_answers = { 'UTIL', '' }
@@ -896,15 +906,17 @@ T['the filter']['shows the files whose path holds it, and an empty one shows eve
   ]])
 
   entry.press(child, 'f')
-  local filtered = explorer_lines()
+  local filtered, filtered_footer = explorer_lines(), footer_lines()
   entry.press(child, 'f')
 
-  local left = vim.fn.fnamemodify(child.lua_get('vim.fn.getcwd()'), ':~') .. ' · main'
-  local right = 'ignored hidden  ·  dotfiles shown  ·  filter “UTIL”'
-  local gap = child.lua_get(WINDOW_WIDTH) - vim.api.nvim_strwidth(left .. right)
-  eq(filtered[1], left .. string.rep(' ', gap) .. right)
-  eq(vim.list_slice(filtered, 2), { '▾   src/lib/', '      util.lua' })
-  eq(vim.list_slice(explorer_lines(), 2), FOLDED_TREE)
+  eq(filtered_footer, {
+    vim.fn.fnamemodify(child.lua_get('vim.fn.getcwd()'), ':~'),
+    '  main',
+    'ignored hidden · dotfiles shown',
+    'filter “UTIL”',
+  })
+  eq(filtered, { '▾   src/lib/', '      util.lua' })
+  eq(explorer_lines(), FOLDED_TREE)
 end
 
 T['@'] = MiniTest.new_set()
@@ -1039,7 +1051,7 @@ T['the current file']['is unfolded to and highlighted, the cursors staying where
     '    README.md',
   }
   eq(wait_for_tree(expected), expected)
-  eq(child.lua_get(FOLLOWED_LINE), 5)
+  eq(child.lua_get(FOLLOWED_LINE), 4)
   eq(entry.current_window(child), vim.fs.joinpath(top, 'src', 'lib', 'util.lua'))
   eq(
     child.lua_get([[(function()
@@ -1066,7 +1078,7 @@ T['the current file']['in a folder git ignores whole, ignored entries shown, is 
 
   child.cmd('edit ' .. vim.fn.fnameescape(vim.fs.joinpath(top, 'build', 'out.js')))
 
-  eq(vim.list_slice(explorer_lines(), 2), {
+  eq(explorer_lines(), {
     '▾   build/',
     '      out.js',
     '▸   docs/',
@@ -1074,7 +1086,7 @@ T['the current file']['in a folder git ignores whole, ignored entries shown, is 
     '    .gitignore',
     '    README.md',
   })
-  eq(child.lua_get(FOLLOWED_LINE), 3)
+  eq(child.lua_get(FOLLOWED_LINE), 2)
 end
 
 T['the current file']['outside the folder shown changes nothing'] = function()
@@ -1086,8 +1098,8 @@ T['the current file']['outside the folder shown changes nothing'] = function()
   child.cmd('edit ' .. vim.fn.fnameescape(outside))
 
   vim.wait(300)
-  eq(vim.list_slice(explorer_lines(), 2), FOLDED_TREE)
-  eq(child.lua_get(FOLLOWED_LINE), 5)
+  eq(explorer_lines(), FOLDED_TREE)
+  eq(child.lua_get(FOLLOWED_LINE), 4)
 end
 
 T['a name with a line feed'] = MiniTest.new_set()
@@ -1151,7 +1163,7 @@ T['a submodule and a nested repository']['show as folders listed from disk, Ente
   put_cursor_on('nested/')
   entry.press(child, '<CR>')
 
-  eq(vim.list_slice(explorer_lines(), 2), {
+  eq(explorer_lines(), {
     '▾ ? nested/',
     '      n.txt',
     '▾   vendor/lib/',
@@ -1174,7 +1186,7 @@ T['the folder shown']['is the one Claude works in, wherever the editor moved sin
 end
 
 T['the filter']['is kept as the tree is read again after a change on disk'] = function()
-  make_room_for_header('filter-refresh')
+  make_room_for_footer('filter-refresh')
   local top = explore('filter-refresh')
   child.lua([[
     vim.ui.input = function(_, on_confirm)
@@ -1187,7 +1199,7 @@ T['the filter']['is kept as the tree is read again after a change on disk'] = fu
 
   local expected = { '▾ • src/', '    M main.lua' }
   eq(wait_for_tree(expected), expected)
-  eq(explorer_lines()[1]:find('filter “main”', 1, true) ~= nil, true)
+  eq(vim.tbl_contains(footer_lines(), 'filter “main”'), true)
 end
 
 T['a file']['deleted opens nothing with Enter, and says so'] = function()

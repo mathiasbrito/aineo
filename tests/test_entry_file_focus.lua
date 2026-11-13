@@ -94,12 +94,12 @@ local function open_in_repository(name, settings, picked)
 end
 
 --- Waits, at most `PATIENCE_MS`, until the explorer's tree is read: its
---- buffer holds more than its header and a first row.
+--- buffer holds more than a first row.
 local function wait_for_tree()
   vim.wait(PATIENCE_MS, function()
     return child.lua_get([[(function()
       local buffer = vim.fn.bufnr('aineo://explorer')
-      return buffer ~= -1 and vim.api.nvim_buf_line_count(buffer) > 2
+      return buffer ~= -1 and vim.api.nvim_buf_line_count(buffer) > 1
     end)()]])
   end, 20)
 end
@@ -138,7 +138,7 @@ local function put_cursor_on(text)
   )
 end
 
---- The lines of the explorer's buffer in the child, the header first.
+--- The lines of the explorer's buffer in the child.
 ---
 ---@return string[]
 local function explorer_lines()
@@ -302,7 +302,7 @@ end
 
 T['<C-l> in the explorer column']['on a folder arms the focus: nothing closes, opens or changes size'] = function()
   open_with_column('on-folder', 'right')
-  local tree = vim.list_slice(explorer_lines(), 2)
+  local tree = explorer_lines()
   local windows, widths = entry.windows(child), side_widths()
   put_cursor_on('src/')
 
@@ -312,7 +312,7 @@ T['<C-l> in the explorer column']['on a folder arms the focus: nothing closes, o
   eq(is_focused(), true)
   eq(entry.windows(child), windows)
   eq(side_widths(), widths)
-  eq(vim.list_slice(explorer_lines(), 2), tree)
+  eq(explorer_lines(), tree)
   eq(entry.messages(child), {})
 end
 

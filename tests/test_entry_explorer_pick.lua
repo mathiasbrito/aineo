@@ -1,5 +1,6 @@
 local MiniTest = require('mini.test')
 local claude_session = dofile('tests/helpers/claude_session.lua')
+local explorer_footer = dofile('tests/helpers/explorer_footer.lua')
 local entry = dofile('tests/helpers/entry.lua')
 local git_repo = dofile('tests/helpers/git_repo.lua')
 
@@ -107,6 +108,14 @@ local function lines_of(name)
   )
 end
 
+--- The title the footer of the explorer's window in the child's current
+--- tab shows, `''` while none shows.
+---
+---@return string
+local function footer_title()
+  return explorer_footer.shown_lines_in(child)[1] or ''
+end
+
 --- Waits, at most `PATIENCE_MS`, until `condition()` is true, and returns
 --- whether it became true.
 ---
@@ -116,7 +125,7 @@ local function wait_until(condition)
   return vim.wait(PATIENCE_MS, condition, 20)
 end
 
---- Waits until the explorer's lines below its header are `expected`, and
+--- Waits until the explorer's lines are `expected`, and
 --- returns them as they are then.
 ---
 ---@param expected string[]
@@ -124,7 +133,7 @@ end
 local function wait_for_tree(expected)
   local lines
   wait_until(function()
-    lines = vim.list_slice(lines_of('aineo://explorer'), 2)
+    lines = lines_of('aineo://explorer')
     return vim.deep_equal(lines, expected)
   end)
   return lines
@@ -179,7 +188,7 @@ T['one pick']['in the changes pane moves the explorer to the worktree picked'] =
   entry.press(child, '\\e')
 
   eq(wait_for_tree(FEATURE_TREE), FEATURE_TREE)
-  eq(vim.startswith(lines_of('aineo://explorer')[1], 'Worktree feature (feature)'), true)
+  eq(vim.startswith(footer_title(), 'Worktree feature (feature)'), true)
 end
 
 T['one pick']['in the explorer moves the changes pane, which shows the worktree alone'] = function()
@@ -252,7 +261,7 @@ T['one pick']['opens a file of the worktree picked for editing there'] = functio
   )
 end
 
-T['one pick']['of a branch with no worktree shows the folder Claude works in, the header saying so'] = function()
+T['one pick']['of a branch with no worktree shows the folder Claude works in, the footer saying so'] = function()
   open_with_worktree('lonely-branch')
   entry.press(child, '\\e')
   wait_for_tree(OWN_TREE)
@@ -261,13 +270,12 @@ T['one pick']['of a branch with no worktree shows the folder Claude works in, th
 
   eq(
     wait_until(function()
-      return lines_of('aineo://explorer')[1]:find('(Branch lonely has no folder on disk)', 1, true)
-        ~= nil
+      return footer_title():find('(Branch lonely has no folder on disk)', 1, true) ~= nil
     end),
     true
   )
-  eq(vim.list_slice(lines_of('aineo://explorer'), 2), OWN_TREE)
-  eq(lines_of('aineo://explorer')[1]:find(' · main', 1, true), nil)
+  eq(lines_of('aineo://explorer'), OWN_TREE)
+  eq(explorer_footer.shown_lines_in(child), { footer_title(), 'ignored hidden · dotfiles shown' })
 end
 
 T['one pick']['of a branch checked out in a worktree since shows that worktree'] = function()
@@ -277,7 +285,7 @@ T['one pick']['of a branch checked out in a worktree since shows that worktree']
   eq(pick('[branch] lonely'), true)
   eq(
     wait_until(function()
-      return lines_of('aineo://explorer')[1]:find('no folder on disk', 1, true) ~= nil
+      return footer_title():find('no folder on disk', 1, true) ~= nil
     end),
     true
   )
@@ -289,8 +297,8 @@ T['one pick']['of a branch checked out in a worktree since shows that worktree']
 
   local expected = { '  ? lonely.txt', '    main.txt' }
   eq(wait_for_tree(expected), expected)
-  eq(lines_of('aineo://explorer')[1]:find('no folder on disk', 1, true), nil)
-  eq(lines_of('aineo://explorer')[1]:find(' · main', 1, true), nil)
+  eq(footer_title():find('no folder on disk', 1, true), nil)
+  eq(vim.tbl_contains(explorer_footer.shown_lines_in(child), '  main'), false)
 end
 
 T['one pick']['gives way to the folder Claude works in in the changes pane’s default view'] = function()

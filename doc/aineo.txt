@@ -454,7 +454,6 @@ the time in a column of its own at the far side of the screen
 instead, opening it again where it was if you closed it. Everything below is
 the same in both.
 
-    ~/project · main · 2 changed · 1 new     ignored hidden · dotfiles shown
     ▾ •2 lua/
       ├ ▸   aineo/
       └ ✦ M init.lua                                                 +3 −1
@@ -462,15 +461,30 @@ the same in both.
         .gitignore
       ? notes.md
 
-The first line names what the tree shows, on the left: the folder, its
-branch when it is the folder Claude works in and HEAD is on one, and a
+    ~/project
+      main
+    2 changed · 1 new
+    ignored hidden · dotfiles shown
+
+The tree starts on the window's first line. The footer, on the window's
+bottom rows, names what the tree shows, one item a line: the folder; its
+branch, indented, when it is the folder Claude works in and HEAD is on one; a
 summary of the changes (`2 changed · 1 new`, the files git sees as new apart
-from the others); and on the right the toggles and the filter, when there is
-one. When the window is too narrow for both sides, the toggles go first, then
-the summary, then the branch, and a folder still too long is cut from its
-start, behind `…`: the line never wraps. A worktree or branch picked with `s`
-keeps the heading the changes pane gives it. Folders come first, then files,
-each alphabetically, `▸` before a folded folder and `▾` before an unfolded
+from the others); the toggles; and the filter (`filter “lua”`), when there is
+one. A line with nothing to say is left out, so a clean checkout shows three
+lines. A window shorter than 12 rows shows the folder alone. A line too long
+for the window is cut from its start, behind `…`: it never wraps. The footer
+stays on the bottom rows as the tree scrolls, and the tree scrolls past it:
+there are blank lines after its last entry. The cursor stays above the
+footer: moved down under it, the tree scrolls so that its line shows; left
+under it by the tree scrolling (`<C-y>`, the wheel, `zb`) or by its window
+getting shorter, it moves up to the last row above the footer. Each window
+that shows the explorer has its footer, in any tab; the footer takes no
+focus, and closes with its window or as the window shows another buffer.
+Each of its lines shows in a group of its own, |hl-AineoExplorerFooterTitle|
+and those after it below. A worktree or branch picked with `s` keeps the
+heading the changes pane gives it. Folders come first, then files, each
+alphabetically, `▸` before a folded folder and `▾` before an unfolded
 one. In a repository git's mark sits before a file's name: `M` modified,
 `A` added, `D` deleted (a file gone from disk still shows, with its mark),
 `R` renamed, `T` its type changed, `?` untracked; a folder holding a change,
@@ -501,7 +515,8 @@ The keys of the tree, in Normal mode, in its buffer alone:
              disk, opens nothing, and aineo says why
     `<C-l>`    show a file as `l` does and turn the file focus on, which
              closes the panes column and gives its cells to the file
-             column; on a folder or the header, only turn it on; with
+             column; on a folder, or a line with no entry, only turn it
+             on; with
              it on, turn it off, on any line (|aineo-focus|)
     `h`        fold an unfolded folder; on a file or a folded folder, fold
              the folder that holds it and move to it
@@ -546,7 +561,7 @@ branch the changes pane shows alone (|aineo-changes-s|), picked with `s` in
 either pane and remembered for the Claude Code session as that pick is. A
 worktree shows that worktree, and so does a branch checked out in one; a
 branch no worktree has checked out shows the folder Claude works in, the
-first line saying the branch has no folder on disk; the reported work shows
+footer saying the branch has no folder on disk; the reported work shows
 the first worktree or branch it shows alone. Files open for editing in the
 worktree shown.
 The changes pane's default view (`\g` in that pane) shows the folder Claude
@@ -628,8 +643,24 @@ AineoExplorerFolder	A folder's sign and name, linked to |hl-Directory|.
 AineoExplorerFollowed	The line of the current file in the tree.
                                                        *hl-AineoExplorerGuide*
 AineoExplorerGuide	The guides over the indent, linked to |hl-NonText|.
-                                                      *hl-AineoExplorerHeader*
-AineoExplorerHeader	The tree's first line.
+                                                      *hl-AineoExplorerFooter*
+AineoExplorerFooter	The footer's background, linked to |hl-Normal|.
+                                                 *hl-AineoExplorerFooterTitle*
+AineoExplorerFooterTitle
+			The footer's folder, linked to |hl-Title|.
+                                                *hl-AineoExplorerFooterBranch*
+AineoExplorerFooterBranch
+			The footer's branch, linked to |hl-Identifier|.
+                                               *hl-AineoExplorerFooterSummary*
+AineoExplorerFooterSummary
+			The footer's summary of the changes, linked to
+			|hl-AineoExplorerChanged|.
+                                               *hl-AineoExplorerFooterToggles*
+AineoExplorerFooterToggles
+			The footer's toggles, linked to |hl-Comment|.
+                                                *hl-AineoExplorerFooterFilter*
+AineoExplorerFooterFilter
+			The footer's filter, linked to |hl-Special|.
                                                      *hl-AineoExplorerIgnored*
 AineoExplorerIgnored	An entry git ignores, whole, linked to |hl-Comment|.
                                                     *hl-AineoExplorerModified*
@@ -750,8 +781,8 @@ column, so that the row is Claude Code, the files and the explorer column
 (mirrored when Claude Code is on the right). Claude's column and the explorer
 column keep their widths; the pane that showed stays the pane shown, with the
 views its windows had (the Report's top line, the explorer pane's cursor), and
-shows again when the focus ends. On a folder, or on the header, `<C-l>` only
-turns the focus on and opens nothing.
+shows again when the focus ends. On a folder, or on a line with no entry,
+`<C-l>` only turns the focus on and opens nothing.
 
 With no file column open there is nothing to give the panes column's cells to,
 so the focus waits: nothing closes, opens or changes size, and Claude Code is

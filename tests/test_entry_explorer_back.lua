@@ -1,5 +1,6 @@
 local MiniTest = require('mini.test')
 local claude_session = dofile('tests/helpers/claude_session.lua')
+local explorer_footer = dofile('tests/helpers/explorer_footer.lua')
 local entry = dofile('tests/helpers/entry.lua')
 local find_pickers = dofile('tests/helpers/find_pickers.lua')
 local git_repo = dofile('tests/helpers/git_repo.lua')
@@ -125,12 +126,20 @@ local function wait_until(condition)
   return vim.wait(PATIENCE_MS, condition, 20)
 end
 
---- Whether the explorer's header starts with `text`.
+--- The title the footer of the explorer's window in the child's current
+--- tab shows, `''` while none shows.
+---
+---@return string
+local function footer_title()
+  return explorer_footer.shown_lines_in(child)[1] or ''
+end
+
+--- Whether the title of the explorer's footer starts with `text`.
 ---
 ---@param text string
 ---@return boolean
-local function header_starts_with(text)
-  return vim.startswith(lines_of('aineo://explorer')[1] or '', text)
+local function title_starts_with(text)
+  return vim.startswith(footer_title(), text)
 end
 
 --- Whether a line of the explorer ends with `text`.
@@ -158,7 +167,7 @@ local function pick(text)
 end
 
 --- Shows the explorer by `\e` and has it show the worktree `feature`: waits
---- until its header names it.
+--- until its footer names it.
 local function show_the_worktree()
   entry.press(child, '\\e')
   wait_until(function()
@@ -166,7 +175,7 @@ local function show_the_worktree()
   end)
   pick('[worktree] feature')
   wait_until(function()
-    return header_starts_with('Worktree feature (feature)')
+    return title_starts_with('Worktree feature (feature)')
   end)
 end
 
@@ -241,7 +250,7 @@ T['a file of the folder Claude works in']['opened with :e takes the explorer bac
     wait_until(function()
       return explorer_has('inner.txt')
         and not explorer_has('feature.txt')
-        and not header_starts_with('Worktree feature (feature)')
+        and not title_starts_with('Worktree feature (feature)')
     end),
     true
   )
@@ -262,7 +271,7 @@ T['a file of the folder Claude works in']['revealed by \\f takes the explorer ba
     end),
     true
   )
-  eq(header_starts_with('Worktree feature (feature)'), false)
+  eq(title_starts_with('Worktree feature (feature)'), false)
   eq(entry.current_window(child), inner)
 end
 
@@ -271,14 +280,14 @@ T['a file of the folder Claude works in']['leaves the explorer showing Claude’
   show_the_worktree()
   edit(vim.fs.joinpath(repository.top, 'sub', 'inner.txt'))
   wait_until(function()
-    return not header_starts_with('Worktree feature (feature)')
+    return not title_starts_with('Worktree feature (feature)')
   end)
 
   pick('[branch] lonely')
 
   eq(
     wait_until(function()
-      return (lines_of('aineo://explorer')[1] or ''):find('has no folder on disk', 1, true) ~= nil
+      return footer_title():find('has no folder on disk', 1, true) ~= nil
     end),
     true
   )
@@ -289,13 +298,13 @@ T['a file outside both folders'] = MiniTest.new_set()
 T['a file outside both folders']['changes nothing in the explorer'] = function()
   local repository = open_with_worktree('outside')
   show_the_worktree()
-  local tree_before = vim.list_slice(lines_of('aineo://explorer'), 2)
+  local tree_before = lines_of('aineo://explorer')
 
   edit(vim.fs.joinpath(repository.elsewhere, 'outside.txt'))
   vim.wait(300)
 
-  eq(header_starts_with('Worktree feature (feature)'), true)
-  eq(vim.list_slice(lines_of('aineo://explorer'), 2), tree_before)
+  eq(title_starts_with('Worktree feature (feature)'), true)
+  eq(lines_of('aineo://explorer'), tree_before)
 end
 
 return T
