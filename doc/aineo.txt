@@ -516,8 +516,9 @@ The keys of the tree, in Normal mode, in its buffer alone:
     `<C-l>`    show a file as `l` does and turn the file focus on, which
              closes the panes column and gives its cells to the file
              column; on a folder, or a line with no entry, only turn it
-             on; with
-             it on, turn it off, on any line (|aineo-focus|)
+             on; with it on, turn it off, on any line (|aineo-focus|).
+             In the explorer pane, with the focus off, it does what `l`
+             does and turns nothing on
     `h`        fold an unfolded folder; on a file or a folded folder, fold
              the folder that holds it and move to it
     `@`        paste `@` and the path of the entry under the cursor, from
@@ -773,16 +774,22 @@ so that its Claude Code is not told a width the window never has.
 
 File focus ~
                                                                  *aineo-focus*
-`<C-l>` in the explorer (|aineo-explorer|), the column's or the pane's, on a
-file shows it in the file column as `l` does, the cursor staying in the tree,
-and turns the file focus on for the tab: the panes column closes, with
-the Report, Input and whichever pane it shows, and its cells go to the file
-column, so that the row is Claude Code, the files and the explorer column
-(mirrored when Claude Code is on the right). Claude's column and the explorer
-column keep their widths; the pane that showed stays the pane shown, with the
-views its windows had (the Report's top line, the explorer pane's cursor), and
-shows again when the focus ends. On a folder, or on a line with no entry,
-`<C-l>` only turns the focus on and opens nothing.
+`<C-l>` in the explorer column (|aineo-explorer|), on a file, turns the file
+focus on for the tab and shows the file in the file column as `l` does, the
+cursor staying in the tree: the panes column closes, with the Report, Input
+and whichever pane it shows, and its cells go to the file column, so that the
+row is Claude Code, the files and the explorer column (mirrored when Claude
+Code is on the right). The file column takes the width the panes column had,
+and Claude's column and the explorer column keep theirs, the first file
+included; the pane that showed stays the pane shown, with the views its
+windows had (the Report's top line, the explorer pane's cursor), and shows
+again when the focus ends. On a folder, or on a line with no entry, `<C-l>`
+only turns the focus on and opens nothing.
+
+`<C-l>` in the explorer pane, which is in the panes column and closes with it,
+does what `l` does while the focus is off: the file opens in the file column
+beside the pane and the focus stays off. `:Aineo focus` turns it on from
+there.
 
 With no file column open there is nothing to give the panes column's cells to,
 so the focus waits: nothing closes, opens or changes size, and Claude Code is

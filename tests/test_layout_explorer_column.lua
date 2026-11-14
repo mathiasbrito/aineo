@@ -123,6 +123,32 @@ T['open() with the explorer column']['fixes the explorer window’s width'] = fu
   eq(child.lua_get('vim.wo[...].winfixwidth', { window }), true)
 end
 
+T['open() with the explorer column']['says which window is the explorer column’s: the explorer’s, no other'] = function()
+  local buffers = open_with_column('right')
+
+  local is_column = function(buffer)
+    return child.lua_get(
+      [[require('aineo.layout').is_explorer_column_window(...)]],
+      { layout.window_showing(child, buffer) }
+    )
+  end
+  eq(
+    { is_column(buffers.explorer), is_column(buffers.claude), is_column(buffers.report) },
+    { true, false, false }
+  )
+end
+
+T['open() with the explorer column']['says no window is the explorer column’s when the layout has none'] = function()
+  local buffers = open_with_column(false)
+
+  eq(
+    child.lua_get([[require('aineo.layout').is_explorer_column_window(...)]], {
+      layout.window_showing(child, buffers.claude),
+    }),
+    false
+  )
+end
+
 T['open() with the explorer column']['adds no window when the column is false'] = function()
   open_with_column(false)
 
