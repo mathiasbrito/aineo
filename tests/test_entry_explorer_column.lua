@@ -700,6 +700,33 @@ T['a new aineo tab']['has an explorer column of its own'] = function()
   eq(tabs.windows_of_tab(child, 2), COLUMN_LEFT)
 end
 
+T['the width of the column'] = MiniTest.new_set()
+
+T['the width of the column']['is a quarter of a wide screen by default'] = function()
+  child.o.columns = 240
+
+  open_with_column('width-default', 'left')
+
+  eq(width_of('aineo://explorer'), 60)
+end
+
+T['the width of the column']['is the count of columns the setting names'] = function()
+  child.o.columns = 240
+
+  open_in_repository('width-count', { layout = { explorer_column = 'left', explorer_width = 50 } })
+
+  eq(width_of('aineo://explorer'), 50)
+end
+
+T['the width of the column']['is the share the setting names, kept as the screen is resized'] = function()
+  child.o.columns = 240
+  open_in_repository('width-share', { layout = { explorer_column = 'left', explorer_width = 0.5 } })
+
+  child.o.columns = 160
+
+  eq(width_of('aineo://explorer'), 80)
+end
+
 T['restoring the layout'] = MiniTest.new_set()
 
 T['restoring the layout']['opens the column again, at its width'] = function()
@@ -711,7 +738,7 @@ T['restoring the layout']['opens the column again, at its width'] = function()
   entry.press(child, '\\o')
 
   eq(entry.windows(child), COLUMN_LEFT)
-  eq(width_of('aineo://explorer'), 40)
+  eq(width_of('aineo://explorer'), 60)
 end
 
 T['a zoom of the whole window'] = MiniTest.new_set()
@@ -724,7 +751,7 @@ T['a zoom of the whole window']['covers the column and gives it its width back']
   local while_zoomed = width_of('aineo://explorer')
   entry.press(child, '\\Z')
 
-  eq({ before, while_zoomed, width_of('aineo://explorer') }, { 40, 1, 40 })
+  eq({ before, while_zoomed, width_of('aineo://explorer') }, { 60, 1, 60 })
 end
 
 T['a zoom of the whole window']['gives the column its width back after the screen was resized meanwhile'] = function()

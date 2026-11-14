@@ -241,7 +241,8 @@ the file column beside it on its left:
   side. A window across the whole screen, such as the quickfix window or help
   opened at the bottom, is not spanned by it.
 - Its width is `layout.explorer_width` (|aineo-config-layout.explorer_width|),
-  40 columns by default, kept ('winfixwidth') while the other three columns
+  a quarter of the screen's width by default, never fewer than 40 columns,
+  kept ('winfixwidth') while the other three columns
   share the rest as they do without it: half each without a file column, a
   third each with one.
 - `\e` (|aineo-\e|) moves the cursor into it; it reopens the column in
@@ -5096,11 +5097,18 @@ layout.explorer_column	`'left'`, `'right'` or `false`. Default: `'right'`
 			when the layout next opens.
 
                                           *aineo-config-layout.explorer_width*
-layout.explorer_width	A whole number of at least 1. Default: `40`
-			The explorer column's width in columns, kept
-			while the other columns share the rest
-			(|aineo-explorer-column|). It does nothing while
-			`layout.explorer_column` is `false`.
+layout.explorer_width	A number strictly between 0 and 1, or a whole number
+			of at least 1. Default: `1 / 4`
+			The explorer column's width, kept while the other
+			columns share the rest (|aineo-explorer-column|). A
+			number strictly between 0 and 1 is that share of the
+			screen's width, rounded down to whole columns but
+			never fewer than 40, and follows the screen as it is
+			resized; `1 / 4` is a quarter, so 60 columns on a
+			screen 240 wide and 40 on one 120 wide. A whole
+			number of at least 1 is that many columns, as is.
+			It does nothing while `layout.explorer_column` is
+			`false`.
 
                                           *aineo-config-layout.panel_numbers*
 layout.panel_numbers	A boolean. Default: `false`

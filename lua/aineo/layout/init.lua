@@ -47,7 +47,7 @@ local zoom = require('aineo.layout.zoom')
 ---@field run? aineo.layout.RunPane the run pane's terminals; without them the run pane has nothing to show, and the layout shows the agent pane in its place
 ---@field explorer? integer the explorer pane's buffer, the tree of the folder Claude works in, shown alone in the right column, in the Report's window; without it the layout keeps the one it was handed last
 ---@field explorer_column? aineo.layout.Side|false the side of the screen the explorer column is on, a column of its own the full height of the screen beside the other columns showing `explorer`, whichever side Claude's column is on; `false` for none; without it the layout keeps what it was handed last, none before any
----@field explorer_width? integer the explorer column's width in cells, a positive whole number; without it the layout keeps the one it was handed last, and a side for the column needs one
+---@field explorer_width? number the explorer column's width: a positive whole number of cells, or a share of the screen's width strictly between 0 and 1, which is that share of the columns rounded down but not fewer than 40 cells and follows the screen as it is resized; without it the layout keeps the one it was handed last, and a side for the column needs one
 ---@field file_beside_explorer? boolean whether the file column lies beside the explorer column while that column is open, on its inner side, rather than between Claude's column and the right column; without it the layout keeps what it was handed last, false before any
 ---@field panel_numbers? boolean whether the layout's panels, its windows that show no file, show the user's own line numbers, sign column, fold column and status column; without it the layout keeps what it was handed last, false before any, which leaves them only the separator between windows
 ---@field walkthrough? integer the walkthrough pane's buffer, the plan of a code walkthrough, shown in the Report's window above Input's; without it the layout keeps the one it was handed last
@@ -110,7 +110,7 @@ local zoom = require('aineo.layout.zoom')
 ---@field set_column_sides fun(claude_side: aineo.layout.Side, explorer_side?: aineo.layout.Side)
 ---@field explorer_column fun(): aineo.layout.Side|false
 ---@field focus_explorer_column fun(arrangement: aineo.layout.Arrangement|fun(): aineo.layout.Arrangement)
----@field set_explorer_column fun(explorer_column: aineo.layout.Side|false, explorer_width: integer, file_beside_explorer?: boolean)
+---@field set_explorer_column fun(explorer_column: aineo.layout.Side|false, explorer_width: number, file_beside_explorer?: boolean)
 ---@field explorer_column_is_open fun(): boolean
 ---@field is_explorer_column_window fun(window: integer): boolean
 ---@field reopen_explorer_column fun()
@@ -118,6 +118,10 @@ local zoom = require('aineo.layout.zoom')
 ---@field end_file_focus fun(arrangement: aineo.layout.Arrangement|fun(): aineo.layout.Arrangement)
 ---@field is_file_focused fun(): boolean
 ---@field let_go? fun() only on a layout `M.new()` made: removes its handlers and wipes its Input
+
+--- The fewest cells the explorer column takes when its width is a share of the
+--- screen.
+local MIN_SHARED_EXPLORER_CELLS = 40
 
 --- Makes a layout: its state, and the functions that act on it, and the
 --- function that lets it go (`let_go()`).
@@ -207,7 +211,7 @@ local function make_layout(input_name, group_name)
     file_focus = nil,
     ---@type aineo.layout.Side|false
     explorer_column = false,
-    ---@type integer|nil
+    ---@type number|nil
     explorer_width = nil,
     ---@type integer|nil
     explorer_window = nil,
@@ -406,6 +410,20 @@ local function make_layout(input_name, group_name)
     return state.explorer_window ~= nil and vim.api.nvim_win_is_valid(state.explorer_window)
   end
 
+  --- The explorer column's width in cells at the screen's width now: the
+  --- setting (`state.explorer_width`) when it is a count, else the share of
+  --- the screen it names, rounded down, but not fewer than
+  --- `MIN_SHARED_EXPLORER_CELLS`.
+  ---
+  ---@return integer
+  local function explorer_cells()
+    local width = state.explorer_width
+    if width >= 1 then
+      return width
+    end
+    return math.max(MIN_SHARED_EXPLORER_CELLS, math.floor(vim.o.columns * width))
+  end
+
   --- The file column's windows when it lies between Claude's column and the
   --- right one, top to bottom: those of the columns between them, in the row
   --- that holds the layout's windows, the explorer column's not among them;
@@ -593,8 +611,9 @@ local function make_layout(input_name, group_name)
   local function set_column_widths()
     local available = vim.o.columns
     if has_explorer_column() then
-      vim.api.nvim_win_set_width(state.explorer_window, state.explorer_width)
-      available = available - state.explorer_width - 1
+      local cells = explorer_cells()
+      vim.api.nvim_win_set_width(state.explorer_window, cells)
+      available = available - cells - 1
     end
     if has_file_column() then
       local third = math.floor((available - 2) / 3)
@@ -636,8 +655,9 @@ local function make_layout(input_name, group_name)
     for _ = 1, 2 do
       local available = vim.o.columns
       if has_explorer_column() then
-        vim.api.nvim_win_set_width(state.explorer_window, state.explorer_width)
-        available = available - state.explorer_width - 1
+        local cells = explorer_cells()
+        vim.api.nvim_win_set_width(state.explorer_window, cells)
+        available = available - cells - 1
       end
       claude_width = math.min(claude_width, available - 2)
       vim.api.nvim_win_set_width(state.windows.claude, claude_width)
@@ -1278,7 +1298,7 @@ local function make_layout(input_name, group_name)
     else
       full_zoom.restore(zoomed)
       if has_explorer_column() then
-        vim.api.nvim_win_set_width(state.explorer_window, state.explorer_width)
+        vim.api.nvim_win_set_width(state.explorer_window, explorer_cells())
       end
     end
   end
@@ -2168,12 +2188,13 @@ local function make_layout(input_name, group_name)
     return value == false or side.is_side(value)
   end
 
-  --- Whether `value` is a width in cells: a whole number from 1.
+  --- Whether `value` is an explorer column's width: a whole number of cells from 1, or
+  --- a share of the screen (`is_share()`).
   ---
   ---@param value any
   ---@return boolean
   local function is_column_width(value)
-    return type(value) == 'number' and value >= 1 and value % 1 == 0
+    return type(value) == 'number' and (is_share(value) or (value >= 1 and value % 1 == 0))
   end
 
   --- Raises an error naming the first of the explorer column's settings of
@@ -2195,7 +2216,7 @@ local function make_layout(input_name, group_name)
       arrangement.explorer_width,
       is_column_width,
       true,
-      'a positive whole number'
+      'a positive whole number or a number strictly between 0 and 1'
     )
     local column = arrangement.explorer_column
     if column == nil then
@@ -2214,7 +2235,7 @@ local function make_layout(input_name, group_name)
         arrangement.explorer_width or state.explorer_width,
         is_column_width,
         false,
-        'a positive whole number'
+        'a positive whole number or a number strictly between 0 and 1'
       )
     end
   end
@@ -3066,8 +3087,8 @@ local function make_layout(input_name, group_name)
   ---
   --- With `arrangement.explorer_column` a side, a fourth window shows
   --- `arrangement.explorer` as a column of its own at the outer edge of that
-  --- side, as tall as the screen, `arrangement.explorer_width` cells wide and
-  --- fixed there; the other three columns share the screen's remaining cells
+  --- side, as tall as the screen, `arrangement.explorer_width` cells wide (the
+  --- cells of the share it names, when it is a share) and fixed there; the other three columns share the screen's remaining cells
   --- as they do without it. Claude's column being on either side leaves it
   --- where it is (`M.explorer_column()`). Handed again with another side or
   --- width the column moves or resizes, with `false` it closes, the cursor
@@ -3145,7 +3166,7 @@ local function make_layout(input_name, group_name)
   --- buffer, `report_height` is not a number strictly between 0 and 1,
   --- `claude_side`, when given, is neither `'left'` nor `'right'`,
   --- `explorer_column`, when given, is neither a side nor `false`,
-  --- `explorer_width`, when given, is not a positive whole number,
+  --- `explorer_width`, when given, is neither a positive whole number nor a share strictly between 0 and 1,
   --- `file_beside_explorer`, when given, is not a boolean, the
   --- explorer column is a side and no explorer buffer or width was handed,
   --- now or before, or `changes`, when given, is not a table whose `files` and
@@ -3828,8 +3849,9 @@ local function make_layout(input_name, group_name)
     end
   end
 
-  --- Makes the explorer column `explorer_column` at `explorer_width` cells in
-  --- the layout's tab page whether or not it is shown, as handing the
+  --- Makes the explorer column `explorer_column` at `explorer_width` (cells, or a
+  --- share of the screen, `arrangement.explorer_width`) in the layout's tab
+  --- page whether or not it is shown, as handing the
   --- arrangement again does but without moving the cursor or the tab page: a
   --- column that is not open opens, one that is open moves to the other side,
   --- takes the width, or closes when it is `false`, the cursor of the tab page
@@ -3849,7 +3871,7 @@ local function make_layout(input_name, group_name)
   --- `M.keep_pane_buffer()`) when the column is a side.
   ---
   --- Raises an error naming `explorer_column` when it is neither a side nor
-  --- `false`, `explorer_width` when it is not a positive whole number,
+  --- `false`, `explorer_width` when it is neither a positive whole number nor a share strictly between 0 and 1,
   --- `file_beside_explorer` when it is given and not a boolean, and the
   --- explorer's buffer when the column is a side and none was handed, before
   --- changing anything.
@@ -3870,7 +3892,7 @@ local function make_layout(input_name, group_name)
       explorer_width,
       is_column_width,
       false,
-      'a positive whole number'
+      'a positive whole number or a number strictly between 0 and 1'
     )
     vim.validate('file_beside_explorer', file_beside_explorer, 'boolean', true)
     if explorer_column then

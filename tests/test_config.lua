@@ -13,7 +13,7 @@ local DEFAULTS = {
     report_height = 2 / 3,
     claude_side = 'left',
     explorer_column = 'right',
-    explorer_width = 40,
+    explorer_width = 1 / 4,
     file_beside_explorer = true,
     panel_numbers = false,
   },
@@ -282,26 +282,56 @@ T['resolve_config()']['refuses an explorer column that is not left, right or fal
   end, "layout%.explorer_column: expected 'left', 'right' or false")
 end
 
-T['resolve_config()']['takes the width of the explorer column from either source, 40 by default'] = function()
+T['resolve_config()']['takes the width of the explorer column from either source, a quarter of the screen by default'] = function()
   local from_global = config.resolve_config({ layout = { explorer_width = 40 } }, nil)
   local from_setup = config.resolve_config(nil, { layout = { explorer_width = 12 } })
 
   eq(from_global.layout.explorer_width, 40)
   eq(from_setup.layout.explorer_width, 12)
-  eq(config.resolve_config(nil, nil).layout.explorer_width, 40)
+  eq(config.resolve_config(nil, nil).layout.explorer_width, 1 / 4)
 end
 
-T['resolve_config()']['refuses an explorer width that is not a whole number from 1'] =
+T['resolve_config()']['takes an explorer width that is a share of the screen'] = MiniTest.new_set({
+  parametrize = { { 1 / 3 }, { 0.5 }, { 0.01 }, { 0.99 } },
+})
+
+T['resolve_config()']['takes an explorer width that is a share of the screen']['as layout.explorer_width'] = function(
+  share
+)
+  local resolved = config.resolve_config({ layout = { explorer_width = share } }, nil)
+
+  eq(resolved.layout.explorer_width, share)
+end
+
+T['resolve_config()']['takes an explorer width of 1 as one column, not the whole screen'] = function()
+  local resolved = config.resolve_config(nil, { layout = { explorer_width = 1 } })
+
+  eq(resolved.layout.explorer_width, 1)
+end
+
+T['resolve_config()']['refuses an explorer width that is neither a whole number from 1 nor a share'] =
   MiniTest.new_set({
-    parametrize = { { 0 }, { -3 }, { 1.5 }, { '30' }, { true }, { math.huge } },
+    parametrize = {
+      { 0 },
+      { -3 },
+      { -0.2 },
+      { 1.5 },
+      { 40.5 },
+      { '30' },
+      { true },
+      { math.huge },
+    },
   })
 
-T['resolve_config()']['refuses an explorer width that is not a whole number from 1']['as layout.explorer_width'] = function(
+T['resolve_config()']['refuses an explorer width that is neither a whole number from 1 nor a share']['as layout.explorer_width'] = function(
   width
 )
-  expect.error(function()
-    config.resolve_config({ layout = { explorer_width = width } }, nil)
-  end, 'layout%.explorer_width: expected a whole number of at least 1')
+  expect.error(
+    function()
+      config.resolve_config({ layout = { explorer_width = width } }, nil)
+    end,
+    'layout%.explorer_width: expected a whole number of at least 1 or a number strictly between 0 and 1'
+  )
 end
 
 T['resolve_config()']['keeps layout.file_beside_explorer false from either source, true by default'] = function()
