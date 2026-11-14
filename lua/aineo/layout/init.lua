@@ -112,6 +112,7 @@ local zoom = require('aineo.layout.zoom')
 ---@field focus_explorer_column fun(arrangement: aineo.layout.Arrangement|fun(): aineo.layout.Arrangement)
 ---@field set_explorer_column fun(explorer_column: aineo.layout.Side|false, explorer_width: integer, file_beside_explorer?: boolean)
 ---@field explorer_column_is_open fun(): boolean
+---@field is_explorer_column_window fun(window: integer): boolean
 ---@field reopen_explorer_column fun()
 ---@field start_file_focus fun()
 ---@field end_file_focus fun(arrangement: aineo.layout.Arrangement|fun(): aineo.layout.Arrangement)
@@ -3920,6 +3921,16 @@ local function make_layout(input_name, group_name)
   ---@return boolean
   function M.explorer_column_is_open()
     return has_explorer_column()
+  end
+
+  --- Whether `window` is the explorer column's window: false for any other,
+  --- the explorer pane's among them, and for every window when the layout has
+  --- no column.
+  ---
+  ---@param window integer
+  ---@return boolean
+  function M.is_explorer_column_window(window)
+    return has_explorer_column() and window == state.explorer_window
   end
 
   --- Whether the panels show the user's own line numbers, sign column, fold
