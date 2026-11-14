@@ -522,6 +522,13 @@ The keys of the tree, in Normal mode, in its buffer alone:
              does and turns nothing on
     `h`        fold an unfolded folder; on a file or a folded folder, fold
              the folder that holds it and move to it
+    `q`        close the file column, the cursor staying in the tree, on
+             the same line, and the columns taking the widths `:q` in the
+             file column gives them; the files stay loaded. A file in the
+             column with unsaved changes keeps it open, and aineo says so,
+             once. With the file focus on (|aineo-focus|) it also ends
+             the focus, as `<C-l>` does, and the panes column comes back.
+             With no file column open it does nothing
     `@`        paste `@` and the path of the entry under the cursor, from
              the folder shown, a folder's with a `/`, then a space, into
              Claude Code's prompt, with no Enter, the cursor staying in
