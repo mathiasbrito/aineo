@@ -69,6 +69,15 @@ local function is_positive_count(value)
     and value == math.floor(value)
 end
 
+--- Whether `value` is an explorer column's width: a whole number of at least 1,
+--- a count of columns, or a share of the screen's width (`is_share()`).
+---
+---@param value any
+---@return boolean
+local function is_explorer_width(value)
+  return is_positive_count(value) or is_share(value)
+end
+
 --- Whether `value` names a model Claude Code takes: a non-empty string.
 ---
 ---@param value any
@@ -288,9 +297,9 @@ local SETTINGS = {
   },
   {
     name = 'layout.explorer_width',
-    default = 40,
-    validator = is_positive_count,
-    expected = 'a whole number of at least 1',
+    default = 1 / 4,
+    validator = is_explorer_width,
+    expected = 'a whole number of at least 1 or a number strictly between 0 and 1',
   },
   { name = 'layout.file_beside_explorer', default = true, validator = 'boolean' },
   { name = 'layout.panel_numbers', default = false, validator = 'boolean' },
