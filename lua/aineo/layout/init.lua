@@ -96,6 +96,7 @@ local zoom = require('aineo.layout.zoom')
 ---@field show_diff fun(diff: integer): integer|nil
 ---@field show_file fun(file: integer): integer|nil
 ---@field is_file_column_window fun(window: integer): boolean
+---@field close_file_column fun(): boolean
 ---@field follow_claude_terminal fun(terminal: integer)
 ---@field toggle_claude_numbers fun()
 ---@field panel_numbers fun(): boolean
@@ -517,20 +518,27 @@ local function make_layout(input_name, group_name)
     return #file_column_windows() > 0
   end
 
-  --- The file column's first window that may take a file or a diff: one
-  --- showing a file or a diff `M.show_diff()` showed, not one of the layout's
-  --- windows and without `'winfixbuf'`, so that neither another plugin's
-  --- window in the file column's place, such as a sidebar, nor a layout window
-  --- moved there is ever taken. `nil` when there is none.
+  --- The file column's windows that may take a file or a diff: those showing
+  --- a file or a diff `M.show_diff()` showed, not one of the layout's windows
+  --- and without `'winfixbuf'`, so that neither another plugin's window in the
+  --- file column's place, such as a sidebar, nor a layout window moved there
+  --- is ever taken.
   ---
-  ---@return integer|nil window
-  local function window_taking_files()
-    return vim.iter(file_column_windows()):find(function(window)
+  ---@return integer[] windows
+  local function windows_taking_files()
+    return vim.tbl_filter(function(window)
       local buffer = vim.api.nvim_win_get_buf(window)
       return not role_of(window)
         and (is_file(buffer) or state.diffs[buffer] == true)
         and not vim.wo[window].winfixbuf
-    end)
+    end, file_column_windows())
+  end
+
+  --- The first of `windows_taking_files()`, `nil` when there is none.
+  ---
+  ---@return integer|nil window
+  local function window_taking_files()
+    return windows_taking_files()[1]
   end
 
   --- A column of the file column that the user split side by side: the first
@@ -3548,6 +3556,39 @@ local function make_layout(input_name, group_name)
   ---@return boolean
   function M.is_file_column_window(window)
     return vim.list_contains(file_column_windows(), window)
+  end
+
+  --- What closing the file column tells the user when a file in it holds
+  --- unsaved changes, by the file's name.
+  local UNSAVED_FILE_KEPT = 'aineo: %s has unsaved changes; the file column stays open'
+
+  --- Closes the windows of the file column that show a file or a diff
+  --- (`windows_taking_files()`), as `:q` closes one: the layout's
+  --- proportions are put back and an applied file focus gives the panes
+  --- column back (`keep_proportions()`). The buffers stay loaded, and the
+  --- cursor stays in the window it was in unless that one closes. When a file
+  --- in the column holds unsaved changes nothing closes and the user is
+  --- warned once, naming the file. Does nothing, and says nothing, when no
+  --- such window is open.
+  ---
+  ---@return boolean closed whether the windows were closed
+  function M.close_file_column()
+    local windows = windows_taking_files()
+    if #windows == 0 then
+      return false
+    end
+    for _, window in ipairs(windows) do
+      local buffer = vim.api.nvim_win_get_buf(window)
+      if vim.bo[buffer].modified then
+        local name = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(buffer), ':t')
+        vim.notify(UNSAVED_FILE_KEPT:format(name), vim.log.levels.WARN)
+        return false
+      end
+    end
+    for _, window in ipairs(windows) do
+      vim.api.nvim_win_hide(window)
+    end
+    return true
   end
 
   --- Shows `file`, a buffer that holds a file, in the file column

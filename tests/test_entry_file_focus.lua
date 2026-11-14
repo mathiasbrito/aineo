@@ -826,4 +826,144 @@ T['a pane key while the file focus is armed']['ends it, and a file opened later 
   eq(entry.windows(child), showing_pane(top, pane))
 end
 
+T['q in the explorer'] = MiniTest.new_set()
+
+--- Opens the layout with the explorer column on the right, shows `NOTES.md`
+--- in the file column with `l`, the cursor staying in the tree; returns the
+--- repository's top and the windows with the file shown.
+---
+---@param name string
+---@return string top
+---@return string[] windows
+local function show_notes_with_l(name)
+  local top = open_with_column(name, 'right')
+  put_cursor_on('NOTES.md')
+  entry.press(child, 'l')
+  return top, wait_for_windows(unfocused_on(top, 'NOTES.md'))
+end
+
+--- Waits until the child's current tab has `count` windows and the
+--- layout's sizing, put back once the commands in flight are done, has
+--- settled; returns the widths then (`side_widths()`).
+---
+---@param count integer
+---@return { terminal: integer, explorer: integer }
+local function settled_widths(count)
+  vim.wait(PATIENCE_MS, function()
+    return #entry.windows(child) == count
+  end, 20)
+  vim.wait(CURSOR_SETTLE_MS, function()
+    return false
+  end)
+  return side_widths()
+end
+
+T['q in the explorer']['closes the file column, the cursor staying on the same tree line'] = function()
+  local top = open_with_column('q-closes', 'right')
+  local windows = entry.windows(child)
+  put_cursor_on('NOTES.md')
+  entry.press(child, 'l')
+  wait_for_windows(unfocused_on(top, 'NOTES.md'))
+
+  entry.press(child, 'q')
+
+  eq(wait_for_windows(windows), windows)
+  eq(wait_for_current_window('aineo://explorer'), 'aineo://explorer')
+  eq(child.lua_get('vim.api.nvim_get_current_line()'), '    NOTES.md')
+  eq(entry.messages(child), {})
+end
+
+T['q in the explorer']['gives the columns the widths :q in the file column gives them'] = function()
+  local top, windows = show_notes_with_l('q-widths')
+  child.lua(
+    'vim.api.nvim_win_close(vim.fn.bufwinid(vim.fn.bufnr(...)), false)',
+    { vim.fs.joinpath(top, 'NOTES.md') }
+  )
+  local after_quit = settled_widths(#windows - 1)
+  put_cursor_on('NOTES.md')
+  entry.press(child, 'l')
+  wait_for_windows(unfocused_on(top, 'NOTES.md'))
+
+  entry.press(child, 'q')
+
+  eq(settled_widths(#windows - 1), after_quit)
+end
+
+T['q in the explorer']['keeps the file loaded'] = function()
+  local top, windows = show_notes_with_l('q-loaded')
+
+  entry.press(child, 'q')
+  settled_widths(#windows - 1)
+
+  eq(
+    child.lua_get('vim.api.nvim_buf_is_loaded(vim.fn.bufnr(...))', {
+      vim.fs.joinpath(top, 'NOTES.md'),
+    }),
+    true
+  )
+end
+
+T['q in the explorer']['keeps a file with unsaved changes open and warns once'] = function()
+  local top, windows = show_notes_with_l('q-unsaved')
+  child.lua('vim.bo[vim.fn.bufnr(...)].modified = true', { vim.fs.joinpath(top, 'NOTES.md') })
+
+  entry.press(child, 'q')
+  settled_widths(#windows)
+
+  eq(entry.windows(child), windows)
+  eq(entry.current_window(child), 'aineo://explorer')
+  local messages = entry.messages(child)
+  eq(#messages, 1)
+  eq(messages[1].level, vim.log.levels.WARN)
+  eq(messages[1].message:find('NOTES.md', 1, true) ~= nil, true)
+end
+
+T['q in the explorer']['with the file focus on, closes the file and ends the focus'] = function()
+  local top = open_with_column('q-focus', 'right')
+  put_cursor_on('NOTES.md')
+  entry.press(child, '<C-l>')
+  wait_for_windows(focused_on(top, 'NOTES.md'))
+
+  entry.press(child, 'q')
+
+  local expected = { 'terminal', 'aineo://report', 'aineo://input', 'aineo://explorer' }
+  eq(wait_for_windows(expected), expected)
+  vim.wait(PATIENCE_MS, function()
+    return not is_focused()
+  end, 20)
+  eq(is_focused(), false)
+  eq(wait_for_current_window('aineo://explorer'), 'aineo://explorer')
+  eq(child.lua_get('vim.api.nvim_get_current_line()'), '    NOTES.md')
+end
+
+T['q in the explorer']['with no file column open does nothing, and says nothing'] = function()
+  open_with_column('q-none', 'right')
+  put_cursor_on('NOTES.md')
+  local windows = entry.windows(child)
+
+  entry.press(child, 'q')
+  settled_widths(#windows)
+
+  eq(entry.windows(child), windows)
+  eq(child.lua_get('vim.fn.reg_recording()'), '')
+  eq(entry.messages(child), {})
+end
+
+T['q in the explorer']['in the explorer pane closes the file column too'] = function()
+  open_in_repository('q-pane')
+  entry.press(child, '\\e')
+  wait_for_tree()
+  local windows = entry.windows(child)
+  put_cursor_on('NOTES.md')
+  entry.press(child, 'l')
+  vim.wait(PATIENCE_MS, function()
+    return #entry.windows(child) > #windows
+  end, 20)
+
+  entry.press(child, 'q')
+
+  eq(wait_for_windows(windows), windows)
+  eq(wait_for_current_window('aineo://explorer'), 'aineo://explorer')
+end
+
 return T
