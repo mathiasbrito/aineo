@@ -33,7 +33,9 @@ end
 local NOT_STARTED = 'aineo: nothing to pick yet: Claude Code has not started'
 
 --- The explorer of the tab whose homes are `homes`, all but the explorer
---- itself made. Its `s` offers the changes pane's list (`offer_scopes()`)
+--- itself made. Its `q` closes the layout's file column
+--- (`close_file_column()`) and, the file focus being on, ends the focus as
+--- `<C-l>` does. Its `s` offers the changes pane's list (`offer_scopes()`)
 --- once the tab's Claude Code has started, and before that tells the user
 --- so (`NOT_STARTED`).
 ---
@@ -64,6 +66,11 @@ function M.make_explorer(homes)
     end,
     toggle_file_focus = function()
       toggle_file_focus_of(homes)
+    end,
+    close_file_column = function()
+      if homes.layout.close_file_column() and homes.layout.is_file_focused() then
+        toggle_file_focus_of(homes)
+      end
     end,
     is_in_explorer_column = function()
       return homes.layout.is_explorer_column_window(vim.api.nvim_get_current_win())

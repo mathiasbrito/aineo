@@ -45,6 +45,7 @@ local M = {}
 ---@field focused_work? fun(): aineo.explorer.Work|nil what the changes pane's focused view shows alone, nil for its default view
 ---@field offer_work? fun() offers the changes pane's list of worktrees, branches and reported work, whose pick it shows alone
 ---@field open_file fun(path: string) opens the file `path`, absolute, in the file column
+---@field close_file_column? fun() closes the file column's windows, with what that takes: the file focus ended, a file with unsaved changes kept and the user told; none given, `q` does nothing
 ---@field is_file_focused? fun(): boolean whether the file focus of the explorer's tab is on; with `toggle_file_focus`, what `<C-l>` acts on, and none given, `<C-l>` does nothing
 ---@field toggle_file_focus? fun() turns the file focus of the explorer's tab on, or off when it is on
 ---@field is_in_explorer_column? fun(): boolean whether the explorer's window is the layout's explorer column, not the explorer pane in the panes column; with the file focus off, `<C-l>` in the pane does what `l` does; none given, the window is taken to be the column's
@@ -1074,6 +1075,18 @@ function M.new(settings)
     end
   end
 
+  --- What `q` does: closes the file column (`settings.close_file_column`),
+  --- the cursor staying in the explorer's window, on its line. Does nothing
+  --- when the explorer was handed no way to close it.
+  local function on_q()
+    if not settings.close_file_column then
+      return
+    end
+    local window, line = vim.api.nvim_get_current_win(), vim.api.nvim_win_get_cursor(0)[1]
+    settings.close_file_column()
+    return_cursor_to_tree(window, line)
+  end
+
   --- What the explorer tells the user as `I` is pressed over a folder
   --- outside git.
   local NOTHING_IGNORED = 'aineo: the explorer shows a folder outside git, where nothing is ignored'
@@ -1146,6 +1159,7 @@ function M.new(settings)
       desc = 'show the file and hide the panes column, or bring it back',
     },
     { lhs = 'h', rhs = on_h, desc = 'fold the folder, or the folder above' },
+    { lhs = 'q', rhs = on_q, desc = 'close the file column, the cursor staying in the tree' },
     {
       lhs = 'R',
       rhs = function()
