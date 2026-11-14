@@ -395,7 +395,7 @@ end
 
 T['<C-l> in the explorer pane'] = MiniTest.new_set()
 
-T['<C-l> in the explorer pane']['on a file shows it and closes the panes column, the pane with it'] = function()
+T['<C-l> in the explorer pane']['on a file shows it as l does: the panes column stays, with the explorer in it, and no focus is on'] = function()
   local top = open_in_repository('pane')
   entry.press(child, '\\e')
   wait_for_tree()
@@ -403,10 +403,105 @@ T['<C-l> in the explorer pane']['on a file shows it and closes the panes column,
 
   entry.press(child, '<C-l>')
 
-  local expected = { 'terminal', vim.fs.joinpath(top, 'README.md') }
-  eq(wait_for_windows(expected), expected)
-  eq(is_focused(), true)
+  local file = vim.fs.joinpath(top, 'README.md')
+  vim.wait(PATIENCE_MS, function()
+    return vim.list_contains(entry.windows(child), file)
+  end, 20)
+  eq(entry.windows(child), { 'terminal', file, 'aineo://explorer' })
+  eq(is_focused(), false)
+  eq(wait_for_current_window('aineo://explorer'), 'aineo://explorer')
+  eq(child.lua_get('vim.api.nvim_get_current_line()'), '    README.md')
   eq(entry.messages(child), {})
+end
+
+T['<C-l> in the explorer pane']['on a folder unfolds it as l does, and no focus is on'] = function()
+  open_in_repository('pane-folder')
+  entry.press(child, '\\e')
+  wait_for_tree()
+  put_cursor_on('src/')
+
+  entry.press(child, '<C-l>')
+
+  vim.wait(PATIENCE_MS, function()
+    return vim.tbl_contains(explorer_lines(), '      main.lua')
+  end, 20)
+  eq(vim.tbl_contains(explorer_lines(), '      main.lua'), true)
+  eq(is_focused(), false)
+end
+
+--- The width of each window of the child's current tab, by what it shows:
+--- `claude`, `panes` (the Report's), `file` and `explorer`.
+---
+---@return { claude: integer, panes: integer, file: integer, explorer: integer }
+local function column_widths()
+  return child.lua_get([[(function()
+    local widths = {}
+    for _, window in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+      local buffer = vim.api.nvim_win_get_buf(window)
+      local name = vim.api.nvim_buf_get_name(buffer)
+      local role
+      if vim.bo[buffer].buftype == 'terminal' then
+        role = 'claude'
+      elseif name:find('aineo://report', 1, true) then
+        role = 'panes'
+      elseif name:find('aineo://explorer', 1, true) then
+        role = 'explorer'
+      elseif vim.bo[buffer].buftype == '' and name ~= '' then
+        role = 'file'
+      end
+      if role then
+        widths[role] = vim.api.nvim_win_get_width(window)
+      end
+    end
+    return widths
+  end)()]])
+end
+
+--- Each screen and side arrangement the width cases run in, as a set's
+--- `parametrize`: the screen's columns and lines, the side Claude's column
+--- is on and the one the explorer column is on.
+local SCREENS = {
+  { 240, 42, 'left', 'right' },
+  { 160, 45, 'left', 'right' },
+  { 240, 42, 'right', 'left' },
+  { 160, 45, 'right', 'left' },
+}
+
+T['<C-l> on the first file'] = MiniTest.new_set({ parametrize = SCREENS })
+
+T['<C-l> on the first file']['gives the file the width of the panes column, Claude and the explorer keeping theirs'] = function(
+  columns,
+  lines,
+  claude_side,
+  explorer_side
+)
+  local top = git_repo.create('file-focus-first-file', FILES)
+  child.o.columns, child.o.lines = columns, lines
+  child.cmd('cd ' .. vim.fn.fnameescape(top))
+  entry.use_fake_with_default_layout(child, claude_session.fake('file-focus-first-file', 'ready'), {
+    layout = { claude_side = claude_side, explorer_column = explorer_side },
+  })
+  find_pickers.install(child, { 'snacks' }, false)
+  child.cmd('Aineo open')
+  claude_session.wait_for_status(child, 'ready')
+  entry.press(child, '\\e')
+  wait_for_tree()
+  local before = column_widths()
+  put_cursor_on('README.md')
+
+  entry.press(child, '<C-l>')
+
+  vim.wait(PATIENCE_MS, function()
+    return column_widths().file ~= nil
+  end, 20)
+  vim.wait(PATIENCE_MS, is_focused, 20)
+  local after = column_widths()
+  eq({ claude = after.claude, file = after.file, explorer = after.explorer }, {
+    claude = before.claude,
+    file = before.panes,
+    explorer = before.explorer,
+  })
+  eq(is_focused(), true)
 end
 
 --- Each key that opens a file in the explorer, as a set's `parametrize`.
@@ -667,8 +762,9 @@ T['the explorer pane under the file focus']['the explorer column turned on keeps
   local top = open_in_repository('pane-then-column', { layout = { explorer_column = false } })
   entry.press(child, '\\e')
   wait_for_tree()
+  entry.command(child, 'Aineo focus')
   put_cursor_on('README.md')
-  entry.press(child, '<C-l>')
+  entry.press(child, 'l')
   local file = vim.fs.joinpath(top, 'README.md')
   wait_for_windows({ 'terminal', file })
 
@@ -685,7 +781,9 @@ T['the explorer pane under the file focus']['comes back with the cursor on the e
   wait_for_tree()
   put_cursor_on('NOTES.md')
   local line = child.lua_get('vim.api.nvim_win_get_cursor(0)[1]')
-  entry.press(child, '<C-l>')
+  entry.press(child, 'l')
+  wait_for_windows({ 'terminal', vim.fs.joinpath(top, 'NOTES.md'), 'aineo://explorer' })
+  entry.command(child, 'Aineo focus')
   wait_for_windows({ 'terminal', vim.fs.joinpath(top, 'NOTES.md') })
 
   entry.command(child, 'Aineo focus')

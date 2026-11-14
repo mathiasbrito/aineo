@@ -65,6 +65,9 @@ function M.make_explorer(homes)
     toggle_file_focus = function()
       toggle_file_focus_of(homes)
     end,
+    is_in_explorer_column = function()
+      return homes.layout.is_explorer_column_window(vim.api.nvim_get_current_win())
+    end,
     quote_name = require('aineo.changes').quoted_path,
     change_groups = require('aineo.changes').kind_groups,
     define_change_groups = require('aineo.changes').define_colours,

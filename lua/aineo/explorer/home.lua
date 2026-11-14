@@ -47,6 +47,7 @@ local M = {}
 ---@field open_file fun(path: string) opens the file `path`, absolute, in the file column
 ---@field is_file_focused? fun(): boolean whether the file focus of the explorer's tab is on; with `toggle_file_focus`, what `<C-l>` acts on, and none given, `<C-l>` does nothing
 ---@field toggle_file_focus? fun() turns the file focus of the explorer's tab on, or off when it is on
+---@field is_in_explorer_column? fun(): boolean whether the explorer's window is the layout's explorer column, not the explorer pane in the panes column; with the file focus off, `<C-l>` in the pane does what `l` does; none given, the window is taken to be the column's
 ---@field paste fun(text: string) pastes `text` into Claude Code's prompt, with no Enter
 ---@field quote_name fun(name: string): string how a name shows on its line, a control character in it escaped
 ---@field change_groups table<string, string> the highlight group a file's mark and name show in, by the kind of its change (`'added'`, `'modified'`, `'deleted'`, `'renamed'`, `'type_changed'`, `'untracked'`)
@@ -1043,23 +1044,34 @@ function M.new(settings)
     end
   end
 
-  --- What `<C-l>` does: with the file focus off, shows the file under the
-  --- cursor as `l` does (`open_file_of()`), nothing for a folder or a line
-  --- with no entry, and turns the file focus on; with it on, turns it off, on any
-  --- line (`settings.toggle_file_focus`). The focus is turned once the file
-  --- has taken its place in the file column, after the commands in flight
-  --- are done (`return_cursor_to_tree()`). Does nothing when the explorer
-  --- was handed no file focus.
+  --- What `<C-l>` does. Shown in the panes column (`settings.is_in_explorer_column`)
+  --- with the file focus off, it does what `l` does: the focus is a matter of
+  --- the explorer column. With the file focus off otherwise, it turns the
+  --- focus on (`settings.toggle_file_focus`) and then shows the file under the
+  --- cursor as `l` does (`open_file_of()`), nothing for a folder or a line with
+  --- no entry, so that the file column opens already under the focus, Claude's
+  --- column keeping the width it had; the cursor goes back to the tree once
+  --- the commands in flight are done (`return_cursor_to_tree()`). With the
+  --- focus on, it turns it off, on any line, once the commands in flight are
+  --- done. Does nothing when the explorer was handed no file focus.
   local function on_file_focus()
     if not (settings.toggle_file_focus and settings.is_file_focused) then
       return
     end
-    local entry = not settings.is_file_focused() and entry_in(0) or nil
+    if settings.is_file_focused() then
+      vim.schedule(settings.toggle_file_focus)
+      return
+    end
+    if settings.is_in_explorer_column and not settings.is_in_explorer_column() then
+      on_l()
+      return
+    end
+    local entry = entry_in(0)
     local window, line = vim.api.nvim_get_current_win(), vim.api.nvim_win_get_cursor(0)[1]
+    settings.toggle_file_focus()
     if entry and entry.kind ~= 'folder' and open_file_of(entry) then
       return_cursor_to_tree(window, line)
     end
-    vim.schedule(settings.toggle_file_focus)
   end
 
   --- What the explorer tells the user as `I` is pressed over a folder
