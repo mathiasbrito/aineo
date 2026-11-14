@@ -45,9 +45,11 @@ where a lasting choice lives:
 `layout.explorer_column` (`'right'` by default, `'left'`, or `false`) keeps the
 explorer always visible, as a fourth column the full height of the screen at
 the far side you name, whichever side Claude Code is on; `layout.explorer_width`
-sets its width (40 by default). `\e` then moves the cursor into it and is never
-a toggle, and `:Aineo layout swap` leaves it where it is; `\E` turns it on and
-off at will, in every tab, for the session. The file column opens beside it, on
+sets its width, a share of the screen's width (a number strictly between 0 and
+1, a quarter by default, never fewer than 40 columns) or a whole number of
+columns. `\e` then moves the cursor into it and is never a toggle, and
+`:Aineo layout swap` leaves it where it is; `\E` turns it on and off at will,
+in every tab, for the session. The file column opens beside it, on
 its inner side, unless `layout.file_beside_explorer` is `false`, which keeps it
 between Claude Code and the panes. With the explorer on the left:
 
@@ -906,7 +908,7 @@ vim.g.aineo = {
     report_height = 2 / 3,
     claude_side = 'left',
     explorer_column = 'right',
-    explorer_width = 40,
+    explorer_width = 1 / 4,
     file_beside_explorer = true,
     panel_numbers = false,
   },
@@ -958,7 +960,7 @@ vim.g.aineo = {
 | `layout.report_height` | `2/3` | The Report's share of the panes column, a number strictly between 0 and 1. |
 | `layout.claude_side` | `'left'` | The side of the screen Claude Code's terminal is on, `'left'` or `'right'`; the panes column is on the other side and the file column between. |
 | `layout.explorer_column` | `'right'` | Where the explorer column is: `'left'` or `'right'` keeps the explorer always visible as a column the full height of the screen at that side, beside the other three, and `\e` moves into it; `false` keeps the explorer a pane that `\e` shows. A call to `setup()` applies it at once in every tab. |
-| `layout.explorer_width` | `40` | The explorer column's width in columns, a whole number of at least 1; it does nothing while `layout.explorer_column` is `false`. |
+| `layout.explorer_width` | `1 / 4` | The explorer column's width: a number strictly between 0 and 1 is that share of the screen's width, rounded down to whole columns but never fewer than 40, and follows the screen as it is resized; a whole number of at least 1 is that many columns, as is. It does nothing while `layout.explorer_column` is `false`. |
 | `layout.file_beside_explorer` | `true` | Whether the file column opens beside the explorer column while it is shown (on its right when the explorer column is at the left edge, on its left when at the right edge); `false` keeps it between Claude Code and the panes column. `\E` and a live `setup()` move an open file column to where it belongs. |
 | `layout.panel_numbers` | `false` | Whether the panels, the windows of the layout that show no file (Claude Code, the Report, Input, the explorer, the changes, terminal, run and walkthrough panes), show your line numbers, sign column, fold column and status column. With `false` they show none, only the separator between windows, whatever your global settings say, and files keep yours; `true` starts with them shown. `\tn` toggles it live in every tab. |
 | `changes.working_branch` | none | The branch work lands in, as git reads a name, such as `origin/dev`. Unset, it is the default branch of the remote `origin`. With none set and no `origin/HEAD`, the changes pane shows no Landed section. aineo never fetches. |
