@@ -375,6 +375,15 @@ function M.take_plan(tab, call, folders, project_of_root)
   return { text = shown_words(call, pane.shown), is_error = false }
 end
 
+--- The title of the plan `tab` shows; nil when it shows none.
+---
+---@param tab aineo.entry.WalkthroughPlanTab
+---@return string|nil
+function M.title_of(tab)
+  local pane = panes[tab]
+  return pane and pane.plan and pane.plan.title or nil
+end
+
 --- Shows the walkthrough pane of `tab` and moves the cursor into it, or tells
 --- the user the tab shows no plan.
 ---

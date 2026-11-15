@@ -191,6 +191,16 @@ local function is_office_pieces(value)
   return true
 end
 
+--- Whether `value` names the folder walkthrough records are written in: a
+--- non-empty string, a path relative to the folder Claude Code works in or an
+--- absolute one.
+---
+---@param value any
+---@return boolean
+local function is_record_folder(value)
+  return type(value) == 'string' and value ~= ''
+end
+
 --- The classes of shell commands the office tells apart, in the order they are
 --- tried.
 local COMMAND_CLASSES = { 'tests', 'committing', 'searching', 'reading' }
@@ -327,6 +337,12 @@ local SETTINGS = {
     default = 'auto',
     validator = is_find_picker,
     expected = 'one of ' .. table.concat(FIND_PICKERS, ', '),
+  },
+  {
+    name = 'walkthrough.record_folder',
+    default = 'walkthroughs',
+    validator = is_record_folder,
+    expected = 'a non-empty string',
   },
   { name = 'explorer.guides', default = true, validator = 'boolean' },
   { name = 'explorer.icons', default = true, validator = 'boolean' },
