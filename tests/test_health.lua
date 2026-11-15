@@ -839,6 +839,7 @@ T['the prefix mappings']['are reported in place when aineo mapped each key'] = f
     '- ✅ OK \\vn runs <Plug>(aineo-walk-next)',
     '- ✅ OK \\vp runs <Plug>(aineo-walk-previous)',
     '- ✅ OK \\vq runs <Plug>(aineo-walk-end)',
+    '- ✅ OK \\Vq runs <Plug>(aineo-walk-record)',
     '- ✅ OK \\s in Visual mode runs <Plug>(aineo-send)',
     '- ✅ OK \\v in Visual mode runs <Plug>(aineo-explain)',
     '- ✅ OK \\V in Visual mode runs <Plug>(aineo-explain-tools)',
@@ -861,7 +862,7 @@ T['the prefix mappings']['warn that the leader, unset and so a backslash, is the
 
   local report = health.report(child)
 
-  eq(health.section(report, 'Prefix mappings')[69], LEADER_WARNING)
+  eq(health.section(report, 'Prefix mappings')[70], LEADER_WARNING)
   eq(health.advice(report, 'Prefix mappings'), { LEADER_ADVICE })
 end
 
@@ -878,7 +879,7 @@ T['the prefix mappings']['warn that the leader, a Number, is the prefix'] = func
 
   local report = health.report(child)
 
-  eq(health.section(report, 'Prefix mappings')[69], '- ⚠️ WARNING the leader is the prefix, 1')
+  eq(health.section(report, 'Prefix mappings')[70], '- ⚠️ WARNING the leader is the prefix, 1')
 end
 
 T['the prefix mappings']['warn that a leader longer than 48 bytes, which Neovim maps as a backslash, is the prefix'] = function()
@@ -894,7 +895,7 @@ T['the prefix mappings']['warn that a leader longer than 48 bytes, which Neovim 
 
   local report = health.report(child)
 
-  eq(health.section(report, 'Prefix mappings')[69], LEADER_WARNING)
+  eq(health.section(report, 'Prefix mappings')[70], LEADER_WARNING)
 end
 
 T['the prefix mappings']['take a leader of 48 bytes as the characters Neovim maps it to'] = function()
@@ -910,7 +911,7 @@ T['the prefix mappings']['take a leader of 48 bytes as the characters Neovim map
 
   local report = health.report(child)
 
-  eq(#health.section(report, 'Prefix mappings'), 68)
+  eq(#health.section(report, 'Prefix mappings'), 69)
 end
 
 T['the prefix mappings']['warn that the leader, the same key as a prefix in key notation, is the prefix'] = function()
@@ -927,7 +928,7 @@ T['the prefix mappings']['warn that the leader, the same key as a prefix in key 
   local report = health.report(child)
 
   eq(
-    health.section(report, 'Prefix mappings')[69],
+    health.section(report, 'Prefix mappings')[70],
     '- ⚠️ WARNING the leader is the prefix, <space>'
   )
 end
@@ -945,7 +946,7 @@ T['the prefix mappings']['take a leader written in key notation as the character
 
   local report = health.report(child)
 
-  eq(#health.section(report, 'Prefix mappings'), 68)
+  eq(#health.section(report, 'Prefix mappings'), 69)
 end
 
 T['the prefix mappings']['report the keys plugin/aineo.lua mapped to aineo, no more and no fewer'] = function()
@@ -1018,6 +1019,7 @@ T['the prefix mappings']['warn that the local leader, the same key as a prefix i
     '- ✅ OK <space>vn runs <Plug>(aineo-walk-next)',
     '- ✅ OK <space>vp runs <Plug>(aineo-walk-previous)',
     '- ✅ OK <space>vq runs <Plug>(aineo-walk-end)',
+    '- ✅ OK <space>Vq runs <Plug>(aineo-walk-record)',
     '- ✅ OK <space>s in Visual mode runs <Plug>(aineo-send)',
     '- ✅ OK <space>v in Visual mode runs <Plug>(aineo-explain)',
     '- ✅ OK <space>V in Visual mode runs <Plug>(aineo-explain-tools)',
@@ -1096,6 +1098,7 @@ T['the prefix mappings']['take a local leader written in key notation as the cha
     '- ✅ OK <Space>vn runs <Plug>(aineo-walk-next)',
     '- ✅ OK <Space>vp runs <Plug>(aineo-walk-previous)',
     '- ✅ OK <Space>vq runs <Plug>(aineo-walk-end)',
+    '- ✅ OK <Space>Vq runs <Plug>(aineo-walk-record)',
     '- ✅ OK <Space>s in Visual mode runs <Plug>(aineo-send)',
     '- ✅ OK <Space>v in Visual mode runs <Plug>(aineo-explain)',
     '- ✅ OK <Space>V in Visual mode runs <Plug>(aineo-explain-tools)',
@@ -1124,7 +1127,7 @@ T['the prefix mappings']['warn that the local leader, a Number, is the prefix'] 
   local report = health.report(child)
 
   eq(
-    health.section(report, 'Prefix mappings')[69],
+    health.section(report, 'Prefix mappings')[70],
     '- ⚠️ WARNING the local leader is the prefix, 1'
   )
   eq(#health.section(report, 'Limits'), 1)
@@ -1144,7 +1147,7 @@ T['the prefix mappings']['warn that a List local leader, which Neovim maps as a 
   local report = health.report(child)
 
   eq(
-    health.section(report, 'Prefix mappings')[69],
+    health.section(report, 'Prefix mappings')[70],
     '- ⚠️ WARNING the local leader is the prefix, \\'
   )
   eq(#health.section(report, 'Limits'), 1)
@@ -1287,6 +1290,7 @@ T['the prefix mappings']['warn of a key the user mapped, naming what it runs'] =
     '- ✅ OK \\vn runs <Plug>(aineo-walk-next)',
     '- ✅ OK \\vp runs <Plug>(aineo-walk-previous)',
     '- ✅ OK \\vq runs <Plug>(aineo-walk-end)',
+    '- ✅ OK \\Vq runs <Plug>(aineo-walk-record)',
     '- ✅ OK \\s in Visual mode runs <Plug>(aineo-send)',
     '- ✅ OK \\v in Visual mode runs <Plug>(aineo-explain)',
     '- ✅ OK \\V in Visual mode runs <Plug>(aineo-explain-tools)',
@@ -1323,7 +1327,7 @@ T['the prefix mappings']['warn of a Visual-mode key the user mapped, saying Visu
 
   eq({
     normal = health.section(report, 'Prefix mappings')[1],
-    visual = health.section(report, 'Prefix mappings')[56],
+    visual = health.section(report, 'Prefix mappings')[57],
   }, {
     normal = '- ✅ OK \\s runs <Plug>(aineo-send)',
     visual = '- ⚠️ WARNING \\s in Visual mode runs \':echo "mine"<CR>\', not <Plug>(aineo-send)',
@@ -1430,6 +1434,7 @@ T['the prefix mappings']['warn of each key nobody mapped, as after setup() chang
     '- ⚠️ WARNING ,vn is not mapped',
     '- ⚠️ WARNING ,vp is not mapped',
     '- ⚠️ WARNING ,vq is not mapped',
+    '- ⚠️ WARNING ,Vq is not mapped',
     '- ⚠️ WARNING ,s in Visual mode is not mapped',
     '- ⚠️ WARNING ,v in Visual mode is not mapped',
     '- ⚠️ WARNING ,V in Visual mode is not mapped',
@@ -1456,7 +1461,7 @@ T['the prefix mappings']['warn that the local leader, unset and so a backslash, 
   local report = health.report(child)
 
   eq(
-    health.section(report, 'Prefix mappings')[69],
+    health.section(report, 'Prefix mappings')[70],
     '- ⚠️ WARNING the local leader is the prefix, \\'
   )
   eq(health.advice(report, 'Prefix mappings'), {
@@ -1471,7 +1476,7 @@ T['the prefix mappings']['warn that the local leader, empty and so a backslash, 
   local report = health.report(child)
 
   eq(
-    health.section(report, 'Prefix mappings')[69],
+    health.section(report, 'Prefix mappings')[70],
     '- ⚠️ WARNING the local leader is the prefix, \\'
   )
 end
@@ -1482,7 +1487,7 @@ T['the prefix mappings']['warn that the local leader, set, is the prefix set'] =
   local report = health.report(child)
 
   eq(
-    health.section(report, 'Prefix mappings')[69],
+    health.section(report, 'Prefix mappings')[70],
     '- ⚠️ WARNING the local leader is the prefix, ,'
   )
 end
@@ -2106,13 +2111,13 @@ T['explaining code']['says what Claude Code explains with, and what it may use']
   eq(health.section(report, 'Explain code'), {
     '- \\v and \\V start a Claude Code of their own for each request, with the program of claude.cmd (the words before its first flag, none of its flags), and end it with the answer: model opus (explain.model), stopped after 90 s (explain.timeout_ms): :help |aineo-explain|',
     "- \\v hands it the code alone, with no tool; \\V lets it read the project with Read, Grep and Glob, without asking; it gets no other tool, no MCP server and no settings of aineo, loads your own settings but never the project's (--setting-sources user), and asks no permission",
-    "- \\vi and \\VI ask the same Claude Code for potential issues instead of explanations, \\vi with the code alone and \\VI with the read-only tools; \\v waits for 'timeoutlen' for a following i, m, c, n, p or q, \\V for a following I, V or f, and \\VV for a following I or f",
+    "- \\vi and \\VI ask the same Claude Code for potential issues instead of explanations, \\vi with the code alone and \\VI with the read-only tools; \\v waits for 'timeoutlen' for a following i, m, c, n, p or q, \\V for a following I, V, f or q, and \\VV for a following I or f",
     '- \\VV and \\VVI do what \\V and \\VI do after a float in which you edit the whole prompt (<CR> sends, q or <Esc> cancels, R restores the default text), with model sonnet (explain.deep_model) at effort high (explain.deep_effort), stopped after 300 s (explain.deep_timeout_ms): :help |aineo-explain-deep|',
     "- \\Vf asks a Claude Code of its own, with Read, Grep and Glob alone, for a fix of the issue on the cursor's line, with model sonnet (explain.fix_model) at effort high (explain.fix_effort), stopped after 300 s (explain.fix_timeout_ms), and \\VVf first opens the float in which you edit its prompt; the fix shows over the code, which it changes only when you accept it, and the buffer is read-only until you decide: \\Va accepts it as one undo step and writes no file, \\Vr rejects it, \\Vd shows it as a diff; a fix whose code changed anyway stays, marked stale, until \\Vr, and \\Vf on unchanged code shows the fix kept from before: :help |aineo-explain-fix|",
     '- \\vc cleans the buffer of everything explaining added to it, stopping its requests and dropping its kept answers and fixes, and leaves its text and undo history as they were; :Aineo explain clear does the same: :help |aineo-explain-clean|',
     '- \\vm marks the issues on a line (on each selected line in Visual mode), and \\s then sends the marked issues to the session\'s Claude Code in place of Input, after "Some issues were found in this code, can you check and propose a fix if the issue holds:" (explain.issues_prompt): :help |aineo-explain-mark|',
     '- ]v and [v jump to the next and the previous explanation or issue of a buffer that shows any, in Normal, Visual and Operator-pending mode, and are never mapped over a key of yours: :help |aineo-explain-jump|',
-    '- \\vn, \\vp and \\vq ask the agent of your tab for the next step, the previous step or the end of the walkthrough it shows with walkthrough_step, as a message of yours that waits while the agent works; \\vq and \\vc clear its bands: :help |aineo-walkthrough|',
+    '- \\vn, \\vp and \\vq ask the agent of your tab for the next step, the previous step or the end of the walkthrough it shows with walkthrough_step, as a message of yours that waits while the agent works; \\vq and \\vc clear its bands; \\Vq ends it too and asks the agent to write the whole walkthrough as a PDF in walkthroughs (walkthrough.record_folder), told when its turn ends: :help |aineo-walkthrough-record|',
     "- \\pw shows the walkthrough pane, the plan the agent sends with walkthrough_plan before its first step, in the Report's place over Input; Enter in it asks the agent to go to the step under the cursor, as a message of yours that waits while the agent works: :help |aineo-walkthrough-pane|",
   })
 end

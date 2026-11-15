@@ -252,6 +252,7 @@ resumes it.
 | `\vc` | cleans the buffer of everything the `\v`, `\V` and `\w` keys added (answers, marks, a fix or written code, requests that run, kept answers), leaving its text and undo history as they were |
 | `\pw` | shows the walkthrough pane, the plan of the walkthrough Claude gave you, and moves into it (Enter there asks Claude to go to the step under the cursor) |
 | `\vn`, `\vp`, `\vq` | while a walkthrough step is shown (see What Claude tells aineo), ask the agent for the next step, the previous one, or the end, which also clears its bands; `\vc` clears them too, sending nothing |
+| `\Vq` | ends the walkthrough as `\vq` does, and asks the agent to write the whole walkthrough as an HTML file and a PDF in `walkthrough.record_folder` under Claude's folder, the walkthrough plan on the first page, then each step with its explanation and the code it marked; aineo tells you when the record is there |
 | `\vm` | marks the issues on the cursor's line (on each selected line in Visual mode), or unmarks them; `\s` then sends the marked issues to Claude |
 | `]v`, `[v` | jump to the next and the previous explanation or issue of the buffer |
 | `\z` | zooms the window of the panes column the cursor is in, and gives the heights back when pressed again |
@@ -548,7 +549,7 @@ handling gaps, security or performance risks, no remarks on style), shown the
 same way in the accent of `DiagnosticWarn` with the label `issue`. Explanations
 and issues are shown together, and each key toggles its own kind; a request of
 each kind may run at once, and a key stops the request of its own kind alone.
-Since `\v` starts `\vi`, `\vm`, `\vc`, `\vn`, `\vp` and `\vq`, and `\V` starts `\VI` and `\VV`, Neovim waits
+Since `\v` starts `\vi`, `\vm`, `\vc`, `\vn`, `\vp` and `\vq`, and `\V` starts `\VI`, `\VV` and `\Vq`, Neovim waits
 `'timeoutlen'` for a following key before it runs `\v` or `\V`. `:Aineo explain [issues] [tools]` with a range does the same, and `:Aineo
 explain clear` what `\vc` does. The model is `explain.model`, `'sonnet'` by
 default, and a request is stopped after `explain.timeout_ms`. If the text of
@@ -779,7 +780,12 @@ and `walkthrough_step` shows Claude's walkthrough of code, one step at a time.
   message, the next key waits (one at most, the last replacing it) and goes
   when its turn ends or a step is shown, or after 10 s if the agent is not
   seen working: it waits for the answer to the last, so no two are queued.
-  `\vc` drops it. A switch of the tab's session ends the walkthrough. The file must lie in a repository the editor has open or in a
+  `\vc` drops it. `\Vq` ends the walkthrough as `\vq` does and asks the agent,
+  in its place, to write the whole walkthrough as a record, an HTML file and
+  the PDF made from it, at `<Claude's folder>/<walkthrough.record_folder>/<date>-<slug>.pdf`:
+  the walkthrough plan on the first page, then each step with its
+  explanation and the code it marked; when that turn ends, aineo tells you
+  whether the PDF is there (`:help aineo-walkthrough-record`). A switch of the tab's session ends the walkthrough. The file must lie in a repository the editor has open or in a
   worktree its agents reported, with the guards `test_layout` applies to its
   paths (nothing under `.git`, also by a link, no link out), be a regular file of at most
   1 MiB, and be checked out: a branch no worktree has checked out has no file
@@ -969,6 +975,7 @@ vim.g.aineo = {
 | `tabs.padding` | `2` | Spaces either side of each title in aineo's tab line, from 0 to 8. |
 | `tabs.always_show` | `true` | Whether the tab line shows with a single tab page: aineo sets `'showtabline'` to `2` once, when its first tab opens, and a value you set afterwards is kept. `false` leaves `'showtabline'` as you have it. Read at the first tab: a later change needs a restart. |
 | `find.picker` | `'auto'` | The picker `\f` hands its search to: `'auto'` takes the first installed of snacks.nvim, fzf-lua, telescope.nvim and mini.pick; `'snacks'`, `'fzf-lua'`, `'telescope'` or `'mini.pick'` takes that one alone. With none installed, or the one named missing, aineo lists the files through `vim.ui.select()`. None is a dependency. |
+| `walkthrough.record_folder` | `'walkthroughs'` | The folder `\Vq` has the walkthrough's record written in: under the folder Claude Code started in when relative, as it is when absolute. |
 | `explorer.guides` | `true` | Whether the explorer lays guides over the indent of its entries. |
 | `explorer.icons` | `true` | Whether the explorer shows file icons from mini.icons or nvim-web-devicons, when either is installed. |
 | `explorer.dim` | `true` | Whether unchanged files dim while a changed file shows. |

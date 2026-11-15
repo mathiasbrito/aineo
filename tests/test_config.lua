@@ -20,6 +20,7 @@ local DEFAULTS = {
   changes = { graph_limit = 1000 },
   tabs = { padding = 2, always_show = true },
   find = { picker = 'auto' },
+  walkthrough = { record_folder = 'walkthroughs' },
   explorer = {
     guides = true,
     icons = true,
@@ -592,6 +593,30 @@ T['resolve_config()']['refuses a picker the file finder does not know']['as find
   expect.error(function()
     config.resolve_config({ find = { picker = picker } }, nil)
   end, 'find%.picker: expected one of auto, snacks, fzf%-lua, telescope, mini%.pick')
+end
+
+T['resolve_config()']['takes the folder of the walkthrough records from either source, walkthroughs by default'] = function()
+  local from_global = config.resolve_config({ walkthrough = { record_folder = 'records' } }, nil)
+  local from_setup = config.resolve_config(
+    { walkthrough = { record_folder = 'records' } },
+    { walkthrough = { record_folder = '/srv/records' } }
+  )
+
+  eq(from_global.walkthrough.record_folder, 'records')
+  eq(from_setup.walkthrough.record_folder, '/srv/records')
+  eq(config.resolve_config(nil, nil).walkthrough.record_folder, 'walkthroughs')
+end
+
+T['resolve_config()']['refuses a record folder that is not a non-empty string'] = MiniTest.new_set({
+  parametrize = { { '' }, { false }, { 1 }, { {} } },
+})
+
+T['resolve_config()']['refuses a record folder that is not a non-empty string']['as walkthrough.record_folder'] = function(
+  folder
+)
+  expect.error(function()
+    config.resolve_config({ walkthrough = { record_folder = folder } }, nil)
+  end, 'walkthrough%.record_folder: expected a non%-empty string')
 end
 
 T['resolve_config()']['takes the working branch of the changes pane from either source, none by default'] = function()
