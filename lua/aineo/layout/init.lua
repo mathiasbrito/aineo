@@ -2018,15 +2018,9 @@ local function make_layout(input_name, group_name)
   end
 
   --- Gives Claude's terminal a fresh size once the windows have settled
-  --- (`aineo.layout.fresh_size`'s `SETTLE_DELAY_MS`) when Claude's window
-  --- was one of those that changed size, once for a run of changes
-  --- (`give_claude_terminal_a_fresh_size()`).
-  local function give_claude_terminal_a_fresh_size_when_resized()
-    if
-      not has_window('claude') or not vim.list_contains(vim.v.event.windows, state.windows.claude)
-    then
-      return
-    end
+  --- (`aineo.layout.fresh_size`'s `SETTLE_DELAY_MS`), once for a run of
+  --- requests (`give_claude_terminal_a_fresh_size()`).
+  local function give_claude_terminal_a_fresh_size_soon()
     local timer = state.fresh_size_timer
     if timer and not timer:is_closing() then
       timer:stop()
@@ -2034,6 +2028,18 @@ local function make_layout(input_name, group_name)
     end
     state.fresh_size_timer =
       vim.defer_fn(give_claude_terminal_a_fresh_size, fresh_size.SETTLE_DELAY_MS)
+  end
+
+  --- Gives Claude's terminal a fresh size soon
+  --- (`give_claude_terminal_a_fresh_size_soon()`) when Claude's window was
+  --- one of those that changed size.
+  local function give_claude_terminal_a_fresh_size_when_resized()
+    if
+      not has_window('claude') or not vim.list_contains(vim.v.event.windows, state.windows.claude)
+    then
+      return
+    end
+    give_claude_terminal_a_fresh_size_soon()
   end
 
   --- Puts the layout's proportions back when the editor is resized, unless the
@@ -3167,7 +3173,9 @@ local function make_layout(input_name, group_name)
   --- call when a window is gone.
   ---
   --- Opening the layout ends the file focus (`M.start_file_focus()`): the
-  --- panes column opens again with the windows of the pane shown.
+  --- panes column opens again with the windows of the pane shown, and
+  --- Claude's terminal is given a fresh size when the focus was applied,
+  --- whether or not its window changed size.
   ---
   --- Raises an error naming the setting, before changing anything, when
   --- `arrangement` is not a table, `claude` or `report` is not an existing
@@ -3194,7 +3202,8 @@ local function make_layout(input_name, group_name)
     local panel_numbers_changed = arrangement.panel_numbers ~= nil
       and arrangement.panel_numbers ~= state.panel_numbers
     take_arrangement(arrangement)
-    local focus_views = is_file_focus_applied() and state.file_focus.views or nil
+    local ends_applied_focus = is_file_focus_applied()
+    local focus_views = ends_applied_focus and state.file_focus.views or nil
     state.file_focus = nil
     forget_wiped_shell()
     local wanted_side = arrangement.claude_side or state.claude_side
@@ -3228,6 +3237,9 @@ local function make_layout(input_name, group_name)
     end
     apply_proportions()
     restore_panes_views(focus_views, report_arrived)
+    if ends_applied_focus then
+      give_claude_terminal_a_fresh_size_soon()
+    end
     watch_windows()
     watch_shell()
     if panel_numbers_changed then
@@ -4109,8 +4121,10 @@ local function make_layout(input_name, group_name)
   end
 
   --- Opens the panes column again, showing the pane it showed with the views
-  --- it had (`restore_panes_views()`), as the file column closed, and leaves
-  --- the file focus waiting for a file column.
+  --- it had (`restore_panes_views()`), as the file column closed, gives
+  --- Claude's terminal a fresh size
+  --- (`give_claude_terminal_a_fresh_size_soon()`), and leaves the file focus
+  --- waiting for a file column.
   restore_panes_column = function()
     local focus = state.file_focus
     local views = focus.views
@@ -4130,6 +4144,7 @@ local function make_layout(input_name, group_name)
       apply_proportions()
       restore_panes_views(views, report_arrived)
     end)
+    give_claude_terminal_a_fresh_size_soon()
   end
 
   --- Turns the file focus on, for reading files at the width the panes column
@@ -4141,7 +4156,8 @@ local function make_layout(input_name, group_name)
   --- changes size, so that Claude's terminal is told no size; it is applied as
   --- the first file column opens (`M.show_file()`, or any window that makes
   --- one), Claude's column keeping the width it has. Closing the file column
-  --- of an applied focus opens the panes column again, the focus armed.
+  --- of an applied focus opens the panes column again, the focus armed, and
+  --- gives Claude's terminal a fresh size.
   ---
   --- The pane shown stays the pane shown, and the views of its windows
   --- (`winsaveview()`) are kept; they show again when the layout opens
