@@ -47,8 +47,38 @@ T['text()']['asks for a section for each step, in order, with the explanation an
   eq(holds(text, 'monospace'), true)
 end
 
-T['text()']['asks to mark the steps the user did not reach'] = function()
-  eq(holds(instruction.text(PATH), 'marked as not shown'), true)
+T['text()']['asks for the FULL walkthrough, all its steps, as a PDF'] = function()
+  eq(holds(instruction.text(PATH), 'Write the FULL walkthrough (all steps) as a PDF'), true)
+end
+
+T['text()']['asks for every planned step in full, the ones the user did not reach too'] = function()
+  local text = instruction.text(PATH)
+
+  eq(
+    holds(
+      text,
+      'Every step of the plan gets a complete section, whether or not the user reached it'
+    ),
+    true
+  )
+  eq(holds(text, 'its explanation and its code ranges taken from the plan'), true)
+end
+
+T['text()']['marks no step as not shown and shortens none'] = function()
+  local text = instruction.text(PATH)
+
+  eq(holds(text, 'not shown'), false)
+  eq(holds(text, 'Mark no step and shorten none'), true)
+end
+
+T['text()']['asks to count the sections against the plan before making the PDF'] = function()
+  eq(
+    holds(
+      instruction.text(PATH),
+      'Before making the PDF, count the sections in the HTML: there must be exactly one for each step of the plan'
+    ),
+    true
+  )
 end
 
 T['text()']['names the tools that make the PDF, and says what to do when none is installed'] = function()

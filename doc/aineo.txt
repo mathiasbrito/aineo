@@ -2975,8 +2975,12 @@ pandoc, typst), keeping the HTML and saying so when none is installed. The
 record's first page is the walkthrough plan; then comes one section for each
 step of the plan, in its order: its title, its explanation and the code its
 bands marked, with the file's path and the numbers of the lines, in a
-monospace block; a step you did not reach is included, marked as not shown.
-The folder is made if it is not there, and nothing else is written.
+monospace block. The record is the FULL walkthrough, all its steps, not only
+those shown: a step you did not reach gets a complete section too, its
+explanation and code taken from the plan, and no step is marked or shortened.
+The agent is asked to count the sections in the HTML against the steps of the
+plan before it makes the PDF. The folder is made if it is not there, and
+nothing else is written.
 
 The instruction is sent as the messages of `\vn` are, and waits for the
 agent's turn the same way, the user told `aineo: the agent is working:
