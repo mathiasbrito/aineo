@@ -2404,10 +2404,10 @@ told once: `aineo: no potential issues found`. Issues show as explanations do,
 in a namespace of their own and in the look of |hl-AineoExplainIssue|, the
 accent being the foreground of |hl-DiagnosticWarn|, `#e5c07b` without one, and
 the label `issue`. Since `\v` starts `\vi`, `\vm`, `\vc`, `\vn`, `\vp` and
-`\vq`, `\V` starts `\VI`, `\VV` and `\Vf`, and `\VV` starts `\VVI` and `\VVf`,
-Neovim waits 'timeoutlen' for a following `i`, `m`, `c`, `n`, `p` or `q`
-before it runs `\v`, for a following `I`, `V` or `f` before it runs `\V`, and
-for a following `I` or `f` before it runs `\VV`.
+`\vq`, `\V` starts `\VI`, `\VV`, `\Vf` and `\Vq`, and `\VV` starts `\VVI` and
+`\VVf`, Neovim waits 'timeoutlen' for a following `i`, `m`, `c`, `n`, `p` or
+`q` before it runs `\v`, for a following `I`, `V`, `f` or `q` before it runs
+`\V`, and for a following `I` or `f` before it runs `\VV`.
 
 Explanations and issues are shown together on a buffer, and each key toggles
 its own kind: pressed in Normal mode on a buffer that shows what the key asks
@@ -2892,7 +2892,7 @@ screen line it draws. The marks are the step's lines as it showed them: they
 move with the lines when others are inserted or deleted around them, a
 deleted line loses its mark (undoing the deletion brings it back), and a line
 inserted inside a range gets none. They go with the bands (next step, an end
-call, `\vq`, `\vc`, a switch of session), and leave your own `\v`
+call, `\vq`, `\Vq`, `\vc`, a switch of session), and leave your own `\v`
 explanations and the text alone. The tool is allowed without
 asking, and its answer says what it showed or why it refused. Its arguments:
 - `file`, `title` and `step`, required: the absolute path of the file, what
@@ -2951,8 +2951,43 @@ message waits. Closing the buffer is no signal. A claim of another session
 refuses them, as it refuses Send. `\vc` clears the bands too, without sending
 anything, and drops the message that waits (|aineo-explain-clean|). Your own
 explanations are never touched by a step.
-The keys are |<Plug>(aineo-walk-next)|, |<Plug>(aineo-walk-previous)| and
-|<Plug>(aineo-walk-end)|; `:Aineo` has no word for them.
+The keys are |<Plug>(aineo-walk-next)|, |<Plug>(aineo-walk-previous)|,
+|<Plug>(aineo-walk-end)| and, to end the walkthrough with a record of it,
+|<Plug>(aineo-walk-record)| (|aineo-walkthrough-record|); `:Aineo` has no word
+for them.
+
+                                                    *aineo-walkthrough-record*
+`\Vq` ends the walkthrough as `\vq` does, its bands cleared at once, and
+sends the Claude Code of the tab you are in, in place of `End the
+walkthrough`, one instruction: to write the whole walkthrough as a record,
+for you to keep or to share with a colleague. aineo chooses where:
+`<folder>/<record_folder>/<date>-<slug>.pdf`, `<folder>` the folder the
+tab's Claude Code started in, `<record_folder>` the setting
+|aineo-config-walkthrough.record_folder| (a relative one is under
+`<folder>`, an absolute one is used as it is), `<date>` today as
+`YYYY-MM-DD`, and `<slug>` the first six words of the title of the plan the
+agent sent with `walkthrough_plan`, lowercase, of letters and digits, joined
+by `-` (`walkthrough` when no plan was sent). A name taken already, by a PDF
+or by an HTML, gets `-2`, `-3`… after the slug. The instruction asks the
+agent to write, first, an HTML file of the same name, then the PDF made from
+it with the first tool it finds installed (headless Chrome or Chromium,
+pandoc, typst), keeping the HTML and saying so when none is installed. The
+record's first page is the walkthrough plan; then comes one section for each
+step of the plan, in its order: its title, its explanation and the code its
+bands marked, with the file's path and the numbers of the lines, in a
+monospace block; a step you did not reach is included, marked as not shown.
+The folder is made if it is not there, and nothing else is written.
+
+The instruction is sent as the messages of `\vn` are, and waits for the
+agent's turn the same way, the user told `aineo: the agent is working:
+"Write the walkthrough record" goes when its turn ends`. With no step shown,
+`\Vq` tells you so, as `\vq` does, and sends nothing. When the turn that
+follows the instruction ends, aineo looks at the path, once, and tells you:
+the PDF is there, as information, naming it; only the HTML is, as a warning,
+naming it and saying no PDF tool was found; neither is, as a warning, naming
+the path. It reads files and starts nothing. It tells a turn by the tab's
+Claude Code being seen working, so with an agent never seen working (the
+terminal title off) it tells nothing.
 
                                                     *aineo-walkthrough-pane*
 `walkthrough_plan` gives your walkthrough a pane. Once you say yes to the
@@ -2999,21 +3034,22 @@ walkthrough plan ready: \pw`, and `\pw` (|:Aineo-pane|) shows it. `\pw` brings
 the pane back after any other pane too; the steps that follow do not bring it
 back. The plan follows the tab's session as a step does: a switch of the
 session, a `/clear` or a resume, also before step 1, ends it and drops a
-message that waits. When the walkthrough ends — an end call, `\vq`, `\vc` or a
-switch of the tab's session — the plan is forgotten and the Report returns, if
-the walkthrough pane is the pane shown. `\pw` while the tab has no plan tells
-you so. A step past the last of the plan shows in the winbar as `step N`, with
-no total and no `▸`. A plan is refused, naming the step, when a file would be
-refused to a step (see above); the checkout of a folder is looked for once for
-the whole plan. Its limits count characters: `title`, the title of a step and
-each item of `covers` at most 200, `summary` at most 4096, a concept at most
-80, `covers` 1 to 16 items, `steps` 1 to 64, at most 8 concepts a step, none
-of them blank; the tool's description and input schema say so. The tool is
-allowed without asking, and the instructions appended to the system prompt and
-its description say when to send it and keep the order of the plan described
-above. The highlight groups of the page are |hl-AineoPaneTitle|,
-|hl-AineoPaneSection|, |hl-AineoPaneBullet|, |hl-AineoPaneDone|,
-|hl-AineoPaneShown|, |hl-AineoPaneFile| and |hl-AineoPaneStepRef|.
+message that waits. When the walkthrough ends — an end call, `\vq`, `\Vq`,
+`\vc` or a switch of the tab's session — the plan is forgotten and the Report
+returns, if the walkthrough pane is the pane shown. `\pw` while the tab has
+no plan tells you so. A step past the last of the plan shows in the winbar as
+`step N`, with no total and no `▸`. A plan is refused, naming the step, when
+a file would be refused to a step (see above); the checkout of a folder is
+looked for once for the whole plan. Its limits count characters: `title`, the
+title of a step and each item of `covers` at most 200, `summary` at most
+4096, a concept at most 80, `covers` 1 to 16 items, `steps` 1 to 64, at most
+8 concepts a step, none of them blank; the tool's description and input
+schema say so. The tool is allowed without asking, and the instructions
+appended to the system prompt and its description say when to send it and
+keep the order of the plan described above. The highlight groups of the page
+are |hl-AineoPaneTitle|, |hl-AineoPaneSection|, |hl-AineoPaneBullet|,
+|hl-AineoPaneDone|, |hl-AineoPaneShown|, |hl-AineoPaneFile| and
+|hl-AineoPaneStepRef|.
 
                                                           *aineo-explain-jump*
 `]v` and `[v` move the cursor to the line of the next and the previous
@@ -4534,6 +4570,12 @@ you turn the prefix off, or when a prefix key is yours: >lua
 			In Normal mode, ends the walkthrough: clears its bands
 			and tells the agent so.
 
+                                                  *<Plug>(aineo-walk-record)*
+<Plug>(aineo-walk-record)
+			In Normal mode, ends the walkthrough as
+			|<Plug>(aineo-walk-end)| does, and asks the agent for
+			a record of it as a PDF (|aineo-walkthrough-record|).
+
                                                          *<Plug>(aineo-write)*
 <Plug>(aineo-write)
 			In Normal mode, opens the float in which you type a
@@ -4810,6 +4852,8 @@ are local to its buffer (|aineo-explain-fix|), globally, in Normal mode, and
 \vp		|<Plug>(aineo-walk-previous)|
                                                                    *aineo-\vq*
 \vq		|<Plug>(aineo-walk-end)|
+                                                                   *aineo-\Vq*
+\Vq		|<Plug>(aineo-walk-record)|
                                                                   *aineo-v_\s*
 \s		|<Plug>(aineo-send)| in Visual mode (|aineo-send|)
                                                                   *aineo-v_\v*
@@ -5236,6 +5280,15 @@ find.picker		One of `'auto'`, `'snacks'`, `'fzf-lua'`,
 			|vim.ui.select()|, and with a name it tells you, in
 			each search, with one warning, that the picker is
 			missing. None of them is a dependency of aineo.
+
+          *aineo-config-walkthrough* *aineo-config-walkthrough.record_folder*
+walkthrough.record_folder	A non-empty string. Default: `'walkthroughs'`
+			The folder the record of a walkthrough is written in
+			when you end it with `\Vq`
+			(|aineo-walkthrough-record|): under the folder the
+			tab's Claude Code started in when it is relative, as
+			it is when absolute. `~` and variables in it are
+			expanded.
 
                            *aineo-config-office* *aineo-config-office.idle_ms*
 office.idle_ms		A whole number of at least 1, or `false`. Default:
