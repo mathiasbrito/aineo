@@ -733,7 +733,7 @@ local CLOSE_THE_FILE = [[(function()
   end
 end)()]]
 
-T['the pty of Claude Code under the file focus with no file column']['sees no size as the focus is armed, a file opens and the file column closes'] = function()
+T['the pty of Claude Code under the file focus with no file column']['sees no size as the focus is armed and a file opens, and the size of its window again as the file column closes'] = function()
   local record = pty.open_around_recorder(child, 'file-focus-armed')
   pty.sizes_seen_during(child, record, CLOSE_THE_FILE)
   pty.sizes_seen_during(child, record, [[require('aineo.layout').set_explorer_column(false, 20)]])
@@ -746,7 +746,8 @@ T['the pty of Claude Code under the file focus with no file column']['sees no si
   )
   local closed = pty.sizes_seen_during(child, record, CLOSE_THE_FILE)
 
-  eq({ armed.seen, opened.seen, closed.seen }, { {}, {}, {} })
+  eq({ armed.seen, opened.seen }, { {}, {} })
+  eq(closed.seen, { { closed.final[1], closed.final[2] - 1 }, closed.final })
 end
 
 T['the explorer pane under the file focus'] = MiniTest.new_set()
