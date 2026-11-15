@@ -532,6 +532,14 @@ for _, move in ipairs({ 'next', 'previous', 'end' }) do
   end, { desc = 'aineo: ask the agent for the walkthrough move ' .. move })
 end
 
+--- The `<Plug>` mapping that ends the walkthrough and asks the agent for its
+--- record as a PDF (`aineo.entry`'s `walk_record()`).
+vim.keymap.set('n', '<Plug>(aineo-walk-record)', function()
+  run(function()
+    require('aineo.entry').walk_record()
+  end)
+end, { desc = 'aineo: end the walkthrough and ask the agent for its record' })
+
 --- The `<Plug>` mappings of a proposal shown, a fix or written code, which
 --- the keys of its buffer map to while it is shown, by the words after
 --- `aineo-fix-` and `aineo-write-`: what each does to the proposal of its

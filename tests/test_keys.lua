@@ -197,7 +197,7 @@ T['the sheet']['lists the keys of each section in the order of the ruling'] = Mi
     },
     { 'In the steering float', { '<CR>', 'q', 'R' } },
     { 'Clean', { 'vc' } },
-    { 'Walkthrough', { 'pw', 'vn', 'vp', 'vq' } },
+    { 'Walkthrough', { 'pw', 'vn', 'vp', 'vq', 'Vq' } },
   },
 })
 

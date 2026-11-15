@@ -456,6 +456,16 @@ local ROWS = vim.list_extend(
       'walkthrough',
       global('explain', 'vq', 'walk-end', nil, 'end the walkthrough and clear its bands')
     ),
+    in_section(
+      'walkthrough',
+      global(
+        'explain',
+        'Vq',
+        'walk-record',
+        nil,
+        'end the walkthrough and ask for its record as a PDF'
+      )
+    ),
     listing_again('explain', 'issues', 'send', 'send the marked issues to Claude'),
     in_section(
       'fix_shown',
