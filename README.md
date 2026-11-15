@@ -252,7 +252,7 @@ resumes it.
 | `\vc` | cleans the buffer of everything the `\v`, `\V` and `\w` keys added (answers, marks, a fix or written code, requests that run, kept answers), leaving its text and undo history as they were |
 | `\pw` | shows the walkthrough pane, the plan of the walkthrough Claude gave you, and moves into it (Enter there asks Claude to go to the step under the cursor) |
 | `\vn`, `\vp`, `\vq` | while a walkthrough step is shown (see What Claude tells aineo), ask the agent for the next step, the previous one, or the end, which also clears its bands; `\vc` clears them too, sending nothing |
-| `\Vq` | ends the walkthrough as `\vq` does, and asks the agent to write the whole walkthrough as an HTML file and a PDF in `walkthrough.record_folder` under Claude's folder, the walkthrough plan on the first page, then each step with its explanation and the code it marked; aineo tells you when the record is there |
+| `\Vq` | ends the walkthrough as `\vq` does, and asks the agent to write the whole walkthrough as an HTML file and a PDF in `walkthrough.record_folder` under Claude's folder, the walkthrough plan on the first page, then every step of the plan in full, those you did not reach too, each with its explanation and the code it marked; aineo tells you when the record is there |
 | `\vm` | marks the issues on the cursor's line (on each selected line in Visual mode), or unmarks them; `\s` then sends the marked issues to Claude |
 | `]v`, `[v` | jump to the next and the previous explanation or issue of the buffer |
 | `\z` | zooms the window of the panes column the cursor is in, and gives the heights back when pressed again |
@@ -783,8 +783,8 @@ and `walkthrough_step` shows Claude's walkthrough of code, one step at a time.
   `\vc` drops it. `\Vq` ends the walkthrough as `\vq` does and asks the agent,
   in its place, to write the whole walkthrough as a record, an HTML file and
   the PDF made from it, at `<Claude's folder>/<walkthrough.record_folder>/<date>-<slug>.pdf`:
-  the walkthrough plan on the first page, then each step with its
-  explanation and the code it marked; when that turn ends, aineo tells you
+  the walkthrough plan on the first page, then every step of the plan in full,
+  those you did not reach too, each with its explanation and the code it marked; when that turn ends, aineo tells you
   whether the PDF is there (`:help aineo-walkthrough-record`). A switch of the tab's session ends the walkthrough. The file must lie in a repository the editor has open or in a
   worktree its agents reported, with the guards `test_layout` applies to its
   paths (nothing under `.git`, also by a link, no link out), be a regular file of at most
