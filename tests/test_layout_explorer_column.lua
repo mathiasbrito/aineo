@@ -899,7 +899,7 @@ end
 
 T['a file opened in the explorer column'] = MiniTest.new_set()
 
-T['a file opened in the explorer column']['moves to the file column, the column showing the explorer again'] = function()
+T['a file opened in the explorer column']['moves to the file column beside it, the column showing the explorer again'] = function()
   local buffers, arrangement = arrangement_with_column('left')
   layout.open(child, arrangement)
   focus_explorer_column(arrangement)
@@ -912,8 +912,8 @@ T['a file opened in the explorer column']['moves to the file column, the column 
   eq(child.lua_get('vim.api.nvim_win_get_buf(...)', { explorer_window }), buffers.explorer)
   local explorer, file_box = box_of(buffers.explorer), box_of(file)
   eq(explorer.col, 0)
-  expect.equality(file_box.col > box_of(buffers.claude).col, true)
-  expect.equality(file_box.col < box_of(buffers.report).col, true)
+  expect.equality(file_box.col > explorer.col, true)
+  expect.equality(file_box.col < box_of(buffers.claude).col, true)
   eq(layout.window_count(child), 5)
 end
 

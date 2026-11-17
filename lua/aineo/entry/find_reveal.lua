@@ -115,8 +115,9 @@ end
 --- already shown there, and that file is revealed.
 ---
 ---@param reveal fun(file: string)
+---@param on_opened? fun(buffer: integer) called, in the command that opens the file, with the buffer found
 ---@return aineo.entry.FindWatch watch
-local function start(reveal)
+local function start(reveal, on_opened)
   local page = vim.api.nvim_get_current_tabpage()
   local origin = vim.api.nvim_get_current_win()
   local before = vim.api.nvim_get_current_buf()
@@ -149,6 +150,9 @@ local function start(reveal)
       watch.stop()
       if not (watch.searching or watch.picker_seen) then
         return
+      end
+      if on_opened then
+        on_opened(event.buf)
       end
       local file = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(event.buf), ':p')
       after_the_layout_settles(function()
@@ -188,8 +192,9 @@ end
 ---
 ---@param reveal fun(file: string) what reveals a file in the tab's explorer
 ---@param search fun(): boolean? whether a third-party picker took the search
-function M.watching(reveal, search)
-  local watch = start(reveal)
+---@param on_opened? fun(buffer: integer) called with the buffer of the file the picker opens, as it opens
+function M.watching(reveal, search, on_opened)
+  local watch = start(reveal, on_opened)
   local searched, handed_to_a_picker = pcall(search)
   watch.searching = false
   if not searched then

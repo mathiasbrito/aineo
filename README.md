@@ -49,9 +49,13 @@ sets its width, a share of the screen's width (a number strictly between 0 and
 1, a quarter by default, never fewer than 40 columns) or a whole number of
 columns. `\e` then moves the cursor into it and is never a toggle, and
 `:Aineo layout swap` leaves it where it is; `\E` turns it on and off at will,
-in every tab, for the session. The file column opens beside it, on
-its inner side, unless `layout.file_beside_explorer` is `false`, which keeps it
-between Claude Code and the panes. With the explorer on the left:
+in every tab, for the session. The file column opens on the Claude side of the
+panel a file was picked from: a file picked in the explorer opens beside it, on
+its inner side, and a file picked in the panes column (the changes pane, the
+explorer pane, the walkthrough pane) opens between Claude Code and the panes;
+a file the finder or the agent opens leaves the file column where it is, and
+with none open `layout.file_beside_explorer` says where it opens. With the
+explorer on the left:
 
 ```
 +-----------+----------------+----------------+----------------+
@@ -119,8 +123,10 @@ and its state:
 - **Claude terminal.** The real Claude Code CLI. aineo answers none of its
   questions: permission prompts and dialogs are yours to answer there.
 - **File column.** Files you open, and the diffs the changes pane shows, take
-  a column beside the explorer column, or between Claude's terminal and the
-  panes column without one. `\f` finds a file to open there.
+  a column beside the explorer column when picked in it, or between Claude's
+  terminal and the panes column when picked in the panes column or without an
+  explorer column. `\f` finds a file to open there, leaving the column where
+  it is.
 - **Agent pane.** The Agent Report over Input.
   - *Agent Report.* Claude Code calls a report tool aineo gives it, and each
     report shows as a line: time, status (`started`, `progress`, `blocked`,
@@ -968,7 +974,7 @@ vim.g.aineo = {
 | `layout.claude_side` | `'left'` | The side of the screen Claude Code's terminal is on, `'left'` or `'right'`; the panes column is on the other side and the file column between. |
 | `layout.explorer_column` | `'right'` | Where the explorer column is: `'left'` or `'right'` keeps the explorer always visible as a column the full height of the screen at that side, beside the other three, and `\e` moves into it; `false` keeps the explorer a pane that `\e` shows. A call to `setup()` applies it at once in every tab. |
 | `layout.explorer_width` | `1 / 4` | The explorer column's width: a number strictly between 0 and 1 is that share of the screen's width, rounded down to whole columns but never fewer than 40, and follows the screen as it is resized; a whole number of at least 1 is that many columns, as is. It does nothing while `layout.explorer_column` is `false`. |
-| `layout.file_beside_explorer` | `true` | Whether the file column opens beside the explorer column while it is shown (on its right when the explorer column is at the left edge, on its left when at the right edge); `false` keeps it between Claude Code and the panes column. `\E` and a live `setup()` move an open file column to where it belongs. |
+| `layout.file_beside_explorer` | `true` | Where the file column opens while the explorer column is shown and the file was picked in neither the explorer nor the panes column, such as with `\f`: beside the explorer column (on its right when the explorer column is at the left edge, on its left when at the right edge), or, with `false`, between Claude Code and the panes column. A file picked in the explorer opens beside it and one picked in the panes column between Claude Code and the panes column, whatever this says; an open file column moves to the place of the panel a file is picked in next. `\E` and a live `setup()` that changes this option move an open file column to where it belongs. |
 | `layout.panel_numbers` | `false` | Whether the panels, the windows of the layout that show no file (Claude Code, the Report, Input, the explorer, the changes, terminal, run and walkthrough panes), show your line numbers, sign column, fold column and status column. With `false` they show none, only the separator between windows, whatever your global settings say, and files keep yours; `true` starts with them shown. `\tn` toggles it live in every tab. |
 | `changes.working_branch` | none | The branch work lands in, as git reads a name, such as `origin/dev`. Unset, it is the default branch of the remote `origin`. With none set and no `origin/HEAD`, the changes pane shows no Landed section. aineo never fetches. |
 | `changes.graph_limit` | `1000` | How many commits the commit graph (`t` in the commits window) draws, newest first, a whole number of at least 1. The graph says when older ones are not shown. |

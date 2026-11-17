@@ -533,21 +533,37 @@ T['a file opened with \\f while the file focus is on']['takes the file column an
   eq(is_focused(), true)
 end
 
+--- What each pane of the panes column shows in its windows.
+local PANE_WINDOWS = {
+  agent = { 'aineo://report', 'aineo://input' },
+  changes = { 'aineo://changes-files', 'aineo://changes-commits' },
+  terminal = { 'terminal' },
+}
+
 --- The windows a layout with the explorer column on the right and `README.md`
---- in the file column shows with `pane` in the panes column.
+--- in the file column, beside the explorer column, shows with `pane` in the
+--- panes column.
 ---
 ---@param top string
 ---@param pane 'agent'|'changes'|'terminal'
 ---@return string[]
 local function showing_pane(top, pane)
-  local panes = {
-    agent = { 'aineo://report', 'aineo://input' },
-    changes = { 'aineo://changes-files', 'aineo://changes-commits' },
-    terminal = { 'terminal' },
-  }
   return vim.list_extend(
-    vim.list_extend({ 'terminal' }, panes[pane]),
+    vim.list_extend({ 'terminal' }, PANE_WINDOWS[pane]),
     { vim.fs.joinpath(top, 'README.md'), 'aineo://explorer' }
+  )
+end
+
+--- The same with the file column between Claude Code's column and the panes
+--- column, where a file opened from a window of the panes column puts it.
+---
+---@param top string
+---@param pane 'agent'|'changes'|'terminal'
+---@return string[]
+local function showing_pane_with_file_after_claude(top, pane)
+  return vim.list_extend(
+    { 'terminal', vim.fs.joinpath(top, 'README.md') },
+    vim.list_extend(vim.deepcopy(PANE_WINDOWS[pane]), { 'aineo://explorer' })
   )
 end
 
@@ -672,9 +688,9 @@ end
 --- with the explorer column on the right and a file in the file column,
 --- which `FILE` stands for.
 local LAYOUT_CHANGES = {
-  { 'Aineo layout swap', { 'terminal', 'FILE', 'aineo://explorer' } },
+  { 'Aineo layout swap', { 'FILE', 'terminal', 'aineo://explorer' } },
   { 'Aineo layout mirror', { 'aineo://explorer', 'FILE', 'terminal' } },
-  { 'Aineo layout right', { 'terminal', 'FILE', 'aineo://explorer' } },
+  { 'Aineo layout right', { 'FILE', 'terminal', 'aineo://explorer' } },
   { 'Aineo explorer column', { 'terminal', 'FILE' } },
 }
 
@@ -823,7 +839,7 @@ T['a pane key while the file focus is armed']['ends it, and a file opened later 
   open_file(vim.fs.joinpath(top, 'README.md'))
 
   eq(is_focused(), false)
-  eq(entry.windows(child), showing_pane(top, pane))
+  eq(entry.windows(child), showing_pane_with_file_after_claude(top, pane))
 end
 
 T['q in the explorer'] = MiniTest.new_set()
