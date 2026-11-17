@@ -139,6 +139,7 @@ T['a file column shown after the layout opened']['opens beside the explorer colu
 )
   local buffers = open_with(column, claude_side, true)
   buffers.files = loaded_file('first.txt')
+  layout.enter_window_showing(child, buffers.claude)
 
   child.lua([[require('aineo.layout').show_file(...)]], { buffers.files })
 
@@ -163,6 +164,7 @@ T['the file column beside the explorer']['takes a diff in its window as a file']
   local buffers = open_with('right', 'left', true, true)
   local diff = layout.named_scratch(child, 'aineo://a-diff')
   local window = layout.window_showing(child, buffers.files)
+  layout.enter_window_showing(child, buffers.claude)
 
   child.lua([[require('aineo.layout').show_diff(...)]], { diff })
 
@@ -194,6 +196,7 @@ T['the file column beside the explorer']['opens again beside it once its last wi
   local buffers = open_with('right', 'right', true, true)
   child.lua([[vim.api.nvim_win_close(..., false)]], { layout.window_showing(child, buffers.files) })
   buffers.files = loaded_file('first.txt')
+  layout.enter_window_showing(child, buffers.claude)
 
   child.lua([[require('aineo.layout').show_file(...)]], { buffers.files })
 
@@ -407,6 +410,7 @@ T['with the layout not complete']['a file column opens beside the explorer all t
   local buffers = open_with('left', 'left', true)
   layout.close_windows(child, { report = buffers.report }, { 'report' })
   buffers.files = loaded_file('first.txt')
+  layout.enter_window_showing(child, buffers.claude)
 
   child.lua([[require('aineo.layout').show_file(...)]], { buffers.files })
 
