@@ -501,6 +501,53 @@ T['a file column placed by a pick']['keeps its place between Claude and the pane
   eq(from_the_left(buffers, COLUMN_NAMES), centre_swapped)
 end
 
+T['a file named to pick_without_panel()'] = MiniTest.new_set({ parametrize = PLACES })
+
+T['a file named to pick_without_panel()']['goes where the option says, shown from the panes column'] = function(
+  column,
+  claude_side,
+  beside
+)
+  local buffers = open_layout(column, claude_side, true)
+  buffers.files = loaded_file('first.txt')
+
+  layout.enter_window_showing(child, buffers.report)
+  child.lua(
+    [[(function(buffer)
+      require('aineo.layout').pick_without_panel(buffer)
+      require('aineo.layout').show_file(buffer)
+    end)(...)]],
+    { buffers.files }
+  )
+
+  eq(from_the_left(buffers, COLUMN_NAMES), beside)
+end
+
+T['a file named to pick_without_panel()']['is picked in a panel again once the commands in flight are done'] = function(
+  column,
+  claude_side,
+  beside
+)
+  local buffers = open_layout(column, claude_side, false)
+  buffers.files = loaded_file('first.txt')
+  child.lua([[require('aineo.layout').pick_without_panel(...)]], { buffers.files })
+  child.lua([[vim.wait(100)]])
+
+  show_from(buffers, 'explorer', buffers.files)
+
+  eq(from_the_left(buffers, COLUMN_NAMES), beside)
+end
+
+T['pick_without_panel()'] = MiniTest.new_set()
+
+T['pick_without_panel()']['refuses what is not a buffer, naming it'] = function()
+  open_layout('left', 'left', true)
+
+  MiniTest.expect.error(function()
+    child.lua([[require('aineo.layout').pick_without_panel('first.txt')]])
+  end, 'buffer:')
+end
+
 T['without an explorer column'] = MiniTest.new_set()
 
 T['without an explorer column']['a file picked from the panes column opens between Claude and the panes column'] = function()
