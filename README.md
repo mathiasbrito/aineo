@@ -310,7 +310,7 @@ and, in Terminal mode, `<C-\>Z` do the same.
 | `gf` | in the files window: opens the working tree's file, or, under a commit, the file as that commit has it |
 | `\<CR>`, `<S-CR>` | in the files window: open the file for editing, in the working tree it belongs to |
 | `F` | in a diff: reads it again with the whole file as context, and back to three lines |
-| `\d` | closes the diff, from any window of the tab |
+| `q` | in either window of the pane: closes the file column, the diff and the file shown there (such as one opened with `<S-CR>` or `gf`), the cursor staying in the pane; a file with unsaved changes keeps it open and aineo says so; with none open it does nothing and starts no recording. `:Aineo diff close` (`<Plug>(aineo-diff-close)`, mapped to no key by default) closes the diff alone, from any window of the tab |
 | `<Tab>`, `<S-Tab>` | in either window of the pane: show the next or the previous project of the tab, wrapping (a tab holds several only once Claude Code works in more than one repository) |
 | `X` | in either window of the pane: closes the project shown, unless it is the session's |
 
@@ -416,11 +416,12 @@ Every part takes its colour from your colour scheme, through the
   Session work, a commit or the Landed heading shows the whole diff of that
   choice. Once a diff is open, moving the cursor in the files window shows
   the diff of the file under it, so you can go down the files with the diff
-  following; with none open, moving opens none, and `\d` stops the following;
+  following; with none open, moving opens none, and `q` stops the following;
   `l` and `h` choose the diff against the previous version or against `HEAD`
   and show it at once, and the cursor stays on the list. `<BS>` in the diff
   moves back to the list, onto that file's line. `F` in a diff widens its
-  context to the whole file and back. `\d` closes the diff.
+  context to the whole file and back. `q` in the pane closes the diff and any file in
+  the file column.
 - **See what a diff compares against.** The second line of the files window,
   `Against: <left> → <right>`, and the bar at the top of every diff window,
   `<left> ↔ <right>  <path>`, say both sides of the diff: the abbreviated id of

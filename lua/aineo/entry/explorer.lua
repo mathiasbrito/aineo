@@ -8,25 +8,10 @@
 --- focused work ends the hold of the default view the explorer takes when a
 --- file of the folder Claude works in is followed (`follow_focused_work()`).
 
-local errors = require('aineo.entry.errors')
+local file_column = require('aineo.entry.file_column')
 local links = require('aineo.entry.links')
-local registry = require('aineo.entry.registry')
 
 local M = {}
-
---- Turns the file focus of the tab whose homes are `homes` on, or off when it
---- is on (`aineo.entry.Tab`'s `actions.focus`), and tells the user once the
---- error it raises. Does nothing while no tab holds `homes`.
----
----@param homes aineo.entry.Homes
-local function toggle_file_focus_of(homes)
-  local tab = vim.iter(registry.tab_list):find(function(listed)
-    return listed.homes == homes
-  end)
-  if tab then
-    errors.run(tab.actions.focus)
-  end
-end
 
 --- What the explorer's `s` tells the user before the tab's Claude Code has
 --- started: the changes pane's list is read once it has.
@@ -65,12 +50,10 @@ function M.make_explorer(homes)
       return homes.layout.is_file_focused()
     end,
     toggle_file_focus = function()
-      toggle_file_focus_of(homes)
+      file_column.toggle_file_focus(homes)
     end,
     close_file_column = function()
-      if homes.layout.close_file_column() and homes.layout.is_file_focused() then
-        toggle_file_focus_of(homes)
-      end
+      file_column.close(homes)
     end,
     is_in_explorer_column = function()
       return homes.layout.is_explorer_column_window(vim.api.nvim_get_current_win())
