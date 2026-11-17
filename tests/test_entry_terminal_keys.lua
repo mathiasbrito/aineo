@@ -48,7 +48,6 @@ local TWIN_KEYS = {
   { '7', '<Plug>(aineo-tab-7)' },
   { '8', '<Plug>(aineo-tab-8)' },
   { '9', '<Plug>(aineo-tab-9)' },
-  { 'd', '<Plug>(aineo-diff-close)' },
   { 'f', '<Plug>(aineo-find)' },
   { 'z', '<Plug>(aineo-zoom)' },
   { 'Z', '<Plug>(aineo-zoom-full)' },

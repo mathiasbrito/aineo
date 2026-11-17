@@ -259,7 +259,6 @@ local ROWS = vim.list_extend(
     global_with_twin('layout', '1', 'tab-1', 'tab 1', 'move to tab 1 to 9'),
   },
   vim.list_extend(tab_keys_after_the_first(), {
-    global_with_twin('changes', 'd', 'diff-close', 'diff close', 'close the diff'),
     global_with_twin(
       'explorer',
       'f',
@@ -569,6 +568,12 @@ local ROWS = vim.list_extend(
     in_buffer('changes_pane', '<S-CR>', nil, 'edit the file in its working tree'),
     in_buffer('changes_pane', 'F', nil, 'in a diff: the whole file as context, or three lines'),
     in_buffer('changes_pane', '<BS>', nil, 'move back to the files or commits window'),
+    in_buffer(
+      'changes_pane',
+      'q',
+      nil,
+      'close the file column: the diff and the file, the cursor staying in the pane'
+    ),
     in_buffer('changes_pane', '<Tab>', nil, 'show the next project of the tab'),
     in_buffer('changes_pane', '<S-Tab>', nil, 'show the previous project'),
     in_buffer('changes_pane', 'X', nil, "close the project shown, unless it is the session's"),

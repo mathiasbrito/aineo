@@ -466,7 +466,7 @@ T['Enter']['while the command-line window is open shows the diff once it closes,
   git_repo.wait_until('the diff read', function()
     return child.lua_get('_G.answer_diff ~= nil')
   end)
-  child.api.nvim_input('q:')
+  child.api.nvim_input(':<C-f>')
   git_repo.wait_until('the command-line window open', function()
     return child.fn.getcmdwintype() == ':'
   end)
@@ -723,12 +723,6 @@ T['Diff close'] = MiniTest.new_set()
 --- `parametrize`: its name, and the function that goes through it.
 local DIFF_CLOSE_DOORS = {
   {
-    'pressing \\d',
-    function()
-      entry.press(child, '\\d')
-    end,
-  },
-  {
     'pressing <Plug>(aineo-diff-close)',
     function()
       entry.press(child, '<Plug>(aineo-diff-close)')
@@ -741,6 +735,15 @@ local DIFF_CLOSE_DOORS = {
     end,
   },
 }
+
+T['Diff close']['is mapped to no key by default, its <Plug> mapping staying'] = function()
+  changes_pane_listing_a_file('changespane-entry-diff-close-unbound')
+
+  eq({
+    key = child.lua_get('vim.fn.maparg("\\\\d", "n")'),
+    plug = child.lua_get('vim.fn.maparg("<Plug>(aineo-diff-close)", "n") ~= ""'),
+  }, { key = '', plug = true })
+end
 
 T['Diff close']['closes the diff the cursor is in and puts the cursor on the file’s line of the files window, by'] =
   MiniTest.new_set({ parametrize = DIFF_CLOSE_DOORS })
@@ -788,7 +791,7 @@ end
 
 T['Diff close']['with no aineo tab tells there is no diff and makes no tab, by'] =
   MiniTest.new_set({
-    parametrize = { DIFF_CLOSE_DOORS[1], DIFF_CLOSE_DOORS[3] },
+    parametrize = DIFF_CLOSE_DOORS,
   })
 
 T['Diff close']['with no aineo tab tells there is no diff and makes no tab, by']['door'] = function(
@@ -814,7 +817,7 @@ T['Diff close']['from a tab page of no aineo tab closes the diff of the tab used
   wait_for_window_showing('aineo://diff/notes.txt')
   child.cmd('tabnew')
 
-  entry.press(child, '\\d')
+  entry.press(child, '<Plug>(aineo-diff-close)')
 
   eq({ child.fn.tabpagenr(), entry.windows(child) }, { 1, { 'terminal', FILES, COMMITS } })
 end
@@ -825,7 +828,7 @@ T['Diff close']['gives the file column back: Claude’s column takes half of the
   wait_for_window_showing('aineo://diff/notes.txt')
   local with_the_column = child.lua_get('vim.api.nvim_win_get_width(vim.fn.win_getid(1))')
 
-  entry.press(child, '\\d')
+  entry.press(child, '<Plug>(aineo-diff-close)')
 
   git_repo.wait_until('Claude’s column half of the screen', function()
     return child.lua_get('vim.api.nvim_win_get_width(vim.fn.win_getid(1))')
@@ -838,12 +841,143 @@ T['Diff close']['tells once that there is no diff to close when none is shown'] 
   changes_pane_listing_a_file('changespane-entry-diff-close-none')
   local windows = entry.windows(child)
 
-  entry.press(child, '\\d')
+  entry.press(child, '<Plug>(aineo-diff-close)')
 
   eq({ entry.messages(child), entry.windows(child) }, {
     { { message = 'aineo: no diff to close', level = vim.log.levels.INFO } },
     windows,
   })
+end
+
+T['q'] = MiniTest.new_set()
+
+--- Puts the cursor in the window of the child that shows the buffer named
+--- `name`.
+---
+---@param name string
+local function enter_window_showing(name)
+  child.lua('vim.api.nvim_set_current_win(vim.fn.bufwinid(...))', { name })
+end
+
+--- Opens `notes.txt` in the file column with `<S-CR>` from the files window,
+--- waits for it to show and puts the cursor back in the window that shows
+--- `buffer_name`; returns the file's path.
+---
+---@param top string
+---@param buffer_name string
+---@return string path
+local function file_shown_then_back_in(top, buffer_name)
+  local path = vim.fs.joinpath(top, 'notes.txt')
+  entry.press(child, '<S-CR>')
+  wait_for_window_showing(path)
+  enter_window_showing(buffer_name)
+  return path
+end
+
+T['q']['closes the file opened with <S-CR>, the cursor staying in the files window'] = function()
+  local top = changes_pane_listing_a_file('changespane-entry-q-file')
+  file_shown_then_back_in(top, FILES)
+
+  entry.press(child, 'q')
+
+  eq(
+    { entry.windows(child), entry.current_window(child), child.api.nvim_get_mode().mode },
+    { { 'terminal', FILES, COMMITS }, FILES, 'n' }
+  )
+end
+
+T['q']['closes the file opened with gf'] = function()
+  local top = changes_pane_listing_a_file('changespane-entry-q-gf')
+  entry.press(child, 'gf')
+  wait_for_window_showing(vim.fs.joinpath(top, 'notes.txt'))
+  enter_window_showing(FILES)
+
+  entry.press(child, 'q')
+
+  eq(entry.windows(child), { 'terminal', FILES, COMMITS })
+end
+
+T['q']['closes the file from the commits window, the cursor staying there'] = function()
+  local top = changes_pane_listing_a_file('changespane-entry-q-commits')
+  file_shown_then_back_in(top, COMMITS)
+
+  entry.press(child, 'q')
+
+  eq(
+    { entry.windows(child), entry.current_window(child) },
+    { { 'terminal', FILES, COMMITS }, COMMITS }
+  )
+end
+
+T['q']['closes the diff shown, the cursor staying in the files window'] = function()
+  changes_pane_listing_a_file('changespane-entry-q-diff')
+  entry.press(child, 'l')
+  wait_for_window_showing('aineo://diff/notes.txt')
+
+  entry.press(child, 'q')
+
+  eq(
+    { entry.windows(child), entry.current_window(child) },
+    { { 'terminal', FILES, COMMITS }, FILES }
+  )
+end
+
+T['q']['closes a diff and a file shown side by side'] = function()
+  local top = changes_pane_listing_a_file('changespane-entry-q-both')
+  local path = file_shown_then_back_in(top, FILES)
+  enter_window_showing(path)
+  child.cmd('vsplit')
+  enter_window_showing(FILES)
+  entry.press(child, 'l')
+  wait_for_window_showing('aineo://diff/notes.txt')
+  local shown = entry.windows(child)
+
+  entry.press(child, 'q')
+
+  eq({ shown = shown, closed = entry.windows(child) }, {
+    shown = { 'terminal', 'aineo://diff/notes.txt', path, FILES, COMMITS },
+    closed = { 'terminal', FILES, COMMITS },
+  })
+end
+
+T['q']['with nothing open changes nothing and starts no macro recording'] = function()
+  changes_pane_listing_a_file('changespane-entry-q-nothing')
+  local windows = entry.windows(child)
+
+  entry.press(child, 'q')
+
+  eq({
+    windows = entry.windows(child),
+    recording = child.fn.reg_recording(),
+    errmsg = child.v.errmsg,
+  }, { windows = windows, recording = '', errmsg = '' })
+end
+
+T['q']['keeps a file with unsaved changes open and says so'] = function()
+  local top = changes_pane_listing_a_file('changespane-entry-q-modified')
+  local path = file_shown_then_back_in(top, FILES)
+  child.lua('vim.bo[vim.fn.bufnr(...)].modified = true', { path })
+
+  entry.press(child, 'q')
+
+  eq({ entry.windows(child), entry.messages(child) }, {
+    { 'terminal', path, FILES, COMMITS },
+    {
+      {
+        message = 'aineo: notes.txt has unsaved changes; the file column stays open',
+        level = vim.log.levels.WARN,
+      },
+    },
+  })
+end
+
+T['q']['says what it does in its description'] = function()
+  changes_pane_listing_a_file('changespane-entry-q-desc')
+
+  eq({
+    files = child.lua_get('vim.fn.maparg("q", "n", false, true).desc'),
+    buffer = child.lua_get('vim.fn.maparg("q", "n", false, true).buffer'),
+  }, { files = 'aineo: close the file column, the cursor staying in the pane', buffer = 1 })
 end
 
 --- What `:Aineo diff` tells the user when it is not given `close`.
