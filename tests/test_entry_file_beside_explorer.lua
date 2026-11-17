@@ -133,20 +133,36 @@ end
 
 T['a file opened from Input'] = MiniTest.new_set()
 
-T['a file opened from Input']['lies between Claude Code and the panes with the explorer column on the left'] = function()
+T['a file opened from Input']['lies beside the explorer column on the left by default'] = function()
   local readme = open_in_repository('left', { layout = { explorer_column = 'left' } })
 
   edit(readme)
 
-  eq(wait_for_windows(centre_left(readme)), centre_left(readme))
+  eq(wait_for_windows(beside_left(readme)), beside_left(readme))
 end
 
-T['a file opened from Input']['lies between Claude Code and the panes with the explorer column on the right'] = function()
+T['a file opened from Input']['lies beside the explorer column on the right by default'] = function()
   local readme = open_in_repository('right', { layout = { explorer_column = 'right' } })
 
   edit(readme)
 
-  eq(wait_for_windows(centre_right(readme)), centre_right(readme))
+  eq(wait_for_windows(beside_right(readme)), beside_right(readme))
+end
+
+T['a file opened from Input']['leaves the file column where it is, beside the explorer column'] = function()
+  local readme = open_in_repository(
+    'input-beside',
+    { layout = { explorer_column = 'left', file_beside_explorer = false } }
+  )
+  enter_explorer()
+  edit(readme)
+  wait_for_windows(beside_left(readme))
+  child.lua([[vim.api.nvim_set_current_win(vim.fn.win_findbuf(vim.fn.bufnr('aineo://input'))[1])]])
+  local main = vim.fs.joinpath(vim.fs.dirname(readme), 'src', 'main.lua')
+
+  edit(main)
+
+  eq(wait_for_windows(beside_left(main)), beside_left(main))
 end
 
 T['a file opened from the explorer column'] = MiniTest.new_set()
@@ -233,6 +249,7 @@ T['a file found with \\f']['keeps the file column between Claude Code and the pa
   local readme = open_in_repository('find-centre', {
     layout = { explorer_column = 'left', file_beside_explorer = true },
   })
+  child.lua([[vim.api.nvim_set_current_win(vim.fn.win_findbuf(vim.fn.bufnr('aineo://report'))[1])]])
   edit(readme)
   wait_for_windows(centre_left(readme))
   enter_explorer()
@@ -313,7 +330,6 @@ T['restoring the layout'] = MiniTest.new_set()
 
 T['restoring the layout']['keeps the file column beside the explorer column'] = function()
   local readme = open_in_repository('restore', { layout = { explorer_column = 'left' } })
-  enter_claude()
   edit(readme)
   wait_for_windows(beside_left(readme))
   child.lua('vim.api.nvim_win_close(vim.fn.win_findbuf(vim.fn.bufnr("aineo://report"))[1], false)')
