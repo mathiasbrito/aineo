@@ -242,6 +242,26 @@ T['a file found with \\f']['keeps the file column between Claude Code and the pa
   eq(wait_for_windows(centre_left(readme)), centre_left(readme))
 end
 
+T['a file found with \\f']['keeps the file column beside the explorer column when the finder lists the files itself, started from Input'] = function()
+  local readme = open_in_repository('find-list', {
+    layout = { explorer_column = 'left', file_beside_explorer = false },
+  })
+  enter_explorer()
+  edit(readme)
+  wait_for_windows(beside_left(readme))
+  child.lua([[vim.api.nvim_set_current_win(vim.fn.win_findbuf(vim.fn.bufnr('aineo://input'))[1])]])
+  child.lua([[package.preload['snacks'] = nil
+  package.loaded['snacks'] = nil]])
+  child.lua([[vim.ui.select = function(items, _, on_choice)
+    on_choice('src/main.lua')
+  end]])
+
+  entry.press(child, '\\f')
+
+  local main = vim.fs.joinpath(vim.fs.dirname(readme), 'src', 'main.lua')
+  eq(wait_for_windows(beside_left(main)), beside_left(main))
+end
+
 T['the explorer column key'] = MiniTest.new_set()
 
 T['the explorer column key']['moves the open file column beside the column and back'] = function()
