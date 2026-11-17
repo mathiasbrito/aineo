@@ -555,7 +555,7 @@ local function showing_pane(top, pane)
 end
 
 --- The same with the file column between Claude Code's column and the panes
---- column, where a file opened from a window of the panes column puts it.
+--- column, where a file opened from a window of a pane puts it.
 ---
 ---@param top string
 ---@param pane 'agent'|'changes'|'terminal'
@@ -688,9 +688,9 @@ end
 --- with the explorer column on the right and a file in the file column,
 --- which `FILE` stands for.
 local LAYOUT_CHANGES = {
-  { 'Aineo layout swap', { 'FILE', 'terminal', 'aineo://explorer' } },
+  { 'Aineo layout swap', { 'terminal', 'FILE', 'aineo://explorer' } },
   { 'Aineo layout mirror', { 'aineo://explorer', 'FILE', 'terminal' } },
-  { 'Aineo layout right', { 'FILE', 'terminal', 'aineo://explorer' } },
+  { 'Aineo layout right', { 'terminal', 'FILE', 'aineo://explorer' } },
   { 'Aineo explorer column', { 'terminal', 'FILE' } },
 }
 
@@ -814,20 +814,24 @@ T['the explorer pane under the file focus']['comes back with the cursor on the e
 end
 
 --- Each key that shows a pane of the panes column, as a set's `parametrize`,
---- with the pane that shows once the key ran.
+--- with the pane that shows once the key ran, and the windows that show after
+--- a file is opened from the window the key leaves the cursor in: Input's
+--- prompt leaves the file column beside the explorer, a window of a pane puts
+--- it between Claude Code and the panes.
 local ARMED_PANE_KEYS = {
-  { '\\r', 'agent' },
-  { '\\i', 'agent' },
-  { '\\g', 'changes' },
-  { '\\pa', 'agent' },
-  { '\\pt', 'terminal' },
+  { '\\r', 'agent', showing_pane_with_file_after_claude },
+  { '\\i', 'agent', showing_pane },
+  { '\\g', 'changes', showing_pane_with_file_after_claude },
+  { '\\pa', 'agent', showing_pane_with_file_after_claude },
+  { '\\pt', 'terminal', showing_pane_with_file_after_claude },
 }
 
 T['a pane key while the file focus is armed'] = MiniTest.new_set({ parametrize = ARMED_PANE_KEYS })
 
 T['a pane key while the file focus is armed']['ends it, and a file opened later leaves the pane in place'] = function(
   keys,
-  pane
+  pane,
+  windows_with_file
 )
   local top = open_with_column('armed-key', 'right')
   child.o.shell = '/bin/sh'
@@ -839,7 +843,7 @@ T['a pane key while the file focus is armed']['ends it, and a file opened later 
   open_file(vim.fs.joinpath(top, 'README.md'))
 
   eq(is_focused(), false)
-  eq(entry.windows(child), showing_pane_with_file_after_claude(top, pane))
+  eq(entry.windows(child), windows_with_file(top, pane))
 end
 
 T['q in the explorer'] = MiniTest.new_set()

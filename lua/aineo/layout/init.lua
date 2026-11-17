@@ -559,24 +559,26 @@ local function make_layout(input_name, group_name)
     state.file_beside_explorer = handed
   end
 
-  --- Whether `window` is one of the windows of the panes column: the Report's,
-  --- Input's, or one of the run pane's.
+  --- Whether `window` is a window of a pane of the panes column, a panel files
+  --- are picked in: the Report's, one of the run pane's, or Input's while it
+  --- shows another pane's buffer, the changes pane's commits say. Input's
+  --- window showing the prompt is Claude's, not a panel.
   ---
   ---@param window integer
   ---@return boolean
-  local function is_panes_column_window(window)
+  local function is_pane_window(window)
     return window == state.windows.report
-      or window == state.windows.input
       or vim.list_contains(state.run_windows, window)
+      or (window == state.windows.input and own_buffer('input') ~= state.buffers.input)
   end
 
   --- Records where the file column belongs for the file `buffer` picked in
   --- `window`, before it is shown: picked in the explorer column, beside it;
-  --- picked in a window of the panes column while the explorer column is
-  --- open, between Claude's column and the panes column; picked anywhere
-  --- else, or a buffer `M.pick_without_panel()` named, the file column stays
-  --- where it is, and with no file column open the option
-  --- `file_beside_explorer` says again.
+  --- picked in a window of a pane of the panes column while the explorer
+  --- column is open (`is_pane_window()`), between Claude's column and the
+  --- panes column; picked anywhere else, Input's prompt included, or a buffer
+  --- `M.pick_without_panel()` named, the file column stays where it is, and
+  --- with no file column open the option `file_beside_explorer` says again.
   ---
   ---@param window integer the window the file is picked in
   ---@param buffer integer
@@ -587,7 +589,7 @@ local function make_layout(input_name, group_name)
     end
     if not unplaced and has_explorer_column() and window == state.explorer_window then
       state.file_beside_picker = true
-    elseif not unplaced and has_explorer_column() and is_panes_column_window(window) then
+    elseif not unplaced and has_explorer_column() and is_pane_window(window) then
       state.file_beside_picker = false
     elseif not has_file_column() then
       state.file_beside_picker = nil
@@ -3186,8 +3188,9 @@ local function make_layout(input_name, group_name)
   ---
   --- With the explorer column open, the file column lies beside it, on its
   --- inner side, when the last file was picked in the explorer column, and
-  --- between Claude's column and the right one when it was picked in the
-  --- right column's windows (`M.show_file()`); with no pick deciding it,
+  --- between Claude's column and the right one when it was picked in a pane
+  --- of the right column other than Input's prompt (`M.show_file()`); with no
+  --- pick deciding it,
   --- `arrangement.file_beside_explorer` says: true beside the explorer
   --- column, otherwise between those two. Claude's column and the right one
   --- keep their order. Handed again with another value than the layout holds,
@@ -3709,10 +3712,12 @@ local function make_layout(input_name, group_name)
   --- (`show_in_file_column_keeping_cursor()`), in the window of the file or
   --- diff shown there, which stays listed, and returns its window. The file is
   --- picked in the window the cursor is in: in the explorer column, the file
-  --- column lies beside it from now on, and in a window of the panes column
-  --- while the explorer column is open, between Claude's column and the panes
-  --- column, an open file column moving to that place; picked anywhere else,
-  --- or named to `M.pick_without_panel()`, it stays where it is, and with no
+  --- column lies beside it from now on, and in a window of a pane of the panes
+  --- column (the Report's, the changes pane's, the run pane's) while the
+  --- explorer column is open, between Claude's column and the panes column, an
+  --- open file column moving to that place; picked anywhere else, Input's
+  --- prompt and Claude's window included, or named to
+  --- `M.pick_without_panel()`, it stays where it is, and with no
   --- file column open `arrangement.file_beside_explorer` says where it opens
   --- (`M.open()`).
   ---

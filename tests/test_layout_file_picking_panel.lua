@@ -201,6 +201,123 @@ T['a file picked from the panes column']['opens between them when edited there']
   eq(from_the_left(buffers, COLUMN_NAMES), centre)
 end
 
+T['a file opened from Input’s prompt'] = MiniTest.new_set({ parametrize = PLACES })
+
+T['a file opened from Input’s prompt']['opens where the option says: beside the explorer column'] = function(
+  column,
+  claude_side,
+  beside
+)
+  local buffers = open_layout(column, claude_side, true)
+  buffers.input = layout.input_buffer(child)
+
+  edit_from(buffers, 'input', 'first.txt')
+  buffers.files = child.lua_get([[vim.fn.bufnr(...)]], { layout.file('first.txt') })
+
+  eq(from_the_left(buffers, COLUMN_NAMES), beside)
+end
+
+T['a file opened from Input’s prompt']['opens where the option says: between Claude and the panes column'] = function(
+  column,
+  claude_side,
+  _,
+  centre
+)
+  local buffers = open_layout(column, claude_side, false)
+  buffers.input = layout.input_buffer(child)
+
+  edit_from(buffers, 'input', 'first.txt')
+  buffers.files = child.lua_get([[vim.fn.bufnr(...)]], { layout.file('first.txt') })
+
+  eq(from_the_left(buffers, COLUMN_NAMES), centre)
+end
+
+T['a file opened from Input’s prompt']['leaves a file column beside the explorer column where it is'] = function(
+  column,
+  claude_side,
+  beside
+)
+  local buffers = open_layout(column, claude_side, false)
+  buffers.input = layout.input_buffer(child)
+  buffers.files = loaded_file('first.txt')
+  show_from(buffers, 'explorer', buffers.files)
+
+  local second = loaded_file('second.txt')
+  buffers.files = second
+  show_from(buffers, 'input', second)
+
+  eq(from_the_left(buffers, COLUMN_NAMES), beside)
+end
+
+T['a file opened from Input’s prompt']['leaves a file column between Claude and the panes column where it is'] = function(
+  column,
+  claude_side,
+  _,
+  centre
+)
+  local buffers = open_layout(column, claude_side, true)
+  buffers.input = layout.input_buffer(child)
+  buffers.files = loaded_file('first.txt')
+  show_from(buffers, 'report', buffers.files)
+
+  local second = loaded_file('second.txt')
+  buffers.files = second
+  show_from(buffers, 'input', second)
+
+  eq(from_the_left(buffers, COLUMN_NAMES), centre)
+end
+
+T['a file picked in the changes pane'] = MiniTest.new_set({ parametrize = PLACES })
+
+T['a file picked in the changes pane']['opens between Claude and the panes column from either of its windows'] = function(
+  column,
+  claude_side,
+  _,
+  centre
+)
+  local buffers, arrangement = open_layout(column, claude_side, true)
+  buffers.changes_files = layout.named_scratch(child, 'aineo://changes-files')
+  buffers.changes_commits = layout.named_scratch(child, 'aineo://changes-commits')
+  arrangement.changes = { files = buffers.changes_files, commits = buffers.changes_commits }
+  layout.open(child, arrangement)
+  child.lua([[require('aineo.layout').show_pane('changes')]])
+
+  buffers.files = loaded_file('first.txt')
+  show_from(buffers, 'changes_commits', buffers.files)
+
+  eq(
+    from_the_left(buffers, { 'explorer', 'files', 'claude', 'changes_files' }),
+    vim.tbl_map(function(name)
+      return name == 'report' and 'changes_files' or name
+    end, centre)
+  )
+end
+
+T['a file picked in the run pane'] = MiniTest.new_set({ parametrize = PLACES })
+
+T['a file picked in the run pane']['opens between Claude and the panes column, from its second terminal'] = function(
+  column,
+  claude_side,
+  _,
+  centre
+)
+  local buffers, arrangement = open_layout(column, claude_side, true)
+  buffers.run = layout.terminal(child)
+  buffers.second_run = layout.terminal(child)
+  arrangement.run = { buffers = { buffers.run, buffers.second_run }, winbar = '%f' }
+  child.lua([[require('aineo.layout').show_pane('run', ...)]], { arrangement })
+
+  buffers.files = loaded_file('first.txt')
+  show_from(buffers, 'second_run', buffers.files)
+
+  eq(
+    from_the_left(buffers, { 'explorer', 'files', 'claude', 'run' }),
+    vim.tbl_map(function(name)
+      return name == 'report' and 'run' or name
+    end, centre)
+  )
+end
+
 T['a diff picked from a panel'] = MiniTest.new_set({ parametrize = PLACES })
 
 T['a diff picked from a panel']['opens beside the explorer column from it and between Claude and the panes column from the panes column'] = function(

@@ -237,7 +237,8 @@ the file column beside it on its left:
   column moves to the place of the panel a file is picked in next, and moves
   between Claude Code and the panes column as the explorer column turns off,
   with its buffers, splits and cursors. A file the finder (`\f`) or the agent
-  opens leaves the file column where it is, and with none open it goes where
+  opens, or one opened from Claude Code's window or Input's prompt, leaves the
+  file column where it is, and with none open it goes where
   `layout.file_beside_explorer` (|aineo-config-layout.file_beside_explorer|)
   says.
 - It is independent of the side Claude Code is on: `:Aineo layout swap`,
@@ -2307,12 +2308,12 @@ its own buffer. While the explorer column is shown (|aineo-explorer-column|)
 the file column lies on the Claude side of the panel the file was picked in: a
 file picked in the explorer column opens beside it, and one picked in the
 panes column between Claude's column and the panes column. A file picked
-anywhere else, `\f` and the agent's included, leaves the file column where it
-is; with none open `layout.file_beside_explorer`
-(|aineo-config-layout.file_beside_explorer|) says where it opens. While the
-file column is open, the three columns take a third of the screen each. Only
-file buffers move: help, terminals and scratch buffers stay where they were
-opened until `\o` restores the layout.
+anywhere else, `\f`, the agent, Claude's window and Input's prompt included,
+leaves the file column where it is; with none open
+`layout.file_beside_explorer` (|aineo-config-layout.file_beside_explorer|)
+says where it opens. While the file column is open, the three columns take a
+third of the screen each. Only file buffers move: help, terminals and scratch
+buffers stay where they were opened until `\o` restores the layout.
 
 A diff Enter shows from the changes pane (|aineo-changes|) takes the file
 column's window as a file does, and the next file or diff takes its place:
@@ -5190,8 +5191,9 @@ layout.panel_numbers	A boolean. Default: `false`
 layout.file_beside_explorer	A boolean. Default: `true`
 			Where the file column opens while the explorer column
 			is shown (|aineo-explorer-column|) and the file was
-			picked in neither the explorer column nor the panes
-			column, such as with `\f` (|aineo-find|): beside the
+			picked in neither the explorer column nor a pane of
+			the panes column (Input's prompt is none), such as
+			with `\f` (|aineo-find|): beside the
 			explorer column, on its right when it is at the left
 			edge and on its left when it is at the right edge, or,
 			with `false`, between Claude Code's column and the
