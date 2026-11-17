@@ -15,6 +15,7 @@
 --- `aineo.projects` and `aineo.changes` are required when a tab first needs
 --- them.
 
+local file_column = require('aineo.entry.file_column')
 local office = require('aineo.entry.office')
 local places = require('aineo.entry.places')
 local settings = require('aineo.entry.settings')
@@ -312,12 +313,35 @@ local function close_chosen(tab)
   home.let_go()
 end
 
---- Maps the keys that choose and close projects in `pane`'s two buffers, and
---- has the line of tabs drawn whenever the commits buffer enters a window.
+--- The key that closes the file column, in both windows of the pane.
+local CLOSE_FILE_COLUMN_KEY = 'q'
+
+--- Maps `q` in `pane`'s two buffers, in Normal mode, to close the tab's file
+--- column (`aineo.entry.file_column`'s `close()`), the cursor staying in the
+--- pane. With no file or diff open it does nothing, and starts no recording.
+---
+---@param tab aineo.entry.Tab
+---@param pane { files: integer, commits: integer }
+local function map_close_file_column(tab, pane)
+  for _, buffer in ipairs({ pane.files, pane.commits }) do
+    vim.keymap.set('n', CLOSE_FILE_COLUMN_KEY, function()
+      file_column.close(tab.homes)
+    end, {
+      buffer = buffer,
+      nowait = true,
+      desc = 'aineo: close the file column, the cursor staying in the pane',
+    })
+  end
+end
+
+--- Maps the keys that choose and close projects and the one that closes the
+--- file column (`map_close_file_column()`) in `pane`'s two buffers, and has
+--- the line of tabs drawn whenever the commits buffer enters a window.
 ---
 ---@param tab aineo.entry.Tab
 ---@param pane { files: integer, commits: integer }
 local function prepare_pane(tab, pane)
+  map_close_file_column(tab, pane)
   for _, buffer in ipairs({ pane.files, pane.commits }) do
     local function map(lhs, action, description)
       vim.keymap.set('n', lhs, action, { buffer = buffer, nowait = true, desc = description })
@@ -825,6 +849,8 @@ function M.pane_of(tab)
   local pane = home.pane_buffers()
   if state and state.list then
     prepare_pane(tab, pane)
+  else
+    map_close_file_column(tab, pane)
   end
   return pane
 end
