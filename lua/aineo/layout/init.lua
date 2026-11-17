@@ -48,7 +48,7 @@ local zoom = require('aineo.layout.zoom')
 ---@field explorer? integer the explorer pane's buffer, the tree of the folder Claude works in, shown alone in the right column, in the Report's window; without it the layout keeps the one it was handed last
 ---@field explorer_column? aineo.layout.Side|false the side of the screen the explorer column is on, a column of its own the full height of the screen beside the other columns showing `explorer`, whichever side Claude's column is on; `false` for none; without it the layout keeps what it was handed last, none before any
 ---@field explorer_width? number the explorer column's width: a positive whole number of cells, or a share of the screen's width strictly between 0 and 1, which is that share of the columns rounded down but not fewer than 40 cells and follows the screen as it is resized; without it the layout keeps the one it was handed last, and a side for the column needs one
----@field file_beside_explorer? boolean whether the file column lies beside the explorer column while that column is open, on its inner side, rather than between Claude's column and the right column; without it the layout keeps what it was handed last, false before any
+---@field file_beside_explorer? boolean where the file column lies while the explorer column is open when no pick decides it (`M.show_file()`): beside the explorer column, on its inner side, rather than between Claude's column and the right column; without it the layout keeps what it was handed last, false before any
 ---@field panel_numbers? boolean whether the layout's panels, its windows that show no file, show the user's own line numbers, sign column, fold column and status column; without it the layout keeps what it was handed last, false before any, which leaves them only the separator between windows
 ---@field walkthrough? integer the walkthrough pane's buffer, the plan of a code walkthrough, shown in the Report's window above Input's; without it the layout keeps the one it was handed last
 ---@field claude_statusline? string the 'statusline' Claude's window draws for Claude's terminal; without it the layout keeps the one it was handed last, and before any, Claude's window draws the user's own
@@ -218,6 +218,10 @@ local function make_layout(input_name, group_name)
     explorer_window = nil,
     ---@type boolean
     file_beside_explorer = false,
+    ---@type boolean|nil
+    file_beside_picker = nil,
+    ---@type integer|nil
+    unplaced_pick = nil,
     ---@type boolean
     panel_numbers = false,
     ---@type aineo.layout.FilePart[]|nil
@@ -486,12 +490,34 @@ local function make_layout(input_name, group_name)
     return columns.windows_between(tree, { held = held, left = nearest, right = explorer })
   end
 
-  --- Whether the file column belongs beside the explorer column: the layout
-  --- was handed the option and the explorer column is open.
+  --- Whether the file column belongs beside the explorer column, as far as
+  --- the settings go: the panel the last file was picked from, when it
+  --- decided (`remember_picking_panel()`), else the option
+  --- `file_beside_explorer`. A `file_beside_explorer` handed with another
+  --- value than the layout holds takes the place of both, as the layout is
+  --- about to take it (`take_file_beside_explorer()`).
+  ---
+  ---@param handed? boolean the option handed with settings the layout has not taken yet
+  ---@return boolean
+  local function settings_put_file_column_beside_explorer(handed)
+    if handed ~= nil and handed ~= state.file_beside_explorer then
+      return handed
+    end
+    if state.file_beside_picker ~= nil then
+      return state.file_beside_picker
+    end
+    return state.file_beside_explorer
+  end
+
+  --- Whether the file column belongs beside the explorer column: the settings
+  --- put it there (`settings_put_file_column_beside_explorer()`) and the
+  --- explorer column is open.
   ---
   ---@return boolean
   local function wants_file_column_beside_explorer()
-    return state.file_beside_explorer and state.explorer_column ~= false and has_explorer_column()
+    return settings_put_file_column_beside_explorer()
+      and state.explorer_column ~= false
+      and has_explorer_column()
   end
 
   --- The file column's windows, top to bottom, wherever it lies: in the place
@@ -516,6 +542,58 @@ local function make_layout(input_name, group_name)
   ---@return boolean
   local function has_file_column()
     return #file_column_windows() > 0
+  end
+
+  --- Takes the option `file_beside_explorer` the layout is handed, when it is
+  --- one: a value other than the layout holds is the user's new choice, and
+  --- ends the place the last pick decided (`remember_picking_panel()`).
+  ---
+  ---@param handed? boolean
+  local function take_file_beside_explorer(handed)
+    if handed == nil then
+      return
+    end
+    if handed ~= state.file_beside_explorer then
+      state.file_beside_picker = nil
+    end
+    state.file_beside_explorer = handed
+  end
+
+  --- Whether `window` is a window of a pane of the panes column, a panel files
+  --- are picked in: the Report's, one of the run pane's, or Input's while it
+  --- shows another pane's buffer, the changes pane's commits say. Input's
+  --- window showing the prompt is Claude's, not a panel.
+  ---
+  ---@param window integer
+  ---@return boolean
+  local function is_pane_window(window)
+    return window == state.windows.report
+      or vim.list_contains(state.run_windows, window)
+      or (window == state.windows.input and own_buffer('input') ~= state.buffers.input)
+  end
+
+  --- Records where the file column belongs for the file `buffer` picked in
+  --- `window`, before it is shown: picked in the explorer column, beside it;
+  --- picked in a window of a pane of the panes column while the explorer
+  --- column is open (`is_pane_window()`), between Claude's column and the
+  --- panes column; picked anywhere else, Input's prompt included, or a buffer
+  --- `M.pick_without_panel()` named, the file column stays where it is, and
+  --- with no file column open the option `file_beside_explorer` says again.
+  ---
+  ---@param window integer the window the file is picked in
+  ---@param buffer integer
+  local function remember_picking_panel(window, buffer)
+    local unplaced = state.unplaced_pick == buffer
+    if unplaced then
+      state.unplaced_pick = nil
+    end
+    if not unplaced and has_explorer_column() and window == state.explorer_window then
+      state.file_beside_picker = true
+    elseif not unplaced and has_explorer_column() and is_pane_window(window) then
+      state.file_beside_picker = false
+    elseif not has_file_column() then
+      state.file_beside_picker = nil
+    end
   end
 
   --- The file column's windows that may take a file or a diff: those showing
@@ -1224,8 +1302,9 @@ local function make_layout(input_name, group_name)
 
   --- Whether the file column lies beside the explorer column now and would
   --- not once the layout took the settings given: an `explorer_column` that is
-  --- another side or `false`, or a `file_beside_explorer` that is `false`; a
-  --- setting that is `nil` stays as it is.
+  --- another side or `false`, or a `file_beside_explorer` that is `false` and
+  --- differs from the one the layout holds; a setting that is `nil` stays as
+  --- it is.
   ---
   ---@param explorer_column? aineo.layout.Side|false
   ---@param file_beside_explorer? boolean
@@ -1237,10 +1316,8 @@ local function make_layout(input_name, group_name)
     if explorer_column == nil then
       explorer_column = state.explorer_column
     end
-    if file_beside_explorer == nil then
-      file_beside_explorer = state.file_beside_explorer
-    end
-    return not file_beside_explorer or explorer_column ~= state.explorer_column
+    return not settings_put_file_column_beside_explorer(file_beside_explorer)
+      or explorer_column ~= state.explorer_column
   end
 
   --- Moves the file column from beside the explorer column to the centre when
@@ -1559,6 +1636,7 @@ local function make_layout(input_name, group_name)
       return
     end
     local cursor = vim.api.nvim_win_get_cursor(window)
+    remember_picking_panel(window, file)
     local file_window = place_in_file_column(file, window)
     if not file_window then
       warn_no_room_for(file)
@@ -2151,9 +2229,7 @@ local function make_layout(input_name, group_name)
       state.explorer_column = arrangement.explorer_column
     end
     state.explorer_width = arrangement.explorer_width or state.explorer_width
-    if arrangement.file_beside_explorer ~= nil then
-      state.file_beside_explorer = arrangement.file_beside_explorer
-    end
+    take_file_beside_explorer(arrangement.file_beside_explorer)
     if arrangement.panel_numbers ~= nil then
       state.panel_numbers = arrangement.panel_numbers
     end
@@ -3110,12 +3186,17 @@ local function make_layout(input_name, group_name)
   --- by hand opens again in place. While the column is a side the
   --- explorer pane gives way to the agent pane.
   ---
-  --- With `arrangement.file_beside_explorer` true and the explorer column
-  --- open, the file column lies beside it, on its inner side, and Claude's
-  --- column and the right one keep their order; otherwise it lies between
-  --- those two. Handed again with another value, or with an explorer column
-  --- that moves or closes, an open file column moves to the place it belongs
-  --- with its windows, buffers and cursors, as the explorer column opens or
+  --- With the explorer column open, the file column lies beside it, on its
+  --- inner side, when the last file was picked in the explorer column, and
+  --- between Claude's column and the right one when it was picked in a pane
+  --- of the right column other than Input's prompt (`M.show_file()`); with no
+  --- pick deciding it,
+  --- `arrangement.file_beside_explorer` says: true beside the explorer
+  --- column, otherwise between those two. Claude's column and the right one
+  --- keep their order. Handed again with another value than the layout holds,
+  --- which ends what the last pick decided, or with an explorer column that
+  --- moves or closes, an open file column moves to the place it belongs with
+  --- its windows, buffers and cursors, as the explorer column opens or
   --- closes.
   ---
   --- While any of the three windows exists, opening again restores the layout
@@ -3534,6 +3615,7 @@ local function make_layout(input_name, group_name)
     local current = vim.api.nvim_get_current_win()
     local placed, window
     if has_any_window() then
+      remember_picking_panel(current, buffer)
       placed, window =
         pcall(place_in_file_column, buffer, right_column_window() or state.windows.claude)
     else
@@ -3552,13 +3634,36 @@ local function make_layout(input_name, group_name)
 
   --- Shows `diff`, a buffer that is no file — a diff the changes pane shows —
   --- in the file column (`show_in_file_column_keeping_cursor()`), and
-  --- returns its window.
+  --- returns its window. The file column lies where a file picked in the
+  --- window the cursor is in puts it (`M.show_file()`).
   ---
   ---@param diff integer
   ---@return integer|nil window
   function M.show_diff(diff)
     state.diffs[diff] = true
     return show_in_file_column_keeping_cursor(diff)
+  end
+
+  --- Has the layout take `buffer`, a file it is about to show or has just been
+  --- shown by a window of its own, as picked in no panel: the file column
+  --- stays where it is for it, whichever window the cursor is in, as for a
+  --- file the finder opens or a step of a walkthrough the agent shows. Holds
+  --- for that one showing, and ends once the commands in flight and the
+  --- callbacks they scheduled are done.
+  ---
+  --- Raises an error naming `buffer` when it is not an existing buffer.
+  ---
+  ---@param buffer integer
+  function M.pick_without_panel(buffer)
+    vim.validate('buffer', buffer, is_buffer, false, 'a buffer')
+    state.unplaced_pick = buffer
+    vim.schedule(function()
+      vim.schedule(function()
+        if state.unplaced_pick == buffer then
+          state.unplaced_pick = nil
+        end
+      end)
+    end)
   end
 
   --- Whether `window` is one of the file column's windows, where files and
@@ -3605,7 +3710,16 @@ local function make_layout(input_name, group_name)
 
   --- Shows `file`, a buffer that holds a file, in the file column
   --- (`show_in_file_column_keeping_cursor()`), in the window of the file or
-  --- diff shown there, which stays listed, and returns its window.
+  --- diff shown there, which stays listed, and returns its window. The file is
+  --- picked in the window the cursor is in: in the explorer column, the file
+  --- column lies beside it from now on, and in a window of a pane of the panes
+  --- column (the Report's, the changes pane's, the run pane's) while the
+  --- explorer column is open, between Claude's column and the panes column, an
+  --- open file column moving to that place; picked anywhere else, Input's
+  --- prompt and Claude's window included, or named to
+  --- `M.pick_without_panel()`, it stays where it is, and with no
+  --- file column open `arrangement.file_beside_explorer` says where it opens
+  --- (`M.open()`).
   ---
   ---@param file integer
   ---@return integer|nil window
@@ -3963,9 +4077,7 @@ local function make_layout(input_name, group_name)
     end
     state.explorer_column = explorer_column
     state.explorer_width = explorer_width
-    if file_beside_explorer ~= nil then
-      state.file_beside_explorer = file_beside_explorer
-    end
+    take_file_beside_explorer(file_beside_explorer)
     if not changes_the_column or not has_any_window() then
       return
     end

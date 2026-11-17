@@ -79,10 +79,11 @@ local T = MiniTest.new_set({
 --- start token its hooks carry.
 ---
 ---@param name string the case's own name for its files, starting `walkthrough-`
+---@param settings? table `vim.g.aineo` for the child
 ---@return string token
-local function open_layout(name)
+local function open_layout(name, settings)
   local fake = claude_session.fake(name, 'ready')
-  entry.use_fake(child, fake)
+  entry.use_fake(child, fake, settings)
   child.cmd('Aineo open')
   claude_session.wait_for_start(fake)
   claude_session.wait_for_status(child, 'ready')
@@ -220,6 +221,17 @@ T['a step']['opens the file in the middle window with a band above each range, t
     child.lua_get([[vim.fn.bufwinid(vim.fn.bufnr(...)) > 0]], { project .. '/src/code.lua' }),
     true
   )
+end
+
+T['a step']['opens the file column where the option says, whichever window the cursor is in'] = function()
+  local token = open_layout('walkthrough-place', { layout = { explorer_column = 'left' } })
+  eq(child.lua_get([[vim.api.nvim_buf_get_name(0)]]), 'aineo://input')
+
+  walk(token, step_for('src/code.lua'))
+
+  local names = entry.windows(child)
+  eq({ names[1], names[3] }, { 'aineo://explorer', 'terminal' })
+  eq(vim.endswith(names[2], 'src/code.lua'), true)
 end
 
 T['a step']['puts the first range in view, with a few lines above it, and the cursor on its first line'] = function()

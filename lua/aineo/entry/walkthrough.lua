@@ -159,6 +159,7 @@ end
 local function show(tab, call)
   local buffer = vim.fn.bufadd(call.file)
   vim.fn.bufload(buffer)
+  tab.homes.layout.pick_without_panel(buffer)
   local window = tab.homes.layout.show_file(buffer)
   if not window then
     return refused('the middle column has no room for the file')

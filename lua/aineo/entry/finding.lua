@@ -4,7 +4,9 @@
 --- under the top of the repository that folder is in, with the picker
 --- `find.picker` names
 --- (`aineo.find`), and so opens the file picked in the file column, which the
---- tab's explorer then reveals (`aineo.entry.find_reveal`).
+--- tab's explorer then reveals (`aineo.entry.find_reveal`). The file is picked
+--- in no panel: the file column stays where it is, whichever window the
+--- search began in (`aineo.layout`'s `pick_without_panel()`).
 
 local errors = require('aineo.entry.errors')
 local find_reveal = require('aineo.entry.find_reveal')
@@ -70,10 +72,11 @@ function M.find_in(tab)
             picker = picker,
             list_files = repository and list_files_of(repository) or nil,
             on_open = function(file)
+              tab.homes.layout.pick_without_panel(vim.fn.bufnr(file))
               find_reveal.reveal_when_settled(reveal, file)
             end,
           })
-        end)
+        end, tab.homes.layout.pick_without_panel)
       end)
     end)
   end)

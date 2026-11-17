@@ -72,6 +72,26 @@ local function edit(readme)
   child.cmd('edit ' .. vim.fn.fnameescape(readme))
 end
 
+--- Moves the cursor to the window showing Claude Code's terminal.
+local function enter_claude()
+  child.lua([[(function()
+    for _, window in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+      if vim.bo[vim.api.nvim_win_get_buf(window)].buftype == 'terminal' then
+        vim.api.nvim_set_current_win(window)
+        return
+      end
+    end
+  end)()]])
+end
+
+--- Moves the cursor to the window showing the explorer.
+local function enter_explorer()
+  child.lua([[(function()
+    local window = vim.fn.win_findbuf(vim.fn.bufnr('aineo://explorer'))[1]
+    vim.api.nvim_set_current_win(window)
+  end)()]])
+end
+
 --- Waits, at most ten seconds, until the child's windows show `names` from
 --- the left of the screen, and returns what they show then.
 ---
@@ -129,6 +149,59 @@ T['a file opened from Input']['lies beside the explorer column on the right by d
   eq(wait_for_windows(beside_right(readme)), beside_right(readme))
 end
 
+T['a file opened from Input']['leaves the file column where it is, beside the explorer column'] = function()
+  local readme = open_in_repository(
+    'input-beside',
+    { layout = { explorer_column = 'left', file_beside_explorer = false } }
+  )
+  enter_explorer()
+  edit(readme)
+  wait_for_windows(beside_left(readme))
+  child.lua([[vim.api.nvim_set_current_win(vim.fn.win_findbuf(vim.fn.bufnr('aineo://input'))[1])]])
+  local main = vim.fs.joinpath(vim.fs.dirname(readme), 'src', 'main.lua')
+
+  edit(main)
+
+  eq(wait_for_windows(beside_left(main)), beside_left(main))
+end
+
+T['a file opened from the explorer column'] = MiniTest.new_set()
+
+T['a file opened from the explorer column']['lies beside it on the left, the option off'] = function()
+  local readme = open_in_repository(
+    'from-explorer-left',
+    { layout = { explorer_column = 'left', file_beside_explorer = false } }
+  )
+  enter_explorer()
+
+  edit(readme)
+
+  eq(wait_for_windows(beside_left(readme)), beside_left(readme))
+end
+
+T['a file opened from the explorer column']['lies beside it on the right, the option off'] = function()
+  local readme = open_in_repository(
+    'from-explorer-right',
+    { layout = { explorer_column = 'right', file_beside_explorer = false } }
+  )
+  enter_explorer()
+
+  edit(readme)
+
+  eq(wait_for_windows(beside_right(readme)), beside_right(readme))
+end
+
+T['a file opened from Claude Code’s window'] = MiniTest.new_set()
+
+T['a file opened from Claude Code’s window']['lies beside the explorer column by default'] = function()
+  local readme = open_in_repository('from-claude', { layout = { explorer_column = 'left' } })
+  enter_claude()
+
+  edit(readme)
+
+  eq(wait_for_windows(beside_left(readme)), beside_left(readme))
+end
+
 T['a file opened from Input']['lies between Claude Code and the panes with the option off'] = function()
   local readme = open_in_repository(
     'off',
@@ -156,6 +229,54 @@ T['a file found with \\f']['opens beside the explorer column'] = function()
   entry.press(child, '\\f')
 
   eq(wait_for_windows(beside_left(readme)), beside_left(readme))
+end
+
+T['a file found with \\f']['keeps the file column beside the explorer column when started from Input'] = function()
+  local readme = open_in_repository('find-beside', {
+    layout = { explorer_column = 'left', file_beside_explorer = false },
+  })
+  enter_explorer()
+  edit(readme)
+  wait_for_windows(beside_left(readme))
+  child.lua([[vim.api.nvim_set_current_win(vim.fn.win_findbuf(vim.fn.bufnr('aineo://input'))[1])]])
+
+  entry.press(child, '\\f')
+
+  eq(wait_for_windows(beside_left(readme)), beside_left(readme))
+end
+
+T['a file found with \\f']['keeps the file column between Claude Code and the panes when started from the explorer column'] = function()
+  local readme = open_in_repository('find-centre', {
+    layout = { explorer_column = 'left', file_beside_explorer = true },
+  })
+  child.lua([[vim.api.nvim_set_current_win(vim.fn.win_findbuf(vim.fn.bufnr('aineo://report'))[1])]])
+  edit(readme)
+  wait_for_windows(centre_left(readme))
+  enter_explorer()
+
+  entry.press(child, '\\f')
+
+  eq(wait_for_windows(centre_left(readme)), centre_left(readme))
+end
+
+T['a file found with \\f']['keeps the file column beside the explorer column when the finder lists the files itself, started from Input'] = function()
+  local readme = open_in_repository('find-list', {
+    layout = { explorer_column = 'left', file_beside_explorer = false },
+  })
+  enter_explorer()
+  edit(readme)
+  wait_for_windows(beside_left(readme))
+  child.lua([[vim.api.nvim_set_current_win(vim.fn.win_findbuf(vim.fn.bufnr('aineo://input'))[1])]])
+  child.lua([[package.preload['snacks'] = nil
+  package.loaded['snacks'] = nil]])
+  child.lua([[vim.ui.select = function(items, _, on_choice)
+    on_choice('src/main.lua')
+  end]])
+
+  entry.press(child, '\\f')
+
+  local main = vim.fs.joinpath(vim.fs.dirname(readme), 'src', 'main.lua')
+  eq(wait_for_windows(beside_left(main)), beside_left(main))
 end
 
 T['the explorer column key'] = MiniTest.new_set()
