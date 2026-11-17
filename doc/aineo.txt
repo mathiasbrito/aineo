@@ -2305,15 +2305,14 @@ A file you open from one of the three windows — `:edit`, a picker, a jump,
 column, created on first use and reused afterwards; the aineo window keeps
 its own buffer. While the explorer column is shown (|aineo-explorer-column|)
 the file column lies on the Claude side of the panel the file was picked in: a
-file picked in the explorer column opens beside it, and one picked in the panes
-column between Claude's column and the panes column. A file picked anywhere
-else, `\f` and the agent's included, leaves the file column where it is; with
-none open `layout.file_beside_explorer`
+file picked in the explorer column opens beside it, and one picked in the
+panes column between Claude's column and the panes column. A file picked
+anywhere else, `\f` and the agent's included, leaves the file column where it
+is; with none open `layout.file_beside_explorer`
 (|aineo-config-layout.file_beside_explorer|) says where it opens. While the
-file column is open,
-the three columns take a third of the screen each. Only file buffers move:
-help, terminals and scratch buffers stay where they were opened until `\o`
-restores the layout.
+file column is open, the three columns take a third of the screen each. Only
+file buffers move: help, terminals and scratch buffers stay where they were
+opened until `\o` restores the layout.
 
 A diff Enter shows from the changes pane (|aineo-changes|) takes the file
 column's window as a file does, and the next file or diff takes its place:

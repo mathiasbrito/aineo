@@ -31,18 +31,36 @@ By the window, at the moment the file is shown: the cursor's window for `show_fi
 
 ## Tests
 
-- New `tests/test_layout_file_picking_panel.lua` (86 cases): the four mirrored layouts, a file and a diff, from the explorer column, the panes column and Claude's window, by `show_file`/`show_diff` and by `:edit`; an open file column moving each way keeping its window, buffer and cursor; the option when none is open and after the column closes; `open()` again with the same and with another option; `set_explorer_column()`; a swap of Claude's side; no explorer column; the explorer reopening.
-- `tests/test_entry_file_beside_explorer.lua`: from Input, the explorer, Claude; `\f` from Input and from the explorer with the column on either side; `tests/test_entry_walkthrough.lua`: a step shown from Input.
+- New `tests/test_layout_file_picking_panel.lua` (95 cases): the four mirrored layouts, a file and a diff, from the explorer column, the panes column and Claude's window, by `show_file`/`show_diff` and by `:edit`; an open file column moving each way keeping its window, buffer and cursor; the option when none is open and after the column closes; `open()` again with the same and with another option; `set_explorer_column()`; a swap of Claude's side; no explorer column; the explorer reopening.
+- `tests/test_entry_file_beside_explorer.lua`: from Input, the explorer, Claude; `\f` from Input and from the explorer, through a picker and through the finder's own list; `tests/test_entry_walkthrough.lua`: a step shown from Input.
 
 ## Existing tests changed
 
 - `tests/test_layout_file_beside_explorer.lua`: four cases showed a file or a diff with the cursor where the layout opened it, in the panes column, and expected the option's place; they move the cursor to Claude's window first, a neutral opener.
 - `tests/test_layout_explorer_column.lua`: `a file opened in the explorer column moves to the file column…` expected the centre; the file now lies beside the explorer column.
+- `tests/test_entry_file_focus.lua`: seven cases opened their file from Input with the option on and expected it beside the explorer; they now expect the centre (`showing_pane_with_file_after_claude()`, and the swap and right cases of the layout changes).
 - `tests/test_entry_file_beside_explorer.lua`: the two `a file opened from Input … by default` cases expected beside the explorer; Input is a panes-column window, so they now expect the centre and are renamed; `restoring the layout` opens its file from Claude's window.
 
 ## Mutants
 
-See the pull request.
+Each run alone on the files named, the source restored after.
+
+| Mutant | Result |
+|---|---|
+| an explorer pick records false | killed (picking panel file, 40) |
+| a pick in the panes column never recognised | killed (32) |
+| `pick_without_panel()` ignored | killed (entry beside-explorer 1, walkthrough 1) |
+| a new option keeps the pick | killed (12) |
+| no clearing with no file column open | killed (4) |
+| a pick in the panes column counts with no explorer column | killed (1) |
+| `redirect()` does not remember the panel | killed (8) |
+| the show path does not remember the panel | killed (56) |
+| Input not a panes-column window | survived the layout file, killed by the entry file (3) |
+| the finder's picker hook dropped | killed (1) |
+| the walkthrough hook dropped | killed (1) |
+| the finder's own-list hook dropped | survived `test_entry_find`, killed once a case for it was added (1) |
+| the name never cleared by its timer | killed (4) |
+| `settings_put_file_column_beside_explorer()` ignores a handed option | survived: equivalent in what a user sees, since the move it saves is made by the proportions once the option is taken |
 
 ## Commits
 
