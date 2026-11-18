@@ -590,6 +590,12 @@ local ROWS = vim.list_extend(
       nil,
       'show the file and hide the panes column, or bring it back'
     ),
+    in_buffer(
+      'explorer_pane',
+      '<M-l>',
+      nil,
+      "open the file or folder with the operating system's default application"
+    ),
     in_buffer('explorer_pane', 'h', nil, 'fold the folder, or the one above'),
     in_buffer('explorer_pane', 'q', nil, 'close the file column, the cursor staying in the tree'),
     in_buffer('explorer_pane', 'R', nil, 'read the tree again'),

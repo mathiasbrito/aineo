@@ -41,7 +41,7 @@ end
 --- (`vim.ui.open()`), and tells the user, once, when it cannot.
 ---
 ---@param target string
-local function open_with_system(target)
+function M.open_with_system(target)
   local _, failure = vim.ui.open(target)
   if failure then
     vim.notify(('aineo: %s could not be opened: %s'):format(target, failure), vim.log.levels.ERROR)
@@ -65,7 +65,7 @@ end
 
 --- Opens the regular file `file`, an absolute path, at line `line` when
 --- given: in the current window when it is a text file (`is_text_file()`),
---- wherever it lies, else with the operating system (`open_with_system()`).
+--- wherever it lies, else with the operating system (`M.open_with_system()`).
 ---
 ---@param file string
 ---@param line integer?
@@ -74,7 +74,7 @@ function M.open_file(file, line)
     require('aineo.changes').open_working_file(vim.fs.dirname(file), vim.fs.basename(file), line)
     return
   end
-  open_with_system(file)
+  M.open_with_system(file)
 end
 
 --- Whether the link `text` is an address of anything but a local file.
@@ -122,7 +122,7 @@ end
 ---@param directory string the directory a relative path is in
 function M.open_link(text, line, directory)
   if is_web_address(text) then
-    open_with_system(text)
+    M.open_with_system(text)
     return
   end
   local file, stat, line_named = locate(text, directory)
@@ -131,7 +131,7 @@ function M.open_link(text, line, directory)
     return
   end
   if stat.type ~= 'file' then
-    open_with_system(file)
+    M.open_with_system(file)
     return
   end
   M.open_file(file, tonumber(line_named) or line)

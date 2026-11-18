@@ -46,6 +46,7 @@ function M.make_explorer(homes)
       homes.changes.offer_scopes()
     end,
     open_file = links.open_file,
+    open_with_system = links.open_with_system,
     is_file_focused = function()
       return homes.layout.is_file_focused()
     end,
