@@ -528,6 +528,12 @@ The keys of the tree, in Normal mode, in its buffer alone:
              on; with it on, turn it off, on any line (|aineo-focus|).
              In the explorer pane, with the focus off, it does what `l`
              does and turns nothing on
+    `<M-l>`    open the file or folder under the cursor with the operating
+             system's default application (|vim.ui.open()|), a folder in
+             the file manager, never in Neovim: the layout, the file
+             column and the cursor stay as they are; on a line with no
+             entry it does nothing, and when the system cannot open the
+             entry aineo tells you, once
     `h`        fold an unfolded folder; on a file or a folded folder, fold
              the folder that holds it and move to it
     `q`        close the file column, the cursor staying in the tree, on
