@@ -13,6 +13,8 @@ local M = {}
 ---@field folder string the folder Claude works in
 ---@field focused_work? aineo.explorer.Work what the changes pane's focused view shows alone, read at each read; none for its default view
 ---@field look? fun(): table<string, boolean>, string[]|nil what `settings.look` answers; none given, none is handed
+---@field open_file? fun(path: string) what `settings.open_file` does; none given, it does nothing
+---@field open_with_system? fun(path: string) what `settings.open_with_system` does; none given, none is handed
 ---@field close_file_column? fun() what `settings.close_file_column` does; none given, none is handed
 ---@field list_failure? aineo.git.Failure why git fails to list the files; none given, it lists them
 
@@ -69,7 +71,8 @@ function M.new(world)
     focused_work = function()
       return world.focused_work
     end,
-    open_file = function() end,
+    open_file = world.open_file or function() end,
+    open_with_system = world.open_with_system,
     close_file_column = world.close_file_column,
     paste = function() end,
     quote_name = function(name)

@@ -45,6 +45,7 @@ local M = {}
 ---@field focused_work? fun(): aineo.explorer.Work|nil what the changes pane's focused view shows alone, nil for its default view
 ---@field offer_work? fun() offers the changes pane's list of worktrees, branches and reported work, whose pick it shows alone
 ---@field open_file fun(path: string) opens the file `path`, absolute, in the file column
+---@field open_with_system? fun(path: string) hands the file or folder `path`, absolute, to the operating system's default application, telling the user when it cannot; none given, `<M-l>` does nothing
 ---@field close_file_column? fun() closes the file column's windows, with what that takes: the file focus ended, a file with unsaved changes kept and the user told; none given, `q` does nothing
 ---@field is_file_focused? fun(): boolean whether the file focus of the explorer's tab is on; with `toggle_file_focus`, what `<C-l>` acts on, and none given, `<C-l>` does nothing
 ---@field toggle_file_focus? fun() turns the file focus of the explorer's tab on, or off when it is on
@@ -1075,6 +1076,19 @@ function M.new(settings)
     end
   end
 
+  --- What `<M-l>` does: hands the file or folder under the cursor, by its
+  --- absolute path, to the operating system (`settings.open_with_system`),
+  --- opening nothing in Neovim and leaving the cursor and the tree as they
+  --- are; nothing on a line with no entry, or when the explorer was handed no
+  --- way to.
+  local function open_with_system()
+    local entry = entry_in(0)
+    if not (entry and settings.open_with_system) then
+      return
+    end
+    settings.open_with_system(vim.fs.joinpath(state.place.directory, entry.path))
+  end
+
   --- What `q` does: closes the file column (`settings.close_file_column`),
   --- the cursor staying in the explorer's window, on its line. Does nothing
   --- when the explorer was handed no way to close it.
@@ -1157,6 +1171,11 @@ function M.new(settings)
       lhs = '<C-l>',
       rhs = on_file_focus,
       desc = 'show the file and hide the panes column, or bring it back',
+    },
+    {
+      lhs = '<M-l>',
+      rhs = open_with_system,
+      desc = "open the file or folder with the operating system's default application",
     },
     { lhs = 'h', rhs = on_h, desc = 'fold the folder, or the folder above' },
     { lhs = 'q', rhs = on_q, desc = 'close the file column, the cursor staying in the tree' },
