@@ -139,14 +139,17 @@ end
 --- Opens the layout in a fresh `child` around a terminal running `program`,
 --- waits until the terminal has its window's size, and returns the file it
 --- records in. `settings` are fields of the arrangement the layout is
---- opened with, besides its buffers.
+--- opened with, besides its buffers. With `claude_is_ready`, the layout is
+--- handed a predicate that reads the child's `vim.g.test_claude_is_ready`,
+--- true from the start.
 ---
 ---@param child table
 ---@param name string the case's own name for its files
 ---@param program string
 ---@param settings? table
+---@param claude_is_ready? boolean
 ---@return string record
-local function open_around(child, name, program, settings)
+local function open_around(child, name, program, settings, claude_is_ready)
   local record = vim.fs.joinpath(fixture.directory('pty-recorder-' .. name), 'sizes')
   layout.start(child)
   local terminal = child.lua_get(
@@ -172,7 +175,19 @@ local function open_around(child, name, program, settings)
   for field, value in pairs(settings or {}) do
     arrangement[field] = value
   end
-  layout.open(child, arrangement)
+  if claude_is_ready then
+    child.lua(
+      [[vim.g.test_claude_is_ready = true
+        local arrangement = ...
+        arrangement.claude_is_ready = function()
+          return vim.g.test_claude_is_ready
+        end
+        require('aineo.layout').open(arrangement)]],
+      { arrangement }
+    )
+  else
+    layout.open(child, arrangement)
+  end
   M.wait_for_window_size(child, record)
   vim.wait(M.QUIET_PERIOD_MS, function()
     return false
@@ -193,14 +208,17 @@ function M.open_around_recorder(child, name, busy)
 end
 
 --- The same around a terminal that records the bytes it reads as well
---- (`M.events()`), the layout opened with the arrangement's `settings`.
+--- (`M.events()`), the layout opened with the arrangement's `settings` and a
+--- predicate for Claude Code's readiness that the child's
+--- `vim.g.test_claude_is_ready` answers.
 ---
 ---@param child table
 ---@param name string the case's own name for its files
 ---@param settings? table
+---@param hands_no_predicate? boolean open the layout with no predicate for the readiness
 ---@return string record
-function M.open_around_key_recorder(child, name, settings)
-  return open_around(child, name, M.KEY_RECORDER, settings)
+function M.open_around_key_recorder(child, name, settings, hands_no_predicate)
+  return open_around(child, name, M.KEY_RECORDER, settings, not hands_no_predicate)
 end
 
 --- Runs `change`, a Lua chunk, in the child and returns what the terminal
