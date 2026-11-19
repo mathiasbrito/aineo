@@ -927,6 +927,7 @@ vim.g.aineo = {
     explorer_width = 1 / 4,
     file_beside_explorer = true,
     panel_numbers = false,
+    claude_redraw_on_resize = true,
   },
   changes = {
     -- working_branch = 'origin/dev',
@@ -979,6 +980,7 @@ vim.g.aineo = {
 | `layout.explorer_width` | `1 / 4` | The explorer column's width: a number strictly between 0 and 1 is that share of the screen's width, rounded down to whole columns but never fewer than 40, and follows the screen as it is resized; a whole number of at least 1 is that many columns, as is. It does nothing while `layout.explorer_column` is `false`. |
 | `layout.file_beside_explorer` | `true` | Where the file column opens while the explorer column is shown and the file was picked in neither the explorer nor a pane of the panes column (Input's prompt is none), such as with `\f`: beside the explorer column (on its right when the explorer column is at the left edge, on its left when at the right edge), or, with `false`, between Claude Code and the panes column. A file picked in the explorer opens beside it and one picked in the panes column between Claude Code and the panes column, whatever this says; an open file column moves to the place of the panel a file is picked in next. `\E` and a live `setup()` that changes this option move an open file column to where it belongs. |
 | `layout.panel_numbers` | `false` | Whether the panels, the windows of the layout that show no file (Claude Code, the Report, Input, the explorer, the changes, terminal, run and walkthrough panes), show your line numbers, sign column, fold column and status column. With `false` they show none, only the separator between windows, whatever your global settings say, and files keep yours; `true` starts with them shown. `\tn` toggles it live in every tab. |
+| `layout.claude_redraw_on_resize` | `true` | Whether aineo sends Claude Code one Ctrl+L after telling it the final size of its window, which makes it redraw its whole screen at that size, so that text it wrote while the window was narrower is laid out again; one for each run of resizes, none while a window is zoomed fully. `false` sends none, for a Claude Code whose Ctrl+L does something else; it still gets its size. |
 | `changes.working_branch` | none | The branch work lands in, as git reads a name, such as `origin/dev`. Unset, it is the default branch of the remote `origin`. With none set and no `origin/HEAD`, the changes pane shows no Landed section. aineo never fetches. |
 | `changes.graph_limit` | `1000` | How many commits the commit graph (`t` in the commits window) draws, newest first, a whole number of at least 1. The graph says when older ones are not shown. |
 | `tabs.padding` | `2` | Spaces either side of each title in aineo's tab line, from 0 to 8. |
