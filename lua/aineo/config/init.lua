@@ -313,6 +313,7 @@ local SETTINGS = {
   },
   { name = 'layout.file_beside_explorer', default = true, validator = 'boolean' },
   { name = 'layout.panel_numbers', default = false, validator = 'boolean' },
+  { name = 'layout.claude_redraw_on_resize', default = true, validator = 'boolean' },
   {
     name = 'changes.working_branch',
     default = nil,

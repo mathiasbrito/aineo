@@ -16,6 +16,7 @@ local DEFAULTS = {
     explorer_width = 1 / 4,
     file_beside_explorer = true,
     panel_numbers = false,
+    claude_redraw_on_resize = true,
   },
   changes = { graph_limit = 1000 },
   tabs = { padding = 2, always_show = true },
@@ -376,6 +377,30 @@ T['resolve_config()']['refuses a panel_numbers that is not a boolean']['as layou
   expect.error(function()
     config.resolve_config({ layout = { panel_numbers = value } }, nil)
   end, 'layout%.panel_numbers: expected boolean')
+end
+
+T['resolve_config()']['takes layout.claude_redraw_on_resize from either source, on by default'] = function()
+  local from_global = config.resolve_config({ layout = { claude_redraw_on_resize = false } }, nil)
+  local from_setup = config.resolve_config(nil, { layout = { claude_redraw_on_resize = false } })
+
+  eq(
+    { from_global.layout.claude_redraw_on_resize, from_setup.layout.claude_redraw_on_resize },
+    { false, false }
+  )
+  eq(config.resolve_config(nil, nil).layout.claude_redraw_on_resize, true)
+end
+
+T['resolve_config()']['refuses a claude_redraw_on_resize that is not a boolean'] =
+  MiniTest.new_set({
+    parametrize = { { 'left' }, { 'yes' }, { 1 }, { {} } },
+  })
+
+T['resolve_config()']['refuses a claude_redraw_on_resize that is not a boolean']['as layout.claude_redraw_on_resize'] = function(
+  value
+)
+  expect.error(function()
+    config.resolve_config({ layout = { claude_redraw_on_resize = value } }, nil)
+  end, 'layout%.claude_redraw_on_resize: expected boolean')
 end
 
 T['resolve_config()']['takes the padding of the tab titles from either source, 2 by default'] = function()
