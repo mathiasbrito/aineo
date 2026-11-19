@@ -38,6 +38,26 @@ local BUSY_RECORDER = [[
   while :; do sleep 0.2; done
 ]]
 
+--- The shell program of a terminal that records what it reads as well: it
+--- reads its input a byte at a time, without echo, and appends `key <hex>` to
+--- the same file as the sizes, so that the order of a size and a key can be
+--- read from it.
+M.KEY_RECORDER = [[
+  record() { stty size >> "$1"; }
+  stty -icanon -echo min 1 time 0
+  trap 'record "$1"' WINCH
+  record "$1"
+  exec 3<&0
+  (
+    while :; do
+      byte=$(dd bs=1 count=1 <&3 2>/dev/null | od -An -tx1)
+      [ -n "$byte" ] || break
+      echo "key $byte" >> "$1"
+    done
+  ) &
+  while :; do sleep 100 & wait $!; done
+]]
+
 --- The size Neovim gives a terminal shown in the windows of a child that show
 --- it, in every tab page: the largest height and the largest width among
 --- them, `{ lines, columns }`, the columns taken out of a window for its signs
@@ -64,13 +84,35 @@ end)()]]
 ---@param record string
 ---@return integer[][]
 function M.sizes(record)
+  local sizes = {}
+  for _, event in ipairs(M.events(record)) do
+    if event.size then
+      table.insert(sizes, event.size)
+    end
+  end
+  return sizes
+end
+
+--- What the terminal recorded in `record`, in order: each a table with `size`,
+--- `{ lines, columns }`, or with `key`, the hexadecimal of a byte it read.
+---
+---@param record string
+---@return table[]
+function M.events(record)
   if vim.fn.filereadable(record) == 0 then
     return {}
   end
-  return vim.tbl_map(function(line)
+  local events = {}
+  for _, line in ipairs(vim.fn.readfile(record)) do
     local lines, columns = line:match('^(%d+) (%d+)$')
-    return { tonumber(lines), tonumber(columns) }
-  end, vim.fn.readfile(record))
+    local key = line:match('^key%s+(%x+)%s*$')
+    if lines then
+      table.insert(events, { size = { tonumber(lines), tonumber(columns) } })
+    elseif key then
+      table.insert(events, { key = key })
+    end
+  end
+  return events
 end
 
 --- The last size the terminal recorded in `record`, or nil before it recorded
@@ -94,15 +136,17 @@ function M.wait_for_window_size(child, record)
   end, 20)
 end
 
---- Opens the layout in a fresh `child` around a terminal running `RECORDER`,
---- or `BUSY_RECORDER` when `busy`, waits until the terminal has its window's
---- size, and returns the file it records its sizes in.
+--- Opens the layout in a fresh `child` around a terminal running `program`,
+--- waits until the terminal has its window's size, and returns the file it
+--- records in. `settings` are fields of the arrangement the layout is
+--- opened with, besides its buffers.
 ---
 ---@param child table
 ---@param name string the case's own name for its files
----@param busy? boolean
+---@param program string
+---@param settings? table
 ---@return string record
-function M.open_around_recorder(child, name, busy)
+local function open_around(child, name, program, settings)
   local record = vim.fs.joinpath(fixture.directory('pty-recorder-' .. name), 'sizes')
   layout.start(child)
   local terminal = child.lua_get(
@@ -113,7 +157,7 @@ function M.open_around_recorder(child, name, busy)
       end)
       return buffer
     end)(...)]],
-    { busy and BUSY_RECORDER or RECORDER, record }
+    { program, record }
   )
   local buffers = {
     claude = terminal,
@@ -125,12 +169,59 @@ function M.open_around_recorder(child, name, busy)
   arrangement.explorer = buffers.explorer
   arrangement.explorer_column = 'right'
   arrangement.explorer_width = 20
+  for field, value in pairs(settings or {}) do
+    arrangement[field] = value
+  end
   layout.open(child, arrangement)
   M.wait_for_window_size(child, record)
   vim.wait(M.QUIET_PERIOD_MS, function()
     return false
   end, 20)
   return record
+end
+
+--- Opens the layout in a fresh `child` around a terminal running `RECORDER`,
+--- or `BUSY_RECORDER` when `busy`, waits until the terminal has its window's
+--- size, and returns the file it records its sizes in.
+---
+---@param child table
+---@param name string the case's own name for its files
+---@param busy? boolean
+---@return string record
+function M.open_around_recorder(child, name, busy)
+  return open_around(child, name, busy and BUSY_RECORDER or RECORDER)
+end
+
+--- The same around a terminal that records the bytes it reads as well
+--- (`M.events()`), the layout opened with the arrangement's `settings`.
+---
+---@param child table
+---@param name string the case's own name for its files
+---@param settings? table
+---@return string record
+function M.open_around_key_recorder(child, name, settings)
+  return open_around(child, name, M.KEY_RECORDER, settings)
+end
+
+--- Runs `change`, a Lua chunk, in the child and returns what the terminal
+--- recorded from then on (`M.events()`), once no size came for
+--- `M.QUIET_PERIOD_MS`, and the size its windows give it.
+---
+---@param child table
+---@param record string
+---@param change string
+---@return table recorded `events` and `final`
+function M.events_during(child, record, change)
+  local before = #M.events(record)
+  child.lua(change)
+  M.wait_for_window_size(child, record)
+  vim.wait(M.QUIET_PERIOD_MS, function()
+    return false
+  end, 20)
+  return {
+    events = vim.list_slice(M.events(record), before + 1),
+    final = child.lua_get(M.EXPECTED_SIZE),
+  }
 end
 
 --- Runs `change`, a Lua chunk, in the child and returns the sizes the

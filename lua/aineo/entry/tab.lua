@@ -1129,6 +1129,7 @@ local function make_tab(homes, key, callbacks)
       explorer_width = config.layout.explorer_width,
       file_beside_explorer = config.layout.file_beside_explorer,
       panel_numbers = panel_numbers.current(config),
+      claude_redraw_on_resize = config.layout.claude_redraw_on_resize,
       walkthrough = walkthrough_plans.buffer_of(tab),
       claude_statusline = require('aineo.claude').session_statusline(),
     }

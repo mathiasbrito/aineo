@@ -146,6 +146,7 @@ local TAGS = {
   'aineo-config-layout.explorer_column',
   'aineo-config-layout.explorer_width',
   'aineo-config-layout.file_beside_explorer',
+  'aineo-config-layout.claude_redraw_on_resize',
   'aineo-config-explorer.numbers',
   'aineo-layout-mirror',
   '<Plug>(aineo-layout-mirror)',
