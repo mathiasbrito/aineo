@@ -93,6 +93,34 @@ T['the terminal of Claude Code']['reads no Ctrl+L when claude_redraw_on_resize i
   eq(events[#events - 1].size ~= recorded.final, true)
 end
 
+T['the terminal of Claude Code']['reads no Ctrl+L while Claude Code is not ready for input'] = function()
+  local record = pty.open_around_key_recorder(child, 'redraw-not-ready')
+  child.g.test_claude_is_ready = false
+
+  local recorded = pty.events_during(child, record, CLOSE_EXPLORER)
+
+  eq(keys_among(recorded.events), {})
+end
+
+T['the terminal of Claude Code']['reads no Ctrl+L when the layout is handed no word on Claude Code’s readiness'] = function()
+  local record = pty.open_around_key_recorder(child, 'redraw-no-predicate', nil, true)
+
+  local recorded = pty.events_during(child, record, CLOSE_EXPLORER)
+
+  eq(keys_among(recorded.events), {})
+end
+
+T['the terminal of Claude Code']['reads one Ctrl+L after a resize once Claude Code is ready'] = function()
+  local record = pty.open_around_key_recorder(child, 'redraw-became-ready')
+  child.g.test_claude_is_ready = false
+  pty.events_during(child, record, CLOSE_EXPLORER)
+  child.g.test_claude_is_ready = true
+
+  local recorded = pty.events_during(child, record, RESTORE_EXPLORER)
+
+  eq(keys_among(recorded.events), { CTRL_L })
+end
+
 T['the terminal of Claude Code']['reads no Ctrl+L while a window is zoomed fully'] = function()
   local record = pty.open_around_key_recorder(child, 'redraw-zoomed')
 

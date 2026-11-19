@@ -56,6 +56,11 @@ local TWIN_KEYS = {
 
 local child = MiniTest.new_child_neovim()
 
+--- The layout settings of the cases whose subject is not a resize: Claude Code
+--- is sent no Ctrl+L after its window's size settles, so that what it receives
+--- is what the case does.
+local NO_REDRAW = { layout = { claude_redraw_on_resize = false } }
+
 local T = MiniTest.new_set({
   hooks = {
     pre_case = function()
@@ -89,7 +94,7 @@ end
 ---@return string file the file's path, as its window names it
 local function open_layout(name)
   local fake = claude_session.fake(name, 'ready')
-  entry.use_fake(child, fake)
+  entry.use_fake(child, fake, NO_REDRAW)
   child.cmd('Aineo open')
   claude_session.wait_for_status(child, 'ready')
   local file = fixture.write(name .. '/file.txt', { 'text' })

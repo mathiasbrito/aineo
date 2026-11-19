@@ -1,11 +1,17 @@
 local MiniTest = require('mini.test')
 local entry = dofile('tests/helpers/entry.lua')
+local claude_session = dofile('tests/helpers/claude_session.lua')
 local fixture = dofile('tests/helpers/fixture.lua')
 local pty = dofile('tests/helpers/pty_recorder.lua')
 
 local eq = MiniTest.expect.equality
 
 local child = MiniTest.new_child_neovim()
+
+--- What the recorder draws first, so that aineo reads Claude Code as ready: the
+--- input box, a prompt between two rules.
+local INPUT_BOX = [[printf '──────\n❯ \n──────\n'
+]]
 
 local T = MiniTest.new_set({
   hooks = {
@@ -22,12 +28,14 @@ local T = MiniTest.new_set({
 --- Opens aineo's layout in the child with a file in the file column and
 --- Claude's terminal running the recorder of keys (`pty.KEY_RECORDER`), under
 --- the `layout` settings given, and returns the file it records in once it
---- has the size of its window.
+--- has the size of its window; and, when `shows_input_box`, aineo reads
+--- Claude Code as ready.
 ---
 ---@param name string the case's own name for its files
 ---@param layout_settings table
+---@param shows_input_box boolean
 ---@return string record
-local function open_layout_around_key_recorder(name, layout_settings)
+local function open_layout_around_key_recorder(name, layout_settings, shows_input_box)
   local record = vim.fs.joinpath(fixture.directory('claude-redraw-' .. name), 'sizes')
   child.lua(
     'vim.env.XDG_STATE_HOME = ...',
@@ -40,11 +48,14 @@ local function open_layout_around_key_recorder(name, layout_settings)
         claude = { cmd = { 'sh', '-c', program, 'key-recorder', record } },
         layout = layout,
       }]],
-    { pty.KEY_RECORDER, record, layout_settings }
+    { (shows_input_box and INPUT_BOX or '') .. pty.KEY_RECORDER, record, layout_settings }
   )
   child.cmd('Aineo open')
   child.cmd('edit ' .. fixture.write('claude-redraw-' .. name .. '/file.txt', { 'text' }))
   pty.wait_for_window_size(child, record)
+  if shows_input_box then
+    claude_session.wait_for_status(child, 'ready')
+  end
   vim.wait(pty.QUIET_PERIOD_MS, function()
     return false
   end, 20)
@@ -80,7 +91,7 @@ end
 T['Claude Code'] = MiniTest.new_set()
 
 T['Claude Code']['is sent one Ctrl+L, after its final size, when the panes close'] = function()
-  local record = open_layout_around_key_recorder('on', {})
+  local record = open_layout_around_key_recorder('on', {}, true)
 
   local recorded = pty.events_during(child, record, CLOSE_PANES)
 
@@ -90,8 +101,17 @@ T['Claude Code']['is sent one Ctrl+L, after its final size, when the panes close
   eq(events[#events - 1].size, recorded.final)
 end
 
+T['Claude Code']['is sent no Ctrl+L while aineo does not read it as ready'] = function()
+  local record = open_layout_around_key_recorder('not-ready', {}, false)
+
+  local recorded = pty.events_during(child, record, CLOSE_PANES)
+
+  eq(claude_session.wait_for_status(child, 'starting')[1], 'starting')
+  eq(keys_among(recorded.events), {})
+end
+
 T['Claude Code']['is sent no Ctrl+L, and still its fresh size, with layout.claude_redraw_on_resize off'] = function()
-  local record = open_layout_around_key_recorder('off', { claude_redraw_on_resize = false })
+  local record = open_layout_around_key_recorder('off', { claude_redraw_on_resize = false }, true)
 
   local recorded = pty.events_during(child, record, CLOSE_PANES)
 
