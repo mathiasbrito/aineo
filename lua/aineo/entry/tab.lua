@@ -1108,7 +1108,8 @@ local function make_tab(homes, key, callbacks)
   --- `buffer_of()`), none before; with the Report's
   --- share from `config`, and the status line
   --- of Claude's window, which draws the session's name and folder
-  --- (`aineo.claude`'s `session_statusline()`).
+  --- (`aineo.claude`'s `session_statusline()`), and whether Claude Code is
+  --- ready for input (`session_status()`).
   ---
   ---@param config table the resolved configuration
   ---@param claude_buffer integer
@@ -1129,6 +1130,10 @@ local function make_tab(homes, key, callbacks)
       explorer_width = config.layout.explorer_width,
       file_beside_explorer = config.layout.file_beside_explorer,
       panel_numbers = panel_numbers.current(config),
+      claude_redraw_on_resize = config.layout.claude_redraw_on_resize,
+      claude_is_ready = function()
+        return homes.claude.session_status() == 'ready'
+      end,
       walkthrough = walkthrough_plans.buffer_of(tab),
       claude_statusline = require('aineo.claude').session_statusline(),
     }

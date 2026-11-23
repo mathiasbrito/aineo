@@ -9,6 +9,11 @@ local eq = MiniTest.expect.equality
 
 local child = MiniTest.new_child_neovim()
 
+--- The layout settings of the cases whose subject is not a resize: Claude Code
+--- is sent no Ctrl+L after its window's size settles, so that what it receives
+--- is what the case does.
+local NO_REDRAW = { layout = { claude_redraw_on_resize = false } }
+
 --- How long a case waits for the child to reach a state, in milliseconds.
 local PATIENCE_MS = 10000
 
@@ -74,7 +79,7 @@ local function open_in_repository(name, files)
   local top = git_repo.create('explorer-' .. name, files or FILES)
   child.cmd('cd ' .. vim.fn.fnameescape(top))
   local fake = claude_session.fake('explorer-' .. name, 'ready')
-  entry.use_fake(child, fake)
+  entry.use_fake(child, fake, NO_REDRAW)
   child.cmd('Aineo open')
   claude_session.wait_for_status(child, 'ready')
   return top
@@ -936,7 +941,7 @@ T['@']['pastes the folder’s path into Claude’s prompt, with no Enter, the cu
   local top = git_repo.create('explorer-paste', FILES)
   child.cmd('cd ' .. vim.fn.fnameescape(top))
   local fake = claude_session.fake('explorer-paste', 'ready')
-  entry.use_fake(child, fake)
+  entry.use_fake(child, fake, NO_REDRAW)
   child.cmd('Aineo open')
   claude_session.wait_for_status(child, 'ready')
   entry.press(child, '\\e')
@@ -956,7 +961,7 @@ T['@']['pastes a file’s path from the folder Claude works in'] = function()
   local top = git_repo.create('explorer-paste-file', FILES)
   child.cmd('cd ' .. vim.fn.fnameescape(top))
   local fake = claude_session.fake('explorer-paste-file', 'ready')
-  entry.use_fake(child, fake)
+  entry.use_fake(child, fake, NO_REDRAW)
   child.cmd('Aineo open')
   claude_session.wait_for_status(child, 'ready')
   entry.press(child, '\\e')
@@ -976,7 +981,7 @@ T['@']['pastes nothing, and says so once, while Claude is not ready'] = function
   local top = git_repo.create('explorer-paste-trust', FILES)
   child.cmd('cd ' .. vim.fn.fnameescape(top))
   local fake = claude_session.fake('explorer-paste-trust', 'trust')
-  entry.use_fake(child, fake)
+  entry.use_fake(child, fake, NO_REDRAW)
   child.cmd('Aineo open')
   claude_session.wait_for_status(child, 'starting')
   entry.press(child, '\\e')

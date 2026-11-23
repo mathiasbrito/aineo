@@ -5226,6 +5226,19 @@ layout.file_beside_explorer	A boolean. Default: `true`
 			explorer column, the file column is between Claude
 			Code's column and the panes column.
 
+                                 *aineo-config-layout.claude_redraw_on_resize*
+layout.claude_redraw_on_resize	A boolean. Default: `true`
+			Whether aineo sends Claude Code's terminal one Ctrl+L
+			after it has told Claude Code the final size of its
+			window, which Claude Code answers by redrawing its
+			whole screen at that size: text it wrote while the
+			window was narrower is laid out again at the width
+			the window has. One Ctrl+L is sent for each run of
+			resizes, a short moment after Claude Code was given
+			its size, and none while a window is zoomed fully.
+			`false` sends none, for a Claude Code whose Ctrl+L
+			does something else; it still gets its size.
+
                   *aineo-config-changes* *aineo-config-changes.working_branch*
 changes.working_branch	A non-empty string.
 			Default: none

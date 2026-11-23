@@ -51,6 +51,8 @@ local zoom = require('aineo.layout.zoom')
 ---@field file_beside_explorer? boolean where the file column lies while the explorer column is open when no pick decides it (`M.show_file()`): beside the explorer column, on its inner side, rather than between Claude's column and the right column; without it the layout keeps what it was handed last, false before any
 ---@field panel_numbers? boolean whether the layout's panels, its windows that show no file, show the user's own line numbers, sign column, fold column and status column; without it the layout keeps what it was handed last, false before any, which leaves them only the separator between windows
 ---@field walkthrough? integer the walkthrough pane's buffer, the plan of a code walkthrough, shown in the Report's window above Input's; without it the layout keeps the one it was handed last
+---@field claude_redraw_on_resize? boolean whether Claude's terminal is sent Ctrl+L, which Claude Code answers by redrawing its whole screen, once it has been given a fresh size (`aineo.layout.fresh_size`); without it the layout keeps what it was handed last, true before any
+---@field claude_is_ready? fun(): boolean whether Claude Code is ready for input, asked when the layout is about to send Claude's terminal Ctrl+L (`claude_redraw_on_resize`); without it the layout keeps the one it was handed last, and before any it sends none
 ---@field claude_statusline? string the 'statusline' Claude's window draws for Claude's terminal; without it the layout keeps the one it was handed last, and before any, Claude's window draws the user's own
 
 ---@class aineo.layout.ChangesPane
@@ -123,6 +125,10 @@ local zoom = require('aineo.layout.zoom')
 --- The fewest cells the explorer column takes when its width is a share of the
 --- screen.
 local MIN_SHARED_EXPLORER_CELLS = 40
+
+--- What Claude Code reads as the request to redraw its whole screen: the
+--- control character Ctrl+L.
+local CTRL_L = '\012'
 
 --- Makes a layout: its state, and the functions that act on it, and the
 --- function that lets it go (`let_go()`).
@@ -224,6 +230,12 @@ local function make_layout(input_name, group_name)
     unplaced_pick = nil,
     ---@type boolean
     panel_numbers = false,
+    ---@type boolean
+    claude_redraw_on_resize = true,
+    ---@type (fun(): boolean)|nil
+    claude_is_ready = nil,
+    ---@type integer
+    fresh_size_run = 0,
     ---@type aineo.layout.FilePart[]|nil
     file_parts = nil,
     ---@type uv.uv_timer_t|nil
@@ -2080,25 +2092,55 @@ local function make_layout(input_name, group_name)
 
   --- Tells Claude's terminal the size of its window once more
   --- (`aineo.layout.fresh_size`), so that Claude Code lays its screen out for
-  --- that size whichever sizes the window took before. Does nothing while a
-  --- window is zoomed fully, which leaves Claude's window the sliver the zoom
-  --- gave it, or while Claude's window shows no terminal of Claude's.
+  --- that size whichever sizes the window took before, and then asks it to
+  --- redraw: sends it Ctrl+L, which Claude Code answers by redrawing its whole
+  --- screen at the size it has, unless the setting `claude_redraw_on_resize` is
+  --- off, a later run of fresh sizes has begun, Claude's terminal is no longer
+  --- shown, or Claude Code is not ready for input (`claude_is_ready`), where a
+  --- byte may echo or wait in its input. Does nothing while a window is zoomed fully or while
+  --- Claude's window shows no terminal of Claude's.
   local function give_claude_terminal_a_fresh_size()
-    if state.full_zoom or not has_window('claude') then
+    --- The job of Claude's terminal, when Claude's window shows it and the
+    --- layout is not zoomed fully, which leaves Claude's window the sliver the
+    --- zoom gave it; `nil` otherwise.
+    ---
+    ---@return integer|nil
+    local function job_of_shown_claude_terminal()
+      if state.full_zoom or not has_window('claude') then
+        return nil
+      end
+      local buffer = vim.api.nvim_win_get_buf(state.windows.claude)
+      if buffer ~= state.buffers.claude then
+        return nil
+      end
+      return vim.b[buffer].terminal_job_id
+    end
+
+    local job = job_of_shown_claude_terminal()
+    if not job then
       return
     end
-    local buffer = vim.api.nvim_win_get_buf(state.windows.claude)
-    local job = vim.b[buffer].terminal_job_id
-    if buffer ~= state.buffers.claude or not job then
-      return
-    end
-    fresh_size.give(job, claude_terminal_size)
+    local run = state.fresh_size_run
+    fresh_size.give(job, claude_terminal_size, function()
+      local shown_job = job_of_shown_claude_terminal()
+      local is_ready = state.claude_is_ready
+      if
+        run == state.fresh_size_run
+        and state.claude_redraw_on_resize
+        and shown_job
+        and is_ready
+        and is_ready()
+      then
+        pcall(vim.api.nvim_chan_send, shown_job, CTRL_L)
+      end
+    end)
   end
 
   --- Gives Claude's terminal a fresh size once the windows have settled
   --- (`aineo.layout.fresh_size`'s `SETTLE_DELAY_MS`), once for a run of
   --- requests (`give_claude_terminal_a_fresh_size()`).
   local function give_claude_terminal_a_fresh_size_soon()
+    state.fresh_size_run = state.fresh_size_run + 1
     local timer = state.fresh_size_timer
     if timer and not timer:is_closing() then
       timer:stop()
@@ -2233,6 +2275,10 @@ local function make_layout(input_name, group_name)
     if arrangement.panel_numbers ~= nil then
       state.panel_numbers = arrangement.panel_numbers
     end
+    if arrangement.claude_redraw_on_resize ~= nil then
+      state.claude_redraw_on_resize = arrangement.claude_redraw_on_resize
+    end
+    state.claude_is_ready = arrangement.claude_is_ready or state.claude_is_ready
     if state.explorer_column and state.pane == 'explorer' then
       state.pane = 'agent'
       state.input_closed_by_user = nil
