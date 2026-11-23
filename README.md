@@ -405,7 +405,9 @@ Every part takes its colour from your colour scheme, through the
   (`announce_work`; a report with no branch for a checkout of a repository
   that is not a project joins nothing, and its answer says so); aineo
   says so and leaves the view where it is. `<Tab>` and `<S-Tab>` choose a
-  project, `X` closes one other than the session's; at most 8 are held, kept
+  project, `X` closes one other than the session's, and aineo closes one
+  whose folder is gone, a removed worktree's, saying so once and deleting
+  nothing in git; at most 8 are held, kept
   with the session (a fork, or a session a `continued-in` line names, carries
   them too), and a walkthrough may show any
   file of a project, changed or not, a file of another project shown as
