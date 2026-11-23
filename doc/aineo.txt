@@ -1914,6 +1914,13 @@ As a project joins, aineo says "aineo: Claude Code changed <name>; it's now
 a tab in \g" (or "reported work in <name>" for a report), naming the key
 of the changes pane (|<Plug>(aineo-pane-changes)|); the view and the cursor
 stay.
+A project whose folder is gone, a worktree an agent finished with and
+removed, closes by itself as `X` closes one, once a read of it fails or its
+tab is next chosen, and aineo says "aineo: <name> closed: its worktree was
+removed"; a resumed session does not bring it back, and nothing is told for
+a project already gone then. aineo deletes nothing in git. A repository met
+again at another checkout before that keeps its project, which then reads
+that checkout, base unchanged. The session's own project is never closed.
 `:Aineo diff close` and `\g` in the pane act on the project shown.
 The projects are kept for the Claude Code session, with each project's base,
 under the editor's state directory: a resumed session has them back, a
