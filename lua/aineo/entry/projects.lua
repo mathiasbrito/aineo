@@ -6,7 +6,10 @@
 --- (`aineo.projects`). Each project has a changes home of its own
 --- (`aineo.changes`'s `new()`), its pane shown in the changes pane's windows
 --- in place of the others', with a line of tabs over the commits window,
---- `<Tab>` and `<S-Tab>` choosing a project and `X` closing one.
+--- `<Tab>` and `<S-Tab>` choosing a project and `X` closing one. A project
+--- whose folder is gone, a removed worktree's, is closed as `X` closes one,
+--- once a read of its files fails or the tab is rebuilt from what was kept
+--- (`close_project_if_gone()`); the session's own project is never closed so.
 ---
 --- The projects of a tab are kept for the Claude Code session it follows:
 --- a resume brings them back, a fork of the session carries them, and the
@@ -176,8 +179,15 @@ local function draw_tab_line(tab, state)
   end
 end
 
+--- Closes the project `key` names when its folder is gone, as a worktree is
+--- once its work is done, and tells the user. Defined below, with the
+--- closing of a project.
+---@type fun(tab: aineo.entry.Tab, state: aineo.entry.TabProjects, key: string)
+local close_project_if_gone
+
 --- Reads again the count of the files of *Session work* of the project `key`
---- names, and draws the line of tabs once it is read.
+--- names, and draws the line of tabs once it is read. A count that cannot be
+--- read closes the project when its folder is gone (`close_project_if_gone()`).
 ---
 ---@param tab aineo.entry.Tab
 ---@param state aineo.entry.TabProjects
@@ -189,7 +199,11 @@ local function recount(tab, state, key)
   end
   local generation = state.generation
   home.count_session_work(function(count)
-    if states[tab] ~= state or state.generation ~= generation or count == nil then
+    if states[tab] ~= state or state.generation ~= generation then
+      return
+    end
+    if count == nil then
+      close_project_if_gone(tab, state, key)
       return
     end
     state.counts[key] = count
@@ -289,6 +303,26 @@ local function name_of(project)
   return name == '' and project.top or name
 end
 
+--- Takes the project `key` names out of the tab: its pane gives way, when it
+--- is the one shown, to the previous project's, its home is let go and the
+--- projects kept for the session forget it. The project is not the
+--- session's.
+---
+---@param tab aineo.entry.Tab
+---@param state aineo.entry.TabProjects
+---@param key string
+local function close_project(tab, state, key)
+  local shown = chosen_home(tab, state)
+  state.list.close(key)
+  local home = home_of(tab, state, key)
+  state.homes[key], state.counts[key] = nil, nil
+  show_chosen_project(tab, state, shown)
+  keep_projects(state)
+  if home then
+    home.let_go()
+  end
+end
+
 --- Closes the chosen project unless it is the session's: its pane gives way
 --- to the previous project's, and its home is let go.
 ---
@@ -299,18 +333,14 @@ local function close_chosen(tab)
     return
   end
   local closing = state.list.chosen()
-  local home = home_of(tab, state, closing.key)
-  if not state.list.close(closing.key) then
+  if state.session_project.key == closing.key then
     vim.notify(
       "aineo: the session's own project stays; close another with " .. CLOSE_KEY,
       vim.log.levels.INFO
     )
     return
   end
-  state.homes[closing.key], state.counts[closing.key] = nil, nil
-  show_chosen_project(tab, state, home)
-  keep_projects(state)
-  home.let_go()
+  close_project(tab, state, closing.key)
 end
 
 --- The key that closes the file column, in both windows of the pane.
@@ -472,6 +502,37 @@ local function held_project(state, key)
   return vim.iter(state.list.entries()):find(function(each)
     return each.key == key
   end)
+end
+
+--- Whether the project `key` names, which the session does not own, is held
+--- with a folder that is no longer there.
+---
+---@param state aineo.entry.TabProjects
+---@param key string
+---@return boolean
+local function is_held_with_folder_gone(state, key)
+  local held = held_project(state, key)
+  return held ~= nil and state.session_project.key ~= key and not vim.uv.fs_stat(held.top)
+end
+
+--- Closes the project `key` names, and tells the user once, when its folder
+--- is not there: a worktree is removed when its work is done, and a project
+--- whose home reads it would only fail. Does nothing for the session's own
+--- project, whose folder stays whatever it is, and for a project whose folder
+--- is there. The repository met again at another checkout before this
+--- (`take_live_checkout()`) keeps the project; one closed here is gone with
+--- its base.
+---
+---@param tab aineo.entry.Tab
+---@param state aineo.entry.TabProjects
+---@param key string
+close_project_if_gone = function(tab, state, key)
+  if not is_held_with_folder_gone(state, key) then
+    return
+  end
+  local project = held_project(state, key)
+  close_project(tab, state, key)
+  tellers.for_tab(tab)(('aineo: %s closed: its worktree was removed'):format(name_of(project)))
 end
 
 --- Takes the checkout `met`, one that was just found to be there, for the
@@ -648,7 +709,13 @@ local function rebuild(tab, state)
   end
   let_homes_go(state)
   local kept = require('aineo.projects').read_kept(places.kept_places().state_directory, state.id)
-  state.list = require('aineo.projects').new_list(state.session_project, kept)
+  local present = vim.tbl_filter(function(project)
+    return vim.uv.fs_stat(project.top) ~= nil
+  end, kept or {})
+  state.list = require('aineo.projects').new_list(state.session_project, present)
+  if #present < #(kept or {}) then
+    keep_projects(state)
+  end
   state.full_told = false
   for _, project in ipairs(state.list.entries()) do
     if project.key ~= state.session_project.key then
