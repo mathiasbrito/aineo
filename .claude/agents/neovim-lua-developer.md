@@ -56,4 +56,4 @@ As **records**: LuaCATS annotations match the signatures; vimdoc covers every co
 
 ## Read before you start
 
-The root `CLAUDE.md`; `knowledge-vault/Projects/aineo.md` (the supported minimum, the runner, formatter and linter once decided); in `$VIMRUNTIME/doc` (`:h`): `lua-plugin` whole, `lua-guide`, `api-indexing`, `api-fast`, `lua-loop-callbacks`, `lua-luajit`, `health-dev`, `deprecated`, and `news` from the supported minimum upward; `knowledge-vault/Review/How pre-merge review runs here.md`; the packet's own task lines.
+The root `CLAUDE.md`; `knowledge-vault/Projects/aineo.md`, read at the main checkout's clone of the vault repository (the supported minimum, the runner, formatter and linter once decided); in `$VIMRUNTIME/doc` (`:h`): `lua-plugin` whole, `lua-guide`, `api-indexing`, `api-fast`, `lua-loop-callbacks`, `lua-luajit`, `health-dev`, `deprecated`, and `news` from the supported minimum upward; `knowledge-vault/Review/How pre-merge review runs here.md`; the packet's own task lines.
