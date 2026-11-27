@@ -25,7 +25,7 @@ The worktree is created from the repository's default branch, which is **not** `
 
 1. `git fetch origin dev` then `git checkout -b <branch> origin/dev`, with the branch name from your brief. Confirm with `git log -1 --oneline` that you are on `dev`'s head. Never commit to `main` or `dev`; the hooks refuse it and so must you.
 2. `.claude/scripts/prepare-worktree.sh <resource name>` with the name from your brief (`impl_<slug>`). It checks that the files `.worktreeinclude` lists were copied in and runs the project's per-worktree setup (dependencies, an isolated test database, whatever the project has declared there). What it prints is what you set on every test run.
-3. Read `knowledge-vault/Projects/<project>.md`, the spec or plan sections your brief names, and every vault note the brief cites. Prior decisions (`D#`) are constraints.
+3. Read `knowledge-vault/Projects/<project>.md` (at the main checkout's `knowledge-vault/`: your worktree has none, since the vault is a repository of its own, ignored here), the spec or plan sections your brief names, and every vault note the brief cites. Prior decisions (`D#`) are constraints.
 
 ## Shared state — yours, and nobody else's
 
@@ -58,8 +58,8 @@ The worktree is created from the repository's default branch, which is **not** `
 - **Cite what you have read.** A task id names the line you grepped; a standard names the article you read. A citation relayed to you by the orchestrator or a reviewer is their claim: verify it or omit it and say that you did.
 - **Docs move with the code.** Docstrings describe the code, not the change; READMEs, plans and data models are checked for what your change invalidates. Nothing in source addresses the reader of the change — that goes in the commit message.
 - **Stay inside the boundary your brief draws.** Files it does not name are not yours, and these are never yours whatever the brief says: `.claude/`, `.githooks/`, `CLAUDE.md`, `.worktreeinclude`, `.gitignore` — they change every agent's behaviour and belong on an `ai/` branch the orchestrator raises. Anything the tasks need from outside the boundary is a spec conflict for your report.
-- **Mark only your own task lines** `[X]` in the task list, appending what was decided or left open **on the task's own line, always** — a paragraph inserted between two task lines moves every line below it and breaks the shape the tasks pass reads. When your brief says the wave holds its marks, write a `## Task lines` section in your session note instead. Do not touch the project note or any other agent's notes; the orchestrator owns those.
-- **Write a session note** in `knowledge-vault/Sessions/` under the exact filename your brief gives, with **Author** (the human, "with Claude — implementer agent") and **Branch**, a `## Links` section with the project note, the wave plan and the notes you rest on, what was done and why, decisions by ID, what arrived green and why, the mutant table, open threads. Leave the **Commits** section as *recorded after the merge* — hashes change on rebase.
+- **Mark no task line.** The task list is in the vault repository, which your branch does not carry: write a `## Task lines` section in your session note (in your hand-back) with what each task's line should say, decided or left open, and the orchestrator marks them. Do not touch the project note or any other agent's notes; the orchestrator owns those.
+- **Write a session note, and commit nothing of it.** The vault is a repository of its own; an implementer's note goes in your hand-back, or in a scratchpad file the hand-back names, and the orchestrator commits it there. Use the exact filename your brief gives, and write it with **Author** (the human, "with Claude — implementer agent") and **Branch**, a `## Links` section with the project note, the wave plan and the notes you rest on, what was done and why, decisions by ID, what arrived green and why, the mutant table, open threads. Leave the **Commits** section as *recorded after the merge* — hashes change on rebase.
 
 ## Landing it
 
@@ -92,7 +92,7 @@ ARRIVED GREEN: <n> — <test name: reason; killer mutant and whether it was run>
 MUTANTS: <table: the literal edit → killed by (assertion|crash) / survived / equivalent-with-reason — the kind read from the output, not assumed; a row run several times names the ratio>
 SUITES: <each suite's count, lint, formatter — from output you saw>
 DOCS: <files touched and why>
-RECORDS: <session note path; task lines marked>
+RECORDS: <session note text, or the scratchpad file holding it; task lines marked>
 SPEC CONFLICTS: <anything where the brief, the task and the spec disagreed, and what won>
 OPEN: <what the reviewers should look at first; what you left>
 ```

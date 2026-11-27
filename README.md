@@ -1085,3 +1085,10 @@ make format      # stylua in place
 ```
 
 The real Claude Code never runs in the suite.
+
+The project's knowledge vault is a repository of its own. To read or write
+it, clone it into the git-ignored `knowledge-vault/` at the checkout's root:
+
+```
+git clone https://github.com/mathiasbrito/aineo-knowledge.git knowledge-vault
+```
