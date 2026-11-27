@@ -43,12 +43,11 @@
 # repository if it is still on disk when something stages broadly.
 .claude/worktrees/
 
-# --- Obsidian workspace state (knowledge-vault is tracked, its UI state is not)
-# A vault opened at the repository root rather than at knowledge-vault/ puts
-# its state here instead. Anchored: an unanchored `.obsidian/` matches at any
-# depth and would swallow the vault's own shared settings.
+# --- Knowledge vault -------------------------------------------------------
+# The vault is its own repository, aineo-knowledge, cloned here:
+#   git clone https://github.com/mathiasbrito/aineo-knowledge.git knowledge-vault
+# Its Obsidian state is ignored by that repository. Anchored: an unanchored
+# `.obsidian/` matches at any depth. `/.obsidian/` is the state of a vault
+# opened at this repository's root.
+/knowledge-vault/
 /.obsidian/
-knowledge-vault/.obsidian/workspace*
-knowledge-vault/.obsidian/cache
-knowledge-vault/.obsidian/plugins/*/data.json
-knowledge-vault/.trash/
