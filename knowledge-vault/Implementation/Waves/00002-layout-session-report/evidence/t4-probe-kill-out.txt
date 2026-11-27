@@ -1,2 +1,0 @@
-ignoring HUP: exited=true code=143 ms=2003
-ignoring HUP TERM: exited=true code=137 ms=4005
